@@ -43,20 +43,20 @@
 <div class="contents">
 <div class="textblock"><h1>Introduction</h1>
 <p>EZCAD stands for Easy Computed Aided Design. EZCAD is a mechanical CAD (Computer Aided Design) system with an integrated mechanical CAM (Computer Aided Manufacture) system. The CAD system specifies the geometry of individual parts and how they are assembled together. The CAM system specifies the manufacturing steps required to make a part.</p>
-<p>In EZCAD, the designer writes a program using the (Python)[<a href="http://www.python.org/">http://www.python.org/</a>] programming language. The python program is then executed to generate both the design visualization and all associated manufacturing files (e.g. .stl files for 3-printers, G-codes for CNC mills/lathes, .dxf files for laser printers, etc.) EZCAD does not include either a text editor or a visualization tool. Instead, the designer uses their preferred text editor (e.g. idle, emacs, vim, etc.) and they use their own preferred visualization tools (e.g. meshlab, etc.) Other tools are used to visualize generated manufacturing files.</p>
+<p>In EZCAD, the designer writes a program using the <a href="http://www.python.org/">Python</a> programming language. The python program is then executed to generate both the design visualization and all associated manufacturing files (e.g. .stl files for 3-printers, G-codes for CNC mills/lathes, .dxf files for laser printers, etc.) EZCAD does not include either a text editor or a visualization tool. Instead, the designer uses their preferred text editor (e.g. idle, emacs, vim, etc.) and they use their own preferred visualization tools (e.g. meshlab, etc.) Other tools are used to visualize generated manufacturing files.</p>
 <p>In short, EZCAD is just a Python library that is executed to generate the various design files.</p>
 <h1>Downloading</h1>
 <p>This package is distributed in source form from a <em>git</em> repository. To get a copy: </p>
 <pre class="fragment">    git clone https://github.com/waynegramlich/ezcad3.git
-</pre><p>In addition, this package needs a version of (OpenSCAD)[<a href="http://www.openscad.org/">http://www.openscad.org/</a>]. For those who use Linux distributions based on the Debian package system (e.g. Ubuntu, Mint, etc.), the following will do the trick: </p>
+</pre><p>In addition, this package needs a version of <a href="http://www.openscad.org/">OpenSCAD</a>. For those who use Linux distributions based on the Debian package system (e.g. Ubuntu, Mint, etc.), the following will do the trick: </p>
 <pre class="fragment">    sudo apt-get install openscad
-</pre><p>OpenSCAD is primarily used as a front-end to the wonderful (CGAL)[<a href="http://www.cgal.org/">http://www.cgal.org/</a>] (Computational Geometry Algorithms Library). In particular, OpenSCAD uses the Boolean 3D solids library embodied in the NEF3 sub-library of CGAL.</p>
-<p>Detailed documentation of the Python classes and associated methods is maintained by (Doxygen)[<a href="http://www.doxygen.org/">http://www.doxygen.org/</a>]. For convenience, all of the generated Doxygen documenation is checked into the repository. If you want to generated Doxygen documentation locally, you need to download the program. I downloaded my copy via: </p>
+</pre><p>OpenSCAD is primarily used as a front-end to the wonderful <a href="http://www.cgal.org/">CGAL</a>(Computational Geometry Algorithms Library). In particular, OpenSCAD uses the Boolean 3D solids library embodied in the NEF3 sub-library of CGAL.</p>
+<p>Detailed documentation of the Python classes and associated methods is maintained by <a href="http://www.doxygen.org/">Doxygen</a>. For convenience, all of the generated Doxygen documenation is checked into the repository. If you want to generated Doxygen documentation locally, you need to download the program. I downloaded my copy via: </p>
 <pre class="fragment">    sudo apt-get install doxygen
 </pre><h1>Documentation</h1>
-<p>In addition to this document, there is (Doxygen generated documentation)[html/pages.html].</p>
+<p>In addition to this document, there is <a href="html/pages.html">Doxygen generated documentation</a>.</p>
 <h1>Licensing</h1>
-<p>In general, I really like Open Source Licenses. I have a slight preference of the GPL open source license, so that is what <a class="el" href="namespaceEZCAD3.html" title="More details.">EZCAD3</a> is released under. I emulate the (Free Software Foundation)[<a href="http://www.fsf.org">http://www.fsf.org</a>] that any code contributed to my code branch requires a copyright assignment. Professor Eben Moglen has written up a short explanation of (Why the FSF gets copyright assignments from contributors)[<a href="http://www.gnu.org/licenses/why-assign.html">http://www.gnu.org/licenses/why-assign.html</a>]. I strongly feel that having a unified copyright owner provides maximum protection for the open source software. While it is possible to get (overly legalistic)[<a href="http://ftp.xemacs.org/old-beta/FSF/assign.changes">http://ftp.xemacs.org/old-beta/FSF/assign.changes</a>], I think the following is more that adequate to assign the copyright: </p>
+<p>In general, I really like Open Source Licenses. I have a slight preference of the GPL open source license, so that is what <a class="el" href="namespaceEZCAD3.html" title="More details.">EZCAD3</a> is released under. I emulate the <a href="http://www.fsf.org">Free Software Foundation</a> that any code contributed to my code branch requires a copyright assignment. Professor Eben Moglen has written up a short explanation of <a href="http://www.gnu.org/licenses/why-assign.html">Why the FSF gets copyright assignments from contributors</a>. I strongly feel that having a unified copyright owner provides maximum protection for the open source software. While it is possible to get <a href="http://ftp.xemacs.org/old-beta/FSF/assign.changes">overly legalistic</a>, I think the following is more that adequate to assign the copyright: </p>
 <pre class="fragment">    Hello:
 
     I am assigning my modifications to EZCAD to
@@ -294,7 +294,7 @@
 </div></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Sat Nov 9 2013 17:12:26 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
+Generated on Sun Nov 10 2013 09:17:47 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
 <img class="footer" src="doxygen.png" alt="doxygen"/>
 </a> 1.8.1.2
 </small></address>

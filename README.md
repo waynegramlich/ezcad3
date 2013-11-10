@@ -10,7 +10,7 @@ are assembled together.  The CAM system specifies the
 manufacturing steps required to make a part.
 
 In EZCAD, the designer writes a program using the
-(Python)[http://www.python.org/] programming language.
+[Python](http://www.python.org/) programming language.
 The python program is then executed to generate both the
 design visualization and all associated manufacturing files
 (e.g. .stl files for 3-printers, G-codes for CNC mills/lathes,
@@ -32,19 +32,19 @@ To get a copy:
         git clone https://github.com/waynegramlich/ezcad3.git
 
 In addition, this package needs a version of
-(OpenSCAD)[http://www.openscad.org/].  For those who use
+[OpenSCAD](http://www.openscad.org/).  For those who use
 Linux distributions based on the Debian package system
 (e.g. Ubuntu, Mint, etc.), the following will do the trick:
 
         sudo apt-get install openscad
 
 OpenSCAD is primarily used as a front-end to the wonderful
-(CGAL)[http://www.cgal.org/] (Computational Geometry Algorithms
+[CGAL](http://www.cgal.org/)(Computational Geometry Algorithms
 Library).  In particular, OpenSCAD uses the Boolean 3D solids
 library embodied in the NEF3 sub-library of CGAL.
 
 Detailed documentation of the Python classes and associated
-methods is maintained by (Doxygen)[http://www.doxygen.org/].
+methods is maintained by [Doxygen](http://www.doxygen.org/).
 For convenience, all of the generated Doxygen documenation
 is checked into the repository.  If you want to generated
 Doxygen documentation locally, you need to download the program.
@@ -55,22 +55,22 @@ I downloaded my copy via:
 ## Documentation
 
 In addition to this document, there is
-(Doxygen generated documentation)[html/pages.html].
+[Doxygen generated documentation](html/pages.html).
 
 ## Licensing
 
 In general, I really like Open Source Licenses.  I have a slight
 preference of the GPL open source license, so that is what EZCAD3
 is released under.  I emulate the
-(Free Software Foundation)[http://www.fsf.org] that any code
+[Free Software Foundation](http://www.fsf.org) that any code
 contributed to my code branch requires a copyright assignment.
 Professor Eben Moglen has written up a short explanation of
-(Why the FSF gets copyright assignments from
-contributors)[http://www.gnu.org/licenses/why-assign.html].
+[Why the FSF gets copyright assignments from
+contributors](http://www.gnu.org/licenses/why-assign.html).
 I strongly feel that having a unified copyright owner provides
 maximum protection for the open source software.  While it is
-possible to  get
-(overly legalistic)[http://ftp.xemacs.org/old-beta/FSF/assign.changes],
+possible to get
+[overly legalistic](http://ftp.xemacs.org/old-beta/FSF/assign.changes),
 I think the following is more that adequate to assign the copyright:
 
         Hello:

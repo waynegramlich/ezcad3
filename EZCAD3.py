@@ -8,8 +8,6 @@ import os
 import math
 import subprocess
 
-# Forward clas definitions:
-
 ## The *Angle* class represents an angle.
 #
 # An *Angle* object represents an angle.  *Angle*'s can be specified
@@ -326,231 +324,6 @@ class Angle:
 	""" Angle: Return twice of {self}. """
 
 	return Angle(self.length * 2.0)
-
-## @brief *Box* is a recursives bounding box data structure.
-#
-# *Box* represents a nested set of bounding boxes.  Each time a point
-# a bound box has is location moved, its bounding box and all of its
-# parent bounding boxes are immediately updated.
-class Box:
-    """ *Box*: Keep track of bounding boxes. """
-
-    ## @brief Initialize a *Box* object.
-    #  @param self is the *Box* object to initialize.
-    #  @param parent is the parent enclosing bounding *Box* or *None*.
-    #
-    # <I>__init__</I>() will initialize *self* (a *Box* object).  *parent*
-    # supplies any parent enclosing bounding *Box* or *None* if this is the
-    # top most *Box*.
-    def __init__(self, name, parent = None):
-	""" *Box*: Initialize.  """
-
-	# Check argument types:
-	assert isinstance(name, str)
-	assert parent == None or isinstance(parent, Box)
-
-	# Initialize the bounding box values:
-	big = L(mm=987654321.0)
-	self._changed_count = 0
-	self._maximum_x = -big
-	self._minimum_x = big
-	self._maximum_y = -big
-	self._minimum_y = big
-	self._maximum_z = -big
-	self._minimum_z = big
-	self._name = name
-	self._parent = parent
-	self._points = {}
-
-	# Force a recompute to get all of the 
-	self._recompute()
-
-    ## @brief Formats *self* into a string and returns it.
-    #  @param format is the format control string (currently ignored).
-    #  @returns a string representation of *self*.
-    #
-    # *<I>__format__</I>() will return a *self* (a *Box*) object as
-    # formatted string.  Currently *format* is ignored, but maybe some
-    # time in the future it will contol formaating of the returned string.
-
-    def __format__(self, format):
-	""" *Box*: Return formated version of *self*. """
-	assert isinstance(format, str)
-	if format != "":
-	    format = ":" + format
-	format_string = "{0}[{1" + format + "}:{2" + format + "},{3" + \
-	  format + "}:{4" + format + "}:{5" + format + "}:{6" + format + "}]"
-	#print("format_string='{0}'".format(format_string))
-
-	print("[{0}:{1},{2}:{3},{4}:{5}]".format(
-	  self._minimum_x._mm, self._maximum_x._mm,
-	  self._minimum_y._mm, self._maximum_y._mm,
-	  self._minimum_z._mm, self._maximum_z._mm))
-
-	return format_string.format(self._name,
-	  self._minimum_x, self._maximum_x,
-	  self._minimum_y, self._maximum_y,
-	  self._minimum_z, self._maximum_z)
-
-    ## @brief Recomputes the bounding box for *self* and any parent *Box*'s.
-    #  @param *self* the bounding *Box* to recompute.
-    #
-    # <I>_recompute</I>() will recompute the bounding box for *self* (a bounding
-    # *Box*) and enclosing parent bounding *Box*'s.
-    def _recompute(self):
-	""" *Box*: (Internal use only) Recompute the bounding box corners. """
-
-	# Initialize the bounding box values with bogus big positive/negative
-	# values:
-	big = L(mm=123456789.0)
-	maximum_x = -big
-	minimum_x = big
-	maximum_y = -big
-	minimum_y = big
-	maximum_z = -big
-	minimum_z = big
-
-	# Sweep through each *point*:
-	for point in self._points.values():
-	    # Update *minimum_x* and *maximum_x* with *x* as appropriate.
-	    x = point.x
-            if x > maximum_x:
-		maximum_x = x
-	    if x < minimum_x:
-		minimum_x = x
-	    # Note that we can not assume that *maximum_x* > *minimum_x*
-	    # because the initial value for *maximum_x* is -*big* and the
-	    # initial value for *minimum_x* is *big*.  Thus, we use two
-	    # sequential **if** statements,  rather than a single
-	    # **if**-**elif** combination:
-
-	    # Update *maximum_y* and *minimum_y* with *y* as appropriate.
-            y = point.y
-	    if y > maximum_y:
-		maximum_y = y
-	    if y < minimum_y:
-		minimum_y = y
-
-	    # Update *maximum_z* and *minimum_z* with *z* as appropriate.
-            z = point.z
-	    if z > maximum_z:
-		maximum_z = z
-	    if z < minimum_z:
-		minimum_z = z
-
-	# Determine if the bounding box changed:
-	if self._maximum_x != maximum_x or self._minimum_x != minimum_x or \
-	  self._maximum_y != maximum_y or self._minimum_y != minimum_y or \
-	  self._maximum_z != maximum_z or self._minimum_z != minimum_z:
-	    # Bounding box changed:
-	    self._maximum_x = maximum_x
-	    self._minimum_x = minimum_x
-	    self._maximum_y = maximum_y
-	    self._minimum_y = minimum_y
-	    self._maximum_z = maximum_z
-	    self._minimum_z = minimum_z
-
-	    # Compute averate X/Y/Z:
-	    average_x = (maximum_x + minimum_x).half()
-	    average_y = (maximum_y + minimum_y).half()
-	    average_z = (maximum_z + minimum_z).half()
-
-	    # There are 27 points to compute -- 9 on the top slice, 9 on
-	    # the middle slice, and 9 on the bottom slice:
-
-	    # Top slice:
-	    #	TNW	TN	TNE
-	    #	TW	T	TE
-	    #	TSW	TS	TSE
-	    self.t =   Point(average_x, average_y, maximum_z)
-	    self.te =  Point(maximum_x, average_y, maximum_z)
-	    self.tn =  Point(average_x, maximum_y, maximum_z)
-	    self.tne = Point(maximum_x, maximum_y, maximum_z)
-	    self.tnw = Point(minimum_x, maximum_y, maximum_z)
-	    self.ts =  Point(average_x, minimum_y, maximum_z)
-	    self.tse = Point(maximum_x, minimum_y, maximum_z)
-	    self.tsw = Point(minimum_x, minimum_y, maximum_z)
-	    self.tw =  Point(minimum_x, average_y, maximum_z)
-
-	    # Middle slice:
-	    #	NW	N	NE
-	    #	W	C	E
-	    #	SW	S	SE
-	    self.e =   Point(maximum_x, average_y, average_z)
-	    self.n =   Point(average_x, maximum_y, average_z)
-	    self.ne =  Point(maximum_x, maximum_y, average_z)
-	    self.nw =  Point(minimum_x, maximum_y, average_z)
-	    self.c =   Point(average_x, average_y, average_z)
-	    self.s =   Point(average_x, minimum_y, average_z)
-	    self.se =  Point(maximum_x, minimum_y, average_z)
-	    self.sw =  Point(minimum_x, minimum_y, average_z)
-	    self.w =   Point(minimum_x, average_y, average_z)
-
-	    # Bottom slice:
-	    #	BNW	BN	BNE
-	    #	BW	B	BE
-	    #	BSW	BS	BSE
-	    self.b =   Point(average_x, average_y, minimum_z)
-	    self.be =  Point(maximum_x, average_y, minimum_z)
-	    self.bn =  Point(average_x, maximum_y, minimum_z)
-	    self.bne = Point(maximum_x, maximum_y, minimum_z)
-	    self.bnw = Point(minimum_x, maximum_y, minimum_z)
-	    self.bs =  Point(average_x, minimum_y, minimum_z)
-	    self.bse = Point(maximum_x, minimum_y, minimum_z)
-	    self.bsw = Point(minimum_x, minimum_y, minimum_z)
-	    self.bw =  Point(minimum_x, average_y, minimum_z)
-
-	    # Recursively update parent *Box*'s until top-most bounding
-	    # box is reached:
-	    parent = self._parent
-	    if type(parent) != type(None):
-		parent._recompute()
-
-            # Keep track if we have changed:
-	    self._changed_count += 1
-
-    ## @brief Update inserts *box* onto the nested *Box* list for *self*.
-    #  @param box is the *Box* to insert.
-    #
-    # *box_insert*() will insert *box* into the nested *Box* list for *self*.
-    def box_insert(self, box):
-	""" *Box*: Insert/update the *Box* named *name* to *box*. """
-
-	# Check argument types:
-	assert isinstance(box, Box)
-
-	# Deterimine if this is an update or the initial insert:
-	name = box._name
-	boxes = self._boxes
-	assert not name in boxes, \
-	  "Box {0} is already inserted".format(name)
-	boxes[name] = box
-	self._recompute()
-
-    ## @brief Inserts *point* into the *Point* list for *self* under *name*.
-    def point_update(self, name, point):
-	""" *Box*: Insert/update the point named *name* to *point*. """
-
-	# Check argument types:
-	assert isinstance(name, str)
-	assert isinstance(point, Point)
-
-	#print("Box.point_update({0:m}, '{1}', {2:m})".
-	#  format(self, name, point))
-	# Deterimine if this is an update or the initial insert:
-	points = self._points
-	if name in points.keys():
-	    # This is an update; determine if *point* changed:
-	    previous = points[name]
-	    if previous.x != point.x or \
-	      previous.y != point.y or previous.z != point.z:
-		# *point* changed, so update everything:
-		points[name] = point
-		self._recompute()
-	else:
-	    # This is the initial insert; so update everything:
-	    points[name] = point
-	    self._recompute()
 
 class Color:
     COLORS = {
@@ -1001,8 +774,19 @@ class Part:
 	self._scad_difference_lines = None
 	self._scad_union_lines = None
 	self._update_count = 0
-	self.box = Box(name)
 	self.up = up
+
+	# Initialize the bounding box information:
+	big = L(mm=987654321.0)
+	self._box_changed_count = 0
+	self._box_points = {}
+	self.ex = -big
+	self.wx = big
+	self.ny = -big
+	self.sy = big
+	self.tz = -big
+	self.bz = big
+	self._box_recompute()
 
 	if up_type != none_type and place:
 	    #print("Part.__init__: perform place")
@@ -1010,6 +794,33 @@ class Part:
 	    #print("Part.__init__: place = {0:m}".format(place))
 
 	#print("<=Part.__init__(*, '{0}', *, place={1})".format(name, place))
+
+    ## @brief Formats *self* into a string and returns it.
+    #  @param format is the format control string (currently ignored).
+    #  @returns a string representation of *self*.
+    #
+    # *<I>__format__</I>() will return a *self* (a *Box*) object as
+    # formatted string.  Currently *format* is ignored, but maybe some
+    # time in the future it will contol formaating of the returned string.
+
+    def __format__(self, format):
+	""" *Box*: Return formated version of *self*. """
+	assert isinstance(format, str)
+	if format != "":
+	    format = ":" + format
+	format_string = "{0}[{1" + format + "}:{2" + format + "},{3" + \
+	  format + "}:{4" + format + "}:{5" + format + "}:{6" + format + "}]"
+	#print("format_string='{0}'".format(format_string))
+
+	print("[{0}:{1},{2}:{3},{4}:{5}]".format(
+	  self.wx._mm, self.ex._mm,
+	  self.sy._mm, self.ny._mm,
+	  self.sz._mm, self.tz._mm))
+
+	return format_string.format(self._name,
+	  self.wx, self.ex,
+	  self.sy, self.ny,
+	  self.sz, self.tz)
 
     def __getattr__(self, name):
 	if self._update_count == 0:
@@ -1037,6 +848,156 @@ class Part:
 		return Place()
 	raise AttributeError(
 	  "Part instance has no attribute '{0}'".format(name))
+
+    ## @brief Updates *name*'d *point* is *self* for bounding box calcuation.
+    #  @param self is the *Part* to update.
+    #  @param name is the name of the *Point* object.
+    #  @param point is the *Point* to update.
+    #
+    # <I>_box_point_update</I>() will update the *Point* named *name* in *self*
+    # (a *Part* object) to be *point*.  If the value of *point* has changed
+    # from the last time it was updated, the bounding box for *self* is
+    # recomputed.
+    def _box_point_update(self, name, point):
+	""" *Box*: Insert/update the point named *name* to *point*. """
+
+	# Check argument types:
+	assert isinstance(name, str)
+	assert isinstance(point, Point)
+
+	#print("Box.point_update({0:m}, '{1}', {2:m})".
+	#  format(self, name, point))
+	# Deterimine if this is an update or the initial insert:
+	points = self._box_points
+	if name in points.keys():
+	    # This is an update; determine if *point* changed:
+	    previous = points[name]
+	    if previous.x != point.x or \
+	      previous.y != point.y or previous.z != point.z:
+		# *point* changed, so update everything:
+		points[name] = point
+		self._box_recompute()
+	else:
+	    # This is the initial insert; so update everything:
+	    points[name] = point
+	    self._box_recompute()
+
+    ## @brief Recomputes the bounding box for *self* and any parent *Box*'s.
+    #  @param *self* the bounding *Box* to recompute.
+    #
+    # <I>_recompute</I>() will recompute the bounding box for *self* (a bounding
+    # *Box*) and enclosing parent bounding *Box*'s.
+    def _box_recompute(self):
+	""" *Box*: (Internal use only) Recompute the bounding box corners. """
+
+	# Initialize the bounding box values with bogus big positive/negative
+	# values:
+	big = L(mm=123456789.0)
+	ex = -big
+	wx = big
+	ny = -big
+	sy = big
+	tz = -big
+	bz = big
+
+	# Sweep through each *point*:
+	for point in self._box_points.values():
+	    # Update *wx* and *ex* with *x* as appropriate.
+	    x = point.x
+            if x > ex:
+		ex = x
+	    if x < wx:
+		wx = x
+	    # Note that we can not assume that *ex* > *wx*
+	    # because the initial value for *ex* is -*big* and the
+	    # initial value for *wx* is *big*.  Thus, we use two
+	    # sequential **if** statements,  rather than a single
+	    # **if**-**elif** combination:
+
+	    # Update *ny* and *sy* with *y* as appropriate.
+            y = point.y
+	    if y > ny:
+		ny = y
+	    if y < sy:
+		sy = y
+
+	    # Update *tz* and *bz* with *z* as appropriate.
+            z = point.z
+	    if z > tz:
+		tz = z
+	    if z < bz:
+		bz = z
+
+	# Determine if the bounding box changed:
+	if self.ex != ex or self.wx != wx or \
+	  self.ny != ny or self.sy != sy or \
+	  self.tz != tz or self.bz != bz:
+	    # Bounding box changed:
+	    self.ex  = ex
+	    self.wx = wx
+	    self.ny = ny
+	    self.sy = sy
+	    self.tz = tz
+	    self.bz = bz
+
+	    # Compute averate X/Y/Z:
+	    cx = (ex + wx).half()
+	    cy = (ny + sy).half()
+	    cz = (tz + bz).half()
+
+	    # There are 27 points to compute -- 9 on the top slice, 9 on
+	    # the middle slice, and 9 on the bottom slice:
+
+	    # Top slice:
+	    #	TNW	TN	TNE
+	    #	TW	T	TE
+	    #	TSW	TS	TSE
+	    self.t =   Point(cx, cy, tz)
+	    self.te =  Point(ex, cy, tz)
+	    self.tn =  Point(cx, ny, tz)
+	    self.tne = Point(ex, ny, tz)
+	    self.tnw = Point(wx, ny, tz)
+	    self.ts =  Point(cx, sy, tz)
+	    self.tse = Point(ex, sy, tz)
+	    self.tsw = Point(wx, sy, tz)
+	    self.tw =  Point(wx, cy, tz)
+
+	    # Middle slice:
+	    #	NW	N	NE
+	    #	W	C	E
+	    #	SW	S	SE
+	    self.e =   Point(ex, cy, cz)
+	    self.n =   Point(cx, ny, cz)
+	    self.ne =  Point(ex, ny, cz)
+	    self.nw =  Point(wx, ny, cz)
+	    self.c =   Point(cx, cy, cz)
+	    self.s =   Point(cx, sy, cz)
+	    self.se =  Point(ex, sy, cz)
+	    self.sw =  Point(wx, sy, cz)
+	    self.w =   Point(wx, cy, cz)
+
+	    # Bottom slice:
+	    #	BNW	BN	BNE
+	    #	BW	B	BE
+	    #	BSW	BS	BSE
+	    self.b =   Point(cx, cy, bz)
+	    self.be =  Point(ex, cy, bz)
+	    self.bn =  Point(cx, ny, bz)
+	    self.bne = Point(ex, ny, bz)
+	    self.bnw = Point(wx, ny, bz)
+	    self.bs =  Point(cx, sy, bz)
+	    self.bse = Point(ex, sy, bz)
+	    self.bsw = Point(wx, sy, bz)
+	    self.bw =  Point(wx, cy, bz)
+
+	    # Recursively update parent *Box*'s until top-most bounding
+	    # box is reached:
+	    up = self.up
+	    if type(up) != type(None):
+		up._box_recompute()
+
+            # Keep track if we have changed:
+	    self._box_changed_count += 1
 
     def _dimensions_update(self, trace):
 
@@ -1086,8 +1047,7 @@ class Part:
 	    #else ignore *attribute_name*:
 
 	# Remember 
-	box = self.box
-	before_changed_count = box._changed_count
+	before_box_changed_count = self._box_changed_count
 
 	# Peform dimension updating for *self*:
 	self.construct()
@@ -1114,34 +1074,33 @@ class Part:
 	    place_part = place._part
 	    place_name = place._name
 	    forward_matrix = place._forward_matrix
-	    place_box = place_part.box
 
 	    if trace >= 0:
 		print("{0}Part._dimensions_update:place={1}". \
 		  format(' ' * trace, place))
-		print("{0}Part._dimensions_update:Merge {1:m} into {2:m}". \
-		  format(' ' * trace, place_box, box))
+		#print("{0}Part._dimensions_update:Merge {1:m} into {2:m}". \
+		#  format(' ' * trace, place_box, box))
 
-	    box.point_update(place_name + "[TNE]",
-	      forward_matrix.point_multiply(place_box.tne))
-	    box.point_update(place_name + "[TNW]",
-	      forward_matrix.point_multiply(place_box.tnw))
-	    box.point_update(place_name + "[TSE]",
-	      forward_matrix.point_multiply(place_box.tse))
-	    box.point_update(place_name + "[TSW]",
-	      forward_matrix.point_multiply(place_box.tsw))
-	    box.point_update(place_name + "[BNE]",
-	      forward_matrix.point_multiply(place_box.bne))
-	    box.point_update(place_name + "[BNW]",
-	      forward_matrix.point_multiply(place_box.bnw))
-	    box.point_update(place_name + "[BSE]",
-	      forward_matrix.point_multiply(place_box.bse))
-	    box.point_update(place_name + "[BSW]",
-	      forward_matrix.point_multiply(place_box.bsw))
+	    self._box_point_update(place_name + "[TNE]",
+	      forward_matrix.point_multiply(place_part.tne))
+	    self._box_point_update(place_name + "[TNW]",
+	      forward_matrix.point_multiply(place_part.tnw))
+	    self._box_point_update(place_name + "[TSE]",
+	      forward_matrix.point_multiply(place_part.tse))
+	    self._box_point_update(place_name + "[TSW]",
+	      forward_matrix.point_multiply(place_part.tsw))
+	    self._box_point_update(place_name + "[BNE]",
+	      forward_matrix.point_multiply(place_part.bne))
+	    self._box_point_update(place_name + "[BNW]",
+	      forward_matrix.point_multiply(place_part.bnw))
+	    self._box_point_update(place_name + "[BSE]",
+	      forward_matrix.point_multiply(place_part.bse))
+	    self._box_point_update(place_name + "[BSW]",
+	      forward_matrix.point_multiply(place_part.bsw))
 
 	# Determine whether *box* has changed:
-	after_changed_count = box._changed_count
-	if before_changed_count != after_changed_count:
+	after_box_changed_count = self._box_changed_count
+	if before_box_changed_count != after_box_changed_count:
 	    changed += 1
 
 	if trace >= 0:
@@ -1520,16 +1479,23 @@ class Part:
 	tse = Point(x2, y1, z2)
 	bne = Point(x2, y2, z1)
 
-	box = self.box
 	#print("before box={0:m}".format(box))
-	box.point_update(comment + "[TNE]", forward_matrix.point_multiply(tne))
-	box.point_update(comment + "[TNW]", forward_matrix.point_multiply(tnw))
-	box.point_update(comment + "[TSE]", forward_matrix.point_multiply(tse))
-	box.point_update(comment + "[TSW]", forward_matrix.point_multiply(tsw))
-	box.point_update(comment + "[BNE]", forward_matrix.point_multiply(bne))
-	box.point_update(comment + "[BNW]", forward_matrix.point_multiply(bnw))
-	box.point_update(comment + "[BSE]", forward_matrix.point_multiply(bse))
-	box.point_update(comment + "[BSW]", forward_matrix.point_multiply(bsw))
+	self._box_point_update(comment + "[TNE]",
+	  forward_matrix.point_multiply(tne))
+	self._box_point_update(comment + "[TNW]",
+	  forward_matrix.point_multiply(tnw))
+	self._box_point_update(comment + "[TSE]",
+	  forward_matrix.point_multiply(tse))
+	self._box_point_update(comment + "[TSW]",
+	  forward_matrix.point_multiply(tsw))
+	self._box_point_update(comment + "[BNE]",
+	  forward_matrix.point_multiply(bne))
+	self._box_point_update(comment + "[BNW]",
+	  forward_matrix.point_multiply(bnw))
+	self._box_point_update(comment + "[BSE]",
+	  forward_matrix.point_multiply(bse))
+	self._box_point_update(comment + "[BSW]",
+	  forward_matrix.point_multiply(bsw))
 	#print("after box={0:m}".format(box))
 
 	union_lines = self._scad_union_lines
