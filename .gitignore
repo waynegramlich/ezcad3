@@ -1,3 +1,7 @@
 *~
+*.off
 *.pyc
+*.scad
+*.stl
+*.wrl
 Camera*

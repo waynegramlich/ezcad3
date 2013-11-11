@@ -29,9 +29,9 @@ class Camera_Circuit_Board(Part):
 	  comment="pcb",
 	  material=Material("plastic", "abs"),
 	  color=Color("green", alpha = 0.5),
-	  corner1=Point(-length/2, -width/2, sensor.bz - height),
-	  corner2=Point( length/2,  width/2, sensor.bz))
-	#  center=Point(-length.half(), -width.half()), rotate=Angle.deg(90.0))
+	  corner1=P(-length/2, -width/2, sensor.bz - height),
+	  corner2=P( length/2,  width/2, sensor.bz))
+	#  center=P(-length.half(), -width.half()), rotate=Angle.deg(90.0))
 
 	print("length={0:m}".format(length))
 	#print("Camera_Circuit_Board.box={0:m}\n".format(self.box))
@@ -51,15 +51,15 @@ class Camera_Sensor(Part):
 	  comment="MT9V022M",
 	  material=Material("silicon", ""),
 	  color=Color("black", alpha = 0.5),
-	  corner1=Point(-length/2, -width/2, -height),
-	  corner2=Point( length/2,  width/2, zero))
+	  corner1=P(-length/2, -width/2, -height),
+	  corner2=P( length/2,  width/2, zero))
 
 	self.hole(comment="sample_hole",
 	  diameter = L(mm=3.0), start=self.t, end=self.b)
 
 def main():
 
-    ezcad = EZCAD3(3, 0)
+    ezcad = EZCAD3(0)
     print("Instantiate camera")
     camera = Camera(None)
     print("Process camera")    

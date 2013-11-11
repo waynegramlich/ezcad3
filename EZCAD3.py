@@ -2,7 +2,7 @@
 
 ## @package EZCAD3
 #
-# More details
+# More details here...
 
 import os
 import math
@@ -476,7 +476,8 @@ class Color:
       "yellow_green": 0x9acd32,
     }
 
-    def __init__(self, name = "", red = -1.0, green = -1.0, blue = -1.0, alpha = 1.0):
+    def __init__(self,
+      name = "", red = -1.0, green = -1.0, blue = -1.0, alpha = 1.0):
 	""" *Color*: Initialize *self*"""
 
 	# Deal with SVG color:
@@ -516,21 +517,23 @@ class Color:
 	self.blue = blue
 	self.alpha = alpha
 
+	print("Color({0}, {1}, {2}, {3})".
+	  format(self.red, self.green, self.blue, self.alpha))
+
 class EZCAD3:
     """ EZCAD3 is the top level engine that executes the design. """
 
-    def __init__(self, major, minor):
+    def __init__(self, minor):
 	""" {EZCAD}: Initialize the contents of {self} to contain
 	    {major} and {minor} version numbers. """
 
 	#print "EZCAD.__init__() called"
 
 	# Check argument types:
-	assert major == 3
 	assert minor == 0
 
 	# Load up {self}:
-	self._major = major
+	self._major = 3
 	self._minor = minor
 	self._parts_stack = []
 	self._xml_indent = 0
@@ -843,7 +846,7 @@ class Part:
 	    elif name.endswith("_s"):
 		return ""
 	    elif name.endswith("_p"):
-		return Point()
+		return P()
 	    elif name.endswith("_pl"):
 		return Place()
 	raise AttributeError(
@@ -851,10 +854,10 @@ class Part:
 
     ## @brief Updates *name*'d *point* is *self* for bounding box calcuation.
     #  @param self is the *Part* to update.
-    #  @param name is the name of the *Point* object.
-    #  @param point is the *Point* to update.
+    #  @param name is the name of the *P* object.
+    #  @param point is the *P* to update.
     #
-    # <I>_box_point_update</I>() will update the *Point* named *name* in *self*
+    # <I>_box_point_update</I>() will update the *P* named *name* in *self*
     # (a *Part* object) to be *point*.  If the value of *point* has changed
     # from the last time it was updated, the bounding box for *self* is
     # recomputed.
@@ -863,7 +866,7 @@ class Part:
 
 	# Check argument types:
 	assert isinstance(name, str)
-	assert isinstance(point, Point)
+	assert isinstance(point, P)
 
 	#print("Box.point_update({0:m}, '{1}', {2:m})".
 	#  format(self, name, point))
@@ -952,43 +955,43 @@ class Part:
 	    #	TNW	TN	TNE
 	    #	TW	T	TE
 	    #	TSW	TS	TSE
-	    self.t =   Point(cx, cy, tz)
-	    self.te =  Point(ex, cy, tz)
-	    self.tn =  Point(cx, ny, tz)
-	    self.tne = Point(ex, ny, tz)
-	    self.tnw = Point(wx, ny, tz)
-	    self.ts =  Point(cx, sy, tz)
-	    self.tse = Point(ex, sy, tz)
-	    self.tsw = Point(wx, sy, tz)
-	    self.tw =  Point(wx, cy, tz)
+	    self.t =   P(cx, cy, tz)
+	    self.te =  P(ex, cy, tz)
+	    self.tn =  P(cx, ny, tz)
+	    self.tne = P(ex, ny, tz)
+	    self.tnw = P(wx, ny, tz)
+	    self.ts =  P(cx, sy, tz)
+	    self.tse = P(ex, sy, tz)
+	    self.tsw = P(wx, sy, tz)
+	    self.tw =  P(wx, cy, tz)
 
 	    # Middle slice:
 	    #	NW	N	NE
 	    #	W	C	E
 	    #	SW	S	SE
-	    self.e =   Point(ex, cy, cz)
-	    self.n =   Point(cx, ny, cz)
-	    self.ne =  Point(ex, ny, cz)
-	    self.nw =  Point(wx, ny, cz)
-	    self.c =   Point(cx, cy, cz)
-	    self.s =   Point(cx, sy, cz)
-	    self.se =  Point(ex, sy, cz)
-	    self.sw =  Point(wx, sy, cz)
-	    self.w =   Point(wx, cy, cz)
+	    self.e =   P(ex, cy, cz)
+	    self.n =   P(cx, ny, cz)
+	    self.ne =  P(ex, ny, cz)
+	    self.nw =  P(wx, ny, cz)
+	    self.c =   P(cx, cy, cz)
+	    self.s =   P(cx, sy, cz)
+	    self.se =  P(ex, sy, cz)
+	    self.sw =  P(wx, sy, cz)
+	    self.w =   P(wx, cy, cz)
 
 	    # Bottom slice:
 	    #	BNW	BN	BNE
 	    #	BW	B	BE
 	    #	BSW	BS	BSE
-	    self.b =   Point(cx, cy, bz)
-	    self.be =  Point(ex, cy, bz)
-	    self.bn =  Point(cx, ny, bz)
-	    self.bne = Point(ex, ny, bz)
-	    self.bnw = Point(wx, ny, bz)
-	    self.bs =  Point(cx, sy, bz)
-	    self.bse = Point(ex, sy, bz)
-	    self.bsw = Point(wx, sy, bz)
-	    self.bw =  Point(wx, cy, bz)
+	    self.b =   P(cx, cy, bz)
+	    self.be =  P(ex, cy, bz)
+	    self.bn =  P(cx, ny, bz)
+	    self.bne = P(ex, ny, bz)
+	    self.bnw = P(wx, ny, bz)
+	    self.bs =  P(cx, sy, bz)
+	    self.bse = P(ex, sy, bz)
+	    self.bsw = P(wx, sy, bz)
+	    self.bw =  P(wx, cy, bz)
 
 	    # Recursively update parent *Box*'s until top-most bounding
 	    # box is reached:
@@ -1028,8 +1031,8 @@ class Part:
 		  format(name, attribute_name)
 		before_values[attribute_name] = attribute
 	    elif attribute_name.endswith("_p"):
-		assert isinstance(attribute, Point), \
-		  "{0}.{1} is not a Point (i.e. point)". \
+		assert isinstance(attribute, P), \
+		  "{0}.{1} is not a P (i.e. point)". \
 		  format(name, attribute_name)
 		before_values[attribute_name] = attribute
 	    elif attribute_name.endswith("_a"):
@@ -1134,8 +1137,6 @@ class Part:
 	self._scad_difference_lines = scad_difference_lines
 	self._scad_union_lines = scad_union_lines
 	self.construct()
-	self._scad_difference_lines = None
-	self._scad_union_lines = None
 
 	# Open *scad_file*:
 	name = self._name
@@ -1203,7 +1204,7 @@ class Part:
 	subprocess.call(command, stderr=ignore_file) 
 	ignore_file.close()
 
-	if False:
+	if True:
 	    # For now, write out an offset file:
 	    stl_file = open("{0}.stl".format(name), "r")
 	    stl_lines = stl_file.readlines()
@@ -1261,6 +1262,15 @@ class Part:
 		  format(triangle[0], triangle[1], triangle[2]))
 	    offset_file.close()
 
+	if True:
+	    wrl_file_name = "{0}.wrl".format(name)
+	    wrl_file = open(wrl_file_name, "w")
+	    self.wrl_write(wrl_file, file_name = wrl_file_name)
+	    wrl_file.close()
+
+	self._scad_difference_lines = None
+	self._scad_union_lines = None
+
 	#print("<=Part._manufacture:{0}".format(self._name))
 
     def construct(self):
@@ -1304,6 +1314,175 @@ class Part:
 	#ezcad_xml.read()
 	#assert ezcad_xml.close() == None, \
 	#  "Error running 'EZCAD_XML {0}'".format(xml_file_name)
+
+    def wrl_write(self, wrl_file, indent = 0, parts_table = {}, file_name = ""):
+	assert isinstance(wrl_file, file)	
+	assert isinstance(indent, int)
+
+	if indent == 0:
+	    parts_table = {}
+	name = self._name
+	spaces = " " * indent
+	if indent == 0:
+	    wrl_file.write("#VRML V2.0 utf8\n")
+
+	print("{0}=>Part.wrl_write({1}, {2}, {3}, {4}):enter".
+	  format(spaces, name, indent, parts_table.keys(), file_name))
+
+	if name in parts_table:
+	    wrl_file.write("{0}USE x{1}\n".format(spaces, name))
+	else:
+	    parts_table[name] = self
+
+	    # Decide whether we are a part or an assembly:
+	    union_lines = self._scad_union_lines
+	    if union_lines != None and len(union_lines) > 0:
+		# Read in the .stl file that was generated by OpenSCAD:
+		name = self._name
+		stl_file = open("{0}.stl".format(name), "r")
+		stl_lines = stl_file.readlines()
+		stl_file.close()
+
+		# Extract the *triangles* and *vertices* from the read
+		# in content:
+		triangles = []
+		offsets = []
+		vertices = {}
+		size = len(stl_lines)
+		assert stl_lines[0][:5] == "solid"
+		index = 1
+		while index + 4 < size:
+		    # Extract *vertex1*, *vertex2*, and *vertex3*:
+		    list = stl_lines[index + 2].split()
+		    vertex1 = (float(list[1]), float(list[2]), float(list[3]))
+		    list = stl_lines[index + 3].split()
+		    vertex2 = (float(list[1]), float(list[2]), float(list[3]))
+		    list = stl_lines[index + 4].split()
+		    vertex3 = (float(list[1]), float(list[2]), float(list[3]))
+
+		    # Get *offset1* for *vertex1*:
+		    if vertex1 in vertices:
+			offset1 = vertices[vertex1]
+		    else:
+			offset1 = len(offsets)
+			offsets.append(vertex1)
+			vertices[vertex1] = offset1
+
+		    # Get *offset2* for *vertex2*:
+		    if vertex2 in vertices:
+			offset2 = vertices[vertex2]
+		    else:
+			offset2 = len(offsets)
+			offsets.append(vertex2)
+			vertices[vertex2] = offset2
+
+		    # Get *offset3* for *vertex3*:
+		    if vertex3 in vertices:
+			offset3 = vertices[vertex3]
+		    else:
+			offset3 = len(offsets)
+			offsets.append(vertex3)
+			vertices[vertex3] = offset3
+
+		    # Create a triangle using the offsets:
+		    triangles.append( (offset1, offset2, offset3,) )
+		    index += 7
+		# We are done with *stl_lines*:
+		stl_lines = None
+		spaces = " " * indent
+
+		# Output *color* and Material properties::
+		color = self._color
+		wrl_file.write(
+		  "{0}DEF x{1} Shape {{\n".format(spaces, name))
+		wrl_file.write(
+		  "{0} appearance Appearance {{\n".format(spaces))
+		wrl_file.write(
+		  "{0}  material Material {{\n".format(spaces))
+		wrl_file.write(
+		  "{0}   diffuseColor {1} {2} {3}\n".
+		  format(spaces, color.red, color.green, color.blue))
+		wrl_file.write(
+		  "{0}   transparency {1}\n".format(spaces, color.alpha))
+		wrl_file.write(
+		  "{0}  }}\n".format(spaces))
+		wrl_file.write(
+		  "{0} }}\n".format(spaces))
+	
+		# Start Geometry:
+		wrl_file.write(
+		  "{0} geometry IndexedFaceSet {{\n".format(spaces))
+
+		# Output the *vertices*:
+		wrl_file.write(
+		  "{0}  coord Coordinate {{\n".format(spaces))
+		wrl_file.write(
+		  "{0}   point[\n".format(spaces))
+		for offset in offsets[:-1]:
+		    wrl_file.write(
+		      "{0}    {1} {2} {3},\n". \
+		      format(spaces, offset[0], offset[1], offset[2]))
+		# Output last vertex without trailing comma:
+		offset = offsets[-1]
+		wrl_file.write(
+		  "{0}    {1} {2} {3}\n".
+		  format(spaces, offset[0], offset[1], offset[2]))
+		wrl_file.write(
+		  "{0}   ]\n".format(spaces))
+		wrl_file.write(
+		  "{0}  }}\n".format(spaces))
+
+		# Output the *triangles*:
+		wrl_file.write(
+		  "{0}  coordIndex [\n".format(spaces))
+		for triangle in triangles[:-1]:
+		    # Output each *triangle* (except last one) with
+		    # trailing comma:
+		    wrl_file.write(
+		      "{0}   {1} {2} {3} -1,\n".
+		      format(spaces, triangle[0], triangle[1], triangle[2]))
+		# Output last *triangle* without trailing comma:
+		triangle = triangles[-1]
+		wrl_file.write(
+		  "{0}   {1} {2} {3} -1\n".
+		  format(spaces, triangle[0], triangle[1], triangle[2]))
+		wrl_file.write(
+		  "{0}  ]\n".format(spaces))
+
+		# Close everything up:
+		wrl_file.write(
+		  "{0} }}\n".format(spaces))
+		wrl_file.write(
+		  "{0}}}\n\n".format(spaces, name))
+	    else:
+	        wrl_file.write(
+		  "{0}DEF x{1} Group {{\n".format(spaces, self._name))
+		wrl_file.write(
+		  "{0} children [\n".format(spaces))
+		for place in self._places.values():
+		    # Extract some values from *place*:
+		    center = place._center
+		    axis = place._axis
+		    rotate = place._rotate
+		    translate = place._translate
+		    part = place._part
+
+		    wrl_file.write(
+		      "{0}  Transform {{\n".format(spaces))
+		    wrl_file.write(
+		      "{0}   translation {1} {2} {3}\n".
+		      format(spaces, translate.x, translate.y, translate.z))
+		    part.wrl_write(wrl_file, indent + 4, parts_table, file_name)
+		    wrl_file.write(
+		      "{0}  }}\n".format(spaces))
+		wrl_file.write(
+		  "{0} ]\n".format(spaces))
+		wrl_file.write(
+		  "{0}}}\n".format(spaces))
+	print("{0}<=Part.wrl_write({1}, {2}, {3}, {4}):leave".
+	  format(spaces, name, indent, parts_table.keys(), file_name))
+
+    # ===================================
 
     def __str__(self):
 	""" Part: Return {self} as a formatted string. """
@@ -1435,10 +1614,10 @@ class Part:
 		color = Color()
 	if type(corner1) == none_type:
 	    zero = L(0.0)
-	    corner1 = Point(zero, zero, zero)
+	    corner1 = P(zero, zero, zero)
 	if type(corner2) == none_type:
 	    one = L.mm(1.0)
-	    corner2 = Point(one, one, one)
+	    corner2 = P(one, one, one)
 
 	# Record the materials:
 	self._material = material
@@ -1446,14 +1625,14 @@ class Part:
 
 	# Check argument types:
 	assert isinstance(comment, str)
-	assert isinstance(corner1, Point)
-	assert isinstance(corner2, Point)
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
 	assert isinstance(material, Material)
 	assert isinstance(color, Color)
-	assert type(center) == none_type or isinstance(center, Point)
-	assert type(axis) == none_type or isinstance(axis, Point)
+	assert type(center) == none_type or isinstance(center, P)
+	assert type(axis) == none_type or isinstance(axis, P)
 	assert type(rotate) == none_type or isinstance(rotate, Angle)
-	assert type(translate) == none_type or isinstance(translate, Point)
+	assert type(translate) == none_type or isinstance(translate, P)
 
 	# Make sure that the corners are diagonal from bottom south west
 	# to top north east:
@@ -1470,14 +1649,14 @@ class Part:
 	  axis = axis, rotate = rotate, translate = translate)
 	forward_matrix = place._forward_matrix
 
-	tne = Point(x2, y2, z2)
-	bsw = Point(x1, y1, z1)
-	tsw = Point(x1, y1, z2)
-	bnw = Point(x1, y2, z1)
-	tnw = Point(x1, y2, z2)
-	bse = Point(x2, y1, z1)
-	tse = Point(x2, y1, z2)
-	bne = Point(x2, y2, z1)
+	tne = P(x2, y2, z2)
+	bsw = P(x1, y1, z1)
+	tsw = P(x1, y1, z2)
+	bnw = P(x1, y2, z1)
+	tnw = P(x1, y2, z2)
+	bse = P(x2, y1, z1)
+	tse = P(x2, y1, z2)
+	bne = P(x2, y2, z1)
 
 	#print("before box={0:m}".format(box))
 	self._box_point_update(comment + "[TNE]",
@@ -1727,7 +1906,7 @@ class Part:
 	assert isinstance(top, L)
 	assert isinstance(bottom, L)
 
-	# Look up {bsw} and {tne}, the bounding box corner {Point}'s:
+	# Look up {bsw} and {tne}, the bounding box corner {P}'s:
 	bsw = self.bsw
 	tne = self.tne
 
@@ -1745,7 +1924,7 @@ class Part:
 	ns2 = (n + s).half()
 	tb2 = (t + b).half()
 
-	# Install 6 bounding box surface {Point}'s into {points}:
+	# Install 6 bounding box surface {P}'s into {points}:
 	self.xb = self.point_new(ew2, ns2,   b)
 	self.xe = self.point_new(  e, ns2, tb2)
 	self.xn = self.point_new(ew2,   n, tb2)
@@ -1753,7 +1932,7 @@ class Part:
 	self.xt = self.point_new(ew2, ns2,   t)
 	self.xw = self.point_new(  w, ns2, tb2)
 
-	# Install 12 bounding box edge {Point}'s into {points}:
+	# Install 12 bounding box edge {P}'s into {points}:
 	self.xbe = self.point_new(  e, ns2,   b)
 	self.xbn = self.point_new(ew2,   n,   b)
 	self.xbs = self.point_new(ew2,   s,   b)
@@ -1767,7 +1946,7 @@ class Part:
 	self.xts = self.point_new(ew2,   s,   t)
 	self.xtw = self.point_new(  w, ns2,   t)
 
-	# Install 8 bounding box corner {Point}'s into {points}:
+	# Install 8 bounding box corner {P}'s into {points}:
 	self.xbne = self.point_new(e, n, b)
 	self.xbnw = self.point_new(w, n, b)
 	self.xbse = self.point_new(e, s, b)
@@ -1813,8 +1992,8 @@ class Part:
 	# Check argument types:
 	assert isinstance(color, str)
 	assert isinstance(material, str)
-	assert isinstance(start_point, Point)
-	assert isinstance(end_point, Point)
+	assert isinstance(start_point, P)
+	assert isinstance(end_point, P)
 	assert isinstance(a_width, L)
 	assert isinstance(a_thickness, L)
 	assert isinstance(b_width, L)
@@ -2028,8 +2207,8 @@ class Part:
 	# Check argument types:
 	assert isinstance(comment, str)
 	assert isinstance(diameter, L)
-	assert isinstance(start, Point)
-	assert isinstance(end, Point)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
 
 	# Define some useful abbreviations:
 	zero = L(0.0)
@@ -2048,7 +2227,7 @@ class Part:
 	    print("Part.hole:axis={0:m} length={1:m}".format(axis, length))
 	    if axis.x != zero or axis.y != zero:
 		# We have to tilt the cylinder.
-		z_axis = Point(zero, zero, L(mm=1.0))
+		z_axis = P(zero, zero, L(mm=1.0))
 		angle = z_axis.angle_between(axis)
 		orthogonal_xis = z_axis.dot_product(axis)
 
@@ -2166,21 +2345,21 @@ class Part:
 	if type(name) == none_type:
 	    name = part._name
 	if type(center) == none_type:
-	    center = Point()
+	    center = P()
 	if type(axis) == none_type:
-	    axis = Point(z = L(1.0))
+	    axis = P(z = L(1.0))
 	if type(rotate) == none_type:
 	    rotate = Angle()
 	if type(translate) == none_type:
-	    translate = Point()
+	    translate = P()
 
 	# Check argument types:
 	assert isinstance(name, str)
 	assert isinstance(part, Part)
-	assert isinstance(center, Point)
-	assert isinstance(axis, Point)
+	assert isinstance(center, P)
+	assert isinstance(axis, P)
 	assert isinstance(rotate, Angle)
-	assert isinstance(translate, Point)
+	assert isinstance(translate, P)
 
 	# Create *place* and stuff into *_places*:
 	place = Place(part = part, name = name,
@@ -2190,13 +2369,13 @@ class Part:
 	return place
 
     #def point(self, point_path):
-    #	""" Part dimensions: Return the {Point} associated with {point_path}
+    #	""" Part dimensions: Return the {P} associated with {point_path}
     #	    starting from {self}. """
     #
     #	return self.value_lookup(point_path, Part.POINTS)
 
     def point_map(self, place_path):
-	""" Part dimensions: Return the {Point} that corresponds to
+	""" Part dimensions: Return the {P} that corresponds to
 	    the point specified by {place_path} in the {self} reference
 	    frame. """
 
@@ -2206,9 +2385,9 @@ class Part:
 	# Wait until after all part names have been defined:
 	if self.dimensions_define_mode():
 	    zero = L.inch(0)
-	    result = Point(self, zero, zero, zero)
+	    result = P(self, zero, zero, zero)
 	else:
-	    # Look up the {Part}/{Point}/{Matrix} triple for {place_path1}:
+	    # Look up the {Part}/{P}/{Matrix} triple for {place_path1}:
 	    part_point_matrix = self.point_subtract_helper(place_path)
 	    part = part_point_matrix[0]
 	    point = part_point_matrix[1]
@@ -2268,10 +2447,10 @@ class Part:
 
 	none_type = type(None)
 	assert type(lines) == none_type or isinstance(lines, list)
-	assert type(center) == none_type or isinstance(center, Point)
-	assert type(axis) == none_type or isinstance(axis, Point)
+	assert type(center) == none_type or isinstance(center, P)
+	assert type(axis) == none_type or isinstance(axis, P)
 	assert type(rotate) == none_type or isinstance(rotate, Angle)
-	assert type(translate) == none_type or isinstance(translate, Point)
+	assert type(translate) == none_type or isinstance(translate, P)
 
 	if isinstance(lines, list):
 	    # Perform any requested translate "last":
@@ -2293,7 +2472,7 @@ class Part:
 		      (x1 + x2).half(), (y1 + y2).half(), (z1 + z2).half()))
 		else:
 		    # Rotate around *center*:
-		    assert isinstance(center, Point)
+		    assert isinstance(center, P)
 		    lines.append(
 		      "      translate([{0:m}, {1:m}, {2:m}])".format(
 		      center.x, center.y, center.z))
@@ -2306,7 +2485,7 @@ class Part:
 		      "    rotate(a={0}, v=[0, 0, 1])".format(rotate))
 		else:
                     # Rotate around *axis*:
-		    assert isinstance(axis, Point)
+		    assert isinstance(axis, P)
 		    lines.append(
 		      "      rotate(a={0}, v=[{1:m}, {2:m}, {3:m}])".format(
 		      rotate, axis.x, axis.y, axis.z))
@@ -2708,8 +2887,8 @@ class Part:
 	# Check argument types:
 	assert isinstance(comment, str)
 	assert isinstance(screw, str)
-	assert isinstance(start_point, Point)
-	assert isinstance(end_point, Point)
+	assert isinstance(start_point, P)
+	assert isinstance(end_point, P)
 	assert isinstance(flags, str)
 
 	#print "Part.screw_hole: Part={0} screw={1} flags={2}". \
@@ -2950,7 +3129,74 @@ class Part:
 	for part in self.parts.values():
 	    part.show(indent + " ")
 
-    def simple_pocket(self, comment, \
+    def simple_pocket(self, comment = "no comment",
+      corner1 = None, corner2 = None,
+      center = None, axis = None, rotate = None, translate = None):
+	""" {Part} construct: Create a block with corners at {corner1} and
+	    {corner2}.  The block is made of {material} and visualized as
+	    {color}. """
+
+	#print "block_corners('{0}', {1}, {2}, '{3}', '{4}')".format( \
+	#  self.name, corner1, corner2, color, material)
+
+	# Deal with argument defaults:
+	none_type = type(None)
+	if type(corner1) == none_type:
+	    zero = L(0.0)
+	    corner1 = P(zero, zero, zero)
+	if type(corner2) == none_type:
+	    one = L.mm(1.0)
+	    corner2 = P(one, one, one)
+
+	# Check argument types:
+	assert isinstance(comment, str)
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
+	assert type(center) == none_type or isinstance(center, P)
+	assert type(axis) == none_type or isinstance(axis, P)
+	assert type(rotate) == none_type or isinstance(rotate, Angle)
+	assert type(translate) == none_type or isinstance(translate, P)
+
+	# Make sure that the corners are diagonal from bottom south west
+	# to top north east:
+	x1 = min(corner1.x, corner2.x)
+	x2 = max(corner1.x, corner2.x)
+	y1 = min(corner1.y, corner2.y)
+	y2 = max(corner1.y, corner2.y)
+	z1 = min(corner1.z, corner2.z)
+	z2 = max(corner1.z, corner2.z)
+	#print("Part.box:{0:m}:{1:m},{2:m}:{3:m},{4:m}:{5:m}". \
+	#  format(x1, x2, y1, y2, z1, z2))
+
+	place = Place(part = None, name = comment, center = center,
+	  axis = axis, rotate = rotate, translate = translate)
+	forward_matrix = place._forward_matrix
+
+	difference_lines = self._scad_difference_lines
+	if type(difference_lines) != none_type:
+
+	    assert x1 < x2, "x1={0} should be less than x2={1}".format(x1, x2)
+	    assert y1 < y2, "y1={0} should be less than y2={1}".format(y1, y2)
+	    assert z1 < z2, "xz={0} should be less than z2={1}".format(z1, z2)
+
+	    #print "c1=({0},{1},{2}) c2=({3},{4},{5})".format( \
+	    #  x1, y1, z1, x2, y2, z2)
+
+            # The transforms are done in reverse order:
+
+	    self._scad_transform(difference_lines, center = center,
+	      axis = axis, rotate = rotate, translate = translate)
+
+	    # Get the lower south west corner positioned:
+	    difference_lines.append(
+	      "      translate([{0:m}, {1:m}, {2:m}])".format(x1, y1, z1))
+
+	    # Finally, we can output the cube:
+	    difference_lines.append(
+	      "        cube([{0:m}, {1:m}, {2:m}]);".format(
+	      x2 - x1, y2 - y1, z2 - z1))
+
+    def xxx_simple_pocket(self, comment, \
       corner1_point, corner2_point, radius, flags):
 	""" Part construct: Mill a pocket in {self} where {corner1_point}
 	    and {corner2_point} specify a diagonal across the pocket.  The
@@ -2961,8 +3207,8 @@ class Part:
 
 	# Perform argument type checking:
 	assert isinstance(comment, str)
-	assert isinstance(corner1_point, Point)
-	assert isinstance(corner2_point, Point)
+	assert isinstance(corner1_point, P)
+	assert isinstance(corner2_point, P)
 	assert isinstance(radius, L)
 	assert isinstance(flags, str)
 
@@ -3000,7 +3246,7 @@ class Part:
 	return self.value_lookup(scalar_path, Part.STRINGS)
 
     def string_set(self, string_name, string_value):
-	""" Point dimensions: Store Set the value of {string_name} in {self}
+	""" P dimensions: Store Set the value of {string_name} in {self}
 	    to {string_value}.  In addition, {string_value} is returned. """
 
 	return self.value_set(self, string_name, string_value, Part.STRINGS)
@@ -3329,7 +3575,7 @@ class Part:
 		value = L(0.0)
 	    elif flavor == Part.POINTS:
 		zero = L(0.0)
-		value = Point(self, zero, zero, zero)
+		value = P(self, zero, zero, zero)
 	    elif flavor == Part.SCREWS:
 		# Create a bogus {Screw}, that will not actually be used:
 		value = Screw(self, "", "", "TB")
@@ -3352,7 +3598,7 @@ class Part:
 	    flavor_name = "L"
 	elif flavor == Part.POINTS:
 	    values = self.points
-	    flavor_name = "Point"
+	    flavor_name = "P"
 	elif flavor == Part.SCALARS:
 	    values = self.scalars
 	    flavor_name = "Scalar"
@@ -3486,13 +3732,13 @@ class Place:
 	    assert type(part) != none_type
 	    name = part._name
 	if type(center) == none_type:
-	    center = Point()
+	    center = P()
 	if type(axis) == none_type:
-	    axis = Point(z = L(1.0))
+	    axis = P(z = L(1.0))
 	if type(rotate) == none_type:
 	    rotate = Angle()
 	if type(translate) == none_type:
-	    translate = Point()
+	    translate = P()
 
 	part_name = "<none>"
 	if type(part) != none_type:
@@ -3501,10 +3747,10 @@ class Place:
 	# Check argument types:
 	assert type(part) == none_type or isinstance(part, Part)
 	assert isinstance(name, str)
-	assert isinstance(center, Point)
-	assert isinstance(axis, Point)
+	assert isinstance(center, P)
+	assert isinstance(axis, P)
 	assert isinstance(rotate, Angle)
-	assert isinstance(translate, Point)
+	assert isinstance(translate, P)
 
 	#print (("Place.__init__(part={0}, name={1}, center={2}, " + \
 	#  "axis={3}, rotate={4}, translate={5})"). \
@@ -3610,12 +3856,12 @@ class Place:
 
 	return not (self == place)
 
-class Point:
-    """ {Point} represents a point in 3-space associated with a specific
+class P:
+    """ {P} represents a point in 3-space associated with a specific
 	{Part} to provide the frame of reference. """
 
     def __init__(self, x = None, y = None, z = None):
-	""" Point: Intialize {self} to contain {part}, {x}, {y}, {z}. """
+	""" P: Intialize {self} to contain {part}, {x}, {y}, {z}. """
 
 	# Deal with default arguments:
 	if type(x) == type(None):
@@ -3636,26 +3882,26 @@ class Point:
 	self.z = z
 
     def __add__(self, point):
-	""" Point: Add {point} to {self}. """
+	""" P: Add {point} to {self}. """
 
-	assert isinstance(point, Point)
-	return Point(self.x + point.x, self.y + point.y, self.z + point.z)
+	assert isinstance(point, P)
+	return P(self.x + point.x, self.y + point.y, self.z + point.z)
 
     def __div__(self, number):
-	""" Point: Return the result of dividing {self} by {number}. """
+	""" P: Return the result of dividing {self} by {number}. """
 
 	number = float(number)
 	assert isinstance(number, int) or isinstance(number, float)
-	return Point(self.x / number, self.y / number, self.z / number)
+	return P(self.x / number, self.y / number, self.z / number)
 
     def __eq__(self, point):
-	""" Point: Return {True} if {self} is equal to {point}. """
+	""" P: Return {True} if {self} is equal to {point}. """
 
-	assert isinstance(point, Point)
+	assert isinstance(point, P)
 	return self.x == point.x and self.y == point.y and self.z == point.z
 
     def __format__(self, format):
-	""" *Point*: Return *self* formatted as a string. """
+	""" *P*: Return *self* formatted as a string. """
 
 	assert isinstance(format, str)
 	if format != "":
@@ -3666,41 +3912,41 @@ class Point:
 	return format_string.format(self.x, self.y, self.z)
 
     def __mul__(self, scalar):
-	""" Point: Return the result of muliplying {self} by {scalar}. """
+	""" P: Return the result of muliplying {self} by {scalar}. """
 
-	return Point(self.part, \
+	return P(self.part, \
 	  self.x * scalar, self.y * scalar, self.z * scalar)
 
     def __rmul__(self, scalar):
-	""" Point: Return the result of muliplying {self} by {scalar}. """
+	""" P: Return the result of muliplying {self} by {scalar}. """
 
-	return Point(self.part, \
+	return P(self.part, \
 	  self.x * scalar, self.y * scalar, self.z * scalar)
 
     def __ne__(self, point):
-	""" Point: Return {True} if {self} is not equal to {point}. """
+	""" P: Return {True} if {self} is not equal to {point}. """
 
-	assert isinstance(point, Point)
+	assert isinstance(point, P)
 	return self.x != point.x or self.y != point.y or self.z != point.z
 
     def __neg__(self):
-	""" Point: Return the negative of {self}. """
+	""" P: Return the negative of {self}. """
 
-	return Point(self.part, -self.x, -self.y, -self.z)
+	return P(self.part, -self.x, -self.y, -self.z)
 
     def __str__(self):
-	""" Point: Return {self} as a formatted string. """
+	""" P: Return {self} as a formatted string. """
 
 	return "({0}, {1}, {2})".format(self.x, self.y, self.z)
 
     def __sub__(self, point):
-	""" Point: Subtract {point} from {self}. """
+	""" P: Subtract {point} from {self}. """
 
-	assert isinstance(point, Point)
-	return Point(self.x - point.x, self.y - point.y, self.z - point.z)
+	assert isinstance(point, P)
+	return P(self.x - point.x, self.y - point.y, self.z - point.z)
 
     def angle_between(self, point):
-	""" Point dimensions: Return the angle between {self} and {point}. """
+	""" P dimensions: Return the angle between {self} and {point}. """
 
 	# a . b = ||a|| ||b|| cos <AB		(1)
 	# (a . b) / (||a|| ||b||) = cos <AB	(2)
@@ -3719,7 +3965,7 @@ class Point:
 	return Angle.rad(math.acos(dot_product / (length1 * length2)))
 
     def cross_product(self, point):
-	""" Point dimensions: Return the cross product of {self}
+	""" P dimensions: Return the cross product of {self}
 	    with {point}. """
 
 	ux = self.x.inches()
@@ -3730,14 +3976,14 @@ class Point:
 	vz = point.z.inches()
 
 	assert self.part == point.part, \
-	  "Point.cross_product: Mis-matched parts"
+	  "P.cross_product: Mis-matched parts"
 
 	inch = L.inch
-	return Point(self.part, inch(uy * vz - uz * vy),
+	return P(self.part, inch(uy * vz - uz * vy),
 	  inch(uz * vx - ux * vz), inch(ux * vy - uy * vx))
 
     def distance(self, point):
-	assert isinstance(point, Point)
+	assert isinstance(point, P)
 	dx = (self.x - point.x).inches()
 	dy = (self.y - point.y).inches()
 	dz = (self.z - point.z).inches()
@@ -3745,13 +3991,13 @@ class Point:
 	return length
 
     def half(self):
-	""" Point dimensions: Return {self} / 2. """
+	""" P dimensions: Return {self} / 2. """
 
 	result = self / 2.0
 	return result	
 
     def length(self):
-	""" Point dimensions: Return the length of self. """
+	""" P dimensions: Return the length of self. """
 
 	x = self.x._mm
 	y = self.y._mm
@@ -3772,10 +4018,10 @@ class Point:
     def points(self, dx, dy, dz):
 	""" Part construct: Return a list of points centered around
 	    {self} that are separated by {dx} in X, {dy} in Y and {dx}
-	    in Z.  If all of {dx}, {dy}, {dz} are non-zero, 8 {Point}'s are
-	    returned.  If one of {dx}, {dy}, and {dz} is zero, 4 {Point}'s
+	    in Z.  If all of {dx}, {dy}, {dz} are non-zero, 8 {P}'s are
+	    returned.  If one of {dx}, {dy}, and {dz} is zero, 4 {P}'s
 	    are returned.  If two of {dx}, {dy}, and {dz} are zero, only
-	    2 {Point}'s are returned. """
+	    2 {P}'s are returned. """
 
 	# Extract some values from {part}:
 	part = self.part
@@ -3810,57 +4056,57 @@ class Point:
 	for x in x_list:
 	    for y in y_list:
 		for z in z_list:
-		    point = Point(part, x, y, z)
+		    point = P(part, x, y, z)
 		    result.append(point)
 
 	return result
 
     def twice(self):
-	""" Point dimensions: Return {self} * 2. """
+	""" P dimensions: Return {self} * 2. """
 
 	return self * 2.0
 
     def x_adjust(self, x):
-	""" Point dimensions: Return copy of {self} with {x} added to the
+	""" P dimensions: Return copy of {self} with {x} added to the
 	    x field. """
 
-	return Point(self.part, self.x + x, self.y, self.z)
+	return P(self.part, self.x + x, self.y, self.z)
 
     def xy_adjust(self, x, y):
-	""" Point dimensions: Return copy of {self} with {x} added to the
+	""" P dimensions: Return copy of {self} with {x} added to the
 	    x field and {y} added to the y field. """
 
-	return Point(self.part, self.x + x, self.y + y, self.z)
+	return P(self.part, self.x + x, self.y + y, self.z)
 
     def xyz_adjust(self, x, y, z):
-	""" Point dimensions: Return copy of {self} with {x} added to the
+	""" P dimensions: Return copy of {self} with {x} added to the
 	    x field, {y} added to the y field, and {z} added to the z field. """
 
-	return Point(self.part, self.x + x, self.y + y, self.z + z)
+	return P(self.part, self.x + x, self.y + y, self.z + z)
 
     def xz_adjust(self, x, z):
-	""" Point dimensions: Return copy of {self} with {x} added to the
+	""" P dimensions: Return copy of {self} with {x} added to the
 	    x field and {z} added to the z field. """
 
-	return Point(self.part, self.x + x, self.y, self.z + z)
+	return P(self.part, self.x + x, self.y, self.z + z)
 
     def y_adjust(self, y):
-	""" Point dimensions: Return copy of {self} with {y} added to the
+	""" P dimensions: Return copy of {self} with {y} added to the
 	    y field. """
 
-	return Point(self.part, self.x, self.y + y, self.z)
+	return P(self.part, self.x, self.y + y, self.z)
 
     def yz_adjust(self, y, z):
-	""" Point dimensions: Return copy of {self} with {y} added to the
+	""" P dimensions: Return copy of {self} with {y} added to the
 	    y field and {z} added to the z field. """
 
-	return Point(self.part, self.x, self.y + y, self.z + z)
+	return P(self.part, self.x, self.y + y, self.z + z)
 
     def z_adjust(self, z):
-	""" Point dimensions: Return copy of {self} with {z} added to the
+	""" P dimensions: Return copy of {self} with {z} added to the
 	    z field. """
 
-	return Point(self.part, self.x, self.y, self.z + z)
+	return P(self.part, self.x, self.y, self.z + z)
 
 class Screw:
     """ Screw """
@@ -4171,21 +4417,21 @@ class Matrix:
 	return result
 
     def point_create(self):
-	""" Matrix public:  Return the {Point} the corresponds to {self}
-	    using {part} as the returned {Point}'s reference frame.  {self}
+	""" Matrix public:  Return the {P} the corresponds to {self}
+	    using {part} as the returned {P}'s reference frame.  {self}
 	    must be a 1 x 4 matrix. """
 
 	mat = self.mat
 	x = mat[0, 0]
 	y = mat[0, 1]
 	z = mat[0, 2]
-	point = Point(L(mm=x), L(mm=y), L(mm=z))
+	point = P(L(mm=x), L(mm=y), L(mm=z))
 
 	return point
 
     def point_multiply(self, point):
 	""" Matrix public: Return the point that results from mulitiplying
-	    {point} by {self} and converting it back into a {Point} with
+	    {point} by {self} and converting it back into a {P} with
 	    {part} as the reference frame. """
 
 	point_matrix = point.matrix_create()

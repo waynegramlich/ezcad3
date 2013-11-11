@@ -38,14 +38,15 @@
 </div><!-- top -->
 <div class="header">
   <div class="headertitle">
-<div class="title"><a class="el" href="namespaceEZCAD3.html" title="More details.">EZCAD3</a>: Easy (Mechanical) Computer Aided Design -- Version 3 </div>  </div>
+<div class="title"><a class="el" href="namespaceEZCAD3.html" title="More details here...">EZCAD3</a>: Easy (Mechanical) Computer Aided Design -- Version 3 </div>  </div>
 </div><!--header-->
 <div class="contents">
 <div class="textblock"><h1>Introduction</h1>
 <p>EZCAD stands for Easy Computed Aided Design. EZCAD is a mechanical CAD (Computer Aided Design) system with an integrated mechanical CAM (Computer Aided Manufacture) system. The CAD system specifies the geometry of individual parts and how they are assembled together. The CAM system specifies the manufacturing steps required to make a part.</p>
 <p>In EZCAD, the designer writes a program using the <a href="http://www.python.org/">Python</a> programming language. The python program is then executed to generate both the design visualization and all associated manufacturing files (e.g. .stl files for 3-printers, G-codes for CNC mills/lathes, .dxf files for laser printers, etc.) EZCAD does not include either a text editor or a visualization tool. Instead, the designer uses their preferred text editor (e.g. idle, emacs, vim, etc.) and they use their own preferred visualization tools (e.g. meshlab, etc.) Other tools are used to visualize generated manufacturing files.</p>
 <p>In short, EZCAD is just a Python library that is executed to generate the various design files.</p>
-<h1>Downloading</h1>
+<h1>Downloading, Documentation, and Licensing</h1>
+<h2>Downloading</h2>
 <p>This package is distributed in source form from a <em>git</em> repository. To get a copy: </p>
 <pre class="fragment">    git clone https://github.com/waynegramlich/ezcad3.git
 </pre><p>In addition, this package needs a version of <a href="http://www.openscad.org/">OpenSCAD</a>. For those who use Linux distributions based on the Debian package system (e.g. Ubuntu, Mint, etc.), the following will do the trick: </p>
@@ -53,10 +54,10 @@
 </pre><p>OpenSCAD is primarily used as a front-end to the wonderful <a href="http://www.cgal.org/">CGAL</a>(Computational Geometry Algorithms Library). In particular, OpenSCAD uses the Boolean 3D solids library embodied in the NEF3 sub-library of CGAL.</p>
 <p>Detailed documentation of the Python classes and associated methods is maintained by <a href="http://www.doxygen.org/">Doxygen</a>. For convenience, all of the generated Doxygen documenation is checked into the repository. If you want to generated Doxygen documentation locally, you need to download the program. I downloaded my copy via: </p>
 <pre class="fragment">    sudo apt-get install doxygen
-</pre><h1>Documentation</h1>
+</pre><h2>Documentation</h2>
 <p>In addition to this document, there is <a href="html/pages.html">Doxygen generated documentation</a>.</p>
-<h1>Licensing</h1>
-<p>In general, I really like Open Source Licenses. I have a slight preference of the GPL open source license, so that is what <a class="el" href="namespaceEZCAD3.html" title="More details.">EZCAD3</a> is released under. I emulate the <a href="http://www.fsf.org">Free Software Foundation</a> that any code contributed to my code branch requires a copyright assignment. Professor Eben Moglen has written up a short explanation of <a href="http://www.gnu.org/licenses/why-assign.html">Why the FSF gets copyright assignments from contributors</a>. I strongly feel that having a unified copyright owner provides maximum protection for the open source software. While it is possible to get <a href="http://ftp.xemacs.org/old-beta/FSF/assign.changes">overly legalistic</a>, I think the following is more that adequate to assign the copyright: </p>
+<h2>Licensing</h2>
+<p>In general, I really like Open Source Licenses. I have a slight preference of the GPL open source license, so that is what <a class="el" href="namespaceEZCAD3.html" title="More details here...">EZCAD3</a> is released under. I emulate the <a href="http://www.fsf.org">Free Software Foundation</a> that any code contributed to my code branch requires a copyright assignment. Professor Eben Moglen has written up a short explanation of <a href="http://www.gnu.org/licenses/why-assign.html">Why the FSF gets copyright assignments from contributors</a>. I strongly feel that having a unified copyright owner provides maximum protection for the open source software. While it is possible to get <a href="http://ftp.xemacs.org/old-beta/FSF/assign.changes">overly legalistic</a>, I think the following is more that adequate to assign the copyright: </p>
 <pre class="fragment">    Hello:
 
     I am assigning my modifications to EZCAD to
@@ -68,7 +69,7 @@
 
     {Your name here}
 </pre><p>Enough on this legal stuff!</p>
-<h1>Quick Overview</h1>
+<h1>EZCAD Overview</h1>
 <p>In EZCAD, the most important Python class is the <em>Part</em> class. The <em>Part</em> class is used to both manufacture individual parts <em>and</em> to assemble the individual parts together into sub-assemblies.</p>
 <p>In addition to the <em>Part</em> class there are bunch of utility classes. In alphabetical order, the utility classes are:</p>
 <ul>
@@ -116,7 +117,7 @@
 </ul>
 <p>Each phase is quickly discussed below:</p>
 <h2>Part Initialization Phase</h2>
-<p>Each user individual part is implemented as a Python class object that sub-classes the <em>Part</em> super class. As expected, the initialization phase occurs in the *__init__*() method. Each part has an up-level parent (abbreviated as "*up*"). The following code fragment shows how it is done: </p>
+<p>Each user individual part is implemented as a Python class object that sub-classes the <em>Part</em> super class. As expected, the initialization phase occurs in the <em>__init__</em>() method. Each part has an up-level parent (abbreviated as "*up*"). The following code fragment shows how it is done: </p>
 <pre class="fragment">    class My_Part(Part):
 
         def __init__(self, up):
@@ -143,54 +144,47 @@
 <p>All user defined member variables <em>must</em> end with one of the suffixes above.</p>
 <h2>Constraint Propagation Phase</h2>
 <p>Constraint propagation is what allows the designer to relatively easily resize a design. The constraint propagation phase occurs in a <em>Part</em>'s <em>construct</em>() method. Constraint propagation occurs by repeatably calling the <em>construct</em>() method for each <em>Part</em> in the entire design. The <em>construct</em>() methods are repeatably called until none of the values with approved suffixes (e.g. "_l", "_p") change any more.</p>
-<p>To further support constraint propagation, each <em>Part</em> maintains a bounding box for everything it contains. The designer can easily access the various bounding box values using short concise member variable names. Along the X direction, the two bounding box values are referred as east ("e") and west ("w"). For the Y direction, north ("n") and south ("s") are used. For the Z direction, top ("t") and bottom ("b") are used. The bounding box results in 12 length (i.e. <em>L</em>) member variables and 27 point (i.e. <em>P</em>) member variables as listed below:</p>
-<ul>
-<li><em>ex</em>: East X length</li>
-<li><em>cx</em>: Center X length</li>
-<li><em>wx</em>: West X length</li>
-<li><em>dx</em>: Delta X length (i.e. <em>ex</em> - <em>wx</em>)</li>
-<li><em>ny</em>: North Y length</li>
-<li><em>cy</em>: Center Y length</li>
-<li><em>sy</em>: South Y length</li>
-<li><em>dy</em>: Delta Y length (i.e <em>ny</em> - <em>sy</em>)</li>
-<li><em>tz</em>: Top Z length</li>
-<li><em>cz</em>: Center Z length</li>
-<li><em>bz</em>: Bottom Z length</li>
-<li><em>dz</em>: Delta Z length (i.e. <em>tz</em> - <em>bz</em>)</li>
-<li><em>tne</em>: Top/North/East point (i.e. P(ex, ny, tz))</li>
-<li><em>tn</em>: Top/North point (i.e. P(cx, ny, tz))</li>
-<li><em>tnw</em>: Top/North/West point (i.e. P(wx, ny, tz))</li>
-<li><em>te</em>: Top/East point (i.e. P(ex, cy, cz))</li>
-<li><em>t</em>: Top point (i.e. P(cx, cy, tz))</li>
-<li><em>tw</em>: Top/West point (i.e. P(wx, cy, tz))</li>
-<li><em>tse</em>: Top/South/East point (i.e. P(ex, sy, tz))</li>
-<li><em>ts</em>: Top/South/East point (i.e. P(cx, sy, tz))</li>
-<li><em>tsw</em>: Top/South/East point (i.e. P(wx, sy, tz))</li>
-<li><em>ne</em>: North/East point (i.e. P(ex, ny, cz))</li>
-<li><em>n</em>: North point (i.e. P(cx, ny, cz))</li>
-<li><em>nw</em>: North/West point (i.e. P(wx, ny, cz))</li>
-<li><em>e</em>: East point (i.e. P(ex, cy, cz))</li>
-<li><em>c</em>: Center point (i.e. P(cx, cy, cz))</li>
-<li><em>w</em>: West point (i.e. P(wx, cy, cz))</li>
-<li><em>se</em>: North/East point (i.e. P(ex, sy, cz))</li>
-<li><em>s</em>: North/East point (i.e. P(cx, sy, cz))</li>
-<li><em>sw</em>: North/East point (i.e. P(wx, sy, cz))</li>
-<li><em>bne</em>: Bottom/North/East point (i.e. P(ex, ny, bz))</li>
-<li><em>bn</em>: Bottom/North point (i.e. P(cx, ny, bz))</li>
-<li><em>bnw</em>: Bottom/North/West point (i.e. P(wx, ny, bz))</li>
-<li><em>be</em>: Bottom/East point (i.e. P(ex, cy, bz))</li>
-<li><em>b</em>: South point (i.e. P(cx, cy, bz))</li>
-<li><em>bw</em>: Bottom/West point (i.e. P(wx, cy, bz))</li>
-<li><em>bse</em>: Bottom/South/East point (i.e. P(ex, sy, bz))</li>
-<li><em>bs</em>: Bottom/South/East point (i.e. P(cx, sy, bz))</li>
-<li><em>bsw</em>: Bottom/South/East point (i.e. P(wx, sy, bz))</li>
-</ul>
-<p>{Talk about design in assembly space vs individual parts.}</p>
-<p>{Short example of constraint propagation goes here.}</p>
+<p>To further support constraint propagation, each <em>Part</em> maintains a bounding box for everything it contains. The bounding box uses an altitude/compass bearing naming convention. Using this convention, the X axis is uses East/Center/West names, the Y axis uses North/Center/South names, and the Z axis uses Top/Center/Bottom name. The following crude ASCII art should help to convey the concept. </p>
+<pre class="fragment">                T  N (Y axis)
+                | /
+                |/
+          W-----*-----E (X axis)
+               /|
+              / |
+             S  B
+               (Z-axis)
+</pre><p>The bounding box of a part defines box that consists of 3 by 3 x 3 points. There are three slices &ndash; the top slice, the center slice, and bottom slice that are named as follows: </p>
+<pre class="fragment">      tnw--tn---tne     nw----n----ne     bnw--bn---bne
+      |     |     |     |     |     |     |     |     |
+      tw----t----tw     w-----c-----e     bw----b----bw
+      |     |     |     |     |     |     |     |     |
+      tsw--ts---tse     sw----s----se     bsw--bs---bse
+       (Top Slice)      (Center Slice)    (Bottom Slice)
+</pre><p>The designer can easily access the various bounding box values using short concise member variable names. Thus, the <em>tne</em> member variable corresponds to the Top-North-West corner of the bounding box, <em>c</em> corresponds to the Center of the bounding box, and <em>bw</em> corresponds to the Bottom-West edge of the bounding box.</p>
+<p>Using constraint propagation and bounding boxes, EZCAD encourages the use of the <em>assembly focused</em> design pattern where each part is designed to fit precisely into the final assembly from the beginning. This is in contrast to the <em>part focused</em> design pattern where each part is individually designed and then subsequently fitted into the final assembly.</p>
 <h2>Manufacture and Assembly Phase</h2>
-<p>The manufacturing and assembly phase occurs last.</p>
-<p>{More goes here...}</p>
-<h1>A Quick Example</h1>
+<p>The manufacturing and assembly phase occurs last. EZCAD can generate manufacturing files for the following generic classes of machines:</p>
+<ul>
+<li>3D Printers (.stl file)</li>
+</ul>
+<ul>
+<li>Laser Cutters (.dxf file)</li>
+</ul>
+<ul>
+<li>CNC Mills and Lathes (CNC file)</li>
+</ul>
+<p>EZCAD uses a design for manufacture strategy. For each part, the designer specifies one or more appropriate machines that could be used to manufacture the part. While some parts can only be manufactured on a single machine class, others can be manufactured on more than one machine class. For example, a plastic plate that has some holes, inter cut outs, and a specific exterior contour can actually be manufactured on a CNC mill, laser cutter, or 3D printer. The decision of which machine to use is deferred until the actual part needs to be manufactured.</p>
+<p>EZCAD uses a two step process for designing a part:</p>
+<ul>
+<li>First, a bunch of material chunks (e.g. blocks, cylinders, extrusions, etc.) are "welded" together to provide a rough 3D chunk of material.</li>
+</ul>
+<ul>
+<li>Second, a bunch of material removal operations (e.g. holes, pockets, exterior contour removal, etc.)</li>
+</ul>
+<p>The details of these operations are deferred until later.</p>
+<p>After each part is designed, there is a final step of placing each part into the final assembly. A single part or sub-assembly can easily be replicated multiple times in the final assembly.</p>
+<p>Once the final assembly is present, it can be viewed using the appropriate</p>
+<h2>A Quick Example</h2>
 <p>The example below creates a plastic box with a cover, where the cover has a lip that keeps the cover centered over the box. We present the entire code body first then will describe what is happening on a chunk by chunk basis next: </p>
 <pre class="fragment">    #!/usr/bin/env python
 
@@ -288,13 +282,55 @@
 <pre class="fragment">    ezcad = EZCAD3(0)                # Using EZCAD 3.0
     my_assembly = My_Assembly(None)  # Initialize top-level sub-assembly
     my_assembly.process(ezcad)       # Process the design
-</pre><p>In this code sequence, an <em><a class="el" href="namespaceEZCAD3.html" title="More details.">EZCAD3</a></em> object is allocated and initialized. The major revision number is 3 and the minor revision number is 0. Next, the top-level sub-assembly is allocated and initialized. Finally, the <em>process</em>() method is invoked to cause the design to be processed. For those of you who like to scrunch everything onto one line: </p>
+</pre><p>In this code sequence, an <em><a class="el" href="namespaceEZCAD3.html" title="More details here...">EZCAD3</a></em> object is allocated and initialized. The major revision number is 3 and the minor revision number is 0. Next, the top-level sub-assembly is allocated and initialized. Finally, the <em>process</em>() method is invoked to cause the design to be processed. For those of you who like to scrunch everything onto one line: </p>
 <pre class="fragment">    My_Assembly(None).process(EZCAD3(0))
-</pre><p>will also do the trick. </p>
+</pre><p>will also do the trick.</p>
+<h1>Bounding Box</h1>
+<ul>
+<li><em>ex</em>: East X length</li>
+<li><em>cx</em>: Center X length</li>
+<li><em>wx</em>: West X length</li>
+<li><em>dx</em>: Delta X length (i.e. <em>ex</em> - <em>wx</em>)</li>
+<li><em>ny</em>: North Y length</li>
+<li><em>cy</em>: Center Y length</li>
+<li><em>sy</em>: South Y length</li>
+<li><em>dy</em>: Delta Y length (i.e <em>ny</em> - <em>sy</em>)</li>
+<li><em>tz</em>: Top Z length</li>
+<li><em>cz</em>: Center Z length</li>
+<li><em>bz</em>: Bottom Z length</li>
+<li><em>dz</em>: Delta Z length (i.e. <em>tz</em> - <em>bz</em>)</li>
+<li><em>tne</em>: Top/North/East point (i.e. P(ex, ny, tz))</li>
+<li><em>tn</em>: Top/North point (i.e. P(cx, ny, tz))</li>
+<li><em>tnw</em>: Top/North/West point (i.e. P(wx, ny, tz))</li>
+<li><em>te</em>: Top/East point (i.e. P(ex, cy, cz))</li>
+<li><em>t</em>: Top point (i.e. P(cx, cy, tz))</li>
+<li><em>tw</em>: Top/West point (i.e. P(wx, cy, tz))</li>
+<li><em>tse</em>: Top/South/East point (i.e. P(ex, sy, tz))</li>
+<li><em>ts</em>: Top/South/East point (i.e. P(cx, sy, tz))</li>
+<li><em>tsw</em>: Top/South/East point (i.e. P(wx, sy, tz))</li>
+<li><em>ne</em>: North/East point (i.e. P(ex, ny, cz))</li>
+<li><em>n</em>: North point (i.e. P(cx, ny, cz))</li>
+<li><em>nw</em>: North/West point (i.e. P(wx, ny, cz))</li>
+<li><em>e</em>: East point (i.e. P(ex, cy, cz))</li>
+<li><em>c</em>: Center point (i.e. P(cx, cy, cz))</li>
+<li><em>w</em>: West point (i.e. P(wx, cy, cz))</li>
+<li><em>se</em>: North/East point (i.e. P(ex, sy, cz))</li>
+<li><em>s</em>: North/East point (i.e. P(cx, sy, cz))</li>
+<li><em>sw</em>: North/East point (i.e. P(wx, sy, cz))</li>
+<li><em>bne</em>: Bottom/North/East point (i.e. P(ex, ny, bz))</li>
+<li><em>bn</em>: Bottom/North point (i.e. P(cx, ny, bz))</li>
+<li><em>bnw</em>: Bottom/North/West point (i.e. P(wx, ny, bz))</li>
+<li><em>be</em>: Bottom/East point (i.e. P(ex, cy, bz))</li>
+<li><em>b</em>: South point (i.e. P(cx, cy, bz))</li>
+<li><em>bw</em>: Bottom/West point (i.e. P(wx, cy, bz))</li>
+<li><em>bse</em>: Bottom/South/East point (i.e. P(ex, sy, bz))</li>
+<li><em>bs</em>: Bottom/South/East point (i.e. P(cx, sy, bz))</li>
+<li><em>bsw</em>: Bottom/South/East point (i.e. P(wx, sy, bz)) </li>
+</ul>
 </div></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Sun Nov 10 2013 09:17:47 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
+Generated on Sun Nov 10 2013 16:19:54 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
 <img class="footer" src="doxygen.png" alt="doxygen"/>
 </a> 1.8.1.2
 </small></address>

@@ -93,7 +93,7 @@ list&#160;</td><td class="memItemRight" valign="bottom"><b>y</b> = <a class="el"
 <tr class="memitem:abdbef608e5931219d33cae49eb9ccf58"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="abdbef608e5931219d33cae49eb9ccf58"></a>
 list&#160;</td><td class="memItemRight" valign="bottom"><b>z</b> = <a class="el" href="classEZCAD3_1_1Matrix.html#a721d3fafd7fd46fdd97dd7981f8d3e63">mat</a>[0, 2]</td></tr>
 <tr class="memitem:ab2e7b375ffbd394b1882444e643d5cf4"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="ab2e7b375ffbd394b1882444e643d5cf4"></a>
-tuple&#160;</td><td class="memItemRight" valign="bottom"><b>point</b> = <a class="el" href="classEZCAD3_1_1Point.html">Point</a>(<a class="el" href="classEZCAD3_1_1L.html">L</a>(mm=x), <a class="el" href="classEZCAD3_1_1L.html">L</a>(mm=y), <a class="el" href="classEZCAD3_1_1L.html">L</a>(mm=z))</td></tr>
+tuple&#160;</td><td class="memItemRight" valign="bottom"><b>point</b> = <a class="el" href="classEZCAD3_1_1P.html">P</a>(<a class="el" href="classEZCAD3_1_1L.html">L</a>(mm=x), <a class="el" href="classEZCAD3_1_1L.html">L</a>(mm=y), <a class="el" href="classEZCAD3_1_1L.html">L</a>(mm=z))</td></tr>
 <tr class="memitem:af6cacb53d67c6cf68f27a7d9fa2d6e7e"><td class="memItemLeft" align="right" valign="top">tuple&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classEZCAD3_1_1Matrix.html#af6cacb53d67c6cf68f27a7d9fa2d6e7e">point_matrix</a> = point.matrix_create()</td></tr>
 <tr class="memitem:a74b7beea9955573a47352feaa4eaf98a"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a74b7beea9955573a47352feaa4eaf98a"></a>
 &#160;</td><td class="memItemRight" valign="bottom"><b>result_matrix</b> = <a class="el" href="classEZCAD3_1_1Matrix.html#af6cacb53d67c6cf68f27a7d9fa2d6e7e">point_matrix</a>*self</td></tr>
@@ -211,8 +211,8 @@ must be of type {Angle}.</pre>
   </tr>
 </table>
 </div><div class="memdoc">
-<pre class="fragment">Matrix public:  Return the {Point} the corresponds to {self}
-using {part} as the returned {Point}'s reference frame.  {self}
+<pre class="fragment">Matrix public:  Return the {P} the corresponds to {self}
+using {part} as the returned {P}'s reference frame.  {self}
 must be a 1 x 4 matrix. </pre> 
 </div>
 </div>
@@ -260,7 +260,7 @@ and {dz}. </pre>
 </table>
 </div><div class="memdoc">
 <pre class="fragment">Matrix public: Return the point that results from mulitiplying
-{point} by {self} and converting it back into a {Point} with
+{point} by {self} and converting it back into a {P} with
 {part} as the reference frame. </pre> 
 </div>
 </div>
@@ -310,7 +310,7 @@ and {dz}. </pre>
 </div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Sun Nov 10 2013 09:17:48 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
+Generated on Sun Nov 10 2013 16:19:56 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
 <img class="footer" src="doxygen.png" alt="doxygen"/>
 </a> 1.8.1.2
 </small></address>

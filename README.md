@@ -24,7 +24,9 @@ files.
 In short, EZCAD is just a Python library that is executed to generate
 the various design files.
 
-## Downloading
+## Downloading, Documentation, and Licensing
+
+### Downloading
 
 This package is distributed in source form from a *git* repository.
 To get a copy:
@@ -52,12 +54,12 @@ I downloaded my copy via:
 
         sudo apt-get install doxygen
 
-## Documentation
+### Documentation
 
 In addition to this document, there is
 [Doxygen generated documentation](html/pages.html).
 
-## Licensing
+### Licensing
 
 In general, I really like Open Source Licenses.  I have a slight
 preference of the GPL open source license, so that is what EZCAD3
@@ -86,7 +88,7 @@ I think the following is more that adequate to assign the copyright:
 
 Enough on this legal stuff!
 
-## Quick Overview
+## EZCAD Overview
 
 In EZCAD, the most important Python class is the *Part* class.  The
 *Part* class is used to both manufacture individual parts *and* to
@@ -152,11 +154,11 @@ EZCAD operates in three distinct phases:
 
 Each phase is quickly discussed below:
 
-### Part Initialization Phase ###
+### Part Initialization Phase
 
 Each user individual part is implemented as a Python class object that
 sub-classes the *Part* super class.  As expected, the initialization phase
-occurs in the *\_\_init\_\_*() method.  Each part has an up-level parent
+occurs in the <I>__init__</I>() method.  Each part has an up-level parent
 (abbreviated as "*up*").  The following code fragment shows how it is
 done:
 
@@ -197,7 +199,7 @@ a suffixes listed below:
 
 All user defined member variables *must* end with one of the suffixes above.
 
-### Constraint Propagation Phase ###
+### Constraint Propagation Phase
 
 Constraint propagation is what allows the designer to relatively easily
 resize a design.  The constraint propagation phase occurs in a
@@ -208,66 +210,86 @@ until none of the values with approved suffixes (e.g. "\_l", "\_p")
 change any more.
 
 To further support constraint propagation, each *Part* maintains a
-bounding box for everything it contains.  The designer can easily
-access the various bounding box values using short concise member
-variable names.  Along the X direction, the two bounding box values
-are referred as east ("e") and west ("w").  For the Y direction,
-north ("n") and south ("s") are used.  For the Z direction, top ("t")
-and bottom ("b") are used.  The bounding box results in 12 length
-(i.e. *L*) member variables and 27 point (i.e. *P*) member variables
-as listed below:
+bounding box for everything it contains.  The bounding box uses
+an altitude/compass bearing naming convention.  Using this convention,
+the X axis is uses East/Center/West names, the Y axis uses
+North/Center/South names, and the Z axis uses Top/Center/Bottom name.
+The following crude ASCII art should help to convey the concept.
 
-* *ex*:  East   X length
-* *cx*:  Center X length
-* *wx*:  West   X length
-* *dx*:  Delta  X length (i.e. *ex* - *wx*)
-* *ny*:  North  Y length
-* *cy*:  Center Y length
-* *sy*:  South  Y length
-* *dy*:  Delta  Y length (i.e *ny* - *sy*)
-* *tz*:  Top    Z length
-* *cz*:  Center Z length
-* *bz*:  Bottom Z length
-* *dz*:  Delta  Z length (i.e. *tz* - *bz*)
-* *tne*: Top/North/East    point (i.e. P(ex, ny, tz))
-* *tn*:  Top/North         point (i.e. P(cx, ny, tz))
-* *tnw*: Top/North/West    point (i.e. P(wx, ny, tz))
-* *te*:  Top/East          point (i.e. P(ex, cy, cz))
-* *t*:   Top               point (i.e. P(cx, cy, tz))
-* *tw*:  Top/West          point (i.e. P(wx, cy, tz))
-* *tse*: Top/South/East    point (i.e. P(ex, sy, tz))
-* *ts*:  Top/South/East    point (i.e. P(cx, sy, tz))
-* *tsw*: Top/South/East    point (i.e. P(wx, sy, tz))
-* *ne*:  North/East        point (i.e. P(ex, ny, cz))
-* *n*:   North             point (i.e. P(cx, ny, cz))
-* *nw*:  North/West        point (i.e. P(wx, ny, cz))
-* *e*:   East              point (i.e. P(ex, cy, cz))
-* *c*:   Center            point (i.e. P(cx, cy, cz))
-* *w*:   West              point (i.e. P(wx, cy, cz))
-* *se*:  North/East        point (i.e. P(ex, sy, cz))
-* *s*:   North/East        point (i.e. P(cx, sy, cz))
-* *sw*:  North/East        point (i.e. P(wx, sy, cz))
-* *bne*: Bottom/North/East point (i.e. P(ex, ny, bz))
-* *bn*:  Bottom/North      point (i.e. P(cx, ny, bz))
-* *bnw*: Bottom/North/West point (i.e. P(wx, ny, bz))
-* *be*:  Bottom/East       point (i.e. P(ex, cy, bz))
-* *b*:   South             point (i.e. P(cx, cy, bz))
-* *bw*:  Bottom/West       point (i.e. P(wx, cy, bz))
-* *bse*: Bottom/South/East point (i.e. P(ex, sy, bz))
-* *bs*:  Bottom/South/East point (i.e. P(cx, sy, bz))
-* *bsw*: Bottom/South/East point (i.e. P(wx, sy, bz))
+                    T  N (Y axis)
+                    | /
+                    |/
+              W-----*-----E (X axis)
+                   /|
+                  / |
+                 S  B
+                   (Z-axis)
 
-{Talk about design in assembly space vs individual parts.}
+The bounding box of a part defines box that consists of 3 by 3 x 3
+points.  There are three slices -- the top slice, the center slice,
+and bottom slice that are named as follows:
 
-{Short example of constraint propagation goes here.}
+          tnw--tn---tne     nw----n----ne     bnw--bn---bne
+          |     |     |     |     |     |     |     |     |
+          tw----t----tw     w-----c-----e     bw----b----bw
+          |     |     |     |     |     |     |     |     |
+          tsw--ts---tse     sw----s----se     bsw--bs---bse
+           (Top Slice)      (Center Slice)    (Bottom Slice)
 
-### Manufacture and Assembly Phase ###
+The designer can easily access the various bounding box values
+using short concise member variable names.  Thus, the *tne*
+member variable corresponds to the Top-North-West corner of
+the bounding box, *c* corresponds to the Center of the bounding
+box, and *bw* corresponds to the Bottom-West edge of the
+bounding box.
 
-The manufacturing and assembly phase occurs last.
+Using constraint propagation and bounding boxes, EZCAD encourages
+the use of the  *assembly focused* design pattern where each
+part is designed to fit precisely into the final assembly from the
+beginning.  This is in contrast to the *part focused* design
+pattern where each part is individually designed and then
+subsequently fitted into the final assembly.
 
-{More goes here...}
+### Manufacture and Assembly Phase
 
-## A Quick Example ##
+The manufacturing and assembly phase occurs last.  EZCAD can generate
+manufacturing files for the following generic classes of machines:
+
+* 3D Printers (.stl file)
+
+* Laser Cutters (.dxf file)
+
+* CNC Mills and Lathes (CNC file)
+
+EZCAD uses a design for manufacture strategy.  For each part, the
+designer specifies one or more appropriate machines that could be
+used to manufacture the part.  While some parts can only be manufactured
+on a single machine class, others can be manufactured on more than
+one machine class.  For example, a plastic plate that has some holes,
+inter cut outs, and a specific exterior contour can actually be
+manufactured on a CNC mill, laser cutter, or 3D printer.  The
+decision of which machine to use is deferred until the actual part
+needs to be manufactured.
+
+EZCAD uses a two step process for designing a part:
+
+* First, a bunch of material chunks (e.g. blocks, cylinders,
+  extrusions, etc.) are "welded" together to provide a rough
+  3D chunk of material.
+
+* Second, a bunch of material removal operations (e.g. holes,
+  pockets, exterior contour removal, etc.)
+
+The details of these operations are deferred until later.
+
+After each part is designed, there is a final step of placing
+each part into the final assembly.  A single part or sub-assembly
+can easily be replicated multiple times in the final assembly.
+
+Once the final assembly is present, it can be viewed using the
+appropriate 
+
+### A Quick Example
 
 The example below creates a plastic box with a cover, where the
 cover has a lip that keeps the cover centered over the box.
@@ -385,3 +407,44 @@ onto one line:
 
 will also do the trick.
 
+## Bounding Box
+
+* *ex*:  East   X length
+* *cx*:  Center X length
+* *wx*:  West   X length
+* *dx*:  Delta  X length (i.e. *ex* - *wx*)
+* *ny*:  North  Y length
+* *cy*:  Center Y length
+* *sy*:  South  Y length
+* *dy*:  Delta  Y length (i.e *ny* - *sy*)
+* *tz*:  Top    Z length
+* *cz*:  Center Z length
+* *bz*:  Bottom Z length
+* *dz*:  Delta  Z length (i.e. *tz* - *bz*)
+* *tne*: Top/North/East    point (i.e. P(ex, ny, tz))
+* *tn*:  Top/North         point (i.e. P(cx, ny, tz))
+* *tnw*: Top/North/West    point (i.e. P(wx, ny, tz))
+* *te*:  Top/East          point (i.e. P(ex, cy, cz))
+* *t*:   Top               point (i.e. P(cx, cy, tz))
+* *tw*:  Top/West          point (i.e. P(wx, cy, tz))
+* *tse*: Top/South/East    point (i.e. P(ex, sy, tz))
+* *ts*:  Top/South/East    point (i.e. P(cx, sy, tz))
+* *tsw*: Top/South/East    point (i.e. P(wx, sy, tz))
+* *ne*:  North/East        point (i.e. P(ex, ny, cz))
+* *n*:   North             point (i.e. P(cx, ny, cz))
+* *nw*:  North/West        point (i.e. P(wx, ny, cz))
+* *e*:   East              point (i.e. P(ex, cy, cz))
+* *c*:   Center            point (i.e. P(cx, cy, cz))
+* *w*:   West              point (i.e. P(wx, cy, cz))
+* *se*:  North/East        point (i.e. P(ex, sy, cz))
+* *s*:   North/East        point (i.e. P(cx, sy, cz))
+* *sw*:  North/East        point (i.e. P(wx, sy, cz))
+* *bne*: Bottom/North/East point (i.e. P(ex, ny, bz))
+* *bn*:  Bottom/North      point (i.e. P(cx, ny, bz))
+* *bnw*: Bottom/North/West point (i.e. P(wx, ny, bz))
+* *be*:  Bottom/East       point (i.e. P(ex, cy, bz))
+* *b*:   South             point (i.e. P(cx, cy, bz))
+* *bw*:  Bottom/West       point (i.e. P(wx, cy, bz))
+* *bse*: Bottom/South/East point (i.e. P(ex, sy, bz))
+* *bs*:  Bottom/South/East point (i.e. P(cx, sy, bz))
+* *bsw*: Bottom/South/East point (i.e. P(wx, sy, bz))
