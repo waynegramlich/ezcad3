@@ -523,6 +523,10 @@ class Color:
 class EZCAD3:
     """ EZCAD3 is the top level engine that executes the design. """
 
+    DIMENSIONS_MODE = 0
+    MANUFACTURE_MODE = 1
+    VISUALIZATION_MODE = 2
+
     def __init__(self, minor):
 	""" {EZCAD}: Initialize the contents of {self} to contain
 	    {major} and {minor} version numbers. """
@@ -533,6 +537,7 @@ class EZCAD3:
 	assert minor == 0
 
 	# Load up {self}:
+	self._mode = EZCAD3.DIMENSIONS_MODE
 	self._major = 3
 	self._minor = minor
 	self._parts_stack = []
@@ -769,10 +774,11 @@ class Part:
 
 	# Load up *self*:
 	name = self.__class__.__name__
-	self._ezcad = None
-	self._name = name
-	self._material = None
 	self._color = None
+	self._ezcad = None
+	self._is_part = False	
+	self._material = None
+	self._name = name
 	self._places = {}
 	self._scad_difference_lines = None
 	self._scad_union_lines = None
@@ -1002,7 +1008,10 @@ class Part:
             # Keep track if we have changed:
 	    self._box_changed_count += 1
 
-    def _dimensions_update(self, trace):
+    def _dimensions_update(self, ezcad, trace):
+
+	assert isinstance(ezcad, EZCAD3)
+	self._ezcad = ezcad
 
 	# Do any requested tracing:
 	if trace >= 0:
@@ -1024,7 +1033,7 @@ class Part:
 	    elif attribute_name.endswith("_"):
 		assert isinstance(attribute, Part), \
 		  "{0}.{1} is not a Part".format(name, attribute_name)
-		changed += attribute._dimensions_update(trace + 1)
+		changed += attribute._dimensions_update(ezcad, trace + 1)
 	    elif attribute_name.endswith("_l"):
 		assert isinstance(attribute, L), \
 		  "{0}.{1} is not an L (i.e. length)". \
@@ -1124,87 +1133,92 @@ class Part:
 
 	# First manufacture any child nodes:
 	for attribute_name in dir(self):
-	    if not attribute_name.startswith("__") and \
+	    if not attribute_name.startswith("_") and \
 	      attribute_name.endswith("_"):
 		attribute = getattr(self, attribute_name)
 		assert isinstance(attribute, Part), \
 		  "{0}.{1} is not a Part".format(self.name, attribute)
 		attribute._manufacture(ezcad)
 
-	# Now manufacture this node:
-	scad_difference_lines = []
-	scad_union_lines = []
-	self._scad_difference_lines = scad_difference_lines
-	self._scad_union_lines = scad_union_lines
-	self.construct()
-
-	# Open *scad_file*:
 	name = self._name
-	scad_file = open(name + ".scad", "w")
 
-	# Deal with the part *places*:
-	lines = []
-	place_parts = {}
-	places = self._places.values()
-	for place in places:
-	    place_part = place._part
-	    place_parts[place_part._name] = place_part
-	for part in place_parts.values():
-	    scad_file.write("use <{0}.scad>;\n".format(part._name))
+	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	    # Now manufacture this node:
+	    scad_difference_lines = []
+	    scad_union_lines = []
+	    self._scad_difference_lines = scad_difference_lines
+	    self._scad_union_lines = scad_union_lines
+	    self.construct()
+	    self._scad_difference_lines = None
+	    self._scad_union_lines = None
 
-	# Write out the module:
-	scad_file.write("module {0}() {{\n".format(name))
+	    # Open *scad_file*:
+	    scad_file = open(name + ".scad", "w")
 
-	if len(scad_union_lines) != 0:
-	    # Get the difference() followed union():
-	    scad_file.write("  difference() {\n")
-	    scad_file.write("    union() {\n")
+	    # Deal with the part *places*:
+	    lines = []
+	    place_parts = {}
+	    places = self._places.values()
+	    for place in places:
+		place_part = place._part
+		place_parts[place_part._name] = place_part
+	    for part in place_parts.values():
+		scad_file.write("use <{0}.scad>;\n".format(part._name))
 
-	    # Output the *scan_union_lines*:
-	    for union_line in scad_union_lines:
-		scad_file.write(union_line)
+	    # Write out the module:
+	    scad_file.write("module {0}() {{\n".format(name))
+
+	    if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+		# Get the difference() followed union():
+		scad_file.write("  difference() {\n")
+		scad_file.write("    union() {\n")
+
+		# Output the *scan_union_lines*:
+		for union_line in scad_union_lines:
+		    scad_file.write(union_line)
+		    scad_file.write("\n")
+
+		# Close off union():
+		scad_file.write("    }\n")
+
+		# Output *scad_difference_lines*:
+		for difference_line in scad_difference_lines:
+		    scad_file.write(difference_line)
+		    scad_file.write("\n")
+
+		# Close off difference():
+		scad_file.write("  }\n")
+
+	    for place in places:
+		self._scad_transform(lines, center = place._center,
+		  axis = place._axis, rotate = place._rotate,
+		  translate = place._translate);
+		lines.append("{0}();".format(place._part._name))
+
+	    for line in lines:
+		scad_file.write(line)
 		scad_file.write("\n")
 
-	    # Close off union():
-	    scad_file.write("    }\n")
+	    # Close off the module:
+	    scad_file.write("}\n\n")
 
-	    # Output *scad_difference_lines*:
-	    for difference_line in scad_difference_lines:
-		scad_file.write(difference_line)
-		scad_file.write("\n")
+	    # Call the module we just wrote out:
+	    scad_file.write("{0}();\n".format(name))
 
-	    # Close off difference():
-	    scad_file.write("  }\n")
+	    # Close *scad_file*:
+	    scad_file.close()
 
-        for place in places:
-	    self._scad_transform(lines, center = place._center,
-	      axis = place._axis, rotate = place._rotate,
-	      translate = place._translate);
-	    lines.append("{0}();".format(place._part._name))
+	    # Run the command:
+	    if self._is_part:
+		ignore_file = open("/dev/null", "w")
+		command = [ "openscad",
+		  "-o", "{0}.stl".format(name),
+		  "{0}.scad".format(name) ]
+		print("command=", command)
+		subprocess.call(command, stderr=ignore_file) 
+		ignore_file.close()
 
-	for line in lines:
-	    scad_file.write(line)
-	    scad_file.write("\n")
-
-	# Close off the module:
-	scad_file.write("}\n\n")
-
-	# Call the module we just wrote out:
-	scad_file.write("{0}();\n".format(name))
-
-	# Close *scad_file*:
-	scad_file.close()
-
-	# Run the command:
-	ignore_file = open("/dev/null", "w")
-	command = [ "openscad",
-	  "-o", "{0}.stl".format(name),
-	  "{0}.scad".format(name) ]
-	print("command=", command)
-	subprocess.call(command, stderr=ignore_file) 
-	ignore_file.close()
-
-	if True:
+	if False:
 	    # For now, write out an offset file:
 	    stl_file = open("{0}.stl".format(name), "r")
 	    stl_lines = stl_file.readlines()
@@ -1262,14 +1276,12 @@ class Part:
 		  format(triangle[0], triangle[1], triangle[2]))
 	    offset_file.close()
 
-	if True:
+    
+	if ezcad._mode == EZCAD3.VISUALIZATION_MODE:
 	    wrl_file_name = "{0}.wrl".format(name)
 	    wrl_file = open(wrl_file_name, "w")
 	    self.wrl_write(wrl_file, file_name = wrl_file_name)
 	    wrl_file.close()
-
-	self._scad_difference_lines = None
-	self._scad_union_lines = None
 
 	#print("<=Part._manufacture:{0}".format(self._name))
 
@@ -1283,13 +1295,14 @@ class Part:
 	assert isinstance(ezcad, EZCAD3)
 
 	# Do the dimensions propogate phase:
+	ezcad._mode = EZCAD3.DIMENSIONS_MODE
 	self._update_count = 0
 	changed = 1
 	while changed != 0:
 	    # Find all the child *Part*'s:
             self._update_count += 1
 	    print("Dimensions update {0}".format(self._update_count))
-	    changed = self._dimensions_update(-1000000)
+	    changed = self._dimensions_update(ezcad, -1000000)
 	    print("Part.process: {0} dimensions_changed\n".format(changed))
 
 	# Open the XML output stream:
@@ -1299,6 +1312,10 @@ class Part:
 	#  "Unable to open XML output file '%s'" % (xml_file_name)
 
 	# Now visit *self* and all of its children:
+	ezcad._mode = EZCAD3.MANUFACTURE_MODE
+	self._manufacture(ezcad)
+
+	ezcad._mode = EZCAD3.VISUALIZATION_MODE
 	self._manufacture(ezcad)
 
 	# Close the XML Stream.
@@ -1316,27 +1333,31 @@ class Part:
 	#  "Error running 'EZCAD_XML {0}'".format(xml_file_name)
 
     def wrl_write(self, wrl_file, indent = 0, parts_table = {}, file_name = ""):
+	# Check argument types:
 	assert isinstance(wrl_file, file)	
 	assert isinstance(indent, int)
 
+	# Make sure the top level starts with an empty *parts_table*:
 	if indent == 0:
 	    parts_table = {}
+	    wrl_file.write("#VRML V2.0 utf8 Generated by EZCAD3\n")
+
+	# Do some preparation work:
 	name = self._name
 	spaces = " " * indent
-	if indent == 0:
-	    wrl_file.write("#VRML V2.0 utf8\n")
 
 	print("{0}=>Part.wrl_write({1}, {2}, {3}, {4}):enter".
 	  format(spaces, name, indent, parts_table.keys(), file_name))
 
+	# Figure out whether to generate USE or DEF:
 	if name in parts_table:
 	    wrl_file.write("{0}USE x{1}\n".format(spaces, name))
 	else:
+            # Remember that we have defined *self* in the .wrl file:
 	    parts_table[name] = self
 
 	    # Decide whether we are a part or an assembly:
-	    union_lines = self._scad_union_lines
-	    if union_lines != None and len(union_lines) > 0:
+	    if self._is_part:
 		# Read in the .stl file that was generated by OpenSCAD:
 		name = self._name
 		stl_file = open("{0}.stl".format(name), "r")
@@ -1391,10 +1412,12 @@ class Part:
 		stl_lines = None
 		spaces = " " * indent
 
-		# Output *color* and Material properties::
-		color = self._color
+		# Write out "DEF name Shape {":
 		wrl_file.write(
 		  "{0}DEF x{1} Shape {{\n".format(spaces, name))
+
+		# Output appearance *color* and material properties::
+		color = self._color
 		wrl_file.write(
 		  "{0} appearance Appearance {{\n".format(spaces))
 		wrl_file.write(
@@ -1409,57 +1432,52 @@ class Part:
 		wrl_file.write(
 		  "{0} }}\n".format(spaces))
 	
-		# Start Geometry:
+		# Start "geometry IndexedFaceSet {...}":
 		wrl_file.write(
 		  "{0} geometry IndexedFaceSet {{\n".format(spaces))
 
-		# Output the *vertices*:
+		# Output the *vertices* in a "Coordinate {...}":
 		wrl_file.write(
 		  "{0}  coord Coordinate {{\n".format(spaces))
 		wrl_file.write(
 		  "{0}   point[\n".format(spaces))
-		for offset in offsets[:-1]:
+		for offset in offsets:
 		    wrl_file.write(
-		      "{0}    {1} {2} {3},\n". \
+		      "{0}    {1} {2} {3}\n".
 		      format(spaces, offset[0], offset[1], offset[2]))
-		# Output last vertex without trailing comma:
-		offset = offsets[-1]
-		wrl_file.write(
-		  "{0}    {1} {2} {3}\n".
-		  format(spaces, offset[0], offset[1], offset[2]))
 		wrl_file.write(
 		  "{0}   ]\n".format(spaces))
 		wrl_file.write(
 		  "{0}  }}\n".format(spaces))
 
-		# Output the *triangles*:
+		# Output the *triangles* in a "coordIndex [...]"::
 		wrl_file.write(
 		  "{0}  coordIndex [\n".format(spaces))
-		for triangle in triangles[:-1]:
+		for triangle in triangles:
 		    # Output each *triangle* (except last one) with
 		    # trailing comma:
 		    wrl_file.write(
-		      "{0}   {1} {2} {3} -1,\n".
+		      "{0}   {1} {2} {3} -1\n".
 		      format(spaces, triangle[0], triangle[1], triangle[2]))
-		# Output last *triangle* without trailing comma:
-		triangle = triangles[-1]
-		wrl_file.write(
-		  "{0}   {1} {2} {3} -1\n".
-		  format(spaces, triangle[0], triangle[1], triangle[2]))
 		wrl_file.write(
 		  "{0}  ]\n".format(spaces))
 
-		# Close everything up:
+		# Close "geometry IndexdFaceSet{...}":
 		wrl_file.write(
 		  "{0} }}\n".format(spaces))
+		# Close "... Shape {...}":
 		wrl_file.write(
-		  "{0}}}\n\n".format(spaces, name))
+		  "{0}}}\n".format(spaces, name))
 	    else:
+		# Start a named "Group {...}":
 	        wrl_file.write(
 		  "{0}DEF x{1} Group {{\n".format(spaces, self._name))
 		wrl_file.write(
 		  "{0} children [\n".format(spaces))
-		for place in self._places.values():
+
+		# Output each *place* in *places*
+		places = self._places
+		for place in places.values():
 		    # Extract some values from *place*:
 		    center = place._center
 		    axis = place._axis
@@ -1467,18 +1485,53 @@ class Part:
 		    translate = place._translate
 		    part = place._part
 
-		    wrl_file.write(
-		      "{0}  Transform {{\n".format(spaces))
-		    wrl_file.write(
-		      "{0}   translation {1} {2} {3}\n".
-		      format(spaces, translate.x, translate.y, translate.z))
-		    part.wrl_write(wrl_file, indent + 4, parts_table, file_name)
-		    wrl_file.write(
-		      "{0}  }}\n".format(spaces))
+		    # Figure out if we have to do a "Transform...":
+		    zero_rotate = (rotate == Angle())
+                    zero_translate = (translate == P())
+		    if zero_rotate and zero_translate:
+			# We have neither a rotation nor a translation;
+			# so we output *part* without a "Transform..."
+			part.wrl_write(wrl_file,
+			  indent + 2, parts_table, file_name)
+		    else:
+			# We have either a rotation and/or a translation;
+			# So we need to wrap *part* in a "Transform ...":
+			wrl_file.write(
+			  "{0}  Transform {{\n".format(spaces))
+
+			# If appropriate, write out "rotation"
+			if not zero_rotate:
+			    # Fixme:
+			    pass
+
+			# If appropriate, write out the "translation ..."
+       			if not zero_translate:
+			    wrl_file.write(
+			      "{0}   translation {1} {2} {3}\n".format(spaces,
+			      translate.x, translate.y, translate.z))
+
+			# Now we can write out *part* wrapped in
+			# "children [...]":
+			wrl_file.write(
+			  "{0}   children [\n".format(spaces))
+			part.wrl_write(wrl_file,
+			  indent + 4, parts_table, file_name)
+			wrl_file.write(
+			  "{0}   ]\n".format(spaces))
+
+			# Close out "Transform {...}":
+			wrl_file.write(
+			  "{0}  }}\n".format(spaces))
+
+		# We are done writing out *places*, so we can close out
+		# "children [ ...]":
 		wrl_file.write(
 		  "{0} ]\n".format(spaces))
+
+		# Close out "Group { ... }":
 		wrl_file.write(
 		  "{0}}}\n".format(spaces))
+
 	print("{0}<=Part.wrl_write({1}, {2}, {3}, {4}):leave".
 	  format(spaces, name, indent, parts_table.keys(), file_name))
 
@@ -1677,8 +1730,14 @@ class Part:
 	  forward_matrix.point_multiply(bsw))
 	#print("after box={0:m}".format(box))
 
-	union_lines = self._scad_union_lines
-	if type(union_lines) != none_type:
+	ezcad = self._ezcad
+	assert isinstance(ezcad, EZCAD3)
+
+	self._is_part = True
+	print("Part.block:{0}._is_part = True".format(self._name))
+        
+	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	    union_lines = self._scad_union_lines
 
 	    assert x1 < x2, "x1={0} should be less than x2={1}".format(x1, x2)
 	    assert y1 < y2, "y1={0} should be less than y2={1}".format(y1, y2)
