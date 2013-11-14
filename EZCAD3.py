@@ -27,15 +27,18 @@ class Angle:
     #
     # <I>__init__</I>() will initialize *self* (an *Angle* object) to
     # *scalar_radians*.
-    def __init__(self, scalar_radians = 0.0):
-	""" Angle: Initialize self to contain *scalar_radians*. """
+    def __init__(self, deg = 0.0, rad = 0.0):
+	""" *Angle*: Initialize self to contain *degrees* + *radians*. """
 
 	# Check argument types:
-	assert isinstance(scalar_radians, float) or \
-	  isinstance(scalar_radians, int)
+	assert isinstance(deg, float) or isinstance(deg, int)
+	assert isinstance(rad, float) or isinstance(rad, int)
 
 	# Initliaze the final value:
-	self.radians = float(scalar_radians)
+	rad = float(rad)
+	if deg != 0.0:
+	    rad += deg * Angle.PI / 180.0
+	self.radians = float(rad)
 
     ## @brief Return the sum of two *Angle*'s.
     #  @param self is the first *Angle* object.
@@ -90,8 +93,24 @@ class Angle:
     def __format__(self, format):
 	""" Angle: Format *self* into a string and return it. """
 
+	# Check argument types:
 	assert isinstance(format, str)
-	return str(self.radians * 180.0 / Angle.PI)
+
+	value = self.radians
+	if format.endswith("r"):
+	    format = format[:-1]
+	elif format.endswith("d"):
+            format = format[:-1]
+            value *= 180.0 / Angle.PI
+        else:
+	    # Assume degrees output by default:
+            value *= 180.0 / Angle.PI
+
+	if len(format) == 0:
+	    result = "{0}".format(value)
+	else:
+	    result = ("{0:" + format + "}").format(value)
+	return result
 
     ## @brief Return *True* if *self* is greater than or equal to *angle*.
     #  @param self is the first *Angle* to compare.
@@ -548,20 +567,37 @@ class EZCAD3:
 	assert isinstance(part, Part)
 	part.process(self)
 
+## @brief *L* corresponds to a length.  This class solves the issue
+#  mixed units.  Internally, all lengths are turned into millimeters.
 class L:
-    """ A {L} represents a length. """
+    """ A *L* represents a length. """
 
-    # Currently {L} is represented in inches:
-
+    ## @brief Initialize *self* (an *L* object) to the sum of
+    #         *mm* + *cm* + *inch* + *ft*.
+    #  @param self is the *L* object to initialize.
+    #  @param mm is the number of millimeters to add in.
+    #  @param cm is the number of centiimeters to add in.
+    #  @param inch is the number of inches to add together in.
+    #  @param ft is the number of feet to add together in.
+    #
+    # <I>__init__</I>() will initialize *self (an *L* object) to contain
+    # the sum of *mm*, *cm*, *inch*, and *ft*.  Usually, only one of these
+    # values is specfied.  The argment values must be either an *int* or
+    # *float*.  The *inch* parameter can also be specified as a string
+    # of the form "W-N/D" where is a whole number, N is a numerator, and
+    # D is a denumerator.  In this case, the result is computed as
+    # float(W)+float(N)/float(D).
     def __init__(self, mm=0.0, cm=0.0, inch=0.0, ft=0.0):
-	""" L: Create {L} with a value of {value}. """
+	""" *L*: Initialize *L* with sum of *mm* + *cm* + *inch* + *ft*. """
 
+	# Check argment types:
 	assert isinstance(mm, float) or isinstance(mm, int)
 	assert isinstance(cm, float) or isinstance(cm, int)
 	assert isinstance(inch, float) or isinstance(inch, int) or \
 	       isinstance(inch, str)
 	assert isinstance(ft, float) or isinstance(ft, int)
 
+	# Deal with *inch* argument when it is a string:	
 	if isinstance(inch, str):
 	    # We have a string, parse it:
             whole_fraction = inch.split("-")
@@ -580,111 +616,284 @@ class L:
 	    denominator = float(numerator_denominator[1])
 	    inch = whole + numerator / denominator
 		
+	# Load up *self*:
 	self._mm = mm + cm * 10.0 + inch * 25.4 + ft * (12.0 * 25.4)
 
+    ## @brief Returns *self* + *length*.
+    #  @param self is the first *L* object to sum.
+    #  @param length is the second *L* object to sum.
+    #  @returns sum of *self* + *length*.
+    #
+    # <I>__add__</I>() returns the *self* + *length*.
     def __add__(self, length):
-	""" L: Add {L} to {self}. """
+	""" *L*: Return *self* + *length*. """
 
+	# Check argument types:
 	assert isinstance(length, L)
+
+	# Return result:
 	return L(self._mm + length._mm)
 
+    ## @brief Returns *self* / *number*.
+    #  @param *self* is the *L* object to divide.
+    #  @param *number* the value to divide into *self*
+    #  @returns *self* / *number*
+    #
+    # <I>__div__</I>() returns *self* / *number*.  *number* must be either
+    # be an *int* or a *float*.
     def __div__(self, number):
-	""" L: Divide {self} by {scalar}. """
+	""" *L*: Return {self} / {scalar}. """
+
+	# Check argument types:
 	assert isinstance(number, float) or isinstance(number, int)
 
+	# Return result:
 	return L(self._mm / number)
 
+    ## @brief Returns *True* if *self* equals *length*.
+    #  @param self is the first argument of the equality test.
+    #  @param length is the second argument of the equality test.
+    #  @returns *True* if *self* equals *length*.
+    #
+    # <I>__eq__</I>() returns *True* if *self* equals *length* and *False*
+    # otherwise.
     def __eq__(self, length):
-	""" L: Return {True} if {self} is equal to {length}. """
+	""" *L*: Return *self* <= *length*. """
 
+	# Check arguments types:
 	assert isinstance(length, L)
+
+	# Return result:
 	return self._mm == length._mm
 
+    ## @brief Returns *True* if *self* is greater than or equal to *length*.
+    #  @param self is the first argument of the test.
+    #  @param length is the second argument of the test.
+    #  @returns *True* if *self* is greater than or equal to *length*.
+    #
+    # <I>__ge__</I>() returns *True* if *self* is greater than or equal
+    # to *length* and *False* otherwise.
     def __ge__(self, length):
-	""" L: Return {True} if {self} is greater than or equal
-	    to {length}. """
+	""" *L*: Return *self* >= *length* """
 
+	# Check argument types:
 	assert isinstance(length, L)
+
+	# Return result:
 	return self._mm >= length._mm
 
-    def __lt__(self, length):
-	""" L: Return {True} if {self} is greater than {length}. """
+    ## @brief Returns *True* if *self* is greater than to *length*.
+    #  @param self is the first argument of the test.
+    #  @param length is the second argument of the test.
+    #  @returns *True* if *self* is greater than to *length*.
+    #
+    # <I>__gt__</I>() returns *True* if *self* is greater than *length*
+    # and *False* otherwise.
+    def __gt__(self, length):
+	""" *L*: Return *self* > *length* """
 
+	# Check argument types:
 	assert isinstance(length, L)
+
+	# Return result:
 	return self._mm > length._mm
 
+    ## @brief Returns *True* if *self* is less than or equal to *length*.
+    #  @param self is the first argument of the test.
+    #  @param length is the second argument of the test.
+    #  @returns *True* if *self* is less than or equal to *length*.
+    #
+    # <I>__le__</I>() returns *True* if *self* is less than or equal
+    # to *length* and *False* otherwise.
     def __le__(self, length):
-	""" L: Return {True} if {self} is less than or equal
-	    to {length}. """
+	""" *L*: Return *self* <= *length*. """
 
+	# Check argument types:
 	assert isinstance(length, L)
+
+	# Return result:
 	return self._mm <= length._mm
 
+    ## @brief Returns *True* if *self* is less than to *length*.
+    #  @param self is the first argument of the test.
+    #  @param length is the second argument of the test.
+    #  @returns *True* if *self* is less than *length*.
+    #
+    # <I>__lt__</I>() returns *True* if *self* is less than *length*
+    # and *False* otherwise.
     def __lt__(self, length):
-	""" L: Return {True} if {self} is less than {length}. """
+	""" *L*: Return *self* < *length*. """
 
+	# Check argument types:
 	assert isinstance(length, L)
+
+	# Return result:
 	return self._mm < length._mm
 
-    def __format__(self, fmt):
-	""" L: Format {self} into a string an return it. """
+    ## @brief Returns *self* as a *format*'ed string.
+    #  @param self is the *L* object to format.
+    #  @param format is the format control string.
+    #  @returns formatted string.
+    #
+    # <I>__format__</I>() will return a formatted version of string.
+    # The last letter of *format* specifies the unit formats -- "m"
+    # is millimeters, "c" is centimeters, "i" is inches, and "f" is
+    # is feet.  After the units suffix is stripped off, the remaining
+    # suffix is treated as a *float* suffix (e.g. ".3" means 3 decimal
+    # places after the decimal point.)
+    def __format__(self, format):
+	""" *L*: Return *self* as a *format*'ed string. """
 
-	assert isinstance(fmt, str)
-	mm = self._mm
-	if fmt == 'i':
-	    mm /=  25.4
-	elif fmt == 'f':
-            mm /= (25.4 * 12)
-	elif fmt == 'c':
-	    mm /= 10.0
-	return "{0}".format(mm)
+	# Check argument types:
+	assert isinstance(format, str)
 
+	# Deal with units suffix:
+	value = self._mm
+	if format.endswith("c"):
+	    # Centimeters:
+	    value /= 10.0
+	    format = format[:-1]
+	elif format.endswith("f"):
+	    # Feet:
+            value /= (25.4 * 12)
+	    format = format[:-1]
+	elif format.endswith("i"):
+            # Inches:
+	    value /=  25.4
+	    format = format[:-1]
+	elif format.endswith("m"):
+	    # We are already in millimeters:
+	    format = format[:-1]
+
+	# Now do the final format:
+	if len(format) == 0:
+	    result = "{0}".format(value)
+	else:
+	    result = ("{0:" + format + "}").format(value)
+	return result
+
+    ## @brief Ruturn *self* &times; *number*.
+    #  @param *self* is the first argument of the product.
+    #  @param *number* is the second argument of the product.
+    #  @returns *self* &times; *number*.
+    #
+    # <I>__mul__</I>() returns *self* &times; *number*.  *number* must
+    # be either a *float* or an *int*.
     def __mul__(self, number):
-	""" L: Multiply {self} by {scalar}. """
+	""" *L*: Multiply *self* by *number*. """
 
+	# Check argument types:
 	assert isinstance(number, float) or isinstance(number, int)
+
+	# Return result:
 	return L(self._mm * number)
 
-    def __rmul__(self, number):
-	""" L: Multiply {self} by {scalar}. """
-
-	assert isinstance(number, float) or isinstance(number, int)
-	return L(self._mm * number)
-
+    ## @brief Returns *True* if *self* is not equal to *length*.
+    #  @param self is the first argument of the inequality test.
+    #  @param length is the second argument of the inequality test.
+    #  @returns *True* if *self* is not equal to *length*.
+    #
+    # <I>__eq__</I>() returns *True* if *self* is not equal to *length*
+    # and *False* otherwise.
     def __ne__(self, length):
 	""" L: Return {True} if {self} is not equal to {length}. """
 
+	# Check argument types:
 	assert isinstance(length, L)
+
+	# Return result:
 	return self._mm != length._mm
 
+    ## @brief Return the negative of *self*.
+    #  @param self is the *L* object to negate.
+    #  @returns the negative of *self*.
+    #
+    # <I>__neg__</I>() returns the negative of *self*.
     def __neg__(self):
-	""" L: Return the negative of {self}. """
+	""" *L*: Return -*self*. """
 
+	# Return result:
 	return L(-self._mm)
 
-    def __str__(self):
-	""" L: Return {self} as a formated string. """
+    ## @brief Return *self* &times; *number*.
+    #  @param *self* is the first argument of the product.
+    #  @param *number* is the second argument of the product.
+    #  @returns *self* &times; *number*.
+    #
+    # <I>__mul__</I>() returns *self* &times; *number*.  *number* must
+    # be either a *float* or an *int*.
+    def __rmul__(self, number):
+	""" *L*: Multiply *self* by *number*. """
 
+	# Check argument types:
+	assert isinstance(number, float) or isinstance(number, int)
+
+	# Return result:
+	return L(self._mm * number)
+
+    ## @brief Return *self* converted to a string.
+    #  @param self is the *L* object to convert.
+    #  @returns *self* as a string.
+    #
+    # <I>__str__</I>() returns *self* converted to a string in units of
+    # millimeters.
+    def __str__(self):
+	""" *L*: Return *self* as a formated string. """
+
+	# Return result:
 	return str(self._mm)
 
+    ## @brief Returns *self* - *length*.
+    #  @param self is the first *L* object to subtract from.
+    #  @param length is the second *L* to subtract.
+    #  @returns *self* - *length*.
+    #
+    # <I>__add__</I>() returns *self* - *length*.
     def __sub__(self, length):
-	""" L: Subtract {length} from {self}. """
+	""" *L*: Return *self* - *length* . """
 
+	# Check argument types:
 	assert isinstance(length, L)
+
+	# Return result:
 	return L(self._mm - length._mm)
 
-    def abs(self):
-	""" L: Return absolue value of {self}. """
+    ## @brief Returns the absolute value of *self*.
+    #  @param self is the *L* object to convert to an absolut
+    #  @returns |*self*|
+    #
+    # *absolute*() returns the absolute value of *self*.
+    def absolute(self):
+	""" *L*: Return |*self*|. """
 
+	# Check argument types:
 	assert isinstance(length, L)
-	return L(abs(self._mm))
 
+	# Perform computation:
+	result = self
+	mm = self.mm
+	if mm < 0.0:
+	    result = L(-mm)
+	return result
+
+    ## @brief Returns the arc tangent of *self* / *dx* with resulting in the
+    #         angle in the "correct" quadrant.
+    #  @param *self* is the "Y" value of the arc tangent.
+    #  @param *dx* is the "X" value fo the arc tangent.
+    #  @returns arc tangent of *self* / *dx*.
+    #
+    # *arc_tangent2*() returns the arc tangent of *self* / *dx* with
+    # resulting in the angle in the "correct" quadrant.  The result is
+    # an *Angle*.
     def arc_tangent2(self, dx):
 	""" L: Return the arctangent of {self} over {dx} being careful
 	    that the returned angle is in the correct quadrant. """
 
+	# Check argument type:
 	assert isinstance(dx, L)
-	return Angle.rad(math.atan2(self._mm, dx._mm))
+
+	# Return result:
+	return Angle(rad=math.atan2(self._mm, dx._mm))
 
     def centimeters(self):
 	""" L: Return {self} as a scalar measured in centimeters. """
@@ -696,11 +905,6 @@ class L:
 
 	assert isinstance(angle, Angle)
 	return L(self._mm * angle.cosine())
-
-    def half(self):
-	""" L: Return half of {self}. """
-
-	return L(self._mm / 2.0)
 
     def inches(self):
 	""" L: Return {self} as a scalar in units of inches. """
@@ -739,11 +943,6 @@ class L:
 	""" L: Return {self} * sin(angle). """
 
 	return L(self._mm * angle.sine())
-
-    def twice(self):
-	""" L: Return twice of {self}. """
-
-	return L(self._mm * 2.0)
 
 class Part:
     """ A {Part} specifies either an assembly of parts or a single
@@ -950,9 +1149,9 @@ class Part:
 	    self.bz = bz
 
 	    # Compute averate X/Y/Z:
-	    cx = (ex + wx).half()
-	    cy = (ny + sy).half()
-	    cz = (tz + bz).half()
+	    cx = (ex + wx) / 2.0
+	    cy = (ny + sy) / 2.0
+	    cz = (tz + bz) / 2.0
 
 	    # There are 27 points to compute -- 9 on the top slice, 9 on
 	    # the middle slice, and 9 on the bottom slice:
@@ -1501,8 +1700,15 @@ class Part:
 
 			# If appropriate, write out "rotation"
 			if not zero_rotate:
-			    # Fixme:
-			    pass
+			    # Move rotation center if not (0,0,0):
+			    if center != P():
+				wrl_file.write(
+				  "{0}   center {1} {2} {3}\n".
+				  format(spaces, center.x, center.y, center.z))
+			    # Write out the rotation:
+			    wrl_file.write(
+				  "{0}   rotation {1} {2} {3} {4}\n".format(
+				  spaces, axis.x, axis.y, axis.z, rotate))
 
 			# If appropriate, write out the "translation ..."
        			if not zero_translate:
@@ -2300,7 +2506,7 @@ class Part:
 	      "    translate({0:m})".format(center))
             difference_lines.append(
 	      "      cylinder(r={0:m}, h={1:m}, center = true, $fn=12);".
-	      format(diameter.half(), length + L(mm=1.0)))
+	      format(diameter / 2.0, length + L(mm=1.0)))
 	
     def hole_through(self, comment, diameter, start_point, flags, \
       countersink_diameter = L(0.0)):

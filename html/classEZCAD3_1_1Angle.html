@@ -124,6 +124,14 @@ Static Public Attributes</h2></td></tr>
 <tr class="memdesc:a1b2e83e1f4056f74c3565e718e185860"><td class="mdescLeft">&#160;</td><td class="mdescRight"><em>PI</em> respresents the irrational number &pi;.  <a href="#a1b2e83e1f4056f74c3565e718e185860"></a><br/></td></tr>
 <tr class="memitem:a108583819521ee89a4321ecd18956af1"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classEZCAD3_1_1Angle.html#a108583819521ee89a4321ecd18956af1">TWO_PI</a> = 2</td></tr>
 <tr class="memdesc:a108583819521ee89a4321ecd18956af1"><td class="mdescLeft">&#160;</td><td class="mdescRight"><em>TWO_PI</em> represents 2&pi;.  <a href="#a108583819521ee89a4321ecd18956af1"></a><br/></td></tr>
+<tr class="memitem:acbac9bd83b38f9e28a9f062e92cc998d"><td class="memItemLeft" align="right" valign="top">tuple&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classEZCAD3_1_1Angle.html#acbac9bd83b38f9e28a9f062e92cc998d">rad</a> = float(rad)</td></tr>
+<tr class="memitem:a3a68c38a24baccfa27c9231a7f54e0b2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classEZCAD3_1_1Angle.html#a3a68c38a24baccfa27c9231a7f54e0b2">value</a> = self.radians</td></tr>
+<tr class="memitem:a167fc5252eb9e85109fcdbb373e8a68c"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a167fc5252eb9e85109fcdbb373e8a68c"></a>
+list&#160;</td><td class="memItemRight" valign="bottom"><b>format</b> = format[:-1]</td></tr>
+<tr class="memitem:a595da352d39d0902d440505093071fa8"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a595da352d39d0902d440505093071fa8"></a>
+string&#160;</td><td class="memItemRight" valign="bottom"><b>result</b> = &quot;{0}&quot;</td></tr>
+<tr class="memitem:a7b15e1efaee0af176bcd4fc8a9f5d2ae"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a7b15e1efaee0af176bcd4fc8a9f5d2ae"></a>
+tuple&#160;</td><td class="memItemRight" valign="bottom"><b>result</b> = (&quot;{0:&quot; + format + &quot;}&quot;)</td></tr>
 <tr class="memitem:ae48a50706bcbc6710039cf25100e8493"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classEZCAD3_1_1Angle.html#ae48a50706bcbc6710039cf25100e8493">scalar_radians</a> = self.scalar_radians</td></tr>
 </table>
 <a name="details" id="details"></a><h2>Detailed Description</h2>
@@ -144,7 +152,13 @@ Static Public Attributes</h2></td></tr>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>scalar_radians</em> = <code>0.0</code>&#160;</td>
+          <td class="paramname"><em>deg</em> = <code>0.0</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>rad</em> = <code>0.0</code>&#160;</td>
         </tr>
         <tr>
           <td></td>
@@ -192,7 +206,7 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Return the sum of two <em><a class="el" href="classEZCAD3_1_1Angle.html" title="The Angle class represents an angle.">Angle</a></em>'s. </p>
-<pre class="fragment">Angle: Initialize self to contain *scalar_radians*. </pre> <dl class="params"><dt>Parameters</dt><dd>
+<dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">self</td><td>is the first <em><a class="el" href="classEZCAD3_1_1Angle.html" title="The Angle class represents an angle.">Angle</a></em> object. </td></tr>
     <tr><td class="paramname">angle</td><td>is the second <em><a class="el" href="classEZCAD3_1_1Angle.html" title="The Angle class represents an angle.">Angle</a></em> object. </td></tr>
@@ -340,7 +354,7 @@ Static Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Return <em>True</em> if <em>self</em> is greater than or equal to <em>angle</em>. </p>
-<pre class="fragment">Angle: Format *self* into a string and return it. </pre> <dl class="params"><dt>Parameters</dt><dd>
+<dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">self</td><td>is the first <em><a class="el" href="classEZCAD3_1_1Angle.html" title="The Angle class represents an angle.">Angle</a></em> to compare. </td></tr>
     <tr><td class="paramname">angle</td><td>is the second <em><a class="el" href="classEZCAD3_1_1Angle.html" title="The Angle class represents an angle.">Angle</a></em> to compare. </td></tr>
@@ -963,6 +977,26 @@ return it. </pre> <dl class="params"><dt>Parameters</dt><dd>
 
 </div>
 </div>
+<a class="anchor" id="acbac9bd83b38f9e28a9f062e92cc998d"></a>
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">tuple EZCAD3.Angle.rad = float(rad)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<pre class="fragment">*Angle*: Initialize self to contain *degrees* + *radians*. </pre> 
+</div>
+</div>
 <a class="anchor" id="ae48a50706bcbc6710039cf25100e8493"></a>
 <div class="memitem">
 <div class="memproto">
@@ -1005,13 +1039,33 @@ return it. </pre> <dl class="params"><dt>Parameters</dt><dd>
 
 </div>
 </div>
+<a class="anchor" id="a3a68c38a24baccfa27c9231a7f54e0b2"></a>
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">EZCAD3.Angle.value = self.radians</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<pre class="fragment">Angle: Format *self* into a string and return it. </pre> 
+</div>
+</div>
 <hr/>The documentation for this class was generated from the following file:<ul>
 <li>EZCAD3.py</li>
 </ul>
 </div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Sun Nov 10 2013 16:19:55 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
+Generated on Thu Nov 14 2013 01:17:13 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
 <img class="footer" src="doxygen.png" alt="doxygen"/>
 </a> 1.8.1.2
 </small></address>

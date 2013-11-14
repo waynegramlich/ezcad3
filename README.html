@@ -114,10 +114,9 @@ so much.)</p></li>
 <li><p><em>Place</em> is used to represent a <em>Part</em> placement in a sub-assembly.</p></li>
 </ul>
 
-<p>Each EZCAD class method will validates that its arguments types
-are correct.  (If you have ever heard of the "duck typing" design
-pattern, EZCAD most definitely does <strong>not</strong> use that particular
-programming religion.)</p>
+<p>Each EZCAD class method validates that its arguments types are correct.
+(If you have ever heard of the "duck typing" design pattern, EZCAD
+most definitely does <strong>not</strong> use that particular programming religion.)</p>
 
 <p>The CAM (Computer Aided Manufacture) portion is based on the
 following classes:</p>
@@ -304,12 +303,12 @@ what is happening on a chunk by chunk basis next:</p>
 
 <pre><code>    #!/usr/bin/env python
 
-    import EZCAD3   # The EZCAD (revision 3) classes:
+    from EZCAD3 import *   # The EZCAD (revision 3) classes:
 
     class Simple_Box(Part):
 
         def __init__(self, up, dx=L(mm=100.0), dy=L(mm=50.0),
-          dz=L(25.0), wall_thickness=L(mm=10.0),
+          dz=L(25.0), wall_thickness=L(mm=5.0),
           material=Material("plastic", "ABS")):
             # Initialize the *Part*:
             Part.__init__(self, up)
@@ -318,7 +317,7 @@ what is happening on a chunk by chunk basis next:</p>
             self.dx_l = dx
             self.dy_l = dy
             self.dz_l = dz
-            self.wall_thickness_l_ = wall_thickness
+            self.wall_thickness_l = wall_thickness
             self.material_m = material
 
             # Instantiate the sub-*Part*'s:
@@ -334,30 +333,32 @@ what is happening on a chunk by chunk basis next:</p>
             Part.__init__(self, up, place)
 
         def construct(self):
-            # Grab some values from *self*:
+            # Grab some values from *box*:
             box = self.up
             dx = box.dx_l
             dy = box.dy_l
             dz = box.dz_l
-            thickness = box.wall_thickness
+            wall_thickness = box.wall_thickness_l
             material = box.material_m
 
             # Add another 
-            self.height_l = height = dz - thickness
+            self.height_l = height = dz - wall_thickness
             zero = L()
 
             # Start with a solid block of the right dimensions:
             height = dz - wall_thickness
             self.block(comment = "Initial block of material",
               material = material,
-              color = Color("blue"),
+              color = Color("blue", alpha=.5),
               corner1 = P(-dx/2, -dy/2, zero),
               corner2 = P( dx/2,  dy/2, height))
 
             # Pocket out the body of the box:
             self.simple_pocket(comment = "Box Pocket",
-              corner1 = box.bsw + P(thickness, thickness, thickness),
-              corner2 = box.tne - P(thickness, thickness, zero))
+             corner1 = self.bsw + P(wall_thickness,
+               wall_thickness, wall_thickness),
+             corner2 = self.tne - P(wall_thickness,
+               wall_thickness, L(mm=-.1)))
 
     class Simple_Box_Cover(Part):
 
@@ -371,31 +372,32 @@ what is happening on a chunk by chunk basis next:</p>
             dy = box.dy_l
             dz = box.dz_l
             material = box.material_m
-            thickness = box.wall_thickness_l
+            wall_thickness = box.wall_thickness_l
             base = box.base_
             base_height = base.height_l
+            zero = L()
 
             # Compute local values:
-            self.lip_thickness = lip_thickness = thickness/2
+            self.lip_thickness = lip_thickness = wall_thickness/2
 
             # Do the top part of the cover:
             self.block(comment = "Cover Top",
-              material = material
-              color = Color("green"),
-              corner1 = base.tsw
-              corner2 = base.tne + Point(z = thickness))
+              material = material,
+              color = Color("green", alpha=0.5),
+              corner1 = base.tsw,
+              corner2 = base.tne + P(z = wall_thickness))
 
             # Do the lip part of the cover:
             self.block(comment = "Cover Lip",
-              corner1 = base.tsw + P(thickness, thickness, -lip_thickness),
-              corner2 = base.tne + Point(-thickness, -thickness, zero))
+              corner1 = base.tsw + P(wall_thickness,
+                wall_thickness, -lip_thickness),
+              corner2 = base.tne + P(-wall_thickness,
+                -wall_thickness, zero))
 
     ezcad = EZCAD3(0)                # Using EZCAD 3.0
-    my_assembly = My_Assembly(None)  # Initialize top-level sub-assembly
-    my_assembly.process(ezcad)       # Process the design
+    simple_box = Simple_Box(None)   # Initialize top-level sub-assembly
+    simple_box.process(ezcad)       # Process the design
 </code></pre>
-
-<h3>Final Stuff</h3>
 
 <p>The final step is:</p>
 
@@ -411,12 +413,192 @@ Finally, the <em>process</em>() method is invoked to cause the design
 to be processed.  For those of you who like to scrunch everything
 onto one line:</p>
 
-<pre><code>    My_Assembly(None).process(EZCAD3(0))
+<pre><code>    Simple_Box(None).process(EZCAD3(0))
 </code></pre>
 
 <p>will also do the trick.</p>
 
-<h2>Bounding Box</h2>
+<h2>CAD Class Reference</h2>
+
+<p>This section coveres the design classes.  The lower level
+classes are covered first, followed by the <em>Part</em> class.
+The next major section after this covers the manufacturing
+classes (e.g. <em>Shop</em>, <em>Machine</em>, <em>Tool</em>, etc.</p>
+
+<h3>The <em>Angle</em> Class</h3>
+
+<p>The <em>Angle</em> class represents an angle.  While most designers
+specify their angles in degrees, internally the <em>Angle</em> class
+represents angles in radians.</p>
+
+<p>The initializer can specify angles in either degrees or radians:</p>
+
+<pre><code>    degrees0 = Angle()                    # No arguments is 0 degrees
+    degrees90 = Angle(deg = 90.0)         # Angle specified in degrees
+    degrees180 = Angle(rad = 3.14.15926)  # Angle specified in radians
+</code></pre>
+
+<p>An <em>Angle</em> can be convert back into a <em>float</em> using a conversion method:</p>
+
+<pre><code>    d = degrees90.deg()                   # Convert to degrees
+    r = degress180.rad()                  # Convert to radians
+</code></pre>
+
+<p><em>Angle</em>'s can be added, subtracted, multiplied, divided, etc.:</p>
+
+<pre><code>    a = degrees90 + degrees180            # Addition
+    b = degrees90 - degrees180            # Subtraction
+    c = degrees90 * 3                     # Multiplication
+    d = degrees90 / 3                     # Division
+    e = -degrees90                        # Negation
+</code></pre>
+
+<p>Comparison of <em>Angle</em> objects is supported:</p>
+
+<pre><code>    eq = degrees90 == degrees90     # Equality
+    ge = degrees180 &gt;= degrees90    # Greater than or equal
+    gt = degrees180 &gt; degrees90     # Greater than
+    le = degress0 &lt;= degress180     # Less than or equal
+    lt = degress0 &lt; degress180      # Less than
+    ne = degrees0 != degress180     # Inequality
+</code></pre>
+
+<p>An <em>Angle</em> object can be formatted using the standard Python format
+facility.  The units can be specified by suffix character:</p>
+
+<pre><code>    angle = Angle(deg = 180.0)
+    print("degrees={0:d} radians={0:r}".format(angle))
+</code></pre>
+
+<p>will print:</p>
+
+<pre><code>    degrees=180.0 radians=3.14159265359
+</code></pre>
+
+<p>There are three trigimetric functions for angles:</p>
+
+<pre><code>    angle.sine()                    # sin(angle)
+    angle.cosine()                  # cos(angle)
+    angle.tangent()                 # tan(angle)
+</code></pre>
+
+<p>There is a miscellaneous <em>Angle</em> class:</p>
+
+<pre><code>    angle.normalize()               # Angle between -180 and  180 degrees
+</code></pre>
+
+<p>Read the
+<a href="html/classEZCAD3_1_1Angle.html">Doxygen generated <em>Angle</em> class information</a>
+to get the detailed method documenation.</p>
+
+<h3>The <em>Color</em> Class</h3>
+
+<p><em>Color</em> class documentation goes here.</p>
+
+<h3>The <em>L</em> (i.e. Length) Class</h3>
+
+<p>The <em>L</em> class represents a length.  While the length can be specified
+in units of centimeters, millimeters, inches, and feet, internally,
+the <em>L</em> class converts everything to millimeters.  Here are some
+examples of creating a length:</p>
+
+<pre><code>    length0 = L()                   # Length of 0.0
+    length2mm = L(mm = 2)           # 2.0 millimeters (note *int* is OK)
+    length3_5cm = L(cm = 3.5)       # 3.5 centimeters
+    length1thou = L(inch = .001)    # One thousandth of an inch
+    length6feet = L(ft = 3)         # 3 feet (which happens to be 1 yard)
+    length1_3_4 = L(inch = "1-3/4") # 1.75 inches
+</code></pre>
+
+<p>An <em>L</em> object can be converted back into <em>float</em> using a conversion method:</p>
+
+<pre><code>    length.mm()                     # Millimeters
+    length.cm()                     # Centimeters
+    length.inch()                   # Inches
+    length.ft()                     # Feet.
+</code></pre>
+
+<p>As expected, <em>L</em> objects can be added, subtracted, multiplied, divided, etc.:</p>
+
+<pre><code>    a = length2mm + length1though   # Addition
+    b = length6feet - length3_5cm   # Subtraction
+    c = length6feet * 2             # Mulitplication by *int* (or *float*)
+    d = length2mm / 2.3             # Division by a *float* (or *int*)
+    e = -length3_5cm                # Negation
+</code></pre>
+
+<p>Comparisons between <em>L</em> object are permitted:</p>
+
+<pre><code>    eq = length2mm == length2mm     # Equality
+    ge = length2mm &gt;= length0       # Greater than or equal
+    gt = length2mm &gt; length1thou    # Greater than
+    le = length0 &lt;= length2mm &lt;=    # Less than or equal
+    lt = length1thou &lt; length2mm &lt;  # Less than
+    ne = length3_5cm != length6feet # Inequality
+</code></pre>
+
+<p><em>L</em> object can be formatted using the Python formatting system.
+For example:</p>
+
+<pre><code>    length = L(inch = 1)
+    print("mm={0:m} cm={0:c} inch={0:i} ft={0:f}".format(length))
+</code></pre>
+
+<p>will print out:</p>
+
+<pre><code>    mm=25.4 cm=2.54 inch=1.0 ft=0.08333333333
+</code></pre>
+
+<p>If no suffix is provided, millimetes will be used the for output units.
+In general, it is best to always specify the units.</p>
+
+<p>In addition, it is possible to use standard float syntax to futher
+control the formatting.  Thus:</p>
+
+<pre><code>    print("ft={0:.4f}".format(length)
+</code></pre>
+
+<p>will print out:</p>
+
+<pre><code>ft=0.8333
+</code></pre>
+
+<p>There are trigametric methods for <em>L</em> objects that multiply
+the a length by a trigimetric function:</p>
+
+<pre><code>    length.sine(angle)        # == length * angle.sine()
+    length.cosine(angle)      # == length * angle.cosine()
+    length.tangent(angle)     # == length * angle.tangent()
+</code></pre>
+
+<p>In addtion there is:</p>
+
+<pre><code>    dy.arctangent2(dx)        # == Angle(rad=math.atan2(dy.mm(), dz.mm()))
+</code></pre>
+
+<p>There are a few miscellaneous <em>L</em> methods as well:</p>
+
+<pre><code>    length1.absolute()        # Absolute value of (length1)
+    length1.maximim(length2)  # Maximum of length1 and length2
+    length2.minimum(length2)  # Minimum of length1 and length2
+</code></pre>
+
+<p>The detailed method documentation generated by Doxygen is
+<a href="html/classEZCAD3_1_1L.html">available</a>.</p>
+
+<h3>The <em>Material</em> Class</h3>
+
+<p><em>Matierial</em> class documentation goes here.</p>
+
+<h3>The <em>P</em> (i.e. point) class</h3>
+
+<p><em>P</em> class documenation goes here.</p>
+
+<h3>The <em>Part</em> Class</h3>
+
+<p><em>Part</em> Class documenation goes here:</p>
+
+<p>Bounding Box:</p>
 
 <ul>
 <li><em>ex</em>:  East   X length</li>
