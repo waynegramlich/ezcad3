@@ -340,10 +340,9 @@ what is happening on a chunk by chunk basis next:
                 zero = L()
         
                 # Start with a solid block of the right dimensions:
-                height = dz - wall_thickness
                 self.block(comment = "Initial block of material",
                   material = material,
-                  color = Color("blue", alpha=.5),
+                  color = Color("blue"),
                   corner1 = P(-dx/2, -dy/2, zero),
                   corner2 = P( dx/2,  dy/2, height))
         
@@ -391,6 +390,203 @@ what is happening on a chunk by chunk basis next:
         ezcad = EZCAD3(0)                # Using EZCAD 3.0
         simple_box = Simple_Box(None)   # Initialize top-level sub-assembly
         simple_box.process(ezcad)       # Process the design
+
+Now we will explain the code in smaller steps:
+
+* On Unix-like operating systems (e.g. Linux, MacOS, etc.), the
+  following command makes it possible to directly execute the
+  python program from the command line:
+
+        #!/usr/bin/env python
+        
+* This pulls all of the classes for EZCAD3 into the program namespace.
+
+        from EZCAD3 import *   # The EZCAD (revision 3) classes:
+        
+* This defines the top-level assemble for the box and names it
+  *Simple_Box*.  It is a sub-class of the *Part* class:
+
+        class Simple_Box(Part):
+        
+* This defines the intializtion routine for the *Simple_Box* class.
+  For EZCAD, the first argument of the initializer is *self* and the
+  second argument is always *up*.  *up* is up-level *Part* part class
+  that is the "parent" of the *Simple_Box*.  In this particular code
+  example, *None* is passed in to indicate that there is no "parent"
+  class.  The next five arguments are optional arguments named *dx*,
+  *dy*, *dz*, *wall_thickness*, and *Material*.  These arguments have
+  default values if they are not specified.  The default box dimensions
+  are 100mm long (X direction), 50mm wide (Y direction), 25mm high
+  (Z direction) with a wall thickness of 5mm.  The default construction
+  material is ABS plastic (similar to Lego brick plastic.):
+
+            def __init__(self, up, dx=L(mm=100.0), dy=L(mm=50.0),
+              dz=L(25.0), wall_thickness=L(mm=5.0),
+              material=Material("plastic", "ABS")):
+
+* This initializes the *Part* super class with *self* and *up*:
+
+                # Initialize the *Part*:
+                Part.__init__(self, up)
+        
+* This loads some values into member variables of the *Simple_Box*
+  class.  The member variables are *dx_l*, *dy_l*, *dz_l*,
+  *wall_thickness_l*, and *material_m*.  The first for member variables
+  end with an *\_l* suffix to indicate that they are *L* (i.e. length)
+  objects.  The *material_m" variable end with *\_m* to indicate that
+  it contains a *Material* object:
+
+                # Remember the initialization values:
+                self.dx_l = dx
+                self.dy_l = dy
+                self.dz_l = dz
+                self.wall_thickness_l = wall_thickness
+                self.material_m = material
+        
+* These last lines of the <I>__init__</I>() method instantiate
+  the *Simple_Box_Base* and *Simple_Box_Cover* *Part*'s.  These
+  two instances are stored into the *base\_* and *cover\_* member
+  variables.  These two variables end with a suffix of *\_* to
+  indicate that they are *Part* objects.  The *\_* suffis is
+  **mandatory**, since the EZCAD system uses the *\_* suffix
+  to find the child *Part*'s of the *Simple_Box* assembly.
+  *self* is passed into the <I>__init__</I> methods for both
+  the *Simple_Box_Base* and *Simple_Box_Cover* classes because
+  *self* is the "parent" for both:
+
+                # Instantiate the sub-*Part*'s:
+                self.base_ = Simple_Box_Base(self)
+                self.cover_ = Simple_Box_Cover(self)
+        
+* Every *Part* class must have a *construct*() method.  In this
+  particular case, where *Simple_Box* is an assembly now further
+  operations are needed, so the *pass* statement is used to indicate
+  that no further operations are needed:
+
+            def construct(self):
+                pass
+        
+* This class defines the *Simple_Box_Base* *Part*.  This class
+  describes the shape of the box base.  It is a sub-class of
+  a *Part* class:
+
+        class Simple_Box_Base(Part):
+        
+* As is frequently the case with many *Part*'s to be manufactured,...
+
+            def __init__(self, up, place = True):
+                Part.__init__(self, up, place)
+        
+* The construct method for a *Part* to be manufactured is typically
+  more complicated than a *Part* used as an assembly:
+
+            def construct(self):
+
+* Usually we start with some statement that select various values
+  defined in this part and others.  In this case, we grab the
+  dimension and material objects needed for constructin the box base.
+  Most of these demensions are declared in the "parent" which is
+  access using *self*.*up*.
+
+                # Grab some values from *box*:
+                box = self.up
+
+* Now using *box* we can select the five member variables from
+  the *Simple_Box* "parent" assembly *Part*.  The *_l* and *_m*
+  suffixes are not needed for the local variables *dx*, *dy*,
+  *dz*, *wall_thickness* and *material*:
+
+                dx = box.dx_l
+                dy = box.dy_l
+                dz = box.dz_l
+                wall_thickness = box.wall_thickness_l
+                material = box.material_m
+        
+* We compute a new member variable *height_l* using the extracted
+  dimensions from the *Simple_Box* "parent" *Part*.  This variable
+  is assigned to a local variable *height* and a member variable
+  *height_l* with has the *\_l* suffix.  In addtion, a length of
+  *zero* is created by invoking the *L* initailizer with no arguments:
+
+                # Add another 
+                self.height_l = height = dz - wall_thickness
+                zero = L()
+        
+* Conceptually, we start the box with a block of material that is
+  *dx* by *dy* by *height* in size.  We start by providing a *comment*
+  argment that shows up in the generated .scad and G code files.
+  The color is specified by providing a *Color* object.  This *Color*
+  object is blue.  Finally, two diametrically opposite corners are
+  specified with the *corner1* and *corner2* arguments.  The bottom
+  of the box is centered on the origin and extends upward by *height*.
+  The *P* class is used to specify the X/Y/Z coordinates of each
+  corner:
+
+                # Start with a solid block of the right dimensions:
+                self.block(comment = "Initial block of material",
+                  material = material,
+                  color = Color("blue"),
+                  corner1 = P(-dx/2, -dy/2, zero),
+                  corner2 = P( dx/2,  dy/2, height))
+        
+* The empty contents of the box base is removed from the original
+  block via a *simple_pocket*() method.  The *simple_pocket* method
+  starts with a *comment* argument.  Like the *block* method, the
+  two diametrically opposite corners are used to specify the
+  pocket dimensions.  In this code the bounding box dimensions
+  for *Simple_Box_Base* are used.  The *corner1* argument is
+  specified starting from the *bsw* (Bottom, South, West) corner
+  and has *P*(*wall_thickness*, *wall_thickness*, *wall_thickness*)
+  added to it.  The *corner2* argument is specified starting from
+  the *tne* (Top, North, East) corner and has *P*(*wall_thickness*,
+  *wall_thickness*, *zero*)) subtracted from it.
+
+                # Pocket out the body of the box:
+                self.simple_pocket(comment = "Box Pocket",
+                 corner1 = self.bsw + P(wall_thickness,
+                   wall_thickness, wall_thickness),
+                 corner2 = self.tne - P(wall_thickness,
+                   wall_thickness, zero))
+        
+        class Simple_Box_Cover(Part):
+        
+            def __init__(self, up, place = True):
+                Part.__init__(self, up, place)
+        
+            def construct(self):
+                # Grab some values from *parent* and *base*:
+                box = self.up
+                dx = box.dx_l
+                dy = box.dy_l
+                dz = box.dz_l
+                material = box.material_m
+                wall_thickness = box.wall_thickness_l
+                base = box.base_
+                base_height = base.height_l
+                zero = L()
+        
+                # Compute local values:
+                self.lip_thickness = lip_thickness = wall_thickness/2
+        
+                # Do the top part of the cover:
+                self.block(comment = "Cover Top",
+                  material = material,
+                  color = Color("green", alpha=0.5),
+                  corner1 = base.tsw,
+                  corner2 = base.tne + P(z = wall_thickness))
+        
+                # Do the lip part of the cover:
+                self.block(comment = "Cover Lip",
+                  corner1 = base.tsw + P(wall_thickness,
+                    wall_thickness, -lip_thickness),
+                  corner2 = base.tne + P(-wall_thickness,
+                    -wall_thickness, zero))
+                 
+        ezcad = EZCAD3(0)                # Using EZCAD 3.0
+        simple_box = Simple_Box(None)   # Initialize top-level sub-assembly
+        simple_box.process(ezcad)       # Process the design
+
+
 
 The final step is:
 
