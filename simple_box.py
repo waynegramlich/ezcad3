@@ -38,7 +38,7 @@ class Simple_Box_Base(Part):
 	wall_thickness = box.wall_thickness_l
 	material = box.material_m
 
-	# Add another 
+	# Add another member variable:
 	self.height_l = height = dz - wall_thickness
 	zero = L()
 
@@ -46,14 +46,17 @@ class Simple_Box_Base(Part):
 	height = dz - wall_thickness
 	self.block(comment = "Initial block of material",
 	  material = material,
-	  color = Color("blue", alpha=.5),
+	  color = Color("blue"),
 	  corner1 = P(-dx/2, -dy/2, zero),
 	  corner2 = P( dx/2,  dy/2, height))
 
 	# Pocket out the body of the box:
 	self.simple_pocket(comment = "Box Pocket",
-	 corner1 = self.bsw + P(wall_thickness, wall_thickness, wall_thickness),
-	 corner2 = self.tne - P(wall_thickness, wall_thickness, L(mm=-.1)))
+	  corner1 = self.bsw + \
+            P(wall_thickness, wall_thickness, wall_thickness),
+	  corner2 = self.tne - \
+            P(wall_thickness, wall_thickness, zero),
+          pocket_top = "t")
 
 class Simple_Box_Cover(Part):
 
@@ -73,21 +76,25 @@ class Simple_Box_Cover(Part):
 	zero = L()
 
 	# Compute local values:
-	self.lip_thickness = lip_thickness = wall_thickness/2
+	self.lip_thickness_l = lip_thickness = wall_thickness / 2
+	self.gap_l = gap = L(mm = 0.1)
 
 	# Do the top part of the cover:
 	self.block(comment = "Cover Top",
 	  material = material,
-	  color = Color("green", alpha=0.5),
+	  color = Color("green"),
 	  corner1 = base.tsw,
 	  corner2 = base.tne + P(z = wall_thickness))
 
 	# Do the lip part of the cover:
 	self.block(comment = "Cover Lip",
-	  corner1 = \
-	    base.tsw + P(wall_thickness, wall_thickness, -lip_thickness),
-	  corner2 = base.tne + P(-wall_thickness, -wall_thickness, zero))
-	 
-ezcad = EZCAD3(0)		# Using EZCAD 3.0
-my_assembly = Simple_Box(None)	# Initialize top-level sub-assembly
-my_assembly.process(ezcad)	# Process the design
+	  corner1 = base.tsw + \
+	  P(wall_thickness + gap, wall_thickness + gap, -lip_thickness),
+	  corner2 = base.tne - \
+	  P(wall_thickness + gap, wall_thickness + gap, zero),
+          welds = "t")
+
+if __name__== "__main__":
+    ezcad = EZCAD3(0)               # Using EZCAD 3.0
+    simple_box = Simple_Box(None)   # Initialize top-level sub-assembly
+    simple_box.process(ezcad)       # Process the design

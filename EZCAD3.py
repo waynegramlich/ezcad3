@@ -1852,7 +1852,7 @@ class Part:
 		  format(self.name, top_surface)
 
     def block(self, comment = "no comment",  material = None, color = None,
-      corner1 = None, corner2 = None,
+      corner1 = None, corner2 = None, welds = "",
       center = None, axis = None, rotate = None, translate = None):
 	""" {Part} construct: Create a block with corners at {corner1} and
 	    {corner2}.  The block is made of {material} and visualized as
@@ -1877,6 +1877,7 @@ class Part:
 	if type(corner2) == none_type:
 	    one = L.mm(1.0)
 	    corner2 = P(one, one, one)
+	assert isinstance(welds, str)
 
 	# Record the materials:
 	self._material = material
@@ -1945,15 +1946,36 @@ class Part:
 	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
 	    union_lines = self._scad_union_lines
 
-	    assert x1 < x2, "x1={0} should be less than x2={1}".format(x1, x2)
-	    assert y1 < y2, "y1={0} should be less than y2={1}".format(y1, y2)
-	    assert z1 < z2, "xz={0} should be less than z2={1}".format(z1, z2)
+	    assert x1 < x2, \
+	      "{0}.block '{1}': equal X coordinates: corner1={2} corner2={3}". \
+	     format(self._name, comment, corner1, corner2)
+	    assert y1 < y2, \
+	      "{0}.block '{1}': equal Y coordinates: corner1={2} corner2={3}". \
+	     format(self._name, comment, corner1, corner2)
+	    assert z1 < z2, \
+	      "{0}.block '{1}': equal Z coordinates: corner1={2} corner2={3}". \
+	     format(self._name, comment, corner1, corner2)
+
+
+	    # Now make the block a little bigger for "welding":
+	    weld_extra = L(mm = 0.01)
+	    if welds.find("t") >= 0:
+		z2 += weld_extra
+	    if welds.find("b") >= 0:
+		z1 -= weld_extra
+	    if welds.find("n") >= 0:
+		y2 += weld_extra
+	    if welds.find("s") >= 0:
+		y1 -= weld_extra
+	    if welds.find("e") >= 0:
+		x2 += weld_extra	
+	    if welds.find("w") >= 0:
+		x1 -= weld_extra
 
 	    #print "c1=({0},{1},{2}) c2=({3},{4},{5})".format( \
 	    #  x1, y1, z1, x2, y2, z2)
 
             # The transforms are done in reverse order:
-
 	    self._scad_transform(union_lines, center = center,
 	      axis = axis, rotate = rotate, translate = translate)
 
@@ -2452,7 +2474,7 @@ class Part:
 	      format(color, self.transparency, material))
 	    xml_stream.write(' Comment="{0}"/>\n'.format(self.name))
 
-    def hole(self, comment, diameter, start, end, flags=""):
+    def hole(self, comment, diameter, start, end, top = "t", flags = ""):
 	""" Part construct: Make a {diameter} hole in {part} with starting
 	    at {start_point} and ending at {end_point}.  {comment} will
 	    show in any error messages and any generated G-code.  The
@@ -3395,7 +3417,7 @@ class Part:
 	    part.show(indent + " ")
 
     def simple_pocket(self, comment = "no comment",
-      corner1 = None, corner2 = None,
+      corner1 = None, corner2 = None, pocket_top = "t",
       center = None, axis = None, rotate = None, translate = None):
 	""" {Part} construct: Create a block with corners at {corner1} and
 	    {corner2}.  The block is made of {material} and visualized as
@@ -3421,6 +3443,7 @@ class Part:
 	assert type(axis) == none_type or isinstance(axis, P)
 	assert type(rotate) == none_type or isinstance(rotate, Angle)
 	assert type(translate) == none_type or isinstance(translate, P)
+	assert isinstance(pocket_top, str)
 
 	# Make sure that the corners are diagonal from bottom south west
 	# to top north east:
@@ -3432,6 +3455,25 @@ class Part:
 	z2 = max(corner1.z, corner2.z)
 	#print("Part.box:{0:m}:{1:m},{2:m}:{3:m},{4:m}:{5:m}". \
 	#  format(x1, x2, y1, y2, z1, z2))
+
+	# Deal with *top* argument:
+	extra = L(mm = 1.0)
+	if pocket_top == "t":
+	    z2 += extra
+	elif pocket_top == "b":
+	    z1 -= extra
+	elif pocket_top == "n":
+	    y2 += extra
+	elif pocket_top == "s":
+	    y1 -= extra
+	elif pocket_top == "e":
+	    x2 += extra
+	elif pocket_top == "w":
+	    x1 -= extra
+	else:
+            assert False, \
+	      "pocket_top = '{0}' instead of 't', 'b', 'n', 's', 'e', or 'w'". \
+	      format(pocket_top)
 
 	place = Place(part = None, name = comment, center = center,
 	  axis = axis, rotate = rotate, translate = translate)

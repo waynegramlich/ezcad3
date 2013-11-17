@@ -200,11 +200,15 @@ Static Public Attributes</h2></td></tr>
 <tr class="memitem:a2135588c46ba14838dbb345cde722f65"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a2135588c46ba14838dbb345cde722f65"></a>
 tuple&#160;</td><td class="memItemRight" valign="bottom"><b>zero</b> = <a class="el" href="classEZCAD3_1_1L.html">L</a>()</td></tr>
 <tr class="memitem:aa0749f1859fb7e55d6be5bea1097745c"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="aa0749f1859fb7e55d6be5bea1097745c"></a>
-tuple&#160;</td><td class="memItemRight" valign="bottom"><b>color</b> = <a class="el" href="classEZCAD3_1_1Color.html">Color</a>(&quot;green&quot;, alpha=0.5)</td></tr>
+tuple&#160;</td><td class="memItemRight" valign="bottom"><b>color</b> = <a class="el" href="classEZCAD3_1_1Color.html">Color</a>(&quot;green&quot;)</td></tr>
 <tr class="memitem:a33ab22b5683548d7e58d5226982f3c0a"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a33ab22b5683548d7e58d5226982f3c0a"></a>
 &#160;</td><td class="memItemRight" valign="bottom"><b>corner1</b> = base.tsw,</td></tr>
 <tr class="memitem:aea560db8cceb2d4ec40b9d4aadfb171e"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="aea560db8cceb2d4ec40b9d4aadfb171e"></a>
 tuple&#160;</td><td class="memItemRight" valign="bottom"><b>corner2</b> = base.tne+<a class="el" href="classEZCAD3_1_1P.html">P</a>(z = wall_thickness)</td></tr>
+<tr class="memitem:a2ac83ad521c6b116193bc53141e44037"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a2ac83ad521c6b116193bc53141e44037"></a>
+&#160;</td><td class="memItemRight" valign="bottom"><b>corner2</b> = base.tne-\</td></tr>
+<tr class="memitem:a9059e43cc7e36d042fb80e5973cd9a25"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a9059e43cc7e36d042fb80e5973cd9a25"></a>
+<a class="el" href="classEZCAD3_1_1Part.html#a1127d60e111607ff5dfe8b3c141144a6">string</a>&#160;</td><td class="memItemRight" valign="bottom"><b>welds</b> = &quot;t&quot;</td></tr>
 <tr class="inherit_header pub_static_attribs_classEZCAD3_1_1Part"><td colspan="2" onclick="javascript:toggleInherit('pub_static_attribs_classEZCAD3_1_1Part')"><img src="closed.png" alt="-"/>&nbsp;Static Public Attributes inherited from <a class="el" href="classEZCAD3_1_1Part.html">EZCAD3.Part</a></td></tr>
 <tr class="memitem:a739cca7ded3f6664e72b0ff75295c0a7 inherit pub_static_attribs_classEZCAD3_1_1Part"><td class="memItemLeft" align="right" valign="top">tuple&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classEZCAD3_1_1Part.html#a739cca7ded3f6664e72b0ff75295c0a7">none_type</a> = type(None)</td></tr>
 <tr class="memitem:a4662d66f106c83a1ab7104dc83fc24c8 inherit pub_static_attribs_classEZCAD3_1_1Part"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a4662d66f106c83a1ab7104dc83fc24c8"></a>
@@ -427,6 +431,8 @@ tuple&#160;</td><td class="memItemRight" valign="bottom"><b>tse</b> = <a class="
 tuple&#160;</td><td class="memItemRight" valign="bottom"><b>bne</b> = <a class="el" href="classEZCAD3_1_1P.html">P</a>(x2, y2, z1)</td></tr>
 <tr class="memitem:a65336bcf6a2e9f8cc935c61ae9533696 inherit pub_static_attribs_classEZCAD3_1_1Part"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a65336bcf6a2e9f8cc935c61ae9533696"></a>
 &#160;</td><td class="memItemRight" valign="bottom"><b>union_lines</b> = self._scad_union_lines</td></tr>
+<tr class="memitem:ae532ae4393994edaeab2558e78ac2d13 inherit pub_static_attribs_classEZCAD3_1_1Part"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="ae532ae4393994edaeab2558e78ac2d13"></a>
+tuple&#160;</td><td class="memItemRight" valign="bottom"><b>weld_extra</b> = <a class="el" href="classEZCAD3_1_1L.html">L</a>(mm = 0.01)</td></tr>
 <tr class="memitem:aaf4d4eec586cb7cb5805f001991d4315 inherit pub_static_attribs_classEZCAD3_1_1Part"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="aaf4d4eec586cb7cb5805f001991d4315"></a>
 &#160;</td><td class="memItemRight" valign="bottom"><b>corner1</b> = -<a class="el" href="classEZCAD3_1_1Part.html#a79d2fc0b2a70bc3c70e21be0876b211e">corner2</a></td></tr>
 <tr class="memitem:a2876cdd74bb64abe0ca0a324d0bcf58d inherit pub_static_attribs_classEZCAD3_1_1Part"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a2876cdd74bb64abe0ca0a324d0bcf58d"></a>
@@ -738,7 +744,7 @@ physical part. </pre>
 </div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Thu Nov 14 2013 01:17:13 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
+Generated on Sat Nov 16 2013 23:53:13 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
 <img class="footer" src="doxygen.png" alt="doxygen"/>
 </a> 1.8.1.2
 </small></address>

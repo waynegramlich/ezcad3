@@ -7,7 +7,7 @@ mechanical CAD (Computer Aided Design) system with an integrated
 mechanical CAM (Computer Aided Manufacture) system.  The CAD
 system specifies the geometry of individual parts and how they
 are assembled together.  The CAM system specifies the
-manufacturing steps required to make a part.
+manufacturing steps required to make each individual part.
 
 In EZCAD, the designer writes a program using the
 [Python](http://www.python.org/) programming language.
@@ -47,16 +47,16 @@ library embodied in the NEF3 sub-library of CGAL.
 
 Detailed documentation of the Python classes and associated
 methods is maintained by [Doxygen](http://www.doxygen.org/).
-For convenience, all of the generated Doxygen documenation
-is checked into the repository.  If you want to generated
-Doxygen documentation locally, you need to download the program.
+For convenience, all of the generated Doxygen documentation
+is checked into the repository.  If you want to generate
+Doxygen documentation locally, you need to download Doxygen
 I downloaded my copy via:
 
         sudo apt-get install doxygen
 
 ### Documentation
 
-In addition to this document, there is
+At the moment, the only documentation is this document and the
 [Doxygen generated documentation](html/pages.html).
 
 ### Licensing
@@ -64,7 +64,7 @@ In addition to this document, there is
 In general, I really like Open Source Licenses.  I have a slight
 preference of the GPL open source license, so that is what EZCAD3
 is released under.  I emulate the
-[Free Software Foundation](http://www.fsf.org) that any code
+[Free Software Foundation](http://www.fsf.org) in that any code
 contributed to my code branch requires a copyright assignment.
 Professor Eben Moglen has written up a short explanation of
 [Why the FSF gets copyright assignments from
@@ -111,13 +111,11 @@ In alphabetical order, the utility classes are:
    coordinate system.  (This type is shortened to "P" because is used
    so much.)
 
-* *Place* is used to represent a *Part* placement in a sub-assembly.
-
 Each EZCAD class method validates that its arguments types are correct.
 (If you have ever heard of the "duck typing" design pattern, EZCAD
-most definitely does **not** use that particular programming religion.)
+most definitely does **not** use that particular design pattern.)
 
-The CAM (Computer Aided Manufacture) portion is based on the
+The CAM (Computer Aided Manufacture) portion of EZCAD is based on the
 following classes:
 
 * *EZCAD* is the global object that orchestrates the entire process.
@@ -144,7 +142,7 @@ EZCAD operates in three distinct phases:
 
 * Constraint Propagation.  This phase propagates dimensional changes
   around the overall design.  This process also keeps track of the
-  bounding box around each individual part and sub-assembly.
+  bounding box for each individual part and sub-assembly.
 
 * Manufacture and Assembly.  This phase generates the required
   manufacturing files needed for construct the various parts.
@@ -157,7 +155,7 @@ Each phase is quickly discussed below:
 
 Each user individual part is implemented as a Python class object that
 sub-classes the *Part* super class.  As expected, the initialization phase
-occurs in the <I>__init__</I>() method.  Each part has an up-level parent
+occurs in the *\_\_init\_\_*() method.  Each part has an up-level parent
 (abbreviated as "*up*").  The following code fragment shows how it is
 done:
 
@@ -170,19 +168,20 @@ done:
                 self.partN_ = PartN(self)    # Initialize *PartN*
 
 The first line initializes the *Part* super class with *up* as the
-up-level parent.  The second and subsequent lines initializes the
+up-level parent.  The second and subsequent lines initialize the
 various sub-parts.  By convention, each sub-*Part* is stored into
-*self* with a trailing "_" suffix.  (There will be more about suffixes
-shortly.)
+*self* with a trailing "_" suffix.  (There is more about suffixes
+shortly below.)
 
-After initialization is complete, each *Part* can access any other
-*Part* in the design using standard dot (".") notation.  For example,
+After initialization is complete, each *Part* can access any other *Part*
+in the design using standard Python dot (".") notation.  For example,
 *self.up.base_* will access the *base_* *Part* of the parent to *self*.
 
 Due to the nature of Python, the designer will be storing dimensional
-values into *Part* member variables.  EZCAD uses member variable suffixes
-to prevent accidental name clashes.  Designers are constrained to use
-a suffixes listed below:
+values into their *Part*'s as member variables.  EZCAD uses member
+variable suffixes to prevent accidental name clashes.  Designers are
+*required* to use the standard suffixes listed below for their additional
+*Part* member variables:
 
 * "_": *Part*
 * "_a": *Angle*
@@ -196,7 +195,8 @@ a suffixes listed below:
 * "_p": *P* (i.e. a point)
 * "_pl": *Place*
 
-All user defined member variables *must* end with one of the suffixes above.
+All designer defined member variables *must* end with one of the
+suffixes above.
 
 ### Constraint Propagation Phase
 
@@ -212,7 +212,7 @@ To further support constraint propagation, each *Part* maintains a
 bounding box for everything it contains.  The bounding box uses
 an altitude/compass bearing naming convention.  Using this convention,
 the X axis is uses East/Center/West names, the Y axis uses
-North/Center/South names, and the Z axis uses Top/Center/Bottom name.
+North/Center/South names, and the Z axis uses Top/Center/Bottom names.
 The following crude ASCII art should help to convey the concept.
 
                     T  N (Y axis)
@@ -224,7 +224,7 @@ The following crude ASCII art should help to convey the concept.
                  S  B
                    (Z-axis)
 
-The bounding box of a part defines box that consists of 3 by 3 x 3
+The bounding box of a part defines box that consists of 3 by 3 by 3
 points.  There are three slices -- the top slice, the center slice,
 and bottom slice that are named as follows:
 
@@ -243,9 +243,9 @@ box, and *bw* corresponds to the Bottom-West edge of the
 bounding box.
 
 Using constraint propagation and bounding boxes, EZCAD encourages
-the use of the  *assembly focused* design pattern where each
-part is designed to fit precisely into the final assembly from the
-beginning.  This is in contrast to the *part focused* design
+the use of an "assembly focused" design pattern where each *Part*
+is designed to fit precisely into the final assembly from the
+beginning.  This is in contrast to the "part focused" design
 pattern where each part is individually designed and then
 subsequently fitted into the final assembly.
 
@@ -258,17 +258,17 @@ manufacturing files for the following generic classes of machines:
 
 * Laser Cutters (.dxf file)
 
-* CNC Mills and Lathes (CNC file)
+* CNC Mills and Lathes (.ngc file)
 
-EZCAD uses a design for manufacture strategy.  For each part, the
-designer specifies one or more appropriate machines that could be
-used to manufacture the part.  While some parts can only be manufactured
-on a single machine class, others can be manufactured on more than
-one machine class.  For example, a plastic plate that has some holes,
-inter cut outs, and a specific exterior contour can actually be
-manufactured on a CNC mill, laser cutter, or 3D printer.  The
-decision of which machine to use is deferred until the actual part
-needs to be manufactured.
+EZCAD uses encourages a "design for manufacture" design pattern.
+For each part, the designer specifies one or more appropriate
+machines that could be used to manufacture the part.  While some
+parts can only be manufactured on a single machine class, others
+can be manufactured on more than one machine class.  For example,
+a plastic plate that has some holes, inner cut outs, and a specific
+exterior contour can actually be manufactured on a CNC mill,
+laser cutter, or 3D printer.  The decision of which machine to
+use is deferred until the actual part needs to be manufactured.
 
 EZCAD uses a two step process for designing a part:
 
@@ -279,14 +279,17 @@ EZCAD uses a two step process for designing a part:
 * Second, a bunch of material removal operations (e.g. holes,
   pockets, exterior contour removal, etc.)
 
-The details of these operations are deferred until later.
+The details of these operations are described much further
+below.
 
 After each part is designed, there is a final step of placing
 each part into the final assembly.  A single part or sub-assembly
 can easily be replicated multiple times in the final assembly.
 
 Once the final assembly is present, it can be viewed using the
-appropriate 
+appropriate visualization tool.  Currently, both VRML (i.e.
+.wrl files) and OpenSCAD (i.e. .scad files) are supported for
+visualization.
 
 ### A Quick Example
 
@@ -296,7 +299,7 @@ We present the entire code body first then will describe
 what is happening on a chunk by chunk basis next:
 
         #!/usr/bin/env python
-        
+
         from EZCAD3 import *   # The EZCAD (revision 3) classes:
         
         class Simple_Box(Part):
@@ -323,8 +326,8 @@ what is happening on a chunk by chunk basis next:
         
         class Simple_Box_Base(Part):
         
-            def __init__(self, up, place = True):
-                Part.__init__(self, up, place)
+            def __init__(self, up):
+                Part.__init__(self, up)
         
             def construct(self):
                 # Grab some values from *box*:
@@ -335,11 +338,12 @@ what is happening on a chunk by chunk basis next:
                 wall_thickness = box.wall_thickness_l
                 material = box.material_m
         
-                # Add another 
+                # Add another member_variable:
                 self.height_l = height = dz - wall_thickness
                 zero = L()
         
                 # Start with a solid block of the right dimensions:
+                height = dz - wall_thickness
                 self.block(comment = "Initial block of material",
                   material = material,
                   color = Color("blue"),
@@ -348,10 +352,11 @@ what is happening on a chunk by chunk basis next:
         
                 # Pocket out the body of the box:
                 self.simple_pocket(comment = "Box Pocket",
-                 corner1 = self.bsw + P(wall_thickness,
-                   wall_thickness, wall_thickness),
-                 corner2 = self.tne - P(wall_thickness,
-                   wall_thickness, L(mm=-.1)))
+                  corner1 = self.bsw + \
+                    P(wall_thickness, wall_thickness, wall_thickness),
+                  corner2 = self.tne - \
+                    P(wall_thickness, wall_thickness, zero),
+                  pocket_top = "t")
         
         class Simple_Box_Cover(Part):
         
@@ -371,27 +376,30 @@ what is happening on a chunk by chunk basis next:
                 zero = L()
         
                 # Compute local values:
-                self.lip_thickness = lip_thickness = wall_thickness/2
+                self.lip_thickness_l = lip_thickness = wall_thickness / 2
+                self.gap_l = gap = L(mm = 0.1)
         
                 # Do the top part of the cover:
                 self.block(comment = "Cover Top",
                   material = material,
-                  color = Color("green", alpha=0.5),
+                  color = Color("green"),
                   corner1 = base.tsw,
                   corner2 = base.tne + P(z = wall_thickness))
         
                 # Do the lip part of the cover:
                 self.block(comment = "Cover Lip",
-                  corner1 = base.tsw + P(wall_thickness,
-                    wall_thickness, -lip_thickness),
-                  corner2 = base.tne + P(-wall_thickness,
-                    -wall_thickness, zero))
-                 
-        ezcad = EZCAD3(0)                # Using EZCAD 3.0
-        simple_box = Simple_Box(None)   # Initialize top-level sub-assembly
-        simple_box.process(ezcad)       # Process the design
+                  corner1 = base.tsw + \
+                  P(wall_thickness + gap, wall_thickness + gap, -lip_thickness),
+                  corner2 = base.tne - \
+                  P(wall_thickness + gap, wall_thickness + gap, zero),
+                  welds = "t")
 
-Now we will explain the code in smaller steps:
+        if __name__== "__main__":
+            ezcad = EZCAD3(0)               # Using EZCAD 3.0
+            simple_box = Simple_Box(None)   # Initialize top-level sub-assembly
+            simple_box.process(ezcad)       # Process the design
+
+The code is explained in smaller steps below:
 
 * On Unix-like operating systems (e.g. Linux, MacOS, etc.), the
   following command makes it possible to directly execute the
@@ -399,18 +407,18 @@ Now we will explain the code in smaller steps:
 
         #!/usr/bin/env python
         
-* This pulls all of the classes for EZCAD3 into the program namespace.
+* This pulls all of the classes for EZCAD3 into the program name space.
 
         from EZCAD3 import *   # The EZCAD (revision 3) classes:
-        
+
 * This defines the top-level assemble for the box and names it
   *Simple_Box*.  It is a sub-class of the *Part* class:
 
         class Simple_Box(Part):
         
-* This defines the intializtion routine for the *Simple_Box* class.
-  For EZCAD, the first argument of the initializer is *self* and the
-  second argument is always *up*.  *up* is up-level *Part* part class
+* This defines the initialization routine for the *Simple_Box* class.
+  For EZCAD, the first argument of the initialize method is *self* and
+  the second argument is always *up*.  *up* is up-level *Part* part class
   that is the "parent" of the *Simple_Box*.  In this particular code
   example, *None* is passed in to indicate that there is no "parent"
   class.  The next five arguments are optional arguments named *dx*,
@@ -443,14 +451,14 @@ Now we will explain the code in smaller steps:
                 self.wall_thickness_l = wall_thickness
                 self.material_m = material
         
-* These last lines of the <I>__init__</I>() method instantiate
+* These last lines of the *\_\_init\_\_*() method instantiate
   the *Simple_Box_Base* and *Simple_Box_Cover* *Part*'s.  These
   two instances are stored into the *base\_* and *cover\_* member
   variables.  These two variables end with a suffix of *\_* to
-  indicate that they are *Part* objects.  The *\_* suffis is
+  indicate that they are *Part* objects.  The *\_* suffix is
   **mandatory**, since the EZCAD system uses the *\_* suffix
   to find the child *Part*'s of the *Simple_Box* assembly.
-  *self* is passed into the <I>__init__</I> methods for both
+  *self* is passed into the *\_\_init\_\_* methods for both
   the *Simple_Box_Base* and *Simple_Box_Cover* classes because
   *self* is the "parent" for both:
 
@@ -459,9 +467,13 @@ Now we will explain the code in smaller steps:
                 self.cover_ = Simple_Box_Cover(self)
         
 * Every *Part* class must have a *construct*() method.  In this
-  particular case, where *Simple_Box* is an assembly now further
-  operations are needed, so the *pass* statement is used to indicate
-  that no further operations are needed:
+  particular case, where *Simple_Box* is a simple assembly.
+  A simply assembly consists of an assembly where each of its
+  sub *Part*'s is automatically placed into the assembly.
+  Since a simple assembly is the "default" mode, no further
+  operations are needed for the *construct*() method for
+  *Simple_Box*.  Thus, the Python *pass* statement is used
+  to indicate that no further operations are needed:
 
             def construct(self):
                 pass
@@ -472,21 +484,23 @@ Now we will explain the code in smaller steps:
 
         class Simple_Box_Base(Part):
         
-* As is frequently the case with many *Part*'s to be manufactured,...
+* As is frequently the case with many *Part*'s to be manufactured
+  the *\_\_init\_\_*() method simple calls the *Part* super class
+  *\_\_init\_\_* initialization method:
 
-            def __init__(self, up, place = True):
-                Part.__init__(self, up, place)
+            def __init__(self, up):
+                Part.__init__(self, up)
         
 * The construct method for a *Part* to be manufactured is typically
-  more complicated than a *Part* used as an assembly:
+  quite a bit more involved than a *Part* used as an assembly:
 
             def construct(self):
 
-* Usually we start with some statement that select various values
+* Usually we start with some statements that select various values
   defined in this part and others.  In this case, we grab the
-  dimension and material objects needed for constructin the box base.
-  Most of these demensions are declared in the "parent" which is
-  access using *self*.*up*.
+  dimension and material objects needed for construction the box base.
+  Most of these dimensions are declared in the "parent" which is
+  accessed using *self*.*up*.
 
                 # Grab some values from *box*:
                 box = self.up
@@ -502,25 +516,28 @@ Now we will explain the code in smaller steps:
                 wall_thickness = box.wall_thickness_l
                 material = box.material_m
         
-* We compute a new member variable *height_l* using the extracted
-  dimensions from the *Simple_Box* "parent" *Part*.  This variable
-  is assigned to a local variable *height* and a member variable
-  *height_l* with has the *\_l* suffix.  In addtion, a length of
-  *zero* is created by invoking the *L* initailizer with no arguments:
+* We compute a new member variable *height_l* for the *Box_Base*
+  *Part* using the extracted dimensions from *box*.  This variable
+  is assigned to a local variable *height* and a *Simple_Box_Cover*
+  member variable *height_l*.  As usual, the member variable ends
+  with an *\_l* suffix to indicate that it is a length.  In addition,
+  a length of *zero* is created by invoking the *L* initialize method
+  with no arguments:
 
-                # Add another 
+                # Add another member variable:
                 self.height_l = height = dz - wall_thickness
                 zero = L()
         
 * Conceptually, we start the box with a block of material that is
   *dx* by *dy* by *height* in size.  We start by providing a *comment*
-  argment that shows up in the generated .scad and G code files.
-  The color is specified by providing a *Color* object.  This *Color*
-  object is blue.  Finally, two diametrically opposite corners are
-  specified with the *corner1* and *corner2* arguments.  The bottom
-  of the box is centered on the origin and extends upward by *height*.
-  The *P* class is used to specify the X/Y/Z coordinates of each
-  corner:
+  argument that shows up in the generated .scad and G code files.
+  The material is the one we selected from *box*.  The color is
+  specified by providing a *Color* object.  This *Color* object is blue.
+  Finally, two diametrically opposite corners are specified with the
+  *corner1* and *corner2* arguments.  In this particular case, the
+  designer has decided that the bottom of the box is centered on the
+  origin and extends upward by *height*.  The *P* (i.e. point) class
+  is used to specify the X/Y/Z coordinates of each corner:
 
                 # Start with a solid block of the right dimensions:
                 self.block(comment = "Initial block of material",
@@ -539,20 +556,35 @@ Now we will explain the code in smaller steps:
   and has *P*(*wall_thickness*, *wall_thickness*, *wall_thickness*)
   added to it.  The *corner2* argument is specified starting from
   the *tne* (Top, North, East) corner and has *P*(*wall_thickness*,
-  *wall_thickness*, *zero*)) subtracted from it.
+  *wall_thickness*, *zero*)) subtracted from it.  Lastly, it is
+  useful to inform the system where the top of the pocket is.
+  This is done by setting *pocket_top* to "t" (for Top).  This
+  causes the pocket to extend upwards just a little to make sure
+  that the 3D solids package does not accidentally leave a thin
+  slice of material behind on top:
 
                 # Pocket out the body of the box:
                 self.simple_pocket(comment = "Box Pocket",
-                 corner1 = self.bsw + P(wall_thickness,
-                   wall_thickness, wall_thickness),
-                 corner2 = self.tne - P(wall_thickness,
-                   wall_thickness, zero))
+                  corner1 = self.bsw + \
+                    P(wall_thickness, wall_thickness, wall_thickness),
+                  corner2 = self.tne - \
+                    P(wall_thickness, wall_thickness, zero),
+                  pocket_top = "t")
         
+* The *Box_Cover* class is very similar to the *Box_Base* class.
+  Thus, only the important differences are discussed below.
+
+* There are no surprises with the *\_\_init\_\_* method:
+
         class Simple_Box_Cover(Part):
+            def __init__(self, up, place):
+                Part.__init__(self, up)
         
-            def __init__(self, up, place = True):
-                Part.__init__(self, up, place)
-        
+* The first part of the *construct*() method is pretty similar.
+  The *box* and *base* parts are selected using standard Python
+  dot ('.') notation.  The *base_height* variable is obtained from
+  *base* using the *Simple_Box_Base* *height_l* member variable.
+
             def construct(self):
                 # Grab some values from *parent* and *base*:
                 box = self.up
@@ -565,52 +597,107 @@ Now we will explain the code in smaller steps:
                 base_height = base.height_l
                 zero = L()
         
+* Two new variables, *lip_thickness* and *gap*, are defined.
+  In addition, two new member variables defined --
+  *lip_thickness_l* and *gap_l*.  As usual these have the required
+  *\_l* suffixes:
+
                 # Compute local values:
-                self.lip_thickness = lip_thickness = wall_thickness/2
+                self.lip_thickness_l = lip_thickness = wall_thickness/2
+                self.gap_l = gap = L(mm = 0.1)
         
+* Like *Simple_Box_Base*, the *Simple_Box_Cover* design starts with
+  a block ABS plastic that is colored green to differentiate it from
+  the blue base..  This top is carefully, aligned to fit on top of the
+  *Simple_Box_Base* *Part*.  *corner1* is set to the Top/South/West
+  corner of *base*.  *corner1* is set to the Top/North/East corner
+  of base plus the height of the cover (i.e. *wall_thickness*.)
+  Notice that the point only specifies *z* dimension and the *x* and
+  *y* dimensions default to a length of 0:
+
                 # Do the top part of the cover:
                 self.block(comment = "Cover Top",
                   material = material,
-                  color = Color("green", alpha=0.5),
+                  color = Color("green"),
                   corner1 = base.tsw,
                   corner2 = base.tne + P(z = wall_thickness))
         
+* The cover lip is a block of ABS plastic that is welded to the
+  bottom of the previous block.  There can only be one material
+  and color for a *Part* so there is no need to specify either
+  *material* or *color* to this second *block*() method call.
+  The *comment* is specified as "Cover Lip". *corner1* is equal
+  to *base* Top/South/West plus the (*wall_thickness* + *gap*)
+  in X and Y, and -*lip_thickness* in Z.  *corner2* is equal to
+  *base* Top/North/East minus (*wall_thickness* + *gap*) in X and Y,
+  and 0 in Z.  For EZCAD, each block, cylinder, extrusion, etc.
+  that is specified is "welded" together into a single chunk
+  of material.  The 3D solids packages sometimes leave an
+  infinitesimally thin gap between two material chunks.  By setting
+  *welds* to "t" (i.e. Top), the block is extended a small amount up
+  into the adjoining part to force the two parts to be welded
+  together:
+
                 # Do the lip part of the cover:
                 self.block(comment = "Cover Lip",
-                  corner1 = base.tsw + P(wall_thickness,
-                    wall_thickness, -lip_thickness),
-                  corner2 = base.tne + P(-wall_thickness,
-                    -wall_thickness, zero))
-                 
-        ezcad = EZCAD3(0)                # Using EZCAD 3.0
-        simple_box = Simple_Box(None)   # Initialize top-level sub-assembly
-        simple_box.process(ezcad)       # Process the design
+                  corner1 = base.tsw + \
+                  P(wall_thickness + gap, wall_thickness + gap, -lip_thickness),
+                  corner2 = base.tne - \
+                  P(wall_thickness + gap, wall_thickness + gap, zero),
+                  welds = "t")
 
+* At the bottom of the file is the code to execute the design is enclosed
+  in the standard Python design pattern of testing *\_\_name\_\_*
+  for equality with "*\_\_main\_\_*".  If they are equal, the program
+  is the top level program and the EZCAD processing code is executed.
+  Otherwise, it is not a top level program, and the code is actually
+  being imported into another Python module.  In this case, the
+  EZCAD processing code is not executed here, but higher up in the
+  top level program.  This design pattern allows parts to be nested.
+  Thus, one person can put a *Part* design in one file, other person
+  can put yet another design in a second file, and yet a third person
+  can glue them together using Python "import" commands in yet at
+  third file:
 
+        if __name__== "__main__":
 
-The final step is:
+* For the final processing sequence, an *EZCAD3* object is allocated
+  and initialized.  The major revision number is 3 and the minor
+  revision number is 0.  Next, the top-level *Simple_Box* assembly
+  is allocated and initialized.  Finally, the *process*() method
+  is invoked on *simple* to cause the design to be processed.:
 
-        ezcad = EZCAD3(0)                # Using EZCAD 3.0
-        my_assembly = My_Assembly(None)  # Initialize top-level sub-assembly
-        my_assembly.process(ezcad)       # Process the design
+            ezcad = EZCAD3(0)               # Using EZCAD 3.0
+            simple_box = Simple_Box(None)   # Initialize top-level sub-assembly
+            simple_box.process(ezcad)       # Process the design
 
-In this code sequence, an *EZCAD3* object is allocated and initialized.
-The major revision number is 3 and the minor revision number is 0.
-Next, the top-level sub-assembly is allocated and initialized.
-Finally, the *process*() method is invoked to cause the design
-to be processed.  For those of you who like to scrunch everything
-onto one line:
+* For those of you who like to scrunch everything onto one line,
+  this could be replaced by:
 
-        Simple_Box(None).process(EZCAD3(0))
+            Simple_Box(None).process(EZCAD3(0))
 
-will also do the trick.
+Hopefully, the example above gives you the an idea of how
+EZCAD works.  When this program is executed it produces the
+following files:
+
+ * Simple_Box_Base.stl: An .stl file to manufacture the base with.
+ * Simple_Box_Cover.stl: An .stl file to manufacture the cover with.
+ * Simple_Box.scad: An .scad file to view the box assembly.
+ * Simple_Box_Base.scad: An .scad file to view the box base part.
+ * Simple_Box_Cover.scad. An .scad file to view the box cover part.
+ * Simple_Box.wrl: An VRML file to view the box assembly.
+ * Simple_Box_Base.wrl: An VRML file to view the box base part.
+ * Simple_Box_Cover.wrl. An VRML file to view the box cover part.
+
+The .scad files can be view with OpenSCAD and the .wrl files
+can be view with a VRML viewer (e.g. meshlab.)
 
 ## CAD Class Reference
 
-This section coveres the design classes.  The lower level
+This section covers the design classes.  The lower level
 classes are covered first, followed by the *Part* class.
 The next major section after this covers the manufacturing
-classes (e.g. *Shop*, *Machine*, *Tool*, etc.
+classes (e.g. *Shop*, *Machine*, *Tool*, etc.)
 
 ### The *Angle* Class
 
@@ -733,7 +820,7 @@ control the formatting.  Thus:
 
 will print out:
 
-	ft=0.8333
+        ft=0.8333
 
 There are trigametric methods for *L* objects that multiply
 the a length by a trigimetric function:
