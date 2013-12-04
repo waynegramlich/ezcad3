@@ -8,565 +8,6 @@ import os
 import math
 import subprocess
 
-## The *Angle* class represents an angle.
-#
-# An *Angle* object represents an angle.  *Angle*'s can be specified
-# in either degrees or radians.
-class Angle:
-    """ An {Angle} represents an angle. """
-
-    ## *PI* respresents the irrational number &pi;.
-    PI = 3.14159265358979323846
-
-    ## *TWO_PI* represents 2&pi;.
-    TWO_PI = 2 * PI
-
-    ## Initialize *Angle* to be *scalar_radians*.
-    #  @param self *Angle* object to initialize.
-    #  @param scalar_radians is the value of the angle in radians.
-    #
-    # <I>__init__</I>() will initialize *self* (an *Angle* object) to
-    # *scalar_radians*.
-    def __init__(self, deg = 0.0, rad = 0.0):
-	""" *Angle*: Initialize self to contain *degrees* + *radians*. """
-
-	# Check argument types:
-	assert isinstance(deg, float) or isinstance(deg, int)
-	assert isinstance(rad, float) or isinstance(rad, int)
-
-	# Initliaze the final value:
-	rad = float(rad)
-	if deg != 0.0:
-	    rad += deg * Angle.PI / 180.0
-	self.radians = float(rad)
-
-    ## @brief Return the sum of two *Angle*'s.
-    #  @param self is the first *Angle* object.
-    #  @param angle is the second *Angle* object.
-    #  @returns the sum of *self* and *angle* as a normalized *Angle* object.
-    #
-    # <I>__add__</I>() will add *self* to *angle* and return the result as an
-    # *Angle* object.
-    def __add__(self, angle):
-	""" Angle: Return *angle* added to *self*. """
-
-	assert isinstance(angle, Angle)
-	return Angle(self.radians + angle.radians)
-
-    ## @brief Divides an *Angle* by *divisor*.
-    #  @param self is the *Angle* object to divide.
-    #  @param divisor the amount to divide the *Angle* bye.
-    #  @returns an *Angle* the corresponds to *self* / *divisor.
-    #
-    # <I>__div__</I>() will divide *self* by *divisor*.  *divisor* must be
-    # either a *float* or an *int*.
-    def __div__(self, divisor):
-	""" Angle: Return *self* divided by *divisor*. """
-
-	assert isinstance(divisor, float) or isinstance(divisor, int)
-	return Angle(self.radians / float(scalar))
-
-    ## @brief Return *True* if angles are equal.
-    #  @param self is the first *Angle* to compare.
-    #  @param angle is the second *Angle* to compare.
-    #  @returns *True* if *self* equals *angle*.
-    #
-    # <I>__eq__</I>() will return *True* if *self* equals *angle* and *False*
-    # otherwise.  Due to the fact that floating point arithmetic is
-    # involved, to *Angle*'s could be very close to one another and
-    # still not exactly match.
-    def __eq__(self, angle):
-	""" Angle: Return *True* if *self* is equal to *angle*. """
-
-	assert isinstance(angle, Angle)
-	return self.radians == angle.radians
-
-    ## @brief Return a formatted version of *self* using *format* to
-    #         control formatting.
-    #  @param self is the *Angle* to format.
-    #  @param format is the the formatting control string.
-    #  @returns a formatted version of *self* as a *str*.
-    #
-    # <I>__format__</I>() will return a formatted version of *self* using
-    # *format* to control formatting.  Right now *format* is ignoreed and
-    # the value returned is *self* converted to degrees.
-    def __format__(self, format):
-	""" Angle: Format *self* into a string and return it. """
-
-	# Check argument types:
-	assert isinstance(format, str)
-
-	value = self.radians
-	if format.endswith("r"):
-	    format = format[:-1]
-	elif format.endswith("d"):
-            format = format[:-1]
-            value *= 180.0 / Angle.PI
-        else:
-	    # Assume degrees output by default:
-            value *= 180.0 / Angle.PI
-
-	if len(format) == 0:
-	    result = "{0}".format(value)
-	else:
-	    result = ("{0:" + format + "}").format(value)
-	return result
-
-    ## @brief Return *True* if *self* is greater than or equal to *angle*.
-    #  @param self is the first *Angle* to compare.
-    #  @param angle is the second *Angle* to compare.
-    #  @returns *True* if *self* is greater than or equal to *angle*.
-    #
-    # <I>__ge__</I>() will return *True* if *self* is greater than or 
-    # equal to *angle* and *False* otherwise.
-    def __ge__(self, angle):
-	""" Angle: Return *True* if *self* is greater than or equal
-	    to *angle*. """
-
-	assert isinstance(angle, Angle)
-	return self.radians >= angle.radians
-
-    ## @brief Return *True* if *self* is greater than *angle*.
-    #  @param self is the first *Angle* to compare.
-    #  @param angle is the second *Angle* to compare.
-    #  @returns *True* if *self* is greater than *angle*.
-    #
-    # <I>__gt__</I>() will return *True* if *self* is greater than *angle*
-    # and *False* otherwise.
-    def __gt__(self, angle):
-	""" Angle: Return *True* if *self* is greater than *angle*. """
-
-	assert isinstance(angle, Angle)
-	return self.radians > angle.radians
-
-    ## @brief Return *True* if *self* is less than *angle*.
-    #  @param self is the first *Angle* to compare.
-    #  @param angle is the second *Angle* to compare.
-    #  @returns *True* if *self* is less than *angle*.
-    #
-    # <I>__gt__</I>() will return *True* if *self* is less than *angle*
-    # and *False* otherwise.
-    def __le__(self, angle):
-	""" Angle: Return *True* if *self* is less than or equal to *angle*. """
-
-	assert isinstance(angle, Angle)
-	return self.radians <= angle.radians
-
-    ## @brief Return *True* if *self* is less than or equal to *angle*.
-    #  @param self is the first *Angle* to compare.
-    #  @param angle is the second *Angle* to compare.
-    #  @returns *True* if *self* is less than or equal to *angle*.
-    #
-    # <I>__ge__</I>() will return *True* if *self* is less than or 
-    # equal to *angle* and *False* otherwise.
-    def __lt__(self, angle):
-	""" Angle: Return *True* if *self* is less than *angle*. """
-
-	assert isinstance(angle, Angle)
-	return self.radians < angle.radians
-
-    ## @brief Return *self* &times; *multiplier*.
-    #  @param self is the *Angle* object to multiply.
-    #  @param multiplier is the number to mulitply *self* by.
-    #  @returns *self* &times *multiplier*.
-    #
-    # <I>__mul__</I>() returns *self* (an *Angle* object) &times; *multiplier*.
-    def __mul__(self, multiplier):
-	""" Angle: Return *self* divided by *multiplier*. """
-
-	assert isinstance(multiplier, float) or isinstance(multiplier, int)
-	return Angle(self.radians * multiplier)
-
-    ## @brief Return *True* if angles are equal.
-    #  @param self is the first *Angle* to compare.
-    #  @param angle is the second *Angle* to compare.
-    #  @returns *True* if *self* equals *angle*.
-    #
-    # <I>__ne__</I>() will return *True* if *self* is not equal to *angle*
-    # and *False* otherwise.
-    def __ne__(self, angle):
-	""" Angle: Return {True} if {self} is not equal to {angle}. """
-
-	assert isinstance(angle, Angle)
-	return self.radians != angle.radians
-
-    ## @brief Returns -*self*.
-    #  @param self is the *Angle* object to negate.
-    #
-    # <I>__neg__</I>() will return -*self*.
-    def __neg__(self):
-	""" Angle: Return negative of {self}. """
-
-	assert isinstance(angle, Angle)
-	return Angle(-self.radians)
-
-    ## @brief Return *self* &times; *multiplier*.
-    #  @param self is the *Angle* object to multiply.
-    #  @param multiplier is the number to mulitply *self* by.
-    #  @returns *self* &times *multiplier*.
-    #
-    # <I>__rmul__</I>() returns *self* (an *Angle* object) &times; *multiplier*.
-    def __rmul__(self, multiplier):
-	""" Angle: Return {self} multiplied by {multiplier}. """
-
-	assert isinstance(multiplier, float) or isinstance(multiplier, int)
-	return Angle(self.radians * multiplier)
-
-    ## @brief Returns *self* converted to degrees.
-    #  @param self is the *Angle* object to convert to degrees.
-    #  @returns *self* converted to degrees.
-    #
-    # <I>__str__</I>() Returns *self* converted to degrees as a *str* object.
-    def __str__(self):
-	""" Angle: Return {self} as a string. """
-
-	return str(self.radians * 180.0 / Angle.pi)
-
-    ## @brief Returns *self* - *angle*.
-    #  @param self is the *Angle* object to subtract from.
-    #  @param angle is the *Angle* to subtract.
-    #  @returns *self* - *angle*.
-    #
-    # <I>__sub__</I>() returns *self* - *angle*.
-    def __sub__(self, angle):
-	""" Angle: Return {angle} subtracted from {self}. """
-
-	assert isinstance(angle, Angle)
-	return Angle(self.radians - angle.radians)
-
-    ## @brief Returns the cosine of *self*.
-    #  @param self is the *Angle* to compute the cosine of
-    #  @returns the cosine of *self*.
-    #
-    #  *cosine*() returns the cosine of *self* (an *Angle* object.)
-    def cosine(self):
-	""" Angle: Return the cosine of {self}. """
-
-	return math.cos(self.radians)
-
-    ## @brief Returns *scalar_degrees* as an *Angle* object.
-    #  @param scalar_degrees is the number to convert into an *Angle*.
-    #  @returns *scalar_degrees* as an *Angle*.
-    #
-    # *deg*() will return *scalar_degrees* as an *Angle* object.
-    @staticmethod
-    def deg(scalar_degrees):
-	""" Angle: Convert {scalar_degrees} into an {Angle} and return it. """
-
-	assert isinstance(scalar_degrees, float) or \
-	  isinstance(scalar_degrees, int)
-	return Angle(scalar_degrees * Angle.PI / 180.0)
-
-    ## @brief Returns *self* converted degrees as a *float*.
-    #  @param self is the *Angle* to convert to degrees.
-    #  @returns *self* converted to degrees.
-    #
-    # *degrees*() will return *self* converted to degrees
-    def degrees(self):
-	""" Angle: Convert {self} back into degrees and return it. """
-
-	return self.radians * 180.0 / Angle.PI
-
-    ## @brief Returns *self*/2.
-    #  @param self is the *Angle* object to divide by 2.
-    #  @returns *self/2.
-    #
-    # *half*() returns the *self*/2.
-    def half(self):
-	""" Angle: Return half of {self}. """
-
-	return Angle(self.radians / 2.0)
-
-    ## @brief Return a normalized value between -&pi; and &pi;.
-    #  @param self is the *Angle* to normalize.
-    #  @returns a normalized value for *self*.
-    #
-    # *normalize*() will return a normalized angle between -&pi; and &pi;.
-    def normalize(self):
-	""" Angle: Return a normalized angle. """
-
-	scalar_radians = self.scalar_radians
-	while (scalar_radians > PI):
-            scalar_radians -= TWO_PI
-	while (scalar_radians < PI):
-	    scalar_radians += TWO_PI
-	return Angle(scalar_radaians)
-
-    ## @brief Returns *scalar_radians* as an *Angle* object.
-    #  @param scalar_radians is the number to convert into an *Angle*.
-    #  @returns *scalar_radians* as an *Angle*.
-    #
-    # *deg*() will return *scalar_radians* as an *Angle* object.
-    @staticmethod
-    def rad(scalar_radians):
-	""" Angle: Convert *scalar_radians* radians into an *Angle* and
-	    return it. """
-
-	return Angle(scalar_radians)
-
-    ## @brief Returns *self* converted to radians.
-    #  @param self is the *Angle* object to convert to radians.
-    #  @returns *self* converted to radians.
-    #
-    # *radians*() returns *self* converted to radians.
-    def radians(self):
-	""" Angle: Convert *self* into radians and return it. """
-
-	return self.radians
-
-    ## @brief Returns the sine of *self*.
-    #  @param self is the *Angle* to compute the sine of
-    #  @returns the sine of *self*.
-    #
-    #  *sine*() returns the sine of *self* (an *Angle* object.)
-    def sine(self):
-	""" Angle: Return the sine of {self}. """
-
-	return math.sin(self.radians)
-
-    ## @brief Returns the tangent of *self*.
-    #  @param self is the *Angle* to compute the tangent of
-    #  @returns the tangent of *self*.
-    #
-    #  *tangent*() returns the tangent of *self* (an *Angle* object.)
-    def tangent(self):
-	""" Angle: Return the tangent of {self}. """
-
-	return math.tan(self.radians)
-
-    ## @brief Returns *self* times 2.
-    #  @param self is the *Angle* to double.
-    #  @returns twice the value of *self*.
-    #
-    # *twice*() returns twice the value of *self*.
-    def twice(self):
-	""" Angle: Return twice of {self}. """
-
-	return Angle(self.length * 2.0)
-
-class Color:
-    COLORS = {
-      "alice_blue": 0xf0f8ff,
-      "antique_white": 0xfaebd7,
-      "aqua": 0x00ffff,
-      "aquamarine": 0x7fffd4,
-      "azure": 0xf0ffff,
-      "beige": 0xf5f5dc,
-      "bisque": 0xffe4c4,
-      "black": 0x000000,
-      "blanched_almond": 0xffebcd,
-      "blue": 0x0000ff,
-      "blue_violet": 0x8a2be2,
-      "brown": 0xa52a2a,
-      "burlywood": 0xdeb887,
-      "cadet_blue": 0x5f9ea0,
-      "chartreuse": 0x7fff00,
-      "chocolate": 0xd2691e,
-      "coral": 0xf08080,
-      "corn_flower_blue": 0x6495ed,
-      "corn_silk": 0xfff8dc,
-      "crimson": 0xdc143c,
-      "cyan": 0x00ffff,
-      "dark_blue": 0x00008b,
-      "dark_cyan": 0x008b8b,
-      "dark_goldenrod": 0xb8860b,
-      "dark_gray": 0xa9a9a9,
-      "dark_green": 0x006400,
-      "dark_grey": 0xa9a9a9,
-      "dark_khaki": 0xbdb76b,
-      "dark_magenta": 0x8b008b,
-      "dark_olive_green": 0x556b2f,
-      "dark_orange": 0xff8c00,
-      "dark_orchid": 0x9932cc,
-      "dark_red": 0x8b0000,
-      "dark_salmon": 0xe9967a,
-      "dark_sea_green": 0x8fbc8f,
-      "dark_slate_blue": 0x483d8b,
-      "dark_slate_gray": 0x2f4f4f,
-      "dark_slate_grey": 0x2f4f4f,
-      "dark_turquoise": 0x40e0d0,
-      "dark_violet": 0x9f00d3,
-      "deep_pink": 0xff1493,
-      "deep_sky_blue": 0x00bfff,
-      "dim_gray": 0x696969,
-      "dim_grey": 0x696969,
-      "dodger_blue": 0x1e90ff,
-      "fire_brick": 0xb22222,
-      "floral_white": 0xfffaf0,
-      "forest_green": 0x228b22,
-      "fuchsia": 0xff00ff,
-      "gainsboro": 0xdcdcdc,
-      "ghost_white": 0xf8f8ff,
-      "gold": 0xffd700,
-      "goldenrod": 0xdaa520,
-      "gray": 0x808080,
-      "green": 0x008000,
-      "green_yellow": 0xadff2f,
-      "grey": 0x808080,
-      "honey_dew": 0xf0fff0,
-      "hot_pink": 0xff1493,
-      "indian_red": 0xcd5c5c,
-      "indigo": 0x4b0082,
-      "ivory": 0xfffff0,
-      "khaki": 0xf0e68c,
-      "lavender": 0xe6e6fa,
-      "lavender_blush": 0xfff0f5,
-      "lawn_green": 0x7cfc00,
-      "lemon_chiffon": 0xfffacd,
-      "light_blue": 0xadd8e6,
-      "light_coral": 0xf08080,
-      "light_cyan": 0xe0ffff,
-      "light_goldenrod_yellow": 0xfafad2,
-      "light_gray": 0xd3d3d3,
-      "light_green": 0x90ee90,
-      "light_grey": 0xd3d3d3,
-      "light_pink": 0xffb6c1,
-      "light_salmon": 0xffa07a,
-      "light_sea_green": 0x20b2aa,
-      "light_sky_blue": 0x87cefa,
-      "light_slate_gray": 0x778899,
-      "light_slate_grey": 0x778899,
-      "light_steel_blue": 0xb0c4de,
-      "light_yellow": 0xffffe0,
-      "lime": 0x00ff00,
-      "lime_green": 0x2e8b57,
-      "linen": 0xfaf0e6,
-      "magenta": 0xff00ff,
-      "maroon": 0x800000,
-      "medium_aquamarine": 0x66cdaa,
-      "medium_blue": 0x0000cd,
-      "medium_orchid": 0xba55d3,
-      "medium_purple": 0x9370db,
-      "medium_sea_green": 0x3cb371,
-      "medium_slate_blue": 0x66cdaa,
-      "medium_spring_green": 0x00fa9a,
-      "medium_turquoise": 0x48d1cc,
-      "medium_violet_red": 0xc71585,
-      "mid_night_blue": 0x191970,
-      "mint_cream": 0xf5fffa,
-      "misty_rose": 0xffe4e1,
-      "moccasin": 0xffe4b5,
-      "navajo_white": 0xffdead,
-      "navy": 0x000080,
-      "old_lace": 0xfdf5e6,
-      "olive": 0x808000,
-      "olive_drab": 0x6b8e23,
-      "orange": 0xffa500,
-      "orange_red": 0xff4500,
-      "orchid": 0xda70d6,
-      "pale_goldenrod": 0xeee8aa,
-      "pale_green": 0x98fb98,
-      "pale_turquoise": 0xafeeee,
-      "pale_violet_red": 0xdb7093,
-      "papaya_whip": 0xffefd5,
-      "peach_puff": 0xffdab9,
-      "peru": 0xcd8f3f,
-      "pink": 0xffc0cb,
-      "plum": 0xdda0dd,
-      "powder_blue": 0xb0e0e6,
-      "purple": 0x800080,
-      "red": 0xff0000,
-      "rosy_brown": 0xbc8f8f,
-      "royal_blue": 0x4169e1,
-      "saddle_brown": 0x8b2be2,
-      "salmon": 0xfa8072,
-      "sandy_brown": 0xf4a460,
-      "sea_green": 0x2e8b57,
-      "sea_shell": 0xfff5ee,
-      "sienna": 0xa0522d,
-      "silver": 0xc0c0c0,
-      "sky_blue": 0x87ceeb,
-      "slate_blue": 0x6a5acd,
-      "slate_gray": 0x708090,
-      "slate_grey": 0x708090,
-      "snow": 0xfffafa,
-      "spring_green": 0x00ff7f,
-      "steel_blue": 0x4682b4,
-      "tan": 0xd2b48c,
-      "teal": 0x008080,
-      "thistle": 0xd8bfd8,
-      "tomato": 0xff6347,
-      "turquoise": 0x40e0d0,
-      "violet": 0xee82ee,
-      "wheat": 0xf5deb3,
-      "white": 0xffffff,
-      "white_smoke": 0xf5f5f5,
-      "yellow": 0xffff00,
-      "yellow_green": 0x9acd32,
-    }
-
-    def __init__(self,
-      name = "", red = -1.0, green = -1.0, blue = -1.0, alpha = 1.0):
-	""" *Color*: Initialize *self*"""
-
-	# Deal with SVG color:
-	colors = Color.COLORS
-	if name in colors:
-	    rgb = colors[name]
-	    red_byte = (rgb >> 16) & 0xff
-	    green_byte = (rgb >> 8) & 0xff
-	    blue_byte = rgb & 0xff
-	    #print("Color bytes=({0}, {1}, {2})". \
-	    #  format(red_byte, green_byte, blue_byte))
-            red = float(red_byte) / 255.0
-	    green = float(green_byte) / 255.0
-	    blue = float(blue_byte) / 255.0
-
-	# Keep red/green/blue/alpha between 0.0 and 1.0:
-	if red < 0.0:
-	    red = 0.0
-	elif red > 1.0:
-	    red = 1.0
-	if green < 0.0:
-	    green = 0.0
-	elif green > 1.0:
-            green = 1.0
-	if blue < 0.0:
-            blue = 0.0
-	elif blue > 1.0:
-	    blue = 1.0
-	if alpha < 0.0:
-	    alpha = 0.0
-	elif alpha > 1.0:
-	    alpha = 1.0
-
-	# Load up *self*:
-	self.red = red
-	self.green = green
-	self.blue = blue
-	self.alpha = alpha
-
-	print("Color({0}, {1}, {2}, {3})".
-	  format(self.red, self.green, self.blue, self.alpha))
-
-class EZCAD3:
-    """ EZCAD3 is the top level engine that executes the design. """
-
-    DIMENSIONS_MODE = 0
-    MANUFACTURE_MODE = 1
-    VISUALIZATION_MODE = 2
-
-    def __init__(self, minor):
-	""" {EZCAD}: Initialize the contents of {self} to contain
-	    {major} and {minor} version numbers. """
-
-	#print "EZCAD.__init__() called"
-
-	# Check argument types:
-	assert minor == 0
-
-	# Load up {self}:
-	self._mode = EZCAD3.DIMENSIONS_MODE
-	self._major = 3
-	self._minor = minor
-	self._parts_stack = []
-	self._xml_indent = 0
-	self._xml_stream = None
-
-    def process(self, part):
-	assert isinstance(part, Part)
-	part.process(self)
-
 ## @brief *L* corresponds to a length.  This class solves the issue
 #  mixed units.  Internally, all lengths are turned into millimeters.
 class L:
@@ -603,10 +44,10 @@ class L:
             whole_fraction = inch.split("-")
 	    if len(whole_fraction) == 2:
 		whole = float(whole_fraction[0])
-		faction = whole_fraction[1]
+		fraction = whole_fraction[1]
             elif len(whole_fraction) == 1:
 		whole = 0.0
-		fraction = inches
+		fraction = inch
 	    else:
 		assert False, "Poorly formed inches string '{0}'".format(inches)
 	    numerator_denominator = fraction.split("/")
@@ -944,12 +385,1367 @@ class L:
 
 	return L(self._mm * angle.sine())
 
+class P:
+    """ {P} represents a point in 3-space associated with a specific
+	{Part} to provide the frame of reference. """
+
+    def __init__(self, x = None, y = None, z = None):
+	""" P: Intialize {self} to contain {part}, {x}, {y}, {z}. """
+
+	# Deal with default arguments:
+	if type(x) == type(None):
+	    x = L(0.0)
+	if type(y) == type(None):
+	    y = L(0.0)
+	if type(z) == type(None):
+	    z = L(0.0)
+
+	# Check argument types:
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+	assert isinstance(z, L)
+
+	# Load up *self*:
+	self.x = x
+	self.y = y
+	self.z = z
+
+    def __add__(self, point):
+	""" P: Add {point} to {self}. """
+
+	assert isinstance(point, P)
+	return P(self.x + point.x, self.y + point.y, self.z + point.z)
+
+    def __div__(self, number):
+	""" P: Return the result of dividing {self} by {number}. """
+
+	number = float(number)
+	assert isinstance(number, int) or isinstance(number, float)
+	return P(self.x / number, self.y / number, self.z / number)
+
+    def __eq__(self, point):
+	""" P: Return {True} if {self} is equal to {point}. """
+
+	assert isinstance(point, P)
+	return self.x == point.x and self.y == point.y and self.z == point.z
+
+    def __format__(self, format):
+	""" *P*: Return *self* formatted as a string. """
+
+	assert isinstance(format, str)
+	if format != "":
+            format = ":" + format
+	format_string = \
+	    "[{0" + format + "}, {1" + format + "}, {2" + format + "}]"
+
+	return format_string.format(self.x, self.y, self.z)
+
+    def __mul__(self, scalar):
+	""" P: Return the result of muliplying {self} by {scalar}. """
+
+	return P(self.part, \
+	  self.x * scalar, self.y * scalar, self.z * scalar)
+
+    def __rmul__(self, scalar):
+	""" P: Return the result of muliplying {self} by {scalar}. """
+
+	return P(self.part, \
+	  self.x * scalar, self.y * scalar, self.z * scalar)
+
+    def __ne__(self, point):
+	""" P: Return {True} if {self} is not equal to {point}. """
+
+	assert isinstance(point, P)
+	return self.x != point.x or self.y != point.y or self.z != point.z
+
+    def __neg__(self):
+	""" P: Return the negative of {self}. """
+
+	return P(self.part, -self.x, -self.y, -self.z)
+
+    def __str__(self):
+	""" P: Return {self} as a formatted string. """
+
+	return "({0}, {1}, {2})".format(self.x, self.y, self.z)
+
+    def __sub__(self, point):
+	""" P: Subtract {point} from {self}. """
+
+	assert isinstance(point, P)
+	return P(self.x - point.x, self.y - point.y, self.z - point.z)
+
+    def angle_between(self, point):
+	""" P dimensions: Return the angle between {self} and {point}. """
+
+	# a . b = ||a|| ||b|| cos <AB		(1)
+	# (a . b) / (||a|| ||b||) = cos <AB	(2)
+	# acos [(a . b) / (||a|| ||b||)] = <AB	(3)
+
+	assert isinstance(point, P)
+
+	x1 = self.x._mm
+	y1 = self.y._mm
+	z1 = self.z._mm
+	x2 = point.x._mm
+	y2 = point.y._mm
+	z2 = point.z._mm
+	dot_product = x1 * y1 + x2 * y2 + z1 * z2
+	length1 = math.sqrt(x1 * x1 + y1 * y1 + z1 * z1)
+	length2 = math.sqrt(x2 * x2 + y2 * y2 + z2 * z2)
+	
+	return Angle(rad = math.acos(dot_product / (length1 * length2)))
+
+    def cross_product(self, point):
+	""" *P*: Return the cross product of *self* with *point. """
+
+	# Check argument types:
+	assert isinstance(point, P)
+
+	ux = self.x._mm
+	uy = self.y._mm
+	uz = self.z._mm
+	vx = point.x._mm
+	vy = point.y._mm
+	vz = point.z._mm
+
+	return P(L(mm = uy * vz - uz * vy),
+	  L(mm = uz * vx - ux * vz), L(mm = ux * vy - uy * vx))
+
+    def distance(self, point):
+	assert isinstance(point, P)
+	dx = (self.x - point.x).inches()
+	dy = (self.y - point.y).inches()
+	dz = (self.z - point.z).inches()
+	length = Lenght.inch(math.sqrt(dx * dx + dy * dy + dz * dz))
+	return length
+
+    def dot_product(self, point):
+	""" *Point*: Return dot product of *self* . *point* . """
+	assert isinstance(point, P)
+	return L(mm = self.x._mm * point.x._mm +
+	  self.y._mm * point.y._mm + self.z._mm * point.z._mm)
+
+    def half(self):
+	""" P dimensions: Return {self} / 2. """
+
+	result = self / 2.0
+	return result	
+
+    def length(self):
+	""" P dimensions: Return the length of self. """
+
+	x = self.x._mm
+	y = self.y._mm
+	z = self.z._mm
+	return L(mm=math.sqrt(x * x + y * y + z * z))
+
+    def matrix_create(self):
+	""" Matrix public: Create a matrix that corresponds to {self}. """
+
+	result = Matrix(   [[
+	  self.x._mm,
+	  self.y._mm,
+	  self.z._mm,
+	  1.0              ]] )
+
+	return result
+
+    def normalize(self):
+	""" *P*: Return *self* normalized to have a length of 1. """
+
+	x = self.x._mm
+	y = self.y._mm
+	z = self.z._mm
+	length = math.sqrt(x * x + y * y + z * z)
+	return P(L(mm = x / length), L(mm = y / length), L(mm = z / length))
+	
+
+    def points(self, dx, dy, dz):
+	""" Part construct: Return a list of points centered around
+	    {self} that are separated by {dx} in X, {dy} in Y and {dx}
+	    in Z.  If all of {dx}, {dy}, {dz} are non-zero, 8 {P}'s are
+	    returned.  If one of {dx}, {dy}, and {dz} is zero, 4 {P}'s
+	    are returned.  If two of {dx}, {dy}, and {dz} are zero, only
+	    2 {P}'s are returned. """
+
+	# Extract some values from {part}:
+	part = self.part
+	x = self.x
+	y = self.y
+	z = self.z
+
+	# Construct {x_list}, {y_list}, {z_list} to have either 1 or 2 value
+	# depending upon whether {dx}, {dy}, {dz} is zero, repsectively:
+	zero = L.inch(0)
+	if dx == zero:
+	    x_list = (x)
+	else:
+            half_dx = dx.half()
+	    x_list = (x - half_dx, x + half_dx)
+
+	if dy == zero:
+	    y_list = (y)
+	else:
+            half_dy = dy.half()
+	    y_list = (y - half_dy, y + half_dy)
+
+	if dz == zero:
+	    z_list = (z)
+	else:
+            half_dz = dz.half()
+	    z_list = (z - half_dz, z + half_dz)
+
+	# Now iterate over {x_list}, {y_list}, and {z_list}
+	# to generate {result}:
+	result = []
+	for x in x_list:
+	    for y in y_list:
+		for z in z_list:
+		    point = P(part, x, y, z)
+		    result.append(point)
+
+	return result
+
+    def twice(self):
+	""" P dimensions: Return {self} * 2. """
+
+	return self * 2.0
+
+    def x_adjust(self, x):
+	""" P dimensions: Return copy of {self} with {x} added to the
+	    x field. """
+
+	return P(self.part, self.x + x, self.y, self.z)
+
+    def xy_adjust(self, x, y):
+	""" P dimensions: Return copy of {self} with {x} added to the
+	    x field and {y} added to the y field. """
+
+	return P(self.part, self.x + x, self.y + y, self.z)
+
+    def xyz_adjust(self, x, y, z):
+	""" P dimensions: Return copy of {self} with {x} added to the
+	    x field, {y} added to the y field, and {z} added to the z field. """
+
+	return P(self.part, self.x + x, self.y + y, self.z + z)
+
+    def xz_adjust(self, x, z):
+	""" P dimensions: Return copy of {self} with {x} added to the
+	    x field and {z} added to the z field. """
+
+	return P(self.part, self.x + x, self.y, self.z + z)
+
+    def y_adjust(self, y):
+	""" P dimensions: Return copy of {self} with {y} added to the
+	    y field. """
+
+	return P(self.part, self.x, self.y + y, self.z)
+
+    def yz_adjust(self, y, z):
+	""" P dimensions: Return copy of {self} with {y} added to the
+	    y field and {z} added to the z field. """
+
+	return P(self.part, self.x, self.y + y, self.z + z)
+
+    def z_adjust(self, z):
+	""" P dimensions: Return copy of {self} with {z} added to the
+	    z field. """
+
+	return P(self.part, self.x, self.y, self.z + z)
+
+
+## The *Angle* class represents an angle.
+#
+# An *Angle* object represents an angle.  *Angle*'s can be specified
+# in either degrees or radians.
+class Angle:
+    """ An {Angle} represents an angle. """
+
+    ## *PI* respresents the irrational number &pi;.
+    PI = 3.14159265358979323846
+
+    ## *TWO_PI* represents 2&pi;.
+    TWO_PI = 2 * PI
+
+    ## Initialize *Angle* to be *scalar_radians*.
+    #  @param self *Angle* object to initialize.
+    #  @param scalar_radians is the value of the angle in radians.
+    #
+    # <I>__init__</I>() will initialize *self* (an *Angle* object) to
+    # *scalar_radians*.
+    def __init__(self, deg = 0.0, rad = 0.0):
+	""" *Angle*: Initialize self to contain *degrees* + *radians*. """
+
+	# Check argument types:
+	assert isinstance(deg, float) or isinstance(deg, int)
+	assert isinstance(rad, float) or isinstance(rad, int)
+
+	# Initliaze the final value:
+	rad = float(rad)
+	if deg != 0.0:
+	    rad += deg * Angle.PI / 180.0
+	self.radians = float(rad)
+
+    ## @brief Return the sum of two *Angle*'s.
+    #  @param self is the first *Angle* object.
+    #  @param angle is the second *Angle* object.
+    #  @returns the sum of *self* and *angle* as a normalized *Angle* object.
+    #
+    # <I>__add__</I>() will add *self* to *angle* and return the result as an
+    # *Angle* object.
+    def __add__(self, angle):
+	""" Angle: Return *angle* added to *self*. """
+
+	assert isinstance(angle, Angle)
+	return Angle(self.radians + angle.radians)
+
+    ## @brief Divides an *Angle* by *divisor*.
+    #  @param self is the *Angle* object to divide.
+    #  @param divisor the amount to divide the *Angle* bye.
+    #  @returns an *Angle* the corresponds to *self* / *divisor.
+    #
+    # <I>__div__</I>() will divide *self* by *divisor*.  *divisor* must be
+    # either a *float* or an *int*.
+    def __div__(self, divisor):
+	""" Angle: Return *self* divided by *divisor*. """
+
+	assert isinstance(divisor, float) or isinstance(divisor, int)
+	return Angle(self.radians / float(scalar))
+
+    ## @brief Return *True* if angles are equal.
+    #  @param self is the first *Angle* to compare.
+    #  @param angle is the second *Angle* to compare.
+    #  @returns *True* if *self* equals *angle*.
+    #
+    # <I>__eq__</I>() will return *True* if *self* equals *angle* and *False*
+    # otherwise.  Due to the fact that floating point arithmetic is
+    # involved, to *Angle*'s could be very close to one another and
+    # still not exactly match.
+    def __eq__(self, angle):
+	""" Angle: Return *True* if *self* is equal to *angle*. """
+
+	assert isinstance(angle, Angle)
+	return self.radians == angle.radians
+
+    ## @brief Return a formatted version of *self* using *format* to
+    #         control formatting.
+    #  @param self is the *Angle* to format.
+    #  @param format is the the formatting control string.
+    #  @returns a formatted version of *self* as a *str*.
+    #
+    # <I>__format__</I>() will return a formatted version of *self* using
+    # *format* to control formatting.  Right now *format* is ignoreed and
+    # the value returned is *self* converted to degrees.
+    def __format__(self, format):
+	""" Angle: Format *self* into a string and return it. """
+
+	# Check argument types:
+	assert isinstance(format, str)
+
+	value = self.radians
+	if format.endswith("r"):
+	    format = format[:-1]
+	elif format.endswith("d"):
+            format = format[:-1]
+            value *= 180.0 / Angle.PI
+        else:
+	    # Assume degrees output by default:
+            value *= 180.0 / Angle.PI
+
+	if len(format) == 0:
+	    result = "{0}".format(value)
+	else:
+	    result = ("{0:" + format + "}").format(value)
+	return result
+
+    ## @brief Return *True* if *self* is greater than or equal to *angle*.
+    #  @param self is the first *Angle* to compare.
+    #  @param angle is the second *Angle* to compare.
+    #  @returns *True* if *self* is greater than or equal to *angle*.
+    #
+    # <I>__ge__</I>() will return *True* if *self* is greater than or 
+    # equal to *angle* and *False* otherwise.
+    def __ge__(self, angle):
+	""" Angle: Return *True* if *self* is greater than or equal
+	    to *angle*. """
+
+	assert isinstance(angle, Angle)
+	return self.radians >= angle.radians
+
+    ## @brief Return *True* if *self* is greater than *angle*.
+    #  @param self is the first *Angle* to compare.
+    #  @param angle is the second *Angle* to compare.
+    #  @returns *True* if *self* is greater than *angle*.
+    #
+    # <I>__gt__</I>() will return *True* if *self* is greater than *angle*
+    # and *False* otherwise.
+    def __gt__(self, angle):
+	""" Angle: Return *True* if *self* is greater than *angle*. """
+
+	assert isinstance(angle, Angle)
+	return self.radians > angle.radians
+
+    ## @brief Return *True* if *self* is less than *angle*.
+    #  @param self is the first *Angle* to compare.
+    #  @param angle is the second *Angle* to compare.
+    #  @returns *True* if *self* is less than *angle*.
+    #
+    # <I>__gt__</I>() will return *True* if *self* is less than *angle*
+    # and *False* otherwise.
+    def __le__(self, angle):
+	""" Angle: Return *True* if *self* is less than or equal to *angle*. """
+
+	assert isinstance(angle, Angle)
+	return self.radians <= angle.radians
+
+    ## @brief Return *True* if *self* is less than or equal to *angle*.
+    #  @param self is the first *Angle* to compare.
+    #  @param angle is the second *Angle* to compare.
+    #  @returns *True* if *self* is less than or equal to *angle*.
+    #
+    # <I>__ge__</I>() will return *True* if *self* is less than or 
+    # equal to *angle* and *False* otherwise.
+    def __lt__(self, angle):
+	""" Angle: Return *True* if *self* is less than *angle*. """
+
+	assert isinstance(angle, Angle)
+	return self.radians < angle.radians
+
+    ## @brief Return *self* &times; *multiplier*.
+    #  @param self is the *Angle* object to multiply.
+    #  @param multiplier is the number to mulitply *self* by.
+    #  @returns *self* &times *multiplier*.
+    #
+    # <I>__mul__</I>() returns *self* (an *Angle* object) &times; *multiplier*.
+    def __mul__(self, multiplier):
+	""" Angle: Return *self* divided by *multiplier*. """
+
+	assert isinstance(multiplier, float) or isinstance(multiplier, int)
+	return Angle(self.radians * multiplier)
+
+    ## @brief Return *True* if angles are equal.
+    #  @param self is the first *Angle* to compare.
+    #  @param angle is the second *Angle* to compare.
+    #  @returns *True* if *self* equals *angle*.
+    #
+    # <I>__ne__</I>() will return *True* if *self* is not equal to *angle*
+    # and *False* otherwise.
+    def __ne__(self, angle):
+	""" Angle: Return {True} if {self} is not equal to {angle}. """
+
+	assert isinstance(angle, Angle)
+	return self.radians != angle.radians
+
+    ## @brief Returns -*self*.
+    #  @param self is the *Angle* object to negate.
+    #
+    # <I>__neg__</I>() will return -*self*.
+    def __neg__(self):
+	""" Angle: Return negative of {self}. """
+
+	assert isinstance(angle, Angle)
+	return Angle(-self.radians)
+
+    ## @brief Return *self* &times; *multiplier*.
+    #  @param self is the *Angle* object to multiply.
+    #  @param multiplier is the number to mulitply *self* by.
+    #  @returns *self* &times *multiplier*.
+    #
+    # <I>__rmul__</I>() returns *self* (an *Angle* object) &times; *multiplier*.
+    def __rmul__(self, multiplier):
+	""" Angle: Return {self} multiplied by {multiplier}. """
+
+	assert isinstance(multiplier, float) or isinstance(multiplier, int)
+	return Angle(self.radians * multiplier)
+
+    ## @brief Returns *self* converted to degrees.
+    #  @param self is the *Angle* object to convert to degrees.
+    #  @returns *self* converted to degrees.
+    #
+    # <I>__str__</I>() Returns *self* converted to degrees as a *str* object.
+    def __str__(self):
+	""" Angle: Return {self} as a string. """
+
+	return str(self.radians * 180.0 / Angle.pi)
+
+    ## @brief Returns *self* - *angle*.
+    #  @param self is the *Angle* object to subtract from.
+    #  @param angle is the *Angle* to subtract.
+    #  @returns *self* - *angle*.
+    #
+    # <I>__sub__</I>() returns *self* - *angle*.
+    def __sub__(self, angle):
+	""" Angle: Return {angle} subtracted from {self}. """
+
+	assert isinstance(angle, Angle)
+	return Angle(self.radians - angle.radians)
+
+    ## @brief Returns the cosine of *self*.
+    #  @param self is the *Angle* to compute the cosine of
+    #  @returns the cosine of *self*.
+    #
+    #  *cosine*() returns the cosine of *self* (an *Angle* object.)
+    def cosine(self):
+	""" Angle: Return the cosine of {self}. """
+
+	return math.cos(self.radians)
+
+    ## @brief Returns *scalar_degrees* as an *Angle* object.
+    #  @param scalar_degrees is the number to convert into an *Angle*.
+    #  @returns *scalar_degrees* as an *Angle*.
+    #
+    # *deg*() will return *scalar_degrees* as an *Angle* object.
+    @staticmethod
+    def deg(scalar_degrees):
+	""" Angle: Convert {scalar_degrees} into an {Angle} and return it. """
+
+	assert isinstance(scalar_degrees, float) or \
+	  isinstance(scalar_degrees, int)
+	return Angle(scalar_degrees * Angle.PI / 180.0)
+
+    ## @brief Returns *self* converted degrees as a *float*.
+    #  @param self is the *Angle* to convert to degrees.
+    #  @returns *self* converted to degrees.
+    #
+    # *degrees*() will return *self* converted to degrees
+    def degrees(self):
+	""" Angle: Convert {self} back into degrees and return it. """
+
+	return self.radians * 180.0 / Angle.PI
+
+    ## @brief Returns *self*/2.
+    #  @param self is the *Angle* object to divide by 2.
+    #  @returns *self/2.
+    #
+    # *half*() returns the *self*/2.
+    def half(self):
+	""" Angle: Return half of {self}. """
+
+	return Angle(self.radians / 2.0)
+
+    ## @brief Return a normalized value between -&pi; and &pi;.
+    #  @param self is the *Angle* to normalize.
+    #  @returns a normalized value for *self*.
+    #
+    # *normalize*() will return a normalized angle between -&pi; and &pi;.
+    def normalize(self):
+	""" Angle: Return a normalized angle. """
+
+	scalar_radians = self.scalar_radians
+	while (scalar_radians > PI):
+            scalar_radians -= TWO_PI
+	while (scalar_radians < PI):
+	    scalar_radians += TWO_PI
+	return Angle(scalar_radaians)
+
+    ## @brief Returns *scalar_radians* as an *Angle* object.
+    #  @param scalar_radians is the number to convert into an *Angle*.
+    #  @returns *scalar_radians* as an *Angle*.
+    #
+    # *deg*() will return *scalar_radians* as an *Angle* object.
+    @staticmethod
+    def rad(scalar_radians):
+	""" Angle: Convert *scalar_radians* radians into an *Angle* and
+	    return it. """
+
+	return Angle(scalar_radians)
+
+    ## @brief Returns *self* converted to radians.
+    #  @param self is the *Angle* object to convert to radians.
+    #  @returns *self* converted to radians.
+    #
+    # *radians*() returns *self* converted to radians.
+    def radians(self):
+	""" Angle: Convert *self* into radians and return it. """
+
+	return self.radians
+
+    ## @brief Returns the sine of *self*.
+    #  @param self is the *Angle* to compute the sine of
+    #  @returns the sine of *self*.
+    #
+    #  *sine*() returns the sine of *self* (an *Angle* object.)
+    def sine(self):
+	""" Angle: Return the sine of {self}. """
+
+	return math.sin(self.radians)
+
+    ## @brief Returns the tangent of *self*.
+    #  @param self is the *Angle* to compute the tangent of
+    #  @returns the tangent of *self*.
+    #
+    #  *tangent*() returns the tangent of *self* (an *Angle* object.)
+    def tangent(self):
+	""" Angle: Return the tangent of {self}. """
+
+	return math.tan(self.radians)
+
+    ## @brief Returns *self* times 2.
+    #  @param self is the *Angle* to double.
+    #  @returns twice the value of *self*.
+    #
+    # *twice*() returns twice the value of *self*.
+    def twice(self):
+	""" Angle: Return twice of {self}. """
+
+	return Angle(self.length * 2.0)
+
+class Bend:
+
+    def __init__(self, point, radius):
+	assert isinstance(point, P)
+	assert isinstance(radius, L)
+
+	self.point = point
+	self.radius = radius
+	self._px = 0.0
+	self._py = 0.0
+
+    def __format__(self, format):
+	return ("P={0} radius={1} P=({2},{3}) Cx=({4},{5})" + \
+	  " Before=({6},{7}) After=({8},{9}) bf={10:.2f} af={11:.2f}"). \
+	  format(self.point, self.radius,
+	  self._px, self._py, self._center_x, self._center_y,
+	  self._before_tangent_x, self._before_tangent_y,
+	  self._after_tangent_x,  self._after_tangent_y,
+	  self._before_fraction, self._after_fraction)
+
+    def compute(self, before_bend, after_bend):
+	assert isinstance(before_bend, Bend)
+	assert isinstance(after_bend, Bend)
+
+        # Below is an ASCII art picture of a *Bend*.  B represents the
+	# *Bend* point (i.e. *self*.*point*).  *D* and *E* are the
+	# adjecent *Bend* objects and their associated *point* objects.
+	# The ultimate goal here is to compute to compute C, which is the
+	# center of a cirle of radius R (i.e. *self*.*radius*) that
+	# touches to line segments BD and BE tangentially.
+	#
+	#           C
+	#           |
+	#    D      |      E
+	#     \     |     /
+	#      \    |    /
+	#       \   |   /
+	#        \  |  /
+	#         \ | /
+	#          \|/
+	#           B
+	#
+	#
+	# The center of the circle must be on segment BC which is
+	# the line segement that bisects the angle <DBE.  Thus, the
+	# angles <DBC and <CBE are equal.  We will compute <CBE:
+	#
+	#        BD . BE = |BD| * |BE| * cos(<DBE)                (1)
+	#
+	#        cos(<DBE) = (BD . BE) / (|BD| * |BE|)            (2)
+	#
+	#        <DBE = acos( (BD . BE) / (|BD| * |BE|) )         (3)
+        #
+	#        <CBE = <DBE / 2                                  (4)
+	#
+	#        <CBE = acos( (BD . BE) / (|BD| * |BE|) ) / 2     (5)
+	#
+	#
+	# The crude picture above is redrawn with the line BE horizontal
+	# and segment BC going up at an angle.  Even though the ASCII
+	# art does not show it, angle <CBE is the same for both the
+	# diagram above and below.  A circle of radius R with touch
+	# to segment BE at location T.  Thus, angle <BTC is 90 degrees.
+	# The length of segment |CT| is R.  The length of segment |BC|
+	# is defined as L.
+	#
+	#          C
+	#         /|
+	#        / |
+	#     L /  |R
+	#      /   |
+	#     /    |
+	#    B-----T-----E
+	#
+	# Using trigonometery:
+	#
+	#        R = L * sin(<CBE)                            (1)
+	#
+	# Solving for L:
+	#
+	#        L = R / sin(<CBE)                            (2)
+	#
+	# Now we do this:
+
+	# Extract the radius:
+	radius = self.radius._mm
+
+	# Extract the X/Y coordinates for B (i.e. *self*):
+	b = self
+	bx = b._px
+	by = b._py
+
+	# Extract the X/Y coordinates for D (i.e. *bend1*.*\_point*):
+	d = before_bend
+	dx = d._px
+	dy = d._py
+
+	# Extract the X/Y coordinates for E (i.e. *bend2*.*\_point*):
+	e = after_bend
+	ex = e._px
+	ey = e._py
+
+	#print("before:{0} at:{1} after:{2}".format(d.point, b.point, e.point))
+
+	# Compute the direction vector DB:
+	dbx = dx - bx
+	dby = dy - by
+
+	# Compute the direction vector EB:
+	ebx = ex - bx
+	eby = ey - by
+
+	#print("Point:{0}: db=({1},{2}) eb=({3},{4})".
+	#  format(self.point, dbx, dby, ebx, eby))
+
+	# Compute the length of |DB|:
+	db_length = math.sqrt(dbx * dbx + dby * dby)
+
+	# Compute the length of |EB|:
+	eb_length = math.sqrt(ebx * ebx + eby * eby)
+
+	#print("Point:{0}: db_length=({1}) eb_length=({2})".
+	# format(self.point, db_length, eb_length))
+
+	# Compute normalized DB direction vector -- nDB:
+	ndbx = dbx / db_length
+	ndby = dby / db_length
+
+	# Compute normalized EB direction vector -- nEB:
+	nebx = ebx / eb_length
+	neby = eby / eb_length
+
+	#print("Point:{0}: ndb=({1},{2}) neb=({3},{4})".
+	# format(self.point, ndbx, ndby, nebx, neby))
+
+	# Compute the dot product of nDB . nEB:
+	dot_product = ndbx * nebx + ndby * neby
+	
+	# Compute <DBE:
+	angle_dbe = math.acos(dot_product)
+
+	# Compute <CBE:
+	angle_cbe = angle_dbe / 2.0
+
+	#r2d = 180.0 / Angle.PI
+	#print("<dbe={0} <cbe={1}".format(angle_dbe * r2d, angle_cbe * r2d))
+
+	# Now compute length:
+	bc_length = radius / math.sin(angle_cbe)
+
+	#print ("bc_length={0}".format(bc_length))
+
+	# We need a direction vector.  Compute F which is at the midpoint
+	# between *ndb* and *neb*:
+	fx = (ndbx + nebx) / 2.0
+	fy = (ndby + neby) / 2.0
+
+	# Compute the length of |FB|:
+	f_length = math.sqrt(fx * fx + fy * fy)
+
+	#print("f=({0},{1}) f_length={2}".format(fx, fy, f_length))
+
+	# Compute the normalized vector nFB:
+	nfx = fx / f_length
+	nfy = fy / f_length
+
+	#print("nfb=({0},{1})".format(nfx, nfy))
+
+	# Compute C:
+	cx = bx + nfx * bc_length
+	cy = by + nfy * bc_length
+
+	#print("c=({0},{1})".format(cx, cy))
+
+	# Load the center into *self*:
+	self._center_x = cx
+	self._center_y = cy
+
+	# Now we compute the tangent points::
+	tangent_length = bc_length * math.cos(angle_cbe)
+	self._before_tangent_x = bx + tangent_length * ndbx
+	self._before_tangent_y = by + tangent_length * ndby
+	self._after_tangent_x = bx + tangent_length * nebx
+	self._after_tangent_y = by + tangent_length * neby
+
+	# The fraction is how much of the segment length is used
+	# for bend radius.  The two fractions for a given segment must
+	# sum to be less than or equal to 1.0:
+	self._before_fraction = tangent_length / db_length
+	self._after_fraction = tangent_length / eb_length
+
+class Material:
+    def __init__(self, generic = "plastic", specific = "ABS"):
+	""" *Material*: Initialize *self* to contain *generic* and
+	    *specific*. """
+
+	self.generic = generic
+	self.specific = specific
+
+    def __format__(self, format):
+	""" *Material*: Return *self* formatted as a string. """
+
+	return "[{0}, {1}]".format(self.generic, self.specific)
+
+class Bounding_Box:
+
+    def __init__(self, ex, wx, ny, sy, tz, bz):
+	""" *Bounding_Box*: Initialize *self* with *ex*, *wx*, *ny*, *sy*,
+	    *tz*, and *bz*. """
+
+	# Check argument types:
+	assert isinstance(ex, L)
+	assert isinstance(wx, L)
+	assert wx < ex
+	assert isinstance(ny, L)
+	assert isinstance(sy, L)
+	assert sy < ny
+	assert isinstance(tz, L)
+	assert isinstance(bz, L)
+	assert bz < tz
+
+	# Load up *self*
+	self.ex = ex
+	self.wx = wx
+	self.ny = ny
+	self.sy = sy
+	self.tz = tz
+	self.bz = bz
+
+class Color:
+    COLORS = {
+      "alice_blue": 0xf0f8ff,
+      "antique_white": 0xfaebd7,
+      "aqua": 0x00ffff,
+      "aquamarine": 0x7fffd4,
+      "azure": 0xf0ffff,
+      "beige": 0xf5f5dc,
+      "bisque": 0xffe4c4,
+      "black": 0x000000,
+      "blanched_almond": 0xffebcd,
+      "blue": 0x0000ff,
+      "blue_violet": 0x8a2be2,
+      "brown": 0xa52a2a,
+      "burlywood": 0xdeb887,
+      "cadet_blue": 0x5f9ea0,
+      "chartreuse": 0x7fff00,
+      "chocolate": 0xd2691e,
+      "coral": 0xf08080,
+      "corn_flower_blue": 0x6495ed,
+      "corn_silk": 0xfff8dc,
+      "crimson": 0xdc143c,
+      "cyan": 0x00ffff,
+      "dark_blue": 0x00008b,
+      "dark_cyan": 0x008b8b,
+      "dark_goldenrod": 0xb8860b,
+      "dark_gray": 0xa9a9a9,
+      "dark_green": 0x006400,
+      "dark_grey": 0xa9a9a9,
+      "dark_khaki": 0xbdb76b,
+      "dark_magenta": 0x8b008b,
+      "dark_olive_green": 0x556b2f,
+      "dark_orange": 0xff8c00,
+      "dark_orchid": 0x9932cc,
+      "dark_red": 0x8b0000,
+      "dark_salmon": 0xe9967a,
+      "dark_sea_green": 0x8fbc8f,
+      "dark_slate_blue": 0x483d8b,
+      "dark_slate_gray": 0x2f4f4f,
+      "dark_slate_grey": 0x2f4f4f,
+      "dark_turquoise": 0x40e0d0,
+      "dark_violet": 0x9f00d3,
+      "deep_pink": 0xff1493,
+      "deep_sky_blue": 0x00bfff,
+      "dim_gray": 0x696969,
+      "dim_grey": 0x696969,
+      "dodger_blue": 0x1e90ff,
+      "fire_brick": 0xb22222,
+      "floral_white": 0xfffaf0,
+      "forest_green": 0x228b22,
+      "fuchsia": 0xff00ff,
+      "gainsboro": 0xdcdcdc,
+      "ghost_white": 0xf8f8ff,
+      "gold": 0xffd700,
+      "goldenrod": 0xdaa520,
+      "gray": 0x808080,
+      "green": 0x008000,
+      "green_yellow": 0xadff2f,
+      "grey": 0x808080,
+      "honey_dew": 0xf0fff0,
+      "hot_pink": 0xff1493,
+      "indian_red": 0xcd5c5c,
+      "indigo": 0x4b0082,
+      "ivory": 0xfffff0,
+      "khaki": 0xf0e68c,
+      "lavender": 0xe6e6fa,
+      "lavender_blush": 0xfff0f5,
+      "lawn_green": 0x7cfc00,
+      "lemon_chiffon": 0xfffacd,
+      "light_blue": 0xadd8e6,
+      "light_coral": 0xf08080,
+      "light_cyan": 0xe0ffff,
+      "light_goldenrod_yellow": 0xfafad2,
+      "light_gray": 0xd3d3d3,
+      "light_green": 0x90ee90,
+      "light_grey": 0xd3d3d3,
+      "light_pink": 0xffb6c1,
+      "light_salmon": 0xffa07a,
+      "light_sea_green": 0x20b2aa,
+      "light_sky_blue": 0x87cefa,
+      "light_slate_gray": 0x778899,
+      "light_slate_grey": 0x778899,
+      "light_steel_blue": 0xb0c4de,
+      "light_yellow": 0xffffe0,
+      "lime": 0x00ff00,
+      "lime_green": 0x2e8b57,
+      "linen": 0xfaf0e6,
+      "magenta": 0xff00ff,
+      "maroon": 0x800000,
+      "medium_aquamarine": 0x66cdaa,
+      "medium_blue": 0x0000cd,
+      "medium_orchid": 0xba55d3,
+      "medium_purple": 0x9370db,
+      "medium_sea_green": 0x3cb371,
+      "medium_slate_blue": 0x66cdaa,
+      "medium_spring_green": 0x00fa9a,
+      "medium_turquoise": 0x48d1cc,
+      "medium_violet_red": 0xc71585,
+      "mid_night_blue": 0x191970,
+      "mint_cream": 0xf5fffa,
+      "misty_rose": 0xffe4e1,
+      "moccasin": 0xffe4b5,
+      "navajo_white": 0xffdead,
+      "navy": 0x000080,
+      "old_lace": 0xfdf5e6,
+      "olive": 0x808000,
+      "olive_drab": 0x6b8e23,
+      "orange": 0xffa500,
+      "orange_red": 0xff4500,
+      "orchid": 0xda70d6,
+      "pale_goldenrod": 0xeee8aa,
+      "pale_green": 0x98fb98,
+      "pale_turquoise": 0xafeeee,
+      "pale_violet_red": 0xdb7093,
+      "papaya_whip": 0xffefd5,
+      "peach_puff": 0xffdab9,
+      "peru": 0xcd8f3f,
+      "pink": 0xffc0cb,
+      "plum": 0xdda0dd,
+      "powder_blue": 0xb0e0e6,
+      "purple": 0x800080,
+      "red": 0xff0000,
+      "rosy_brown": 0xbc8f8f,
+      "royal_blue": 0x4169e1,
+      "saddle_brown": 0x8b2be2,
+      "salmon": 0xfa8072,
+      "sandy_brown": 0xf4a460,
+      "sea_green": 0x2e8b57,
+      "sea_shell": 0xfff5ee,
+      "sienna": 0xa0522d,
+      "silver": 0xc0c0c0,
+      "sky_blue": 0x87ceeb,
+      "slate_blue": 0x6a5acd,
+      "slate_gray": 0x708090,
+      "slate_grey": 0x708090,
+      "snow": 0xfffafa,
+      "spring_green": 0x00ff7f,
+      "steel_blue": 0x4682b4,
+      "tan": 0xd2b48c,
+      "teal": 0x008080,
+      "thistle": 0xd8bfd8,
+      "tomato": 0xff6347,
+      "turquoise": 0x40e0d0,
+      "violet": 0xee82ee,
+      "wheat": 0xf5deb3,
+      "white": 0xffffff,
+      "white_smoke": 0xf5f5f5,
+      "yellow": 0xffff00,
+      "yellow_green": 0x9acd32,
+    }
+
+    def __init__(self,
+      name = "", red = -1.0, green = -1.0, blue = -1.0, alpha = 1.0):
+	""" *Color*: Initialize *self*"""
+
+	# Deal with SVG color:
+	colors = Color.COLORS
+	if name in colors:
+	    rgb = colors[name]
+	    red_byte = (rgb >> 16) & 0xff
+	    green_byte = (rgb >> 8) & 0xff
+	    blue_byte = rgb & 0xff
+	    #print("Color bytes=({0}, {1}, {2})". \
+	    #  format(red_byte, green_byte, blue_byte))
+            red = float(red_byte) / 255.0
+	    green = float(green_byte) / 255.0
+	    blue = float(blue_byte) / 255.0
+
+	# Keep red/green/blue/alpha between 0.0 and 1.0:
+	if red < 0.0:
+	    red = 0.0
+	elif red > 1.0:
+	    red = 1.0
+	if green < 0.0:
+	    green = 0.0
+	elif green > 1.0:
+            green = 1.0
+	if blue < 0.0:
+            blue = 0.0
+	elif blue > 1.0:
+	    blue = 1.0
+	if alpha < 0.0:
+	    alpha = 0.0
+	elif alpha > 1.0:
+	    alpha = 1.0
+
+	# Load up *self*:
+	self.red = red
+	self.green = green
+	self.blue = blue
+	self.alpha = alpha
+
+	#print("Color({0}, {1}, {2}, {3})".
+	#  format(self.red, self.green, self.blue, self.alpha))
+
+    def __format__(self, format):
+	""" *Color*: Return formatted version of *self*. """
+
+	return "[r={0:.2f}, g={1:.2f}, b={2:.2f}, a={3:.2f}]".format(
+	  self.red, self.green, self.blue, self.alpha)
+
+class Contour:
+
+    def __init__(self, bends, extrude_axis):
+	""" *Contour*: Initialize *self* with *bends* and *extrude_axis*. """
+
+	# Check argument values:
+	assert isinstance(bends, list) 
+	assert isinstance(extrude_axis, P)
+
+	# Make sure we have enough *Bend*'s actually make sense:
+	assert len(bends) >= 3, \
+	  "A contour must have at least 3 bends"
+
+	# Load *self*
+	self.extrude_axis = extrude_axis
+	self.bends = bends
+	self._indexed_points = []
+	self._indexed_points_table = {}
+
+    def bends_compute(self):
+	""" *Contour*: Deal with each *Bend* in *self*. """
+
+	# Project all the 3D points down to 2D:
+	self.project()
+
+	# Find the bend centers:
+	bends = self.bends
+	bends_size = len(bends)
+	for index in range(bends_size):
+	    # Extract three *Bend*'s in sequence
+	    before_bend = bends[(index - 1) % bends_size]
+	    bend = bends[index]
+	    after_bend= bends[(index + 1) % bends_size]
+
+	    # Compute the bend radius:
+	    bend.compute(before_bend, after_bend)
+
+    def bounding_box_compute(self, extrude_axis):
+	""" *Contour*: Compute bounding box for *self* extruded in
+	    *extrude_axis* direction. """
+
+	# Check argument _types:
+	big = L(mm=987654321.0)
+
+	# Initialize the X/Y/Z minimum/maximum values:
+	ex = -big
+	wx = big
+	ny = -big
+	sy = big
+	tz = -big
+	bz = big
+
+	# Grap *dx*, *dy*, and *dz* from *extrude_axis*:
+	dx = extrude_axis.x
+	dy = extrude_axis.y
+	dz = extrude_axis.z
+
+	for bend in self.bends:
+	    # Extract *x*, *y*, *z* from *point*:
+	    point = bend.point
+	    x = point.x
+	    y = point.y
+	    z = point.z
+
+	    # Adjust the bounding box bounaries:
+	    ex = ex.maximum(x).maximum(x + dx)
+	    wx = wx.minimum(x).minimum(x + dx)
+	    ny = ny.maximum(y).maximum(y + dy)
+	    sy = sy.minimum(y).minimum(y + dy)
+	    tz = tz.maximum(z).maximum(z + dz)
+	    bz = tz.minimum(z).minimum(z + dz)
+	    
+	# Return the 8 points that are the bounding box of *self*:
+	bounding_box = Bounding_Box(ex, wx, ny, sy, tz, bz)
+	return bounding_box
+
+    def indexed_point_lookup(self, x, y, label):
+	""" *Contour*: Return (index, (x, y), label) that specifies a point. """
+
+	# Check argument types:
+	assert isinstance(x, float)
+	assert isinstance(y, float)
+	assert isinstance(label, str)
+
+	# Get the *indexed_points* list and *indexed_points_table*:
+	indexed_points = self._indexed_points
+	indexed_points_table = self._indexed_points_table
+
+	# See if *point* is in *indexed_points_table*:
+	point = (x, y)
+	if point in indexed_points_table:
+	    # Already there; just return the previous value:
+	    indexed_point = indexed_points_table[point]
+	else:
+	    # Not there yet; put it in: 
+            indexed_point = (len(indexed_points), point, label)
+	    indexed_points_table[point] = indexed_point
+	    indexed_points.append(indexed_point)
+	return indexed_point
+
+    def output(self, lines, indent = 0, maximum_angle = Angle(deg=16.0)):
+	""" *Contour*: Output the OpenSCAD code for *self*. """
+	assert isinstance(indent, int)
+	assert indent >= 0
+
+	pi = Angle.PI
+	r2d = 180.0 / pi 
+
+	path = []
+	bends = self.bends
+	bends_size = len(bends)
+	for index in range(bends_size):
+	    before_bend = bends[(index - 1) % bends_size]
+	    bend = bends[index]
+	    #bend_after = bends[(index + 1) % bends_size]
+	    before_total_fraction = \
+	      before_bend._after_fraction + bend._before_fraction
+	    if before_total_fraction > 1.0:
+		assert False, "We have a bogus edge"
+
+	    #print("Bend[{0}]:{1}".format(index, bend))
+
+	    radius = bend.radius._mm
+            after_tangent_x = bend._after_tangent_x
+            after_tangent_y = bend._after_tangent_y
+            before_tangent_x = bend._before_tangent_x
+            before_tangent_y = bend._before_tangent_y
+	    center_x = bend._center_x
+	    center_y = bend._center_y
+
+	    if before_total_fraction < 1.0:
+		indexed_point = self.indexed_point_lookup(
+		  before_tangent_x, before_tangent_y,
+		  format("Bend[{0}]:before tangent".format(index)))
+		path.append(indexed_point)
+
+	    before_dy = before_tangent_y - center_y
+	    before_dx = before_tangent_x - center_x
+	    before_angle = math.atan2(before_dy, before_dx)
+
+	    after_dy = after_tangent_y - center_y
+	    after_dx = after_tangent_x - center_x
+	    after_angle = math.atan2(after_dy, after_dx)
+
+	    #print("before_angle={0:.4f} after_angle={1:.4f}".
+	    #  format(before_angle * r2d, after_angle * r2d))
+
+	    # Compute and normalize *delta_angle* from *before_angle* to
+	    # *after_angle*.  *delta_angle* could wind up being positiver
+	    # or negative:
+	    delta_angle = after_angle - before_angle
+	    while delta_angle > pi:
+		delta_angle -= 2.0 * pi
+            while delta_angle < -pi:
+		delta_angle += 2.0 * pi
+
+	    # We want to divide *delta_angle* by an integer *step_count*
+	    # such that the resulting *step_angle* is as close to
+	    # *maximum_angle* as possible.  We start by simply dividing
+	    # computing *fractional* by divided *delta_angle* by
+	    # *maximum_angle*:
+	    max_angle = maximum_angle.radians	
+	    fractional = delta_angle / max_angle
+	    #print(
+	    #  "delta_angle={0:.4f} max_angle={1:.4f} fractional={2:.4f}".
+	    #  format(delta_angle * r2d, max_angle * r2d, fractional))
+
+	    # Compute the *step_count* which is the number of chunks
+	    # we divide *delta_angle* by to get the *step_angle*.  We
+	    # want *step_angle* to be as close to *maximum_angle* without
+	    # going over.  Remember *step_angle* can be positive or negative:
+	    step_count = int(abs(fractional)) + 1
+	    step_angle = delta_angle / float(step_count)
+	    #print("step_count={0} step_angle={1:.4f}".
+	    #  format(step_count, step_angle * r2d))
+
+	    for step_index in range(1, step_count):
+		angle = before_angle + float(step_index) * step_angle
+		x = center_x + radius * math.cos(angle)
+		y = center_y + radius * math.sin(angle)
+		indexed_point = self.indexed_point_lookup(x, y,
+		  "Bend[{0}]:Step[{1}]".format(index, step_index))
+		path.append(indexed_point)
+
+	    if radius > 0.0:
+		indexed_point = self.indexed_point_lookup(
+		  after_tangent_x, after_tangent_y,
+		  "Bend[{0}]:after tangent".format(index))
+		path.append(indexed_point)
+
+	# Output the .scad contents:
+	spaces = " " * indent
+	lines.append("{0}polygon(".format(spaces))
+	lines.append("{0} points = [".format(spaces))
+	indexed_points = self._indexed_points
+	indexed_points_size = len(indexed_points)
+	for point_index in range(indexed_points_size):
+	    indexed_point = indexed_points[point_index]
+	    point = indexed_point[1]
+	    x = point[0]
+	    y = point[1]
+            suffix = ","
+            if point_index + 1 == indexed_points_size:
+		suffix = ""
+	    lines.append("{0}  [{1:.3f}, {2:.3f}]{3}".
+	      format(spaces, x, y, suffix))
+	lines.append("{0} ], paths = [".format(spaces))
+	lines.append("{0}  [".format(spaces))
+	for point_index in range(indexed_points_size):
+	    indexed_point = indexed_points[point_index]
+	    index = indexed_point[0]
+            suffix = ","
+            if point_index + 1 == indexed_points_size:
+		suffix = ""
+	    lines.append("{0}   {1}{2}".format(spaces, index, suffix))
+	lines.append("{0}  ]".format(spaces))
+	lines.append("{0} ]".format(spaces))
+	lines.append("{0});".format(spaces))
+
+    def project(self):
+	
+	# Extract X/Y/Z values from *axis*:
+	axis = self.extrude_axis
+	axis_x = axis.x._mm
+	axis_y = axis.y._mm
+	axis_z = axis.z._mm
+
+	# Figure out which axis to use:
+	axis_x_is_zero = axis_x == 0.0
+	axis_y_is_zero = axis_y == 0.0
+	axis_z_is_zero = axis_z == 0.0
+
+	# Figure out which axis to use:
+	use_x_axis = not axis_x_is_zero and axis_y_is_zero and axis_z_is_zero
+	use_y_axis = axis_x_is_zero and not axis_y_is_zero and axis_z_is_zero
+	use_z_axis = axis_x_is_zero and axis_y_is_zero and not axis_z_is_zero
+
+	# Remember these values:
+	self.use_x_axis = use_x_axis
+	self.use_y_axis = use_y_axis
+	self.use_z_axis = use_z_axis
+
+	# For now, constrain *axis* to be in X, Y, or Z direction:
+	assert use_x_axis or use_y_axis or use_z_axis, \
+	  "axis must align with X, Y, or Z axis"
+
+	# For each *bend* in bends, perform the project from 3D down to 2D:
+	plane = None
+	bends = self.bends
+	for bend in bends:
+	    assert isinstance(bend, Bend)
+
+	    # Grab the X/Y/Z coordinates for *point*:
+	    point = bend.point
+	    px = point.x._mm
+	    py = point.y._mm
+	    pz = point.z._mm
+
+	    if use_x_axis:
+		# Axis is aligned with X:
+		bend._px = py
+		bend._py = pz
+		if plane == None:
+		    plane = px
+		else:
+		    assert plane == px, \
+		      "All points must be in same X plane"
+	    elif use_y_axis:
+		# Axis is aligned with Y:
+		bend._px = px
+		bend._py = pz
+		if plane == None:
+                    plane = py
+		else:
+		    assert plane == py, \
+		      "All points must be in same Y plane"
+	    elif use_z_axis:
+		# Axis is aligned with Y:
+		bend._px = px
+		bend._py = py
+		if plane == None:
+                    plane = pz
+		else:
+		    assert plane == pz, \
+		      "All points must be in same Y plane"
+            else:
+		assert False, "FIXME: Allow arbitray axis direction"
+
+	# Keep track of *plane*
+	self.plane = plane
+
+class EZCAD3:
+    """ EZCAD3 is the top level engine that executes the design. """
+
+    DIMENSIONS_MODE = 0
+    MANUFACTURE_MODE = 1
+    VISUALIZATION_MODE = 2
+
+    def __init__(self, minor):
+	""" {EZCAD}: Initialize the contents of {self} to contain
+	    {major} and {minor} version numbers. """
+
+	#print "EZCAD.__init__() called"
+
+	# Check argument types:
+	assert minor == 0
+
+	# Load up {self}:
+	self._mode = EZCAD3.DIMENSIONS_MODE
+	self._major = 3
+	self._minor = minor
+	self._parts_stack = []
+	self._xml_indent = 0
+	self._xml_stream = None
+
+    def process(self, part):
+	assert isinstance(part, Part)
+	part.process(self)
+
 class Part:
     """ A {Part} specifies either an assembly of parts or a single
 	physical part. """
 
     # Flavors of values that can be stored in a {Part}:
-    def __init__(self, up, place = True):
+    def __init__(self, up):
+	""" *Part*: Initialize *self* to have a parent of *up*. """
 
 	#print("=>Part.__init__(*, '{0}', *, place={1})".format(name, place))
 
@@ -957,7 +1753,6 @@ class Part:
 	none_type = type(None)
 	up_type = type(up)
 	assert up_type == none_type or isinstance(up, Part)
-	assert isinstance(place, bool)
 
 	# Some useful abbreviations:
 	zero = L()
@@ -994,9 +1789,10 @@ class Part:
 	self.sy = big
 	self.tz = -big
 	self.bz = big
-	self._box_recompute()
+	self._box_recompute("Part.__init__")
+	#print("initialize {0}".format(name))
 
-	if up_type != none_type and place:
+	if up_type != none_type:
 	    #print("Part.__init__: perform place")
 	    place = up.place(self, name = name)
 	    #print("Part.__init__: place = {0:m}".format(place))
@@ -1012,7 +1808,8 @@ class Part:
     # time in the future it will contol formaating of the returned string.
 
     def __format__(self, format):
-	""" *Box*: Return formated version of *self*. """
+	""" *Part*: Return formated version of *self*. """
+
 	assert isinstance(format, str)
 	if format != "":
 	    format = ":" + format
@@ -1031,6 +1828,8 @@ class Part:
 	  self.sz, self.tz)
 
     def __getattr__(self, name):
+	""" *Part*: ..."""
+
 	if self._update_count == 0:
 	    if name.endswith("_"):
 		pass
@@ -1057,6 +1856,54 @@ class Part:
 	raise AttributeError(
 	  "Part instance has no attribute '{0}'".format(name))
 
+    def _bounding_box_update(self, bounding_box, comment, place):
+	""" *Part*: Updated *self* with *bounding_box*, *place* and
+	    *comment*. """
+
+	# Check argument types:
+	assert isinstance(bounding_box, Bounding_Box)
+	assert isinstance(comment, str)
+	assert isinstance(place, Place)
+
+	# Grab some values from *bounding_box*:
+	ex = bounding_box.ex
+	wx = bounding_box.wx
+	ny = bounding_box.ny
+	sy = bounding_box.sy
+	tz = bounding_box.tz
+	bz = bounding_box.bz
+
+	# Grab *forward_matrix* from *place*:
+	forward_matrix = place._forward_matrix
+
+	# Compute the bounding box points before rotation and translation:
+	tne = P(ex, ny, tz)
+	tnw = P(wx, ny, tz)
+	tse = P(ex, sy, tz)
+	tsw = P(wx, sy, tz)
+	bne = P(ex, ny, bz)
+	bnw = P(wx, ny, bz)
+	bse = P(ex, sy, bz)
+	bsw = P(wx, sy, bz)
+
+	# Compute bounding box after rotation and translation:
+	self._box_point_update(comment + "[TNE]",
+	  forward_matrix.point_multiply(tne))
+	self._box_point_update(comment + "[TNW]",
+	  forward_matrix.point_multiply(tnw))
+	self._box_point_update(comment + "[TSE]",
+	  forward_matrix.point_multiply(tse))
+	self._box_point_update(comment + "[TSW]",
+	  forward_matrix.point_multiply(tsw))
+	self._box_point_update(comment + "[BNE]",
+	  forward_matrix.point_multiply(bne))
+	self._box_point_update(comment + "[BNW]",
+	  forward_matrix.point_multiply(bnw))
+	self._box_point_update(comment + "[BSE]",
+	  forward_matrix.point_multiply(bse))
+	self._box_point_update(comment + "[BSW]",
+	  forward_matrix.point_multiply(bsw))
+
     ## @brief Updates *name*'d *point* is *self* for bounding box calcuation.
     #  @param self is the *Part* to update.
     #  @param name is the name of the *P* object.
@@ -1073,6 +1920,10 @@ class Part:
 	assert isinstance(name, str)
 	assert isinstance(point, P)
 
+	trace = False
+	if trace:
+	    print("=>Part._box_point_update({0}, {1})".format(name, point))
+
 	#print("Box.point_update({0:m}, '{1}', {2:m})".
 	#  format(self, name, point))
 	# Deterimine if this is an update or the initial insert:
@@ -1088,15 +1939,25 @@ class Part:
 	else:
 	    # This is the initial insert; so update everything:
 	    points[name] = point
-	    self._box_recompute()
+	    self._box_recompute("_box_point_update")
+
+	if trace:
+	    print("<=Part._box_point_update({0}, {1})".format(name, point))
+
 
     ## @brief Recomputes the bounding box for *self* and any parent *Box*'s.
     #  @param *self* the bounding *Box* to recompute.
     #
     # <I>_recompute</I>() will recompute the bounding box for *self* (a bounding
     # *Box*) and enclosing parent bounding *Box*'s.
-    def _box_recompute(self):
-	""" *Box*: (Internal use only) Recompute the bounding box corners. """
+    def _box_recompute(self, label):
+	""" *Part*: (Internal use only) Recompute the bounding box corners. """
+
+	assert isinstance(label, str)
+	# For debugging:
+	trace = False
+	if trace:
+	    print("=>Part._box_recompute({0}, {1})".format(self._name, label))
 
 	# Initialize the bounding box values with bogus big positive/negative
 	# values:
@@ -1140,13 +2001,30 @@ class Part:
 	if self.ex != ex or self.wx != wx or \
 	  self.ny != ny or self.sy != sy or \
 	  self.tz != tz or self.bz != bz:
+	    if trace:
+		if self.ex != ex:
+		    print("ex:{0} => {1}".format(self.ex, ex))
+		if self.wx != wx:
+		    print("wx:{0} => {1}".format(self.wx, wx))
+		if self.ny != ny:
+		    print("ny:{0} => {1}".format(self.ny, ny))
+		if self.sy != sy:
+		    print("sy:{0} => {1}".format(self.sy, sy))
+		if self.tz != tz:
+		    print("tz:{0} => {1}".format(self.tz, tz))
+		if self.bz != bz:
+		    print("bz:{0} => {1}".format(self.bz, bz))
+
 	    # Bounding box changed:
-	    self.ex  = ex
+	    self.ex = ex
 	    self.wx = wx
 	    self.ny = ny
 	    self.sy = sy
 	    self.tz = tz
 	    self.bz = bz
+
+            # Keep track if we have changed:
+	    self._box_changed_count += 1
 
 	    # Compute averate X/Y/Z:
 	    cx = (ex + wx) / 2.0
@@ -1202,10 +2080,32 @@ class Part:
 	    # box is reached:
 	    up = self.up
 	    if type(up) != type(None):
-		up._box_recompute()
+		up._box_recompute("up._box_recompute")
 
-            # Keep track if we have changed:
-	    self._box_changed_count += 1
+	if trace:
+	    print("<=Part._box_recompute({0}, {1})".format(self._name, label))
+
+    def _color_material_update(self, color, material):
+	""" *Part*: Update *color* and *material* for *self*. """
+
+	#print("=>Part._color_material_update({0}, {1}): c={2} m={3}".
+	#  format(color, material, self._color, self._material))
+
+	# Check argument types:
+	none_type = type(None)
+	assert type(color) == none_type or isinstance(color, Color)
+	assert type(material) == none_type or isinstance(material, Material)
+
+	# Update the *material* and *color* as appropriate:
+	if type(self._material) == none_type and isinstance(material, Material):
+	    self._material = material
+	if type(self._color) == none_type and isinstance(color, Color):
+	    self._color = color
+	if isinstance(self._material, Material):
+	    self._is_part = True
+
+	#print("<=Part._color_material_update({0}, {1}): c={2} m={3}".
+	#  format(color, material, self._color, self._material))
 
     def _dimensions_update(self, ezcad, trace):
 
@@ -1257,7 +2157,7 @@ class Part:
 		before_values[attribute_name] = attribute
 	    #else ignore *attribute_name*:
 
-	# Remember 
+	# Remember ...
 	before_box_changed_count = self._box_changed_count
 
 	# Peform dimension updating for *self*:
@@ -1273,7 +2173,8 @@ class Part:
 	      type(after_value))
 	    if before_value != after_value:
 		changed += 1
-
+		if changed > 0:
+		    print("here 2")
 		if trace >= 0:
 		    print("{0}Part._dimensions_update:{1}.{2} ({3}=>{4})". \
 		      format(' ' * trace, name, attribute_name,
@@ -1367,28 +2268,29 @@ class Part:
 	    # Write out the module:
 	    scad_file.write("module {0}() {{\n".format(name))
 
-	    if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
-		# Get the difference() followed union():
-		scad_file.write("  difference() {\n")
-		scad_file.write("    union() {\n")
+            # Get the difference() followed union():
+	    scad_file.write("  difference() {\n")
+	    scad_file.write("    union() {\n")
 
-		# Output the *scan_union_lines*:
-		for union_line in scad_union_lines:
-		    scad_file.write(union_line)
-		    scad_file.write("\n")
+	    # Output the *scan_union_lines*:
+	    for union_line in scad_union_lines:
+		scad_file.write(union_line)
+		scad_file.write("\n")
 
-		# Close off union():
-		scad_file.write("    }\n")
+	    # Close off union():
+	    scad_file.write("    }\n")
 
-		# Output *scad_difference_lines*:
-		for difference_line in scad_difference_lines:
-		    scad_file.write(difference_line)
-		    scad_file.write("\n")
+	    # Output *scad_difference_lines*:
+	    for difference_line in scad_difference_lines:
+	        scad_file.write(difference_line)
+	        scad_file.write("\n")
 
-		# Close off difference():
-		scad_file.write("  }\n")
+	    # Close off difference():
+	    scad_file.write("  }\n")
 
+            # Perform all the placements:
 	    for place in places:
+		print("Part._manufacture.place={0}".format(place))
 		self._scad_transform(lines, center = place._center,
 		  axis = place._axis, rotate = place._rotate,
 		  translate = place._translate);
@@ -1484,9 +2386,360 @@ class Part:
 
 	#print("<=Part._manufacture:{0}".format(self._name))
 
+    def block(self, comment = "no comment", material = None, color = None,
+      corner1 = None, corner2 = None, welds = "",
+      center = None, axis = None, rotate = None, translate = None):
+	""" {Part} construct: Create a block with corners at {corner1} and
+	    {corner2}.  The block is made of {material} and visualized as
+	    {color}. """
+
+	#print "block_corners('{0}', {1}, {2}, '{3}', '{4}')".format( \
+	#  self.name, corner1, corner2, color, material)
+
+	# Deal with argument defaults:
+	none_type = type(None)
+	self._color_maerial_update(color, material)
+	color = self._color
+	material = self._material
+
+	if type(corner1) == none_type:
+	    zero = L(0.0)
+	    corner1 = P(zero, zero, zero)
+	if type(corner2) == none_type:
+	    one = L.mm(1.0)
+	    corner2 = P(one, one, one)
+	assert isinstance(welds, str)
+
+	# Record the *color* and *material*:
+	self._material = material
+	self._color = color
+
+	# Check argument types:
+	assert isinstance(comment, str)
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
+	assert isinstance(material, Material)
+	assert isinstance(color, Color)
+	assert type(center) == none_type or isinstance(center, P)
+	assert type(axis) == none_type or isinstance(axis, P)
+	assert type(rotate) == none_type or isinstance(rotate, Angle)
+	assert type(translate) == none_type or isinstance(translate, P)
+
+	# Make sure that the corners are diagonal from bottom south west
+	# to top north east:
+	x1 = min(corner1.x, corner2.x)
+	x2 = max(corner1.x, corner2.x)
+	y1 = min(corner1.y, corner2.y)
+	y2 = max(corner1.y, corner2.y)
+	z1 = min(corner1.z, corner2.z)
+	z2 = max(corner1.z, corner2.z)
+	#print("Part.box:{0:m}:{1:m},{2:m}:{3:m},{4:m}:{5:m}". \
+	#  format(x1, x2, y1, y2, z1, z2))
+
+	place = Place(part = None, name = comment, center = center,
+	  axis = axis, rotate = rotate, translate = translate)
+	forward_matrix = place._forward_matrix
+
+	tne = P(x2, y2, z2)
+	bsw = P(x1, y1, z1)
+	tsw = P(x1, y1, z2)
+	bnw = P(x1, y2, z1)
+	tnw = P(x1, y2, z2)
+	bse = P(x2, y1, z1)
+	tse = P(x2, y1, z2)
+	bne = P(x2, y2, z1)
+
+	#print("before box={0:m}".format(box))
+	self._box_point_update(comment + "[TNE]",
+	  forward_matrix.point_multiply(tne))
+	self._box_point_update(comment + "[TNW]",
+	  forward_matrix.point_multiply(tnw))
+	self._box_point_update(comment + "[TSE]",
+	  forward_matrix.point_multiply(tse))
+	self._box_point_update(comment + "[TSW]",
+	  forward_matrix.point_multiply(tsw))
+	self._box_point_update(comment + "[BNE]",
+	  forward_matrix.point_multiply(bne))
+	self._box_point_update(comment + "[BNW]",
+	  forward_matrix.point_multiply(bnw))
+	self._box_point_update(comment + "[BSE]",
+	  forward_matrix.point_multiply(bse))
+	self._box_point_update(comment + "[BSW]",
+	  forward_matrix.point_multiply(bsw))
+	#print("after box={0:m}".format(box))
+
+	ezcad = self._ezcad
+	assert isinstance(ezcad, EZCAD3)
+
+	self._is_part = True
+	print("Part.block:{0}._is_part = True".format(self._name))
+        
+	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	    union_lines = self._scad_union_lines
+
+	    assert x1 < x2, \
+	      "{0}.block '{1}': equal X coordinates: corner1={2} corner2={3}". \
+	     format(self._name, comment, corner1, corner2)
+	    assert y1 < y2, \
+	      "{0}.block '{1}': equal Y coordinates: corner1={2} corner2={3}". \
+	     format(self._name, comment, corner1, corner2)
+	    assert z1 < z2, \
+	      "{0}.block '{1}': equal Z coordinates: corner1={2} corner2={3}". \
+	     format(self._name, comment, corner1, corner2)
+
+
+	    # Now make the block a little bigger for "welding":
+	    weld_extra = L(mm = 0.01)
+	    if welds.find("t") >= 0:
+		z2 += weld_extra
+	    if welds.find("b") >= 0:
+		z1 -= weld_extra
+	    if welds.find("n") >= 0:
+		y2 += weld_extra
+	    if welds.find("s") >= 0:
+		y1 -= weld_extra
+	    if welds.find("e") >= 0:
+		x2 += weld_extra	
+	    if welds.find("w") >= 0:
+		x1 -= weld_extra
+
+	    #print "c1=({0},{1},{2}) c2=({3},{4},{5})".format( \
+	    #  x1, y1, z1, x2, y2, z2)
+
+            # The transforms are done in reverse order:
+	    self._scad_transform(union_lines, center = center,
+	      axis = axis, rotate = rotate, translate = translate)
+
+	    # Get the lower south west corner positioned:
+	    union_lines.append(
+	      "      translate([{0:m}, {1:m}, {2:m}])".format(x1, y1, z1))
+
+	    # The color can be output any old time before the cube:
+	    union_lines.append(
+	      "      color([{0}, {1}, {2}, {3}])".
+	      format(color.red, color.green, color.blue, color.alpha))
+
+	    # Finally, we can output the cube:
+	    union_lines.append(
+	      "        cube([{0:m}, {1:m}, {2:m}]);".format(
+	      x2 - x1, y2 - y1, z2 - z1))
+
+
     def construct(self):
 	assert False, \
 	  "No construct() method defined for part '{0}'".format(self._name)
+
+    def extrude(self, comment = "no_comment", material = None, color = None,
+      outer_path = [], inner_paths = [[]], start = None, end = None,
+      center = None, axis = None, rotate = None, translate = None):
+	""" *Part*: """
+
+	print("=>Part.extrude()")
+
+	# Check argument types:
+	assert isinstance(comment, str)
+	none_type = type(None)
+	if type(material) == none_type:
+	    material = self._material
+	    if type(material) == none_type:
+		material = Material("plastic", "abs")
+	if type(color) == none_type:
+	    color = self._color
+	    if type(color) == none_type:
+		color = Color()
+	assert isinstance(outer_path, list)
+	assert isinstance(inner_paths, list)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+
+	# Record the *color* and *material*:
+	self._material = material
+	self._color = color
+
+	extrude_axis = end - start
+	height = extrude_axis.length()
+	contour = Contour(outer_path, extrude_axis)
+	place = Place(part = None, name = comment, center = center,
+	  axis = axis, rotate = rotate, translate = translate)
+
+	bounding_box = contour.bounding_box_compute(extrude_axis)
+
+	self._bounding_box_update(bounding_box, comment, place)
+
+	self._is_part = True
+	ezcad = self._ezcad
+	assert isinstance(ezcad, EZCAD3)
+
+	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+            scad_union_lines = self._scad_union_lines
+            scad_union_lines.append(
+	      "{0}linear_extrude(height = {1})".format(" " * 6, height))
+	    
+	    print("Part.extrude(): manufacture")
+	    contour.bends_compute()
+	    contour.output(scad_union_lines, indent = 6)
+
+	print("<=Part.extrude()")
+	    
+    def cylinder(self, comment = "NO_COMMENT",
+      material = Material(), color = Color(),
+      diameter = L(mm = 1.0), start = P(), end = P(z = L(mm = 1.0)),
+      sides = -1, welds = "", flags = ""):
+	""" *Part*: Place a *diameter* wide cylinder from *start* to *end*. """
+
+	#print("=>Part.cylinder(diam={0} start={1} end={2})".
+	#  format(diameter, start, end))
+
+	# Check argument types:
+	none_type = type(None)
+	assert isinstance(comment, str)
+	assert type(material) == none_type or isinstance(material, Material)
+	assert type(color) == none_type or isinstance(color, Color)
+	assert isinstance(diameter, L)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+	assert isinstance(sides, int)
+	assert isinstance(welds, str)
+	assert isinstance(flags, str)
+
+	union_lines = self._scad_union_lines
+	self._cylinder(lines = union_lines, indent = 6, is_solid = True,
+	  comment = comment, material = material, color = color,
+	  diameter = diameter, start = start, end = end, sides = sides)
+
+	#print("<=Part.cylinder()")
+
+    def hole(self, comment = "NO_COMMENT", diameter = L(mm = 1.0),
+      start = P(), end = P(z = L(mm = 1.0)),
+      sides = -1, top = "t", flags = ""):
+	""" Part construct: Make a {diameter} hole in {part} with starting
+	    at {start_point} and ending at {end_point}.  {comment} will
+	    show in any error messages and any generated G-code.  The
+	    allowed flag letters in {flags} are:
+
+	      One of 't' (default), 'f', or 'p':
+		't'	through hole (i.e. Through)
+		'f'	flat hole (i.e. Flat)
+		'p'	tip hole (drill tip stops at {end_point} (i.e. tiP)
+
+	      Allowed additional flags:	  
+		'u' upper hole edge should be chamfered (i.e. Upper)
+		'l' lower hole edge should be chamfered (i.e. Lower)
+		'm' hole is to be milled (i.e. Milled)
+	"""
+
+	# Check argument types:
+	assert isinstance(comment, str)
+	assert isinstance(sides, int)
+	assert isinstance(diameter, L)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+	assert isinstance(flags, str)
+	assert isinstance(top, str)
+
+	through_hole = True
+
+	if through_hole:
+	    axis  = start - end
+	    normalized = axis.normalize()
+	    start = start + normalized
+            end = end - normalized
+
+	difference_lines = self._scad_difference_lines
+	self._cylinder(lines = difference_lines, indent = 4, is_solid = False,
+	  comment = comment, material = None, color = None,
+	  diameter = diameter, start = start, end = end, sides = sides)
+
+    def _cylinder(self, lines = None, indent = 0, is_solid = True,
+      comment = None, material = None, color = None,
+      diameter = None, start = None, end = None, sides = None):
+	""" *Part*: Deal with commonality between holes (i.e. material
+	    removal) and cylinders made out of a *material*. """
+
+	trace = False
+	#trace = True
+	if trace:
+	    print(("=>Part._cylinder(comment='{0}', is_solid={1}," + 
+	     " diameter={2}, start={3}, end={4}").
+	     format(comment, is_solid, diameter, start, end))
+
+	# Check argument types:
+	none_type = type(None)
+	assert isinstance(comment, str)
+	assert type(lines) == none_type or isinstance(lines, list)
+	assert isinstance(indent, int)
+	assert isinstance(is_solid, bool)
+	assert type(material) == none_type or isinstance(material, Material)
+	assert type(color) == none_type or isinstance(color, Color)
+	assert isinstance(diameter, L)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+	assert isinstance(sides, int)
+
+	# Update the *color* and *material* of this part:
+	self._color_material_update(color, material)
+	color = self._color
+	material = self._material
+
+	# Compute center axis of the *cylinder*, its *length* and its *center*:
+	radius = diameter / 2
+	axis = end - start
+	length = axis.length()
+	half_length = length / 2
+	center = (start + end) / 2
+
+	# If appropriate, we rotate the hole before translation:
+	rotate_angle = None
+	orthogonal_axis = None
+	zero = L()
+	if axis.x != zero or axis.y != zero:
+	    # We have to tilt the cylinder.print("axis={0}".format(axis))
+	    z_axis = P(zero, zero, L(mm=1.0))
+	    rotate_angle = z_axis.angle_between(axis)
+	    orthogonal_axis = z_axis.cross_product(axis)
+	    #print("rotate_angle={0:d}".format(rotate_angle))
+	    #print("orthogonal_axis={0:m}".format(orthogonal_axis))
+
+	# Update bounding box:
+	if is_solid:
+	    bounding_box = Bounding_Box(radius, -radius,
+	      radius, -radius, half_length, -half_length)
+	    place = Place(part = None, name = comment,
+	      center = None, axis = orthogonal_axis, rotate = rotate_angle,
+	      translate = center)
+	    self._bounding_box_update(bounding_box, comment, place)
+
+
+	# Extract some values from {ezcad}:
+	if self._ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	    # Make sure *lines* is a list:
+	    assert isinstance(lines, list)
+	    assert length > zero, "Cylinder '{0}' has no height".format(comment)
+
+	    # Make sure we have a reasonable number of *sides*:
+	    if sides < 0:
+		sides = 16
+
+	    # Output a comment to see what is going on:
+	    spaces = " " * indent
+	    lines.append("{0}// '{1}'".format(spaces, comment))
+
+	    # Ouput the color if appropriate:
+	    if is_solid:
+		self._scad_color(lines, color, indent = indent)
+	    self._scad_transform(lines, indent = indent,
+	      center = None, axis = orthogonal_axis, rotate = rotate_angle,
+	      translate = center)
+
+	    # Output the cylinder in a vertical orientation centered on the
+	    # origin.  It is processed before either rotation or translation:
+            lines.append(
+	      "{0}  cylinder(r={1:m}, h={2:m}, center = true, $fn={3});".
+	      format(spaces, diameter / 2.0, length, sides))
+            lines.append("")
+	
+	if trace:
+	    print("<=Part._cylinder()")
 
     def process(self, ezcad):
 	""" {Part}: Generate the XML control file for *self*. """
@@ -1502,7 +2755,8 @@ class Part:
             self._update_count += 1
 	    print("Dimensions update {0}".format(self._update_count))
 	    changed = self._dimensions_update(ezcad, -1000000)
-	    print("Part.process: {0} dimensions_changed\n".format(changed))
+	    #changed = self._dimensions_update(ezcad, 0)
+	    print("Part.process: {0} dimension(s) changed\n".format(changed))
 
 	# Open the XML output stream:
 	#xml_file_name = self._name + ".xml"
@@ -1532,9 +2786,12 @@ class Part:
 	#  "Error running 'EZCAD_XML {0}'".format(xml_file_name)
 
     def wrl_write(self, wrl_file, indent = 0, parts_table = {}, file_name = ""):
+	""" *Part*: Write *self* to *wrl_file*. """
 	# Check argument types:
-	assert isinstance(wrl_file, file)	
+	assert isinstance(wrl_file, file)
 	assert isinstance(indent, int)
+	assert isinstance(parts_table, dict)
+	assert isinstance(file_name, str)
 
 	# Make sure the top level starts with an empty *parts_table*:
 	if indent == 0:
@@ -1617,6 +2874,7 @@ class Part:
 
 		# Output appearance *color* and material properties::
 		color = self._color
+		assert isinstance(color, Color)
 		wrl_file.write(
 		  "{0} appearance Appearance {{\n".format(spaces))
 		wrl_file.write(
@@ -1707,7 +2965,7 @@ class Part:
 				  format(spaces, center.x, center.y, center.z))
 			    # Write out the rotation:
 			    wrl_file.write(
-				  "{0}   rotation {1} {2} {3} {4}\n".format(
+				  "{0}   rotation {1} {2} {3} {4:r}\n".format(
 				  spaces, axis.x, axis.y, axis.z, rotate))
 
 			# If appropriate, write out the "translation ..."
@@ -1850,149 +3108,6 @@ class Part:
 		assert False, \
 		  "Top surface for {0} is {1} which is not $N/$S/$E/$W/$T/$B". \
 		  format(self.name, top_surface)
-
-    def block(self, comment = "no comment",  material = None, color = None,
-      corner1 = None, corner2 = None, welds = "",
-      center = None, axis = None, rotate = None, translate = None):
-	""" {Part} construct: Create a block with corners at {corner1} and
-	    {corner2}.  The block is made of {material} and visualized as
-	    {color}. """
-
-	#print "block_corners('{0}', {1}, {2}, '{3}', '{4}')".format( \
-	#  self.name, corner1, corner2, color, material)
-
-	# Deal with argument defaults:
-	none_type = type(None)
-	if type(material) == none_type:
-	    material = self._material
-	    if type(material) == none_type:
-		material = Material("plastic", "abs")
-	if type(color) == none_type:
-	    color = self._color
-	    if type(color) == none_type:
-		color = Color()
-	if type(corner1) == none_type:
-	    zero = L(0.0)
-	    corner1 = P(zero, zero, zero)
-	if type(corner2) == none_type:
-	    one = L.mm(1.0)
-	    corner2 = P(one, one, one)
-	assert isinstance(welds, str)
-
-	# Record the materials:
-	self._material = material
-	self._color = color
-
-	# Check argument types:
-	assert isinstance(comment, str)
-	assert isinstance(corner1, P)
-	assert isinstance(corner2, P)
-	assert isinstance(material, Material)
-	assert isinstance(color, Color)
-	assert type(center) == none_type or isinstance(center, P)
-	assert type(axis) == none_type or isinstance(axis, P)
-	assert type(rotate) == none_type or isinstance(rotate, Angle)
-	assert type(translate) == none_type or isinstance(translate, P)
-
-	# Make sure that the corners are diagonal from bottom south west
-	# to top north east:
-	x1 = min(corner1.x, corner2.x)
-	x2 = max(corner1.x, corner2.x)
-	y1 = min(corner1.y, corner2.y)
-	y2 = max(corner1.y, corner2.y)
-	z1 = min(corner1.z, corner2.z)
-	z2 = max(corner1.z, corner2.z)
-	#print("Part.box:{0:m}:{1:m},{2:m}:{3:m},{4:m}:{5:m}". \
-	#  format(x1, x2, y1, y2, z1, z2))
-
-	place = Place(part = None, name = comment, center = center,
-	  axis = axis, rotate = rotate, translate = translate)
-	forward_matrix = place._forward_matrix
-
-	tne = P(x2, y2, z2)
-	bsw = P(x1, y1, z1)
-	tsw = P(x1, y1, z2)
-	bnw = P(x1, y2, z1)
-	tnw = P(x1, y2, z2)
-	bse = P(x2, y1, z1)
-	tse = P(x2, y1, z2)
-	bne = P(x2, y2, z1)
-
-	#print("before box={0:m}".format(box))
-	self._box_point_update(comment + "[TNE]",
-	  forward_matrix.point_multiply(tne))
-	self._box_point_update(comment + "[TNW]",
-	  forward_matrix.point_multiply(tnw))
-	self._box_point_update(comment + "[TSE]",
-	  forward_matrix.point_multiply(tse))
-	self._box_point_update(comment + "[TSW]",
-	  forward_matrix.point_multiply(tsw))
-	self._box_point_update(comment + "[BNE]",
-	  forward_matrix.point_multiply(bne))
-	self._box_point_update(comment + "[BNW]",
-	  forward_matrix.point_multiply(bnw))
-	self._box_point_update(comment + "[BSE]",
-	  forward_matrix.point_multiply(bse))
-	self._box_point_update(comment + "[BSW]",
-	  forward_matrix.point_multiply(bsw))
-	#print("after box={0:m}".format(box))
-
-	ezcad = self._ezcad
-	assert isinstance(ezcad, EZCAD3)
-
-	self._is_part = True
-	print("Part.block:{0}._is_part = True".format(self._name))
-        
-	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
-	    union_lines = self._scad_union_lines
-
-	    assert x1 < x2, \
-	      "{0}.block '{1}': equal X coordinates: corner1={2} corner2={3}". \
-	     format(self._name, comment, corner1, corner2)
-	    assert y1 < y2, \
-	      "{0}.block '{1}': equal Y coordinates: corner1={2} corner2={3}". \
-	     format(self._name, comment, corner1, corner2)
-	    assert z1 < z2, \
-	      "{0}.block '{1}': equal Z coordinates: corner1={2} corner2={3}". \
-	     format(self._name, comment, corner1, corner2)
-
-
-	    # Now make the block a little bigger for "welding":
-	    weld_extra = L(mm = 0.01)
-	    if welds.find("t") >= 0:
-		z2 += weld_extra
-	    if welds.find("b") >= 0:
-		z1 -= weld_extra
-	    if welds.find("n") >= 0:
-		y2 += weld_extra
-	    if welds.find("s") >= 0:
-		y1 -= weld_extra
-	    if welds.find("e") >= 0:
-		x2 += weld_extra	
-	    if welds.find("w") >= 0:
-		x1 -= weld_extra
-
-	    #print "c1=({0},{1},{2}) c2=({3},{4},{5})".format( \
-	    #  x1, y1, z1, x2, y2, z2)
-
-            # The transforms are done in reverse order:
-	    self._scad_transform(union_lines, center = center,
-	      axis = axis, rotate = rotate, translate = translate)
-
-	    # Get the lower south west corner positioned:
-	    union_lines.append(
-	      "      translate([{0:m}, {1:m}, {2:m}])".format(x1, y1, z1))
-
-	    # The color can be output any old time before the cube:
-	    union_lines.append(
-	      "      color([{0}, {1}, {2}, {3}])".
-	      format(color.red, color.green, color.blue, color.alpha))
-
-	    # Finally, we can output the cube:
-	    union_lines.append(
-	      "        cube([{0:m}, {1:m}, {2:m}]);".format(
-	      x2 - x1, y2 - y1, z2 - z1))
-
 
     def block_diagonal(self, diagonal, color, material):
 	""" Part construct: Turn {self} into a block centered on the origin
@@ -2474,62 +3589,6 @@ class Part:
 	      format(color, self.transparency, material))
 	    xml_stream.write(' Comment="{0}"/>\n'.format(self.name))
 
-    def hole(self, comment, diameter, start, end, top = "t", flags = ""):
-	""" Part construct: Make a {diameter} hole in {part} with starting
-	    at {start_point} and ending at {end_point}.  {comment} will
-	    show in any error messages and any generated G-code.  The
-	    allowed flag letters in {flags} are:
-
-	      One of 't' (default), 'f', or 'p':
-		't'	through hole (i.e. Through)
-		'f'	flat hole (i.e. Flat)
-		'p'	tip hole (drill tip stops at {end_point} (i.e. tiP)
-
-	      Allowed additional flags:	  
-		'u' upper hole edge should be chamfered (i.e. Upper)
-		'l' lower hole edge should be chamfered (i.e. Lower)
-		'm' hole is to be milled (i.e. Milled)
-	"""
-
-	# Check argument types:
-	assert isinstance(comment, str)
-	assert isinstance(diameter, L)
-	assert isinstance(start, P)
-	assert isinstance(end, P)
-
-	# Define some useful abbreviations:
-	zero = L(0.0)
-
-	# Extract some values from {ezcad}:
-	ezcad = self._ezcad
-
-	none_type = type(None)
-	difference_lines = self._scad_difference_lines
-	if type(difference_lines) != none_type:
-	    print("Part.hole:start={0:m} end={1:m}".format(start, end))
-	    axis = start - end
-	    length = axis.length()
-	    assert length > zero, "Cylinder '{0}' has no height".format(comment)
-
-	    print("Part.hole:axis={0:m} length={1:m}".format(axis, length))
-	    if axis.x != zero or axis.y != zero:
-		# We have to tilt the cylinder.
-		z_axis = P(zero, zero, L(mm=1.0))
-		angle = z_axis.angle_between(axis)
-		orthogonal_xis = z_axis.dot_product(axis)
-
-	    xxx = start + end
-	    print("Part.hole:xxx={0:m}".format(xxx))
-	    center = (start + end).half()
-	    print("Part.hole:center={0:m}".format(center))
-	    difference_lines.append(
-	      "    // '{0}' Hole".format(comment))
-	    difference_lines.append(
-	      "    translate({0:m})".format(center))
-            difference_lines.append(
-	      "      cylinder(r={0:m}, h={1:m}, center = true, $fn=12);".
-	      format(diameter / 2.0, length + L(mm=1.0)))
-	
     def hole_through(self, comment, diameter, start_point, flags, \
       countersink_diameter = L(0.0)):
 	""" Part construct: Make a {diameter} hole in {self} with starting
@@ -2624,8 +3683,8 @@ class Part:
 	    to {self} with no rotation.  {place_name} is used for point
 	    paths. """
 
-	#print("Part.place({0}, part='{1}',name='{2}' ...)". \
-	#  format(self._name, part._name, name))
+	print("=>Part.place({0}, part='{1}',name='{2}' ...)". \
+	  format(self._name, part._name, name))
 
 	# Deal with default arguments:
 	none_type = type(None)
@@ -2653,7 +3712,9 @@ class Part:
 	  center = center, axis = axis, rotate = rotate, translate = translate)
 	self._places[name] = place
 
-	return place
+	print("<=Part.place({0}, part='{1}',name='{2}' ...)". \
+	  format(self._name, part._name, name))
+	#return place
 
     #def point(self, point_path):
     #	""" Part dimensions: Return the {P} associated with {point_path}
@@ -2729,65 +3790,86 @@ class Part:
 	self.tube(color, material, start_point, end_point, diameter, \
 	  diameter.half() - L.inch(.0001), sides)
 
-    def _scad_transform(self, lines,
+    def _scad_color(self, lines, color, indent = 0):
+	if isinstance(color, Color):
+	    red = color.red
+	    green = color.green
+	    blue = color.blue
+	    alpha = color.alpha
+	    spaces = " " * indent
+	    if alpha < 1.0:
+		lines.append("{0}color([{1},{2},{3},{4}])".
+	          format(spaces, red, green, blue, alpha))
+	    else:
+		lines.append("{0}color([{1},{2},{3}])".
+	          format(spaces, red, green, blue))
+
+    def _scad_transform(self, lines, indent = 0,
        center = None, axis = None, rotate = None, translate = None):
 
 	none_type = type(None)
 	assert type(lines) == none_type or isinstance(lines, list)
+	assert isinstance(indent, int)
 	assert type(center) == none_type or isinstance(center, P)
 	assert type(axis) == none_type or isinstance(axis, P)
 	assert type(rotate) == none_type or isinstance(rotate, Angle)
 	assert type(translate) == none_type or isinstance(translate, P)
 
-	if isinstance(lines, list):
-	    # Perform any requested translate "last":
-	    if type(translate) != none_type:
+	ezcad = self._ezcad
+	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+            assert isinstance(lines, list)
+	    spaces = " " *indent
+
+	    # What we want to do is 4 transforms:
+	    #
+            #  1) Move the object such that its *center* is at the origin:
+	    #  2) Rotate the boject around *axis* by *angle*:
+	    #  3) Restore the object to where it was before step 1.
+	    #  4) Move the object over by *translate*:
+	    #
+	    # Note that steps 1-3 are the rotate steps and step 4 is the
+	    # the translate step.  They are done this way so that they are
+	    # independent of one another.  Thus, a rotation does not affect
+	    # the translation and vice versa.
+	    #
+	    # To further complicate things, we have to output these
+	    # transforms in reverse order (i.e. 4, 3, 2, 1.)
+
+	    # Perform step 4, the *translate* step:
+	    if isinstance(translate, P):
 		lines.append(
-		  "      translate([{0:m}, {1:m}, {2:m}])".format(
-		  translate.x, translate.y, translate.z))
+		  "{0}translate([{1:m}, {2:m}, {3:m}])".format(
+		  spaces, translate.x, translate.y, translate.z))
 
-	    # The rotation only makes sense if there is a *rotate* angle:
-	    if type(rotate) != none_type:
-		assert isinstance(rotate, Angle)
-
+	    # Steps 1-3 only make sence if exists and is *angle* is non-zero:
+	    if isinstance(rotate, Angle) and rotate != Angle():
 		# Again, we do the transforms in reverse order.
-		# This transform restores the part to its natural location:
-		if type(center) == none_type:
-		    # Rotate around the *Part* center:
-		    lines.append(
-		      "    translate([{0:m}, {1:m}, {2:m}])".format(
-		      (x1 + x2).half(), (y1 + y2).half(), (z1 + z2).half()))
-		else:
+		# Start with step 3:
+		if isinstance(center, P):
 		    # Rotate around *center*:
 		    assert isinstance(center, P)
 		    lines.append(
-		      "      translate([{0:m}, {1:m}, {2:m}])".format(
-		      center.x, center.y, center.z))
+		      "{0}translate([{1:m}, {2:m}, {3:m}])".format(
+		      spaces, center.x, center.y, center.z))
 
-		# Now do the axis rotation now that the part center is
+		# Step 2: Rotate around *axis* or Z-axis:
 		# at the origin:
-		if type(axis) == none_type:
+		if isinstance(axis, P):
+		    # Rotate around *axis*:
+		    lines.append(
+		      "{0}rotate(a={1}, v=[{2:m}, {3:m}, {4:m}])".format(
+		      spaces, rotate, axis.x, axis.y, axis.z))
+		else:
 		    # Rotate around the Z axis:
 		    lines.append(
-		      "    rotate(a={0}, v=[0, 0, 1])".format(rotate))
-		else:
-                    # Rotate around *axis*:
-		    assert isinstance(axis, P)
-		    lines.append(
-		      "      rotate(a={0}, v=[{1:m}, {2:m}, {3:m}])".format(
-		      rotate, axis.x, axis.y, axis.z))
+		      "{0}rotate(a={1}, v=[0, 0, 1])".format(spaces, rotate))
 
-		# This is the transform that moves the part to origin
-		# such prior to rotation:
-		if type(center) == none_type:
-		    # Rotate using the center of the cube:
+		# This is the transform that moves the part to *center*
+		# prior to rotation:
+		if isinstance(center, P):
+		    # Step 1: move to *center*; notice negative signs:
 		    lines.append(
-		      "    translate([{0:m}, {1:m}, {2:m}])".format(
-		      -(x1 + x2).half(), -(y1 + y2).half(), -(z1 + z2).half()))
-		else:
-		    # Rotate around *center*:
-		    lines.append(
-		      "      translate([{0:m}, {1:m}, {2:m}])".format(
+		      "{0}translate([{1:m}, {2:m}, {3:m}])".format(spaces,
 		      -center.x, -center.y, -center.z))
 
     def scalar(self, scalar_path):
@@ -4163,258 +5245,6 @@ class Place:
 
 	return not (self == place)
 
-class P:
-    """ {P} represents a point in 3-space associated with a specific
-	{Part} to provide the frame of reference. """
-
-    def __init__(self, x = None, y = None, z = None):
-	""" P: Intialize {self} to contain {part}, {x}, {y}, {z}. """
-
-	# Deal with default arguments:
-	if type(x) == type(None):
-	    x = L(0.0)
-	if type(y) == type(None):
-	    y = L(0.0)
-	if type(z) == type(None):
-	    z = L(0.0)
-
-	# Check argument types:
-	assert isinstance(x, L)
-	assert isinstance(y, L)
-	assert isinstance(z, L)
-
-	# Load up *self*:
-	self.x = x
-	self.y = y
-	self.z = z
-
-    def __add__(self, point):
-	""" P: Add {point} to {self}. """
-
-	assert isinstance(point, P)
-	return P(self.x + point.x, self.y + point.y, self.z + point.z)
-
-    def __div__(self, number):
-	""" P: Return the result of dividing {self} by {number}. """
-
-	number = float(number)
-	assert isinstance(number, int) or isinstance(number, float)
-	return P(self.x / number, self.y / number, self.z / number)
-
-    def __eq__(self, point):
-	""" P: Return {True} if {self} is equal to {point}. """
-
-	assert isinstance(point, P)
-	return self.x == point.x and self.y == point.y and self.z == point.z
-
-    def __format__(self, format):
-	""" *P*: Return *self* formatted as a string. """
-
-	assert isinstance(format, str)
-	if format != "":
-            format = ":" + format
-	format_string = \
-	    "[{0" + format + "}, {1" + format + "}, {2" + format + "}]"
-
-	return format_string.format(self.x, self.y, self.z)
-
-    def __mul__(self, scalar):
-	""" P: Return the result of muliplying {self} by {scalar}. """
-
-	return P(self.part, \
-	  self.x * scalar, self.y * scalar, self.z * scalar)
-
-    def __rmul__(self, scalar):
-	""" P: Return the result of muliplying {self} by {scalar}. """
-
-	return P(self.part, \
-	  self.x * scalar, self.y * scalar, self.z * scalar)
-
-    def __ne__(self, point):
-	""" P: Return {True} if {self} is not equal to {point}. """
-
-	assert isinstance(point, P)
-	return self.x != point.x or self.y != point.y or self.z != point.z
-
-    def __neg__(self):
-	""" P: Return the negative of {self}. """
-
-	return P(self.part, -self.x, -self.y, -self.z)
-
-    def __str__(self):
-	""" P: Return {self} as a formatted string. """
-
-	return "({0}, {1}, {2})".format(self.x, self.y, self.z)
-
-    def __sub__(self, point):
-	""" P: Subtract {point} from {self}. """
-
-	assert isinstance(point, P)
-	return P(self.x - point.x, self.y - point.y, self.z - point.z)
-
-    def angle_between(self, point):
-	""" P dimensions: Return the angle between {self} and {point}. """
-
-	# a . b = ||a|| ||b|| cos <AB		(1)
-	# (a . b) / (||a|| ||b||) = cos <AB	(2)
-	# acos [(a . b) / (||a|| ||b||)] = <AB	(3)
-
-	x1 = self.x.inches()
-	y1 = self.y.inches()
-	z1 = self.z.inches()
-	x2 = point.x.inches()
-	y2 = point.y.inches()
-	z2 = point.z.inches()
-	dot_product = x1 * y1 + x2 * y2 + z1 * z2
-	length1 = math.sqrt(x1 * x1 + y1 * y1 + z1 * z1)
-	length2 = math.sqrt(x2 * x2 + y2 * y2 + z2 * z2)
-	
-	return Angle.rad(math.acos(dot_product / (length1 * length2)))
-
-    def cross_product(self, point):
-	""" P dimensions: Return the cross product of {self}
-	    with {point}. """
-
-	ux = self.x.inches()
-	uy = self.y.inches()
-	uz = self.z.inches()
-	vx = point.x.inches()
-	vy = point.y.inches()
-	vz = point.z.inches()
-
-	assert self.part == point.part, \
-	  "P.cross_product: Mis-matched parts"
-
-	inch = L.inch
-	return P(self.part, inch(uy * vz - uz * vy),
-	  inch(uz * vx - ux * vz), inch(ux * vy - uy * vx))
-
-    def distance(self, point):
-	assert isinstance(point, P)
-	dx = (self.x - point.x).inches()
-	dy = (self.y - point.y).inches()
-	dz = (self.z - point.z).inches()
-	length = Lenght.inch(math.sqrt(dx * dx + dy * dy + dz * dz))
-	return length
-
-    def half(self):
-	""" P dimensions: Return {self} / 2. """
-
-	result = self / 2.0
-	return result	
-
-    def length(self):
-	""" P dimensions: Return the length of self. """
-
-	x = self.x._mm
-	y = self.y._mm
-	z = self.z._mm
-	return L(mm=math.sqrt(x * x + y * y + z * z))
-
-    def matrix_create(self):
-	""" Matrix public: Create a matrix that corresponds to {self}. """
-
-	result = Matrix(   [[
-	  self.x._mm,
-	  self.y._mm,
-	  self.z._mm,
-	  1.0              ]] )
-
-	return result
-
-    def points(self, dx, dy, dz):
-	""" Part construct: Return a list of points centered around
-	    {self} that are separated by {dx} in X, {dy} in Y and {dx}
-	    in Z.  If all of {dx}, {dy}, {dz} are non-zero, 8 {P}'s are
-	    returned.  If one of {dx}, {dy}, and {dz} is zero, 4 {P}'s
-	    are returned.  If two of {dx}, {dy}, and {dz} are zero, only
-	    2 {P}'s are returned. """
-
-	# Extract some values from {part}:
-	part = self.part
-	x = self.x
-	y = self.y
-	z = self.z
-
-	# Construct {x_list}, {y_list}, {z_list} to have either 1 or 2 value
-	# depending upon whether {dx}, {dy}, {dz} is zero, repsectively:
-	zero = L.inch(0)
-	if dx == zero:
-	    x_list = (x)
-	else:
-            half_dx = dx.half()
-	    x_list = (x - half_dx, x + half_dx)
-
-	if dy == zero:
-	    y_list = (y)
-	else:
-            half_dy = dy.half()
-	    y_list = (y - half_dy, y + half_dy)
-
-	if dz == zero:
-	    z_list = (z)
-	else:
-            half_dz = dz.half()
-	    z_list = (z - half_dz, z + half_dz)
-
-	# Now iterate over {x_list}, {y_list}, and {z_list}
-	# to generate {result}:
-	result = []
-	for x in x_list:
-	    for y in y_list:
-		for z in z_list:
-		    point = P(part, x, y, z)
-		    result.append(point)
-
-	return result
-
-    def twice(self):
-	""" P dimensions: Return {self} * 2. """
-
-	return self * 2.0
-
-    def x_adjust(self, x):
-	""" P dimensions: Return copy of {self} with {x} added to the
-	    x field. """
-
-	return P(self.part, self.x + x, self.y, self.z)
-
-    def xy_adjust(self, x, y):
-	""" P dimensions: Return copy of {self} with {x} added to the
-	    x field and {y} added to the y field. """
-
-	return P(self.part, self.x + x, self.y + y, self.z)
-
-    def xyz_adjust(self, x, y, z):
-	""" P dimensions: Return copy of {self} with {x} added to the
-	    x field, {y} added to the y field, and {z} added to the z field. """
-
-	return P(self.part, self.x + x, self.y + y, self.z + z)
-
-    def xz_adjust(self, x, z):
-	""" P dimensions: Return copy of {self} with {x} added to the
-	    x field and {z} added to the z field. """
-
-	return P(self.part, self.x + x, self.y, self.z + z)
-
-    def y_adjust(self, y):
-	""" P dimensions: Return copy of {self} with {y} added to the
-	    y field. """
-
-	return P(self.part, self.x, self.y + y, self.z)
-
-    def yz_adjust(self, y, z):
-	""" P dimensions: Return copy of {self} with {y} added to the
-	    y field and {z} added to the z field. """
-
-	return P(self.part, self.x, self.y + y, self.z + z)
-
-    def z_adjust(self, z):
-	""" P dimensions: Return copy of {self} with {z} added to the
-	    z field. """
-
-	return P(self.part, self.x, self.y, self.z + z)
-
 class Screw:
     """ Screw """
 
@@ -4676,14 +5506,6 @@ class Screw_Level:
 # screw.depth_set(depth)
 
 from numpy import matrix
-
-class Material:
-    def __init__(self, generic, specific):
-	""" *Material*: Initialize *self* to contain *generic* and
-	    *specific*. """
-
-	self.generic = generic
-	self.specific = specific
 
 class Matrix:
 
