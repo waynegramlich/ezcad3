@@ -334,7 +334,7 @@ class L:
 	assert isinstance(dx, L)
 
 	# Return result:
-	return Angle(rad=math.atan2(self._mm, dx._mm))
+	return Angle(rad = math.atan2(self._mm, dx._mm))
 
     def centimeters(self):
 	""" L: Return {self} as a scalar measured in centimeters. """
@@ -477,9 +477,9 @@ class P:
     def angle_between(self, point):
 	""" P dimensions: Return the angle between {self} and {point}. """
 
-	# a . b = ||a|| ||b|| cos <AB		(1)
-	# (a . b) / (||a|| ||b||) = cos <AB	(2)
-	# acos [(a . b) / (||a|| ||b||)] = <AB	(3)
+	# a . b = ||a|| ||b|| cos( <AB )		(1)
+	# (a . b) / (||a|| ||b||) = cos( <AB )		(2)
+	# acos( (a . b) / (||a|| ||b||) ] = <AB	(3)
 
 	assert isinstance(point, P)
 
@@ -489,11 +489,16 @@ class P:
 	x2 = point.x._mm
 	y2 = point.y._mm
 	z2 = point.z._mm
-	dot_product = x1 * y1 + x2 * y2 + z1 * z2
+	dot_product = x1 * x2 + y1 * y2 + z1 * z2
 	length1 = math.sqrt(x1 * x1 + y1 * y1 + z1 * z1)
 	length2 = math.sqrt(x2 * x2 + y2 * y2 + z2 * z2)
-	
-	return Angle(rad = math.acos(dot_product / (length1 * length2)))
+	numerator = length1 * length2
+        result = Angle()
+	xxx = dot_product / numerator
+	#print("dot={0} num={1} xxx={2}".format(dot_product, numerator, xxx))
+	if numerator > 0.0:
+	    result = Angle(rad = math.acos(dot_product / numerator))
+	return result
 
     def cross_product(self, point):
 	""" *P*: Return the cross product of *self* with *point. """
@@ -681,10 +686,12 @@ class Angle:
 	assert isinstance(rad, float) or isinstance(rad, int)
 
 	# Initliaze the final value:
-	rad = float(rad)
+	radians = float(rad)
 	if deg != 0.0:
-	    rad += deg * Angle.PI / 180.0
-	self.radians = float(rad)
+	    radians += float(deg) * Angle.PI / 180.0
+	self.radians = radians
+	#print("Angle.__init__(deg={0}, rad={1})=>{2}".
+	#  format(deg, rad, radians))
 
     ## @brief Return the sum of two *Angle*'s.
     #  @param self is the first *Angle* object.
@@ -697,7 +704,7 @@ class Angle:
 	""" Angle: Return *angle* added to *self*. """
 
 	assert isinstance(angle, Angle)
-	return Angle(self.radians + angle.radians)
+	return Angle(rad = self.radians + angle.radians)
 
     ## @brief Divides an *Angle* by *divisor*.
     #  @param self is the *Angle* object to divide.
@@ -710,7 +717,7 @@ class Angle:
 	""" Angle: Return *self* divided by *divisor*. """
 
 	assert isinstance(divisor, float) or isinstance(divisor, int)
-	return Angle(self.radians / float(scalar))
+	return Angle(rad = self.radians / float(divisor))
 
     ## @brief Return *True* if angles are equal.
     #  @param self is the first *Angle* to compare.
@@ -742,12 +749,16 @@ class Angle:
 	# Check argument types:
 	assert isinstance(format, str)
 
+	#print("Angle.__format__(*, '{0}')".format(format))
+
 	value = self.radians
 	if format.endswith("r"):
+	    # Do radians:
 	    format = format[:-1]
 	elif format.endswith("d"):
+	    # Do degrees:
             format = format[:-1]
-            value *= 180.0 / Angle.PI
+            value = value * 180.0 / Angle.PI
         else:
 	    # Assume degrees output by default:
             value *= 180.0 / Angle.PI
@@ -755,7 +766,8 @@ class Angle:
 	if len(format) == 0:
 	    result = "{0}".format(value)
 	else:
-	    result = ("{0:" + format + "}").format(value)
+	    result = ("{0:" + format + "}").format_text.format(value)
+	#print("Angle.__format__()=>'{0}'".format(result))
 	return result
 
     ## @brief Return *True* if *self* is greater than or equal to *angle*.
@@ -821,7 +833,7 @@ class Angle:
 	""" Angle: Return *self* divided by *multiplier*. """
 
 	assert isinstance(multiplier, float) or isinstance(multiplier, int)
-	return Angle(self.radians * multiplier)
+	return Angle(rad = self.radians * multiplier)
 
     ## @brief Return *True* if angles are equal.
     #  @param self is the first *Angle* to compare.
@@ -844,7 +856,7 @@ class Angle:
 	""" Angle: Return negative of {self}. """
 
 	assert isinstance(angle, Angle)
-	return Angle(-self.radians)
+	return Angle(rad  = -self.radians)
 
     ## @brief Return *self* &times; *multiplier*.
     #  @param self is the *Angle* object to multiply.
@@ -856,7 +868,7 @@ class Angle:
 	""" Angle: Return {self} multiplied by {multiplier}. """
 
 	assert isinstance(multiplier, float) or isinstance(multiplier, int)
-	return Angle(self.radians * multiplier)
+	return Angle(rad = self.radians * multiplier)
 
     ## @brief Returns *self* converted to degrees.
     #  @param self is the *Angle* object to convert to degrees.
@@ -878,7 +890,7 @@ class Angle:
 	""" Angle: Return {angle} subtracted from {self}. """
 
 	assert isinstance(angle, Angle)
-	return Angle(self.radians - angle.radians)
+	return Angle(rad = self.radians - angle.radians)
 
     ## @brief Returns the cosine of *self*.
     #  @param self is the *Angle* to compute the cosine of
@@ -901,7 +913,7 @@ class Angle:
 
 	assert isinstance(scalar_degrees, float) or \
 	  isinstance(scalar_degrees, int)
-	return Angle(scalar_degrees * Angle.PI / 180.0)
+	return Angle(rad = scalar_degrees * Angle.PI / 180.0)
 
     ## @brief Returns *self* converted degrees as a *float*.
     #  @param self is the *Angle* to convert to degrees.
@@ -1200,16 +1212,19 @@ class Bounding_Box:
 	""" *Bounding_Box*: Initialize *self* with *ex*, *wx*, *ny*, *sy*,
 	    *tz*, and *bz*. """
 
+	#FIXME: We should check bounding box values only after we have
+	# finished all the diminsion updating:
+
 	# Check argument types:
 	assert isinstance(ex, L)
 	assert isinstance(wx, L)
-	assert wx < ex
+	#assert wx < ex
 	assert isinstance(ny, L)
 	assert isinstance(sy, L)
-	assert sy < ny
+	#assert sy < ny
 	assert isinstance(tz, L)
 	assert isinstance(bz, L)
-	assert bz < tz
+	#assert bz < tz
 
 	# Load up *self*
 	self.ex = ex
@@ -1744,7 +1759,7 @@ class Part:
 	physical part. """
 
     # Flavors of values that can be stored in a {Part}:
-    def __init__(self, up):
+    def __init__(self, up, name = None):
 	""" *Part*: Initialize *self* to have a parent of *up*. """
 
 	#print("=>Part.__init__(*, '{0}', *, place={1})".format(name, place))
@@ -1752,7 +1767,9 @@ class Part:
         # Check argument types:
 	none_type = type(None)
 	up_type = type(up)
+	name_type = type(name)
 	assert up_type == none_type or isinstance(up, Part)
+	assert name_type == none_type or isinstance(name, str)
 
 	# Some useful abbreviations:
 	zero = L()
@@ -1767,7 +1784,8 @@ class Part:
 	#	#  format(name, attribute_name, attribute._name))
 
 	# Load up *self*:
-	name = self.__class__.__name__
+	if name_type == none_type:
+	    name = self.__class__.__name__
 	self._color = None
 	self._ezcad = None
 	self._is_part = False	
@@ -1835,6 +1853,8 @@ class Part:
 		pass
 	    elif name.endswith("_a"):
 		return Angle()
+	    elif name.endswith("_b"):
+		return False
 	    elif name.endswith("_c"):
 		return Color()
 	    elif name.endswith("_f"):
@@ -1914,7 +1934,7 @@ class Part:
     # from the last time it was updated, the bounding box for *self* is
     # recomputed.
     def _box_point_update(self, name, point):
-	""" *Box*: Insert/update the point named *name* to *point*. """
+	""" *Part*: Insert/update the point named *name* to *point*. """
 
 	# Check argument types:
 	assert isinstance(name, str)
@@ -1935,7 +1955,7 @@ class Part:
 	      previous.y != point.y or previous.z != point.z:
 		# *point* changed, so update everything:
 		points[name] = point
-		self._box_recompute()
+		self._box_recompute("Part._box_point_update")
 	else:
 	    # This is the initial insert; so update everything:
 	    points[name] = point
@@ -2147,6 +2167,10 @@ class Part:
 		assert isinstance(attribute, Angle), \
 		  "{0}.{1} is not an Angle".format(name, attribute_name)
 		before_values[attribute_name] = attribute
+	    elif attribute_name.endswith("_b"):
+		assert isinstance(attribute, bool), \
+		  "{0}.{1} is not an bool".format(name, attribute_name)
+		before_values[attribute_name] = attribute
 	    elif attribute_name.endswith("_f"):
 		assert isinstance(attribute, float), \
 		  "{0}.{1} is not a float".format(name, attribute_name)
@@ -2174,7 +2198,8 @@ class Part:
 	    if before_value != after_value:
 		changed += 1
 		if changed > 0:
-		    print("here 2")
+		    #print("here 2")
+		    pass
 		if trace >= 0:
 		    print("{0}Part._dimensions_update:{1}.{2} ({3}=>{4})". \
 		      format(' ' * trace, name, attribute_name,
@@ -2290,7 +2315,7 @@ class Part:
 
             # Perform all the placements:
 	    for place in places:
-		print("Part._manufacture.place={0}".format(place))
+		#print("Part._manufacture.place={0}".format(place))
 		self._scad_transform(lines, center = place._center,
 		  axis = place._axis, rotate = place._rotate,
 		  translate = place._translate);
@@ -2398,7 +2423,7 @@ class Part:
 
 	# Deal with argument defaults:
 	none_type = type(None)
-	self._color_maerial_update(color, material)
+	self._color_material_update(color, material)
 	color = self._color
 	material = self._material
 
@@ -2472,21 +2497,21 @@ class Part:
 	assert isinstance(ezcad, EZCAD3)
 
 	self._is_part = True
-	print("Part.block:{0}._is_part = True".format(self._name))
+	#print("Part.block:{0}._is_part = True".format(self._name))
         
 	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
 	    union_lines = self._scad_union_lines
 
-	    assert x1 < x2, \
-	      "{0}.block '{1}': equal X coordinates: corner1={2} corner2={3}". \
-	     format(self._name, comment, corner1, corner2)
-	    assert y1 < y2, \
-	      "{0}.block '{1}': equal Y coordinates: corner1={2} corner2={3}". \
-	     format(self._name, comment, corner1, corner2)
-	    assert z1 < z2, \
-	      "{0}.block '{1}': equal Z coordinates: corner1={2} corner2={3}". \
-	     format(self._name, comment, corner1, corner2)
-
+	    #FIXME: Should only check after the dimensions update:
+	    #assert x1 < x2, \
+	    # "{0}.block '{1}': equal X coordinates: corner1={2} corner2={3}". \
+	    # format(self._name, comment, corner1, corner2)
+	    #assert y1 < y2, \
+	    # "{0}.block '{1}': equal Y coordinates: corner1={2} corner2={3}". \
+	    # format(self._name, comment, corner1, corner2)
+	    #assert z1 < z2, \
+	    # "{0}.block '{1}': equal Z coordinates: corner1={2} corner2={3}". \
+	    # format(self._name, comment, corner1, corner2)
 
 	    # Now make the block a little bigger for "welding":
 	    weld_extra = L(mm = 0.01)
@@ -2637,13 +2662,15 @@ class Part:
 	assert isinstance(flags, str)
 	assert isinstance(top, str)
 
-	through_hole = True
+	flat_hole = flags.find("f") >= 0
+	through_hole = not flat_hole
 
-	if through_hole:
-	    axis  = start - end
-	    normalized = axis.normalize()
+	if self._ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+            axis  = start - end
+            normalized = axis.normalize()
 	    start = start + normalized
-            end = end - normalized
+	    if through_hole:
+		end = end - normalized
 
 	difference_lines = self._scad_difference_lines
 	self._cylinder(lines = difference_lines, indent = 4, is_solid = False,
@@ -2702,6 +2729,8 @@ class Part:
 
 	# Update bounding box:
 	if is_solid:
+	    #print("comment={0} radius={1} half_length={2}". \
+	    #  format(comment, radius, half_length))
 	    bounding_box = Bounding_Box(radius, -radius,
 	      radius, -radius, half_length, -half_length)
 	    place = Place(part = None, name = comment,
@@ -2802,8 +2831,8 @@ class Part:
 	name = self._name
 	spaces = " " * indent
 
-	print("{0}=>Part.wrl_write({1}, {2}, {3}, {4}):enter".
-	  format(spaces, name, indent, parts_table.keys(), file_name))
+	#print("{0}=>Part.wrl_write({1}, {2}, {3}, {4}):enter".
+	#  format(spaces, name, indent, parts_table.keys(), file_name))
 
 	# Figure out whether to generate USE or DEF:
 	if name in parts_table:
@@ -2996,8 +3025,8 @@ class Part:
 		wrl_file.write(
 		  "{0}}}\n".format(spaces))
 
-	print("{0}<=Part.wrl_write({1}, {2}, {3}, {4}):leave".
-	  format(spaces, name, indent, parts_table.keys(), file_name))
+	#print("{0}<=Part.wrl_write({1}, {2}, {3}, {4}):leave".
+	#  format(spaces, name, indent, parts_table.keys(), file_name))
 
     # ===================================
 
@@ -3683,8 +3712,8 @@ class Part:
 	    to {self} with no rotation.  {place_name} is used for point
 	    paths. """
 
-	print("=>Part.place({0}, part='{1}',name='{2}' ...)". \
-	  format(self._name, part._name, name))
+	#print("=>Part.place({0}, part='{1}',name='{2}' ...)". \
+	#  format(self._name, part._name, name))
 
 	# Deal with default arguments:
 	none_type = type(None)
@@ -3712,9 +3741,16 @@ class Part:
 	  center = center, axis = axis, rotate = rotate, translate = translate)
 	self._places[name] = place
 
-	print("<=Part.place({0}, part='{1}',name='{2}' ...)". \
-	  format(self._name, part._name, name))
-	#return place
+	#print("<=Part.place({0}, part='{1}',name='{2}' ...)". \
+	#  format(self._name, part._name, name))
+
+    def no_automatic_place(self):
+	""" *Part*: Disable automatic placement of *self*. """
+
+	name = self._name
+	places = self.up._places
+	if name in places:
+	    del places[name]
 
     #def point(self, point_path):
     #	""" Part dimensions: Return the {P} associated with {point_path}
