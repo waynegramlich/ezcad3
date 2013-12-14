@@ -16,9 +16,10 @@ class Synchro_Drive_Wheel_Assembly(Part):
 	Part.__init__(self, up)
 
 	# List all of the sub-*Part*'s that make up a wheel assembly:
-        self.timing_pully_ = Timing_Pully(self, teeth_count = 30,
+        self.timing_pully_ = Timing_Pully(self, teeth_count = 10,
 	  tooth_diameter = L(mm = 1.0), pitch = L(inch = 0.080),
-	  width = L(inch = "1/4"))
+	  belt_width = L(inch = "1/4") + L(inch = .005),
+	  lip_extra = L(mm = 1.5), lip_width = L(mm = 5))
 	self.bearing_ = Bearing(self)
 	self.bevel_gear_ = \
 	  Bevel_Gear(self, part_name = "A 1M 4-Y16016", color = Color("red"))
@@ -408,8 +409,9 @@ class Bevel_Gear_Box_Side(Part):
 	      flags = "t")
 
 class Timing_Pully(Part):
-    def __init__(self, up, teeth_count = -1,
-      pitch = L(), width = L(), tooth_diameter = L()):
+    def __init__(self, up, teeth_count = -1, pitch = L(), belt_width = L(),
+      tooth_diameter = L(), lip_extra = L(), lip_width = L(),
+      bearing_diameter = L(), bearing_depth = L(), shaft_diameter = L()):
 	Part.__init__(self, up)
 
 	# Check argument types:
@@ -417,20 +419,38 @@ class Timing_Pully(Part):
       	assert isinstance(teeth_count, int)
 	assert isinstance(pitch, L) and pitch > zero
 	assert isinstance(tooth_diameter, L) and tooth_diameter > zero
+	assert isinstance(belt_width, L) and belt_width > zero
+	assert isinstance(lip_extra, L) and lip_extra > zero
+	assert isinstance(lip_width, L) and lip_width > zero
+	assert isinstance(bearing_diameter, L)
+	assert isinstance(bearing_depth, L)
+	assert isinstance(shaft_diameter, L)
 
 	# Remember the arguments;
 	self.teeth_count = teeth_count
 	self.tooth_diameter = tooth_diameter
 	self.pitch = pitch
-	self.width = width
+	self.belt_width = belt_width
+	self.lip_extra = lip_extra
+	self.lip_width = lip_width
+	self.bearing_diameter = bearing_diameter
+	self.bearing_depth = bearing_depth
+	self.shaft_diameter = shaft_diameter
 
     def construct(self):
+	""" *Timing_Pully* construct method. """
 	self.no_automatic_place()
 
+	# Grab some value out of *self*:
 	teeth_count = self.teeth_count
 	tooth_diameter = self.tooth_diameter
 	pitch = self.pitch
-	width = self.width
+	belt_width = self.belt_width
+	lip_width = self.lip_width
+	lip_extra = self.lip_extra
+	bearing_diameter = self.bearing_diameter
+	bearing_depth = self.bearing_depth
+	shaft_diameter = self.shaft_diameter
 
 	# The angle between each tooth
 	tooth_angle = Angle(deg = 360) / teeth_count
@@ -461,13 +481,25 @@ class Timing_Pully(Part):
 	#  format(pitch, tooth_radius,
 	#  tooth_radius * 2 * 3.1415629, pitch * teeth_count))
 
+	# Compute the various Z heights:
 	zero = L()
-	self.cylinder(comment = "Pully Body",
+	z0 = zero			# Bottom
+	z1 = z0 + lip_width / 2		# Extend into lip to force a weld
+	z2 = z0 + lip_width		# Lip top and gear bottom
+	z3 = z2 + belt_width		# Gear top
+
+	self.cylinder(comment = "Pully Lip",
 	  material = Material("plastic", "ABS"),
 	  color = Color("crimson"),
+	  diameter = tooth_radius * 2 + lip_extra,
+	  start = P(zero, zero, z0),
+	  end = P(zero, zero, z2),
+	  sides = teeth_count)
+	
+	self.cylinder(comment = "Pully Gear",
 	  diameter = tooth_radius * 2,
-	  start = P(zero, zero, zero),
-	  end = P(zero, zero, width),
+	  start = P(zero, zero, z1),
+	  end = P(zero, zero, z3),
 	  sides = teeth_count)
 
 	for index in range(teeth_count):
@@ -476,9 +508,23 @@ class Timing_Pully(Part):
 	    y = tooth_radius.sine(angle)
 	    self.hole(comment = "Tooth {0}".format(index),
 	      diameter = tooth_diameter,
-	      start = P(x, y, zero),
-	      end = P(x, y, width),
+	      start = P(x, y, z3),
+	      end = P(x, y, z2),
+	      flags = "f")
+
+	if shaft_diameter > zero:
+	    self.hole(comment = "Shaft Hole",
+	      diameter = shaft_diameter,
+	      start = P(zero, zero, z3),
+	      end = P(zero, zero, zero),
 	      flags = "t")
+
+	if bearing_diameter > zero and bearing_width > zero:
+	    self.hole(comment = "Bearing Hole",
+	      diameter = bearing_diameter,
+	      start = P(zero, zero, z3),
+	      end = P(zero, zero, z3 - bearing_width),
+	      flags = "f")
 
 class Turn_Table(Part):
     def __init__(self, up):
