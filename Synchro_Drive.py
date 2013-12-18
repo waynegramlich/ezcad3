@@ -66,15 +66,9 @@ class Wheel_Assembly(Part):
 
 	# *synchro_drive is the up-level parent of *self*:
 	synchro_drive = self.up
-
-	# Grab some values from *bearing*:
 	bearing = self.bearing_
-	bearing_width = bearing.width_l
-
-	# Grab some values from *bevel_gear*:
 	bevel_gear = self.bevel_gear_
-	bevel_gear_outside_diameter = bevel_gear.outside_diameter_l
-	bevel_gear_major_diameter = bevel_gear.major_diameter_l
+	shim = self.shim_
 
 	# Grep some some values from *gear_box_side":
 	gear_box_side = self.wheel_side_gear_box_side_
@@ -85,10 +79,6 @@ class Wheel_Assembly(Part):
 	motor_assembly = synchro_drive.motor_assembly_
 	motor_base = motor_assembly.motor_base_
 	motor_base_dz = motor_base.dz_l
-
-	# Grab some values from *shim*:
-	shim = self.shim_
-	shim_dz = shim.dz_l
 
 	# Grab some values from *turn_table*:
 	turn_table = self.turn_table_
@@ -101,16 +91,16 @@ class Wheel_Assembly(Part):
 
 	zero = L()
 	y0 = zero
-	y1 = y0 + bevel_gear_major_diameter
-	y2 = y1 + shim_dz
-	y3 = y2 + bearing_width / 2
-	y4 = y2 + bearing_width
+	y1 = y0 + bevel_gear.major_diameter_l
+	y2 = y1 + shim.width_l
+	y3 = y2 + bearing.width_l / 2
+	y4 = y2 + bearing.width_l
 	y5 = y4 + gear_box_side_bearing_lip_dy
 
 	# Define some constants:
 	gear_box = self.gear_box_
 	self.gear_box_shelf_sz_l = \
-	  gear_box_shelf_sz = bevel_gear.nz_l + shim_dz
+	  gear_box_shelf_sz = bevel_gear.nz_l + shim.width_l
 
 	# Update the timing pulley:
 	self.twist_timing_pulley_.update(
@@ -128,7 +118,7 @@ class Wheel_Assembly(Part):
 	self.place(bearing, name = "Non Wheel Side Bearing", 
 	  axis = x_axis, rotate = degrees_90, translate = P(zero,  y3, zero))
 	self.place(bearing, name = "Lower Bearing", translate =
-	  P(zero, zero, gear_box_shelf_sz + bearing_width / 2))
+	  P(zero, zero, gear_box_shelf_sz + bearing.width_l / 2))
 
 	# Place the horizontal bevel gear.  (The vertical one auto places):
 	self.place(bevel_gear, name = "Horizontal_Bevel_Gear", 
@@ -333,7 +323,7 @@ class Gear_Box(Part):
 	zero = L()
 	y0 = zero
 	y1 = y0 + bevel_gear.major_diameter_l
-	y2 = y1 + shim.dz_l
+	y2 = y1 + shim.width_l
 	y3 = y2 + bearing.width_l / 2
 	y4 = y2 + bearing.width_l
 	y5 = y4 + gear_box_side.bearing_lip_dy_l
@@ -354,7 +344,7 @@ class Gear_Box_Cover(Part):
 	Part.__init__(self, up)
 
     def construct(self):
-	self.dx_l = dx = L(mm = 2.50)
+	dx = L(mm = 2.50)
 
 	wheel_assembly = self.up
 	gear_box = wheel_assembly.gear_box_
@@ -362,10 +352,8 @@ class Gear_Box_Cover(Part):
 	self.block(comment = "Bevel Gear Box Cover Block",
 	  material = Material("plastic", "ABS"),
 	  color = Color("chartreuse"),
-	  corner1 = P(-gear_box.dx / 2,
-	    -gear_box.dy / 2, gear_box.b.z),
-	  corner2 = P(-gear_box.dx / 2 + dx,
-	     gear_box.dy / 2, gear_box.t.z))
+	  corner1 = P(gear_box.w.x,      gear_box.s.y, gear_box.b.z),
+	  corner2 = P(gear_box.w.x + dx, gear_box.n.y, gear_box.t.z))
 
 class Gear_Box_Shelf(Part):
     def __init__(self, up):
@@ -384,7 +372,6 @@ class Gear_Box_Shelf(Part):
 
 	# Grab some values from *gear_box_cover*:
 	gear_box_cover = wheel_assembly.gear_box_cover_
-	gear_box_cover_dx = gear_box_cover.dx_l
 
 	# Grab some values from *gear_box_side*:
 	gear_box_side = wheel_assembly.wheel_side_gear_box_side_
@@ -399,7 +386,7 @@ class Gear_Box_Shelf(Part):
 	self.bearing_lip_dz_l = bearing_lip_dz = L(mm = 2.00)
 	self.dz_l = dz = bearing_width + bearing_lip_dz
 	
-	dx2 = gear_box.dx / 2 - gear_box_cover_dx
+	dx2 =gear_box.e.x - gear_box_cover.dx
 	dy2 = gear_box.dy / 2 - gear_box_side_thin_dy
 	z0 = gear_box_shelf_sz
 	z1 = z0 + bearing_width
@@ -462,7 +449,6 @@ class Gear_Box_Side(Part):
 
 	# Grab values from *gear_box_cover*:
 	gear_box_cover = wheel_assembly.gear_box_cover_
-	gear_box_cover_dx = gear_box_cover.dx_l
 
 	# Grab values from *gear_box_shelf*:
 	gear_box_shelf = wheel_assembly.gear_box_shelf_
@@ -494,8 +480,8 @@ class Gear_Box_Side(Part):
 	    y4 = -y4
 
 	# Do the main block:
-	corner1 = P(-gear_box.dx / 2 + gear_box_cover_dx, y1, gear_box.b.z)
-	corner2 = P( gear_box.dx / 2 - gear_box_cover_dx,
+	corner1 = P(gear_box.w.x + gear_box_cover.dx, y1, gear_box.b.z)
+	corner2 = P(gear_box.e.x - gear_box_cover.dx,
 	  y3, gear_box.t.z - gear_box_top_base_dz)
 	self.block(comment = self._name + " Main Block",
 	  material = Material("plastic", "abs"),
@@ -505,9 +491,9 @@ class Gear_Box_Side(Part):
 
 	# Do the shelf block:
 	corner1 = \
-	  P(-gear_box.dx / 2 + gear_box_cover_dx, y3, shelf_nub_sz)
+	  P(gear_box.w.x + gear_box_cover.dx, y3, shelf_nub_sz)
 	corner2 = \
-	  P( gear_box.dx / 2 - gear_box_cover_dx, y4, shelf_nub_nz)
+	  P(gear_box.e.x - gear_box_cover.dx, y4, shelf_nub_nz)
 	self.block(comment = self._name + " Shelf Block",
 	  material = Material("plastic", "abs"),
 	  color = Color("orange"),
@@ -591,7 +577,6 @@ class Gear_Box_Top(Part):
 
 	# Grab some values from *gear_box_cover*:
 	gear_box_cover = wheel_assembly.gear_box_cover_
-	gear_box_cover_dx = gear_box_cover.dx_l
 
 	# Grab some values from *gear_box_side*:
 	gear_box_side = wheel_assembly.wheel_side_gear_box_side_
@@ -627,9 +612,9 @@ class Gear_Box_Top(Part):
 	mount_dy2 = gear_box.dy / 2 - gear_box_side_thin_dy
 	self.block(comment = "Bevel Gear Box Top Mount Block",
 	  corner1 =
-	  P(-gear_box.dx / 2 + gear_box_cover_dx, -mount_dy2, z0),
+	  P(gear_box.w.x + gear_box_cover.dx, -mount_dy2, z0),
 	  corner2 =
-	  P( gear_box.dx / 2 - gear_box_cover_dx,  mount_dy2, z2))
+	  P(gear_box.e.x - gear_box_cover.dx,  mount_dy2, z2))
 
 	# Do the twist timing pulley holes:
 	angle_delta = Angle(360) / twist_timing_pulley_holes_count
@@ -665,11 +650,9 @@ class Gear_Box_Top(Part):
 
 	# Pocket out some ..
 	self.simple_pocket(comment = "Top Pocket",
-	  corner1 =
-	    P(-gear_box.dx / 2 + mount_dx + gear_box_cover_dx,
+	  corner1 = P(gear_box.w.x + mount_dx + gear_box_cover.dx,
 	    -mount_dy2 + mount_dy, z0),
-	  corner2 =
-	    P( gear_box.dx / 2 - mount_dx - gear_box_cover_dx,
+	  corner2 = P(gear_box.e.x - mount_dx - gear_box_cover.dx,
 	    mount_dy2 - mount_dy, z1))
 
 class Shim(Part):
@@ -686,7 +669,7 @@ class Shim(Part):
 
 	self.bore_l = bore = bearing_bore
 	self.diameter_l = diameter = (bearing_diameter + bore) / 2
-	self.dz_l = dz = L(inch = .010)
+	self.width_l = width = L(inch = .010)
 	
 	zero = L()
 	self.cylinder(comment = "Shim Cylinder",
@@ -694,7 +677,7 @@ class Shim(Part):
 	  color = Color("coral"),
 	  diameter = diameter,
 	  start = P(zero, zero, zero),
-	  end = P(zero, zero, dz))
+	  end = P(zero, zero, width))
 
 class Timing_Pulley(Part):
     def __init__(self, up, belt_class = "MXL", teeth_count = -1,
