@@ -5229,6 +5229,109 @@ class Part:
 	self._top_surface = surface_point
 	self._top_surface_set = True
 
+class Fastener(Part):
+    """ *Fastener*: """
+        
+    def __init__(self, up):
+	""" *Fastener*: """
+	Part.__init__(self, up)
+	zero = L()
+	self.comment = "NO COMMENT"
+	self.color = Color("black")
+	self.material = Material("steel", "stainless")
+	self.start = P()
+	self.end = P()
+	self.diameter_pitch = ""
+	self.diameter = zero
+	self.pitch = zero
+	self.major_diameter = zero
+	self.pitch = zero
+	self.thread75 = zero
+	self.thread50 = zero
+	self.close_fit = zero
+	self.free_fit = zero	
+
+    def configure(self, comment = None, material = None, color = None,
+      diameter_pitch = None, start = None, end = None):
+     	""" *Fastener*: """
+
+	# Check argument types:
+	none_type = type(None)
+	assert type(comment) == none_type or isinstance(comment, str)
+	assert type(material) == none_type or isinstance(material, Material)
+	assert type(color) == none_type or isinstance(color, Color)
+	assert type(diameter_pitch) == none_type or \
+	  isinstance(diameter_pitch, str)
+	assert type(start) == none_type or isinstance(start, P)
+	assert type(end) == none_type or isinstance(end, P)
+	
+	if isinstance(comment, str):
+	    self.comment = comment
+	if isinstance(material, Material):
+	    self.material = material
+	if isinstance(color, Color):
+	    self.color = color
+	if isinstance(diameter_pitch, str):
+	    self.diameter_pitch = diameter_pitch
+	    if diameter_pitch == "#0-80":
+		major_diameter = L(inch = .0600)
+		pitch = L(inch = "1/80")
+		thread75 = L(inch = "3/64")
+		thread50 = L(inch = .0520)
+		close_fit = L(inch = 0.0635)
+		free_fit = L(inch = 0.0700)
+	    elif diameter_pitch == "#1-72":
+		major_diameter = L(inch = .0730)
+		pitch = L(inch = "1/72")
+		thread75 = L(inch = .0595)
+		thread50 = L(inch = .0635)
+		close_fit = L(inch = 0.0760)
+		free_fit = L(inch = 0.0810)
+	    elif diameter_pitch == "#2-56":
+		major_diameter = L(inch = .0860)
+		pitch = L(inch = "1/56")
+		thread75 = L(inch = .0700)
+		thread50 = L(inch = .0730)
+		close_fit = L(inch = 0.0890)
+		free_fit = L(inch = 0.0960)
+	    elif diameter_pitch == "#4-40":
+		major_diameter = L(inch = .1120)
+		pitch = L(inch = "1/40")
+		thread75 = L(inch = .0890)
+		thread50 = L(inch = .0960)
+		close_fit = L(inch = 0.1160)
+		free_fit = L(inch = 0.1285)
+	    elif diameter_pitch == "#6-32":
+		major_diameter = L(inch = .1380)
+		pitch = L(inch = "1/32")
+		thread75 = L(inch = .1065)
+		thread50 = L(inch = .1160)
+		close_fit = L(inch = 0.1440)
+		free_fit = L(inch = 0.1495)
+	    else:
+		assert False, "Screw in complete"
+	    self.major_diameter = major_diameter
+	    self.pitch = pitch
+	    self.thread75 = thread75
+	    self.thread50 = thread50
+	    self.close_fit = close_fit
+	    self.free_fit = free_fit
+	if isinstance(start, P):
+	    self.start = start
+	if isinstance(end, P):
+	    self.end = end
+
+    def construct(self):
+	""" *Fastener*: """
+
+	self.cylinder(comment = self.comment,
+	  material = self.material,
+	  color = self.color,
+	  diameter = self.major_diameter,
+	  start = self.start,
+	  end = self.end)
+
+
 ## @brief *Place* specifies where another *Part* is to be placed.
 #
 # A *Place* specifies the placement of a *Part* in an assembly.
