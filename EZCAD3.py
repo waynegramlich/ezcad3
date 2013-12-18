@@ -855,8 +855,7 @@ class Angle:
     def __neg__(self):
 	""" Angle: Return negative of {self}. """
 
-	assert isinstance(angle, Angle)
-	return Angle(rad  = -self.radians)
+	return Angle(rad = -self.radians)
 
     ## @brief Return *self* &times; *multiplier*.
     #  @param self is the *Angle* object to multiply.
@@ -1747,8 +1746,11 @@ class EZCAD3:
 	self._major = 3
 	self._minor = minor
 	self._parts_stack = []
+	self._update_count = 0
 	self._xml_indent = 0
 	self._xml_stream = None
+
+	EZCAD3.ezcad = self
 
     def process(self, part):
 	assert isinstance(part, Part)
@@ -1787,14 +1789,13 @@ class Part:
 	if name_type == none_type:
 	    name = self.__class__.__name__
 	self._color = None
-	self._ezcad = None
+	self._ezcad = EZCAD3.ezcad
 	self._is_part = False	
 	self._material = None
 	self._name = name
 	self._places = {}
 	self._scad_difference_lines = None
 	self._scad_union_lines = None
-	self._update_count = 0
 	self.up = up
 
 	# Initialize the bounding box information:
@@ -1848,33 +1849,51 @@ class Part:
     def __getattr__(self, name):
 	""" *Part*: ..."""
 
-	if self._update_count == 0:
-	    if name.endswith("_"):
+	ezcad = self._ezcad
+	update_count = ezcad._update_count
+	first_update = update_count == 0
+	if not name.startswith("_") and name.endswith("_"):
+	    if first_update:
 		pass
-	    elif name.endswith("_a"):
+	elif name.endswith("_a"):
+	    if first_update:
 		return Angle()
-	    elif name.endswith("_b"):
+	elif name.endswith("_b"):
+	    if first_update:
 		return False
-	    elif name.endswith("_c"):
+	elif name.endswith("_c"):
+            if first_update:
 		return Color()
-	    elif name.endswith("_f"):
+	elif name.endswith("_f"):
+	    if first_update:
 		return 0.0
-	    elif name.endswith("_i"):
+	elif name.endswith("_i"):
+	    if first_update:
 		return 0
-	    elif name.endswith("_l"):
+	elif name.endswith("_l"):
+	    if first_update:
 		return L()
-	    elif name.endswith("_m"):
+	elif name.endswith("_m"):
+	    if first_update:
 		return Material()
-            elif name.endswith("_o"):
+        elif name.endswith("_o"):
+	    if first_update:
 		return None
-	    elif name.endswith("_s"):
+	elif name.endswith("_s"):
+	    if first_update:
 		return ""
-	    elif name.endswith("_p"):
+	elif name.endswith("_p"):
+	    if first_update:
 		return P()
-	    elif name.endswith("_pl"):
+	elif name.endswith("_pl"):
+	    if first_update:
 		return Place()
-	raise AttributeError(
-	  "Part instance has no attribute '{0}'".format(name))
+	else:
+	    raise AttributeError(
+	      "Part instance has no attribute '{0}' count={1}".
+	      format(name,update_count))
+	raise AttributeError("Part instance has no attribute named '{0}'". \
+	  format(name))
 
     def _bounding_box_update(self, bounding_box, comment, place):
 	""" *Part*: Updated *self* with *bounding_box*, *place* and
@@ -2559,7 +2578,7 @@ class Part:
       center = None, axis = None, rotate = None, translate = None):
 	""" *Part*: """
 
-	print("=>Part.extrude()")
+	#print("=>Part.extrude()")
 
 	# Check argument types:
 	assert isinstance(comment, str)
@@ -2597,14 +2616,17 @@ class Part:
 
 	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
             scad_union_lines = self._scad_union_lines
+	    scad_union_lines.append(
+	      "{0}translate([{1:m}, {2:m}, {3:m}])".
+	      format(" " * 6, start.x, start.y, start.z))
             scad_union_lines.append(
 	      "{0}linear_extrude(height = {1})".format(" " * 6, height))
 	    
-	    print("Part.extrude(): manufacture")
+	    #print("Part.extrude(): manufacture")
 	    contour.bends_compute()
 	    contour.output(scad_union_lines, indent = 6)
 
-	print("<=Part.extrude()")
+	#print("<=Part.extrude()")
 	    
     def cylinder(self, comment = "NO_COMMENT",
       material = Material(), color = Color(),
@@ -2664,6 +2686,7 @@ class Part:
 
 	flat_hole = flags.find("f") >= 0
 	through_hole = not flat_hole
+	show = flags.find("s") >= 0
 
 	if self._ezcad._mode == EZCAD3.MANUFACTURE_MODE:
             axis  = start - end
@@ -2672,8 +2695,10 @@ class Part:
 	    if through_hole:
 		end = end - normalized
 
-	difference_lines = self._scad_difference_lines
-	self._cylinder(lines = difference_lines, indent = 4, is_solid = False,
+	lines = self._scad_difference_lines
+	if show:
+	    lines = self._scad_union_lines
+	self._cylinder(lines = lines, indent = 4, is_solid = False,
 	  comment = comment, material = None, color = None,
 	  diameter = diameter, start = start, end = end, sides = sides)
 
@@ -2777,15 +2802,15 @@ class Part:
 
 	# Do the dimensions propogate phase:
 	ezcad._mode = EZCAD3.DIMENSIONS_MODE
-	self._update_count = 0
+	ezcad._update_count = 0
 	changed = 1
 	while changed != 0:
 	    # Find all the child *Part*'s:
-            self._update_count += 1
-	    print("Dimensions update {0}".format(self._update_count))
+	    print("Dimensions update {0}".format(ezcad._update_count + 1))
 	    changed = self._dimensions_update(ezcad, -1000000)
 	    #changed = self._dimensions_update(ezcad, 0)
 	    print("Part.process: {0} dimension(s) changed\n".format(changed))
+	    ezcad._update_count += 1
 
 	# Open the XML output stream:
 	#xml_file_name = self._name + ".xml"
@@ -2813,6 +2838,74 @@ class Part:
 	#ezcad_xml.read()
 	#assert ezcad_xml.close() == None, \
 	#  "Error running 'EZCAD_XML {0}'".format(xml_file_name)
+
+    def virtual_box(self, comment = "no comment",
+      corner1 = None, corner2 = None,
+      center = None, axis = None, rotate = None, translate = None):
+	""" {Part} vertual_box: Create a virtual box at {corner1} and
+	    {corner2}. """
+
+	# Deal with argument defaults:
+	none_type = type(None)
+
+	if type(corner1) == none_type:
+	    zero = L(0.0)
+	    corner1 = P(zero, zero, zero)
+	if type(corner2) == none_type:
+	    one = L.mm(1.0)
+	    corner2 = P(one, one, one)
+
+	# Check argument types:
+	assert isinstance(comment, str)
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
+	assert type(center) == none_type or isinstance(center, P)
+	assert type(axis) == none_type or isinstance(axis, P)
+	assert type(rotate) == none_type or isinstance(rotate, Angle)
+	assert type(translate) == none_type or isinstance(translate, P)
+
+	# Make sure that the corners are diagonal from bottom south west
+	# to top north east:
+	x1 = min(corner1.x, corner2.x)
+	x2 = max(corner1.x, corner2.x)
+	y1 = min(corner1.y, corner2.y)
+	y2 = max(corner1.y, corner2.y)
+	z1 = min(corner1.z, corner2.z)
+	z2 = max(corner1.z, corner2.z)
+	#print("Part.box:{0:m}:{1:m},{2:m}:{3:m},{4:m}:{5:m}". \
+	#  format(x1, x2, y1, y2, z1, z2))
+
+	place = Place(part = None, name = comment, center = center,
+	  axis = axis, rotate = rotate, translate = translate)
+	forward_matrix = place._forward_matrix
+
+	tne = P(x2, y2, z2)
+	bsw = P(x1, y1, z1)
+	tsw = P(x1, y1, z2)
+	bnw = P(x1, y2, z1)
+	tnw = P(x1, y2, z2)
+	bse = P(x2, y1, z1)
+	tse = P(x2, y1, z2)
+	bne = P(x2, y2, z1)
+
+	#print("before box={0:m}".format(box))
+	self._box_point_update(comment + "[TNE]",
+	  forward_matrix.point_multiply(tne))
+	self._box_point_update(comment + "[TNW]",
+	  forward_matrix.point_multiply(tnw))
+	self._box_point_update(comment + "[TSE]",
+	  forward_matrix.point_multiply(tse))
+	self._box_point_update(comment + "[TSW]",
+	  forward_matrix.point_multiply(tsw))
+	self._box_point_update(comment + "[BNE]",
+	  forward_matrix.point_multiply(bne))
+	self._box_point_update(comment + "[BNW]",
+	  forward_matrix.point_multiply(bnw))
+	self._box_point_update(comment + "[BSE]",
+	  forward_matrix.point_multiply(bse))
+	self._box_point_update(comment + "[BSW]",
+	  forward_matrix.point_multiply(bsw))
+	#print("after box={0:m}".format(box))
 
     def wrl_write(self, wrl_file, indent = 0, parts_table = {}, file_name = ""):
 	""" *Part*: Write *self* to *wrl_file*. """
