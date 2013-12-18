@@ -2062,6 +2062,11 @@ class Part:
 	    self.tz = tz
 	    self.bz = bz
 
+	    # Update the *dx*/*dy*/*dz*:
+	    self.dx = ex - wx
+	    self.dy = ny - sy
+	    self.dz = tz - bz
+
             # Keep track if we have changed:
 	    self._box_changed_count += 1
 
