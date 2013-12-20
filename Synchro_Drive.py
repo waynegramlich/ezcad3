@@ -39,8 +39,13 @@ class Wheel_Assembly(Part):
 	  lip_extra = L(mm = 1.5), lip_width = L(mm = 5),
 	  bearing_diameter = L(inch = "7/8"), bearing_width = L(inch = "9/32"),
 	  shaft_diameter = L(inch = "1/2"))
-	self.bearing_ = Bearing(self)
-	self.bevel_gear_ = \
+	self.wheel_side_bearing_ = Bearing(self)
+	self.non_wheel_side_bearing_ = Bearing(self)
+	self.pulley_bearing_ = Bearing(self)
+	self.vertical_bearing_ = Bearing(self)
+	self.horizontal_bevel_gear_ = \
+	  Bevel_Gear(self, part_name = "A 1M 4-Y16016", color = Color("red"))
+	self.vertical_bevel_gear_ = \
 	  Bevel_Gear(self, part_name = "A 1M 4-Y16016", color = Color("red"))
 	self.gear_box_ = Gear_Box(self)
 	self.gear_box_bottom_ = Gear_Box_Bottom(self)
@@ -50,7 +55,8 @@ class Wheel_Assembly(Part):
 	self.horizontal_shaft_ = Horizontal_Shaft(self)
 	self.non_wheel_side_gear_box_side_ = \
 	  Gear_Box_Side(self, False)
-	self.shim_ = Shim(self)
+	self.horizontal_shim_ = Shim(self)
+	self.vertical_shim_ = Shim(self)
 	self.turn_table_ = Turn_Table(self)
 	self.vertical_shaft_ = Vertical_Shaft(self)
 	self.wheel_ = Wheel(self)
@@ -70,11 +76,17 @@ class Wheel_Assembly(Part):
 
 	# *synchro_drive is the up-level parent of *self*:
 	synchro_drive = self.up
-	bearing = self.bearing_
-	bevel_gear = self.bevel_gear_
+	wheel_side_bearing = self.wheel_side_bearing_
+	non_wheel_side_bearing = self.non_wheel_side_bearing_
+	pulley_bearing = self.pulley_bearing_
+	vertical_bearing = self.vertical_bearing_
+	horizontal_bevel_gear = self.horizontal_bevel_gear_
+	vertical_bevel_gear = self.vertical_bevel_gear_
 	gear_box = self.gear_box_
-	shim = self.shim_
+	horizontal_shim = self.horizontal_shim_
+	vertical_shim = self.vertical_shim_
 	vertical_shaft = self.vertical_shaft_
+	twist_timing_pulley = self.twist_timing_pulley_
 
 	# Screws:
 	bn_screw = self.bn_screw_
@@ -100,21 +112,20 @@ class Wheel_Assembly(Part):
 
 	# Grab some values from *turn_table*:
 	turn_table = self.turn_table_
-	turn_table.no_automatic_place()
 	turn_table_height = turn_table.height_l
 
 	# Compute various locations along the Y axis:
 	zero = L()
 	y0 = zero
-	y1 = y0 + bevel_gear.major_diameter_l
-	y2 = y1 + shim.width_l
-	y3 = y2 + bearing.width_l / 2
-	y4 = y2 + bearing.width_l
+	y1 = y0 + horizontal_bevel_gear.major_diameter_l
+	y2 = y1 + horizontal_shim.width_l
+	y3 = y2 + wheel_side_bearing.width_l / 2
+	y4 = y2 + wheel_side_bearing.width_l
 	y5 = y4 + gear_box_side_bearing_lip_dy
 
 	# Define some constants:
 	self.gear_box_shelf_sz_l = \
-	  gear_box_shelf_sz = bevel_gear.nz_l + shim.width_l
+	  gear_box_shelf_sz = vertical_bevel_gear.nz_l + vertical_shim.width_l
 
 	# Update the timing pulley:
 	self.twist_timing_pulley_.update(
@@ -127,31 +138,26 @@ class Wheel_Assembly(Part):
 	degrees_90 = Angle(deg = 90)
 
 	# Place the 4 bearings:
-	self.place(bearing, name = "Wheel Side Bearing", 
-	  axis = x_axis, rotate = degrees_90, translate = P(zero, -y3, zero))
-	self.place(bearing, name = "Non Wheel Side Bearing", 
-	  axis = x_axis, rotate = degrees_90, translate = P(zero,  y3, zero))
-	self.place(bearing, name = "Lower Bearing", translate =
-	  P(zero, zero, gear_box_shelf_sz + bearing.width_l / 2))
+	wheel_side_bearing.place(axis = x_axis,
+	  rotate = degrees_90, translate = P(zero, -y3, zero))
+	non_wheel_side_bearing.place(axis = x_axis,
+	  rotate = degrees_90, translate = P(zero,  y3, zero))
+	vertical_bearing.place(translate =
+	  P(zero, zero, gear_box_shelf_sz + vertical_bearing.width_l / 2))
 
 	# Place the horizontal bevel gear.  (The vertical one auto places):
-	self.place(bevel_gear, name = "Horizontal_Bevel_Gear", 
-	  axis = x_axis, rotate = degrees_90)
+	horizontal_bevel_gear.place(axis = x_axis, rotate = degrees_90)
 
 	# Place the shims on next to the bevel gears:
-	self.place(shim, name = "Vertical Shaft Shim",
-	  translate = P(zero, zero, y1))
-	self.place(shim, name = "Horzontal Shaft Shim",
-	  axis = x_axis, rotate = degrees_90,
-	  translate = P(zero, -y1, zero))
+	vertical_shim.place(translate = P(zero, zero, y1))
+	horizontal_shim.place(axis = x_axis,
+	  rotate = degrees_90, translate = P(zero, -y1, zero))
 
 	# Drop in the turn table:
-	self.place(self.turn_table_, name = "XTurn_Table",
-	  translate = P(zero, zero, gear_box.t.z))
+	turn_table.place(translate = P(zero, zero, gear_box.t.z))
 
 	# Drop in the two pullies:
-	self.place(self.twist_timing_pulley_, name = "Twist Turn Pulley",
-	  translate = P(zero, zero, gear_box.t.z))
+	twist_timing_pulley.place(translate = P(zero, zero, gear_box.t.z))
 
 # Various parts:
 
@@ -161,8 +167,6 @@ class Bearing(Part):
 	self.bore_l = bore = L(inch = "3/8")
 	self.diameter_l = diameter = L(inch = "7/8")
 	self.width_l = width = L(inch = "9/32")
-
-	self.no_automatic_place()
 
 	zero = L()
 	self.cylinder(comment = "Bearing Cylinder",
@@ -322,16 +326,17 @@ class Gear_Box(Part):
     def construct(self):
 	# Grab some values *wheel_assembly*:
 	wheel_assembly = self.up
-	bearing = wheel_assembly.bearing_
-	bevel_gear = wheel_assembly.bevel_gear_
-	shim = wheel_assembly.shim_
+	bearing = wheel_assembly.wheel_side_bearing_
+	bevel_gear = wheel_assembly.vertical_bevel_gear_
+	horizontal_shim = wheel_assembly.horizontal_shim_
+	vertical_shim = wheel_assembly.vertical_shim_
 	gear_box_side = wheel_assembly.wheel_side_gear_box_side_
 
 	# Figure out *y5* the distance from the center to the outside Y wall:
 	zero = L()
 	y0 = zero
 	y1 = y0 + bevel_gear.major_diameter_l
-	y2 = y1 + shim.width_l
+	y2 = y1 + horizontal_shim.width_l
 	y3 = y2 + bearing.width_l / 2
 	y4 = y2 + bearing.width_l
 	y5 = y4 + gear_box_side.bearing_lip_dy_l
@@ -405,7 +410,7 @@ class Gear_Box_Shelf(Part):
 	gear_box_shelf_sz = wheel_assembly.gear_box_shelf_sz_l
 
 	# Grab some values form *bearing*:
-	bearing = wheel_assembly.bearing_
+	bearing = wheel_assembly.wheel_side_bearing_
 	bearing_diameter = bearing.diameter_l
 	bearing_width = bearing.width_l
 
@@ -473,7 +478,7 @@ class Gear_Box_Side(Part):
 
 	# Grab some values from *wheel_assembly*:
 	wheel_assembly = self.up
-	bearing = wheel_assembly.bearing_
+	bearing = wheel_assembly.wheel_side_bearing_
 	gear_box = wheel_assembly.gear_box_
 	gear_box_bottom = wheel_assembly.gear_box_bottom_
 	gear_box_cover = wheel_assembly.gear_box_cover_
@@ -689,10 +694,9 @@ class Shim(Part):
 	Part.__init__(self, up)
 
     def construct(self):
-	self.no_automatic_place()
 
 	wheel_assembly = self.up
-	bearing = wheel_assembly.bearing_
+	bearing = wheel_assembly.wheel_side_bearing_
 	bearing_diameter = bearing.diameter_l
 	bearing_bore = bearing.bore_l
 
@@ -742,7 +746,6 @@ class Timing_Pulley(Part):
 
     def construct(self):
 	""" *Timing_Pulley* construct method. """
-	self.no_automatic_place()
 
 	# Grab some value out of *self*:
 	belt_class = self.belt_class_s
@@ -1180,7 +1183,7 @@ class Horizontal_Shaft(Part):
 	wheel = wheel_assembly.wheel_
 
 	# Some values from *bevel_gear*:
-	bevel_gear = wheel_assembly.bevel_gear_
+	bevel_gear = wheel_assembly.vertical_bevel_gear_
 	bevel_gear_data = bevel_gear.bevel_gear_data_o
 	bevel_gear_bore = bevel_gear_data.bore
 
@@ -1199,7 +1202,7 @@ class Horizontal_Shaft(Part):
 class Vertical_Shaft(Part):
     def construct(self):
 	wheel_assembly = self.up
-	bevel_gear = wheel_assembly.bevel_gear_
+	bevel_gear = wheel_assembly.vertical_bevel_gear_
 	bevel_gear_data = bevel_gear.bevel_gear_data_o
 	bevel_gear_bore = bevel_gear_data.bore
 	bevel_gear_major_diameter = bevel_gear_data.major_diameter

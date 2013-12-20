@@ -1795,15 +1795,19 @@ class Part:
 	# Load up *self*:
 	if name_type == none_type:
 	    name = self.__class__.__name__
+	self._axis = None
+	self._center = None
 	self._color = None
 	self._ezcad = EZCAD3.ezcad
 	self._is_part = False	
 	self._material = None
 	self._name = name
-	self._places = {}
+	#self._places = {}
+	self._rotate = None
 	self._scad_difference_lines = None
 	self._scad_union_lines = None
 	self._signature_hash = None
+	self._translate = None
 	self.up = up
 
 	# Initialize the bounding box information:
@@ -1819,10 +1823,10 @@ class Part:
 	self._box_recompute("Part.__init__")
 	#print("initialize {0}".format(name))
 
-	if up_type != none_type:
-	    #print("Part.__init__: perform place")
-	    place = up.place(self, name = name)
-	    #print("Part.__init__: place = {0:m}".format(place))
+	#if up_type != none_type:
+	#    #print("Part.__init__: perform place")
+	#    place = up.place(self, name = name)
+	#    #print("Part.__init__: place = {0:m}".format(place))
 
 	#print("<=Part.__init__(*, '{0}', *, place={1})".format(name, place))
 
@@ -1899,7 +1903,7 @@ class Part:
 	else:
 	    raise AttributeError(
 	      "Part instance has no attribute '{0}' count={1}".
-	      format(name,update_count))
+	      format(name, update_count))
 	raise AttributeError("Part instance has no attribute named '{0}'". \
 	  format(name))
 
@@ -2197,13 +2201,14 @@ class Part:
 	if trace >= 0:
 	    print("{0}=>Part._dimensions_update('{1}')". \
 	      format(' ' * trace, self._name))
-	    print("{0}Part._dimensions_update:places={1}". \
-	      format(' ' * trace, self._places))
+	    #print("{0}Part._dimensions_update:places={1}". \
+	    #  format(' ' * trace, self._places))
 
 	# Start with nothing *changed*:
 	changed = 0
 
 	# First record the current values load into *self*.
+	sub_parts = []
 	before_values = {}
 	name = self._name
 	for attribute_name in dir(self):
@@ -2214,6 +2219,7 @@ class Part:
 		assert isinstance(attribute, Part), \
 		  "{0}.{1} is not a Part".format(name, attribute_name)
 		changed += attribute._dimensions_update(ezcad, trace + 1)
+		sub_parts.append(attribute)
 	    elif attribute_name.endswith("_l"):
 		assert isinstance(attribute, L), \
 		  "{0}.{1} is not an L (i.e. length)". \
@@ -2267,10 +2273,13 @@ class Part:
 		      before_value, after_value))
 
 	# Update bounding box with placed *Part* bounding boxes:
-	for place in self._places.values():
+	#for place in self._places.values():
+	for sub_part in sub_parts:
 	    # Grab some values from *place* and *part*:
-	    place_part = place._part
-	    place_name = place._name
+	    #place_part = place._part
+	    #place_name = place._name
+	    place = Place(center = self._center, axis = self._axis,
+	      rotate = self._rotate, translate = self._translate)
 	    forward_matrix = place._forward_matrix
 
 	    if trace >= 0:
@@ -2279,22 +2288,22 @@ class Part:
 		#print("{0}Part._dimensions_update:Merge {1:m} into {2:m}". \
 		#  format(' ' * trace, place_box, box))
 
-	    self._box_point_update(place_name + "[TNE]",
-	      forward_matrix.point_multiply(place_part.tne))
-	    self._box_point_update(place_name + "[TNW]",
-	      forward_matrix.point_multiply(place_part.tnw))
-	    self._box_point_update(place_name + "[TSE]",
-	      forward_matrix.point_multiply(place_part.tse))
-	    self._box_point_update(place_name + "[TSW]",
-	      forward_matrix.point_multiply(place_part.tsw))
-	    self._box_point_update(place_name + "[BNE]",
-	      forward_matrix.point_multiply(place_part.bne))
-	    self._box_point_update(place_name + "[BNW]",
-	      forward_matrix.point_multiply(place_part.bnw))
-	    self._box_point_update(place_name + "[BSE]",
-	      forward_matrix.point_multiply(place_part.bse))
-	    self._box_point_update(place_name + "[BSW]",
-	      forward_matrix.point_multiply(place_part.bsw))
+	    self._box_point_update("[TNE]",
+	      forward_matrix.point_multiply(sub_part.tne))
+	    self._box_point_update("[TNW]",
+	      forward_matrix.point_multiply(sub_part.tnw))
+	    self._box_point_update("[TSE]",
+	      forward_matrix.point_multiply(sub_part.tse))
+	    self._box_point_update("[TSW]",
+	      forward_matrix.point_multiply(sub_part.tsw))
+	    self._box_point_update("BNE]",
+	      forward_matrix.point_multiply(sub_part.bne))
+	    self._box_point_update("[BNW]",
+	      forward_matrix.point_multiply(sub_part.bnw))
+	    self._box_point_update("[BSE]",
+	      forward_matrix.point_multiply(sub_part.bse))
+	    self._box_point_update("[BSW]",
+	      forward_matrix.point_multiply(sub_part.bsw))
 
 	# Determine whether *box* has changed:
 	after_box_changed_count = self._box_changed_count
@@ -2339,6 +2348,8 @@ class Part:
 	    # The *signature* for the Part (i.e. *self*) is the concatenation
 	    # of *scad_union_lines* and *scad_difference_lines*:
 	    signature = "\n".join(scad_union_lines + scad_difference_lines)
+            signature_hash = hashlib.sha1(signature).hexdigest()
+	    self._signature_hash = signature_hash
 
             # We want to create a *name* the consists of *base_name* followed
 	    # by a digit.  We want a unique *name* for each *signature*.
@@ -2349,43 +2360,63 @@ class Part:
 	    # *bases_table* keeps track of each different *base_name*.
 	    bases_table = ezcad._bases_table
 
-	    # We ensure that there is a signature tablee for
+	    # We ensure that there is a signature table for *base_name*:
 	    if base_name in bases_table:
-		base_signatures = bases_table[base_name]
+		base_signatures_table = bases_table[base_name]
 	    else:
-		base_signatures = {}
-		bases_table[base_name] = base_signatures
+		base_signatures_table = {}
+		bases_table[base_name] = base_signatures_table
 
             # Now ensure see whether we have encountered this *signature*
 	    # before:
-	    if signature in base_signatures:
-		# Yes we have, so reuse the signature:
-		name = base_signatures[signature]
+	    if signature in base_signatures_table:
+		# Yes we have, so reuse the previously assigned name:
+		name = base_signatures_table[signature]
 		self._name = name
 	    else:
 		# No we have not so we create a new one *and* write out
 		# the associated *name*.scad file:
-		name = "{0}{1}".format(base_name, len(base_signatures))
-		base_signatures[signature] = name
+		name = "{0}{1}".format(base_name, len(base_signatures_table))
+		base_signatures_table[signature] = name
 		self._name = name
 
 		# Now we see whether we need to write out the file and
 		# run it through openscad:
-		signature_hash = hashlib.sha1(signature).hexdigest()
-		self._signature_hash = signature_hash
 		stl_file_name = "{0}_{1}.stl".format(name, signature_hash)
-		if not os.path.isfile(stl_file_name):
-		    # We need to write out the .scad file:
+		if os.path.isfile(stl_file_name):
+		    # Since the .stl file already exists, we must have already
+		    # written out the .scad file.  Thus, there is nothing
+		    # more to do:
+		    pass
+		else:
+		    # We need to write out the .scad file and generate the
+		    # assocatied .stl file:
 
 		    # Deal with the part *places*:
 		    lines = []
-		    place_parts = {}
-		    places = self._places.values()
-		    for place in places:
-			place_part = place._part
-			place_parts[place_part._name] = place_part
-		    for part in place_parts.values():
-			lines.append("use <{0}.scad>;".format(part._name))
+		    #place_parts = {}
+
+		    # Find all the *sub_parts* from *self*:
+		    sub_parts = []
+		    for attribute_name in dir(self):
+			if not attribute_name.startswith("_") and \
+			  attribute_name.endswith("_"):
+			    sub_part = getattr(self, attribute_name)
+			    assert isinstance(sub_part, Part)
+			    sub_parts.append(sub_part)
+
+		    # Remove duplicates from *sub_parts* and sort:
+		    sub_parts = list(set(sub_parts))
+		    sub_parts.sort(key=lambda sub_part: sub_part._name)
+		    for sub_part in sub_parts:
+			lines.append("use <{0}.scad>;".format(sub_part._name))
+
+		    #places = self._places.values()
+		    #for place in places:
+		    #	place_part = place._part
+		    #	place_parts[place_part._name] = place_part
+		    #for part in place_parts.values():
+		    #	lines.append("use <{0}.scad>;".format(part._name))
 
 		    # Write out the module:
 		    lines.append("module {0}() {{".format(name))
@@ -2409,12 +2440,12 @@ class Part:
 		    lines.append("  }")
 
 		    # Perform all the placements:
-		    for place in places:
+		    for sub_part in sub_parts:
 			#print("Part._manufacture.place={0}".format(place))
-			self._scad_transform(lines, center = place._center,
-			  axis = place._axis, rotate = place._rotate,
-			  translate = place._translate);
-			lines.append("{0}();".format(place._part._name))
+			self._scad_transform(lines, center = sub_part._center,
+			  axis = sub_part._axis, rotate = sub_part._rotate,
+			  translate = sub_part._translate);
+			lines.append("{0}();".format(sub_part._name))
 
 		    # Close off the module:
 		    lines.append("}")
@@ -2435,7 +2466,8 @@ class Part:
 		    for previous_stl_file in previous_stl_files:
 			os.remove(previous_stl_file)
 
-		    # Run the command:
+		    # Run the command that convert the .scad file into the
+		    # associated .stl file:
 		    if self._is_part:
 			ignore_file = open("/dev/null", "w")
 			command = [ "openscad",
@@ -2459,12 +2491,12 @@ class Part:
 	    index = 1
 	    while index + 4 < size:
 		#normal_list = stl_lines[index].split()
-		list = stl_lines[index + 2].split()
-		vertex1 = (float(list[1]), float(list[2]), float(list[3]))
-		list = stl_lines[index + 3].split()
-		vertex2 = (float(list[1]), float(list[2]), float(list[3]))
-		list = stl_lines[index + 4].split()
-		vertex3 = (float(list[1]), float(list[2]), float(list[3]))
+		xlist = stl_lines[index + 2].split()
+		vertex1 = (float(xlist[1]), float(xlist[2]), float(xlist[3]))
+		xlist = stl_lines[index + 3].split()
+		vertex2 = (float(xlist[1]), float(xlist[2]), float(xlist[3]))
+		xlist = stl_lines[index + 4].split()
+		vertex3 = (float(xlist[1]), float(xlist[2]), float(xlist[3]))
 
 		if vertex1 in vertices:
 		    offset1 = vertices[vertex1]
@@ -3035,12 +3067,15 @@ class Part:
 		index = 1
 		while index + 4 < size:
 		    # Extract *vertex1*, *vertex2*, and *vertex3*:
-		    list = stl_lines[index + 2].split()
-		    vertex1 = (float(list[1]), float(list[2]), float(list[3]))
-		    list = stl_lines[index + 3].split()
-		    vertex2 = (float(list[1]), float(list[2]), float(list[3]))
-		    list = stl_lines[index + 4].split()
-		    vertex3 = (float(list[1]), float(list[2]), float(list[3]))
+		    xlist = stl_lines[index + 2].split()
+		    vertex1 = \
+		      (float(xlist[1]), float(xlist[2]), float(xlist[3]))
+		    xlist = stl_lines[index + 3].split()
+		    vertex2 = \
+		      (float(xlist[1]), float(xlist[2]), float(xlist[3]))
+		    xlist = stl_lines[index + 4].split()
+		    vertex3 = \
+		      (float(xlist[1]), float(xlist[2]), float(xlist[3]))
 
 		    # Get *offset1* for *vertex1*:
 		    if vertex1 in vertices:
@@ -3138,22 +3173,32 @@ class Part:
 		  "{0} children [\n".format(spaces))
 
 		# Output each *place* in *places*
-		places = self._places
-		for place in places.values():
+		sub_parts = []
+		for attribute_name in dir(self):
+		    if not attribute_name.startswith("_") and \
+		      attribute_name.endswith("_"):
+			sub_part = getattr(self, attribute_name)
+			assert isinstance(sub_part, Part)
+			sub_parts.append(sub_part)
+		sub_parts = list(set(sub_parts))
+		sub_parts.sort(key = lambda sub_part: sub_part._name)
+
+		for sub_part in sub_parts:
 		    # Extract some values from *place*:
-		    center = place._center
-		    axis = place._axis
-		    rotate = place._rotate
-		    translate = place._translate
-		    part = place._part
+		    center = sub_part._center
+		    axis = sub_part._axis
+		    rotate = sub_part._rotate
+		    translate = sub_part._translate
 
 		    # Figure out if we have to do a "Transform...":
-		    zero_rotate = (rotate == Angle())
-                    zero_translate = (translate == P())
+		    none_type = type(None)
+		    zero_rotate = type(rotate) == none_type or rotate == Angle()
+                    zero_translate = \
+		      type(translate) == none_type or translate == P()
 		    if zero_rotate and zero_translate:
 			# We have neither a rotation nor a translation;
 			# so we output *part* without a "Transform..."
-			part.wrl_write(wrl_file,
+			sub_part.wrl_write(wrl_file,
 			  indent + 2, parts_table, file_name)
 		    else:
 			# We have either a rotation and/or a translation;
@@ -3164,7 +3209,7 @@ class Part:
 			# If appropriate, write out "rotation"
 			if not zero_rotate:
 			    # Move rotation center if not (0,0,0):
-			    if center != P():
+			    if type(center) != none_type and center != P():
 				wrl_file.write(
 				  "{0}   center {1} {2} {3}\n".
 				  format(spaces, center.x, center.y, center.z))
@@ -3183,7 +3228,7 @@ class Part:
 			# "children [...]":
 			wrl_file.write(
 			  "{0}   children [\n".format(spaces))
-			part.wrl_write(wrl_file,
+			sub_part.wrl_write(wrl_file,
 			  indent + 4, parts_table, file_name)
 			wrl_file.write(
 			  "{0}   ]\n".format(spaces))
@@ -3882,45 +3927,36 @@ class Part:
 	#print "parts=", parts
 	return parts
 
-    def place(self, part, name = None,
+    def place(self,
       center = None, axis = None, rotate = None, translate = None):
-	""" Part dimensions: Place {place_part} at {translate_point} relative
-	    to {self} with no rotation.  {place_name} is used for point
-	    paths. """
+	""" *Part*: Place *self* at *translate* rotated by *rotate* around
+	    *axis* centered on *center*. """
 
 	#print("=>Part.place({0}, part='{1}',name='{2}' ...)". \
 	#  format(self._name, part._name, name))
 
-	# Deal with default arguments:
-	none_type = type(None)
-	if type(name) == none_type:
-	    name = part._name
-	if type(center) == none_type:
-	    center = P()
-	if type(axis) == none_type:
-	    axis = P(z = L(1.0))
-	if type(rotate) == none_type:
-	    rotate = Angle()
-	if type(translate) == none_type:
-	    translate = P()
-
 	# Check argument types:
-	assert isinstance(name, str)
-	assert isinstance(part, Part)
-	assert isinstance(center, P)
-	assert isinstance(axis, P)
-	assert isinstance(rotate, Angle)
-	assert isinstance(translate, P)
+	none_type = type(None)
+	assert type(center) == none_type or isinstance(center, P)
+	assert type(axis) == none_type or isinstance(axis, P)
+	assert type(rotate) == none_type or isinstance(rotate, Angle)
+	assert type(translate) == none_type or isinstance(translate, P)
+
+	# Load up *self8:
+	self._center = center
+	self._axis = axis
+	self._rotate = rotate
+	self._translate = translate
 
 	# Create *place* and stuff into *_places*:
-	place = Place(part = part, name = name,
-	  center = center, axis = axis, rotate = rotate, translate = translate)
-	self._places[name] = place
+	#place = Place(part = part, name = name,
+	#  center = center, axis = axis, rotate = rotate, translate = translate)
+	#self._places[name] = place
 
 	#print("<=Part.place({0}, part='{1}',name='{2}' ...)". \
 	#  format(self._name, part._name, name))
 
-    def no_automatic_place(self):
+    def xxxno_automatic_place(self):
 	""" *Part*: Disable automatic placement of *self*. """
 
 	name = self._name
@@ -5430,11 +5466,16 @@ class Place:
 	    {center_point}, {axis_point}, {rotate_angle}, and
 	    {translate_point}. """
 
-	# Deal with default argument values:
+	# Check argument types:
 	none_type = type(None)
-	if type(name) == none_type:
-	    assert type(part) != none_type
-	    name = part._name
+	assert type(center) == none_type or isinstance(center, P)
+	assert type(axis) == none_type or isinstance(axis, P)
+	assert type(rotate) == none_type or isinstance(rotate, Angle)
+	assert type(translate) == none_type or isinstance(translate, P)
+
+	# Deal with default argument values:
+	#if type(name) == none_type:
+	#    name = part._name
 	if type(center) == none_type:
 	    center = P()
 	if type(axis) == none_type:
@@ -5449,12 +5490,8 @@ class Place:
 	    part_name = part._name
 
 	# Check argument types:
-	assert type(part) == none_type or isinstance(part, Part)
-	assert isinstance(name, str)
-	assert isinstance(center, P)
-	assert isinstance(axis, P)
-	assert isinstance(rotate, Angle)
-	assert isinstance(translate, P)
+	#assert type(part) == none_type or isinstance(part, Part)
+	#assert isinstance(name, str)
 
 	#print (("Place.__init__(part={0}, name={1}, center={2}, " + \
 	#  "axis={3}, rotate={4}, translate={5})"). \
