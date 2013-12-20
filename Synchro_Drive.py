@@ -78,12 +78,11 @@ class Wheel_Assembly(Part):
 
 	# Screws:
 	bn_screw = self.bn_screw_
-	bs_screw = self.bs_screw_
-
 	bn_screw.configure(comment = "Bottom North Screw",
 	  diameter_pitch = "#4-40",
 	  start = gear_box.bne,
 	  end = gear_box.bnw)
+	bs_screw = self.bs_screw_
 	bs_screw.configure(comment = "Bottom South Screw",
 	  diameter_pitch = "#4-40",
 	  start = gear_box.bse,

@@ -8,6 +8,9 @@ import os
 import math
 import subprocess
 
+#  The L, P, and Angle classes are listed first because Python does not
+# have a good mechanism for dealing with forward references to class names.
+
 ## @brief *L* corresponds to a length.  This class solves the issue
 #  mixed units.  Internally, all lengths are turned into millimeters.
 class L:
@@ -1749,6 +1752,7 @@ class EZCAD3:
 	self._update_count = 0
 	self._xml_indent = 0
 	self._xml_stream = None
+	self._bases_table = {}
 
 	EZCAD3.ezcad = self
 
@@ -2289,8 +2293,6 @@ class Part:
 		  "{0}.{1} is not a Part".format(self.name, attribute)
 		attribute._manufacture(ezcad)
 
-	name = self._name
-
 	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
 	    # Now manufacture this node:
 	    scad_difference_lines = []
@@ -2301,72 +2303,100 @@ class Part:
 	    self._scad_difference_lines = None
 	    self._scad_union_lines = None
 
-	    # Open *scad_file*:
-	    scad_file = open(name + ".scad", "w")
+	    # The *signature* for the Part (i.e. *self*) is the concatenation
+	    # of *scad_union_lines* and *scad_difference_lines*:
+	    signature = "\n".join(scad_union_lines + scad_difference_lines)
 
-	    # Deal with the part *places*:
-	    lines = []
-	    place_parts = {}
-	    places = self._places.values()
-	    for place in places:
-		place_part = place._part
-		place_parts[place_part._name] = place_part
-	    for part in place_parts.values():
-		scad_file.write("use <{0}.scad>;\n".format(part._name))
+            # We want to create a *name* the consists of *base_name* followed
+	    # by a digit.  We want a unique *name* for each *signature*.
 
-	    # Write out the module:
-	    scad_file.write("module {0}() {{\n".format(name))
+	    # *base_name* is the most specific class name:
+	    base_name = self.__class__.__name__
 
-            # Get the difference() followed union():
-	    scad_file.write("  difference() {\n")
-	    scad_file.write("    union() {\n")
+	    # *bases_table* keeps track of each different *base_name*.
+	    bases_table = ezcad._bases_table
 
-	    # Output the *scan_union_lines*:
-	    for union_line in scad_union_lines:
-		scad_file.write(union_line)
-		scad_file.write("\n")
+	    # We ensure that there is a signature tablee for
+	    if base_name in bases_table:
+		base_signatures = bases_table[base_name]
+	    else:
+		base_signatures = {}
+		bases_table[base_name] = base_signatures
 
-	    # Close off union():
-	    scad_file.write("    }\n")
+            # Now ensure see whether we have encountered this *signature*
+	    # before:
+	    if signature in base_signatures:
+		# Yes we have, so reuse the signature:
+		name = base_signatures[signature]
+		self._name = name
+	    else:
+		# No we have not so we create a new one *and* write out
+		# the associated *name*.scad file:
+		name = "{0}{1}".format(base_name, len(base_signatures))
+		base_signatures[signature] = name
+		self._name = name
 
-	    # Output *scad_difference_lines*:
-	    for difference_line in scad_difference_lines:
-	        scad_file.write(difference_line)
-	        scad_file.write("\n")
+		# Deal with the part *places*:
+		lines = []
+		place_parts = {}
+		places = self._places.values()
+		for place in places:
+		    place_part = place._part
+		    place_parts[place_part._name] = place_part
+		for part in place_parts.values():
+		    lines.append("use <{0}.scad>;".format(part._name))
 
-	    # Close off difference():
-	    scad_file.write("  }\n")
+		# Write out the module:
+		lines.append("module {0}() {{".format(name))
 
-            # Perform all the placements:
-	    for place in places:
-		#print("Part._manufacture.place={0}".format(place))
-		self._scad_transform(lines, center = place._center,
-		  axis = place._axis, rotate = place._rotate,
-		  translate = place._translate);
-		lines.append("{0}();".format(place._part._name))
+		# Get the difference() followed union():
+		lines.append("  difference() {")
+		lines.append("    union() {")
 
-	    for line in lines:
-		scad_file.write(line)
-		scad_file.write("\n")
+		# Output the *scan_union_lines*:
+		for union_line in scad_union_lines:
+		    lines.append(union_line)
 
-	    # Close off the module:
-	    scad_file.write("}\n\n")
+		# Close off union():
+		lines.append("    }")
 
-	    # Call the module we just wrote out:
-	    scad_file.write("{0}();\n".format(name))
+		# Output *scad_difference_lines*:
+		for difference_line in scad_difference_lines:
+		    lines.append(difference_line)
 
-	    # Close *scad_file*:
-	    scad_file.close()
+		# Close off difference():
+		lines.append("  }")
 
-	    # Run the command:
-	    if self._is_part:
-		ignore_file = open("/dev/null", "w")
-		command = [ "openscad",
-		  "-o", "{0}.stl".format(name),
-		  "{0}.scad".format(name) ]
-		print("command=", command)
-		subprocess.call(command, stderr=ignore_file) 
-		ignore_file.close()
+		# Perform all the placements:
+		for place in places:
+		    #print("Part._manufacture.place={0}".format(place))
+		    self._scad_transform(lines, center = place._center,
+		      axis = place._axis, rotate = place._rotate,
+		      translate = place._translate);
+		    lines.append("{0}();".format(place._part._name))
+
+		# Close off the module:
+		lines.append("}")
+		lines.append("")
+
+		# Call the module we just produced:
+		lines.append("{0}();".format(name))
+		lines.append("")
+
+		# Write out *scad_file*:
+		scad_file = open(name + ".scad", "w")
+		scad_file.write("\n".join(lines))
+		scad_file.close()
+
+		# Run the command:
+		if self._is_part:
+		    ignore_file = open("/dev/null", "w")
+		    command = [ "openscad",
+		      "-o", "{0}.stl".format(name),
+		      "{0}.scad".format(name) ]
+		    print("command=", command)
+		    subprocess.call(command, stderr=ignore_file) 
+		    ignore_file.close()
 
 	if False:
 	    # For now, write out an offset file:
@@ -2428,7 +2458,7 @@ class Part:
 
     
 	if ezcad._mode == EZCAD3.VISUALIZATION_MODE:
-	    wrl_file_name = "{0}.wrl".format(name)
+	    wrl_file_name = "{0}.wrl".format(self._name)
 	    wrl_file = open(wrl_file_name, "w")
 	    self.wrl_write(wrl_file, file_name = wrl_file_name)
 	    wrl_file.close()
