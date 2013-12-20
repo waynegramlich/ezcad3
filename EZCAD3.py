@@ -4,8 +4,11 @@
 #
 # More details here...
 
-import os
+import glob
+import hashlib
 import math
+import os
+import os.path
 import subprocess
 
 #  The L, P, and Angle classes are listed first because Python does not
@@ -1800,12 +1803,13 @@ class Part:
 	self._places = {}
 	self._scad_difference_lines = None
 	self._scad_union_lines = None
+	self._signature_hash = None
 	self.up = up
 
 	# Initialize the bounding box information:
 	big = L(mm=987654321.0)
 	self._box_changed_count = 0
-	self._box_points = {}
+	self._box_points_list = []
 	self.ex = -big
 	self.wx = big
 	self.ny = -big
@@ -1947,7 +1951,7 @@ class Part:
 	self._box_point_update(comment + "[BSW]",
 	  forward_matrix.point_multiply(bsw))
 
-    ## @brief Updates *name*'d *point* is *self* for bounding box calcuation.
+    ## @brief Updates *name*'d *point* in *self* for bounding box calcuation.
     #  @param self is the *Part* to update.
     #  @param name is the name of the *P* object.
     #  @param point is the *P* to update.
@@ -1963,29 +1967,50 @@ class Part:
 	assert isinstance(name, str)
 	assert isinstance(point, P)
 
+	# Set *trace* to *True* if tracing is desired:
 	trace = False
+	#trace = True
 	if trace:
-	    print("=>Part._box_point_update({0}, {1})".format(name, point))
+	    print("=>Part._box_point_update('{0}', {1})".format(name, point))
 
-	#print("Box.point_update({0:m}, '{1}', {2:m})".
-	#  format(self, name, point))
-	# Deterimine if this is an update or the initial insert:
-	points = self._box_points
-	if name in points.keys():
-	    # This is an update; determine if *point* changed:
-	    previous = points[name]
-	    if previous.x != point.x or \
-	      previous.y != point.y or previous.z != point.z:
-		# *point* changed, so update everything:
-		points[name] = point
-		self._box_recompute("Part._box_point_update")
+	# Get *current_box_points* from *box_points_list*:
+	box_points_list = self._box_points_list
+	ezcad = self._ezcad
+	update_count = ezcad._update_count
+	while update_count >= len(box_points_list):
+	    box_points_list.append([])
+	box_points_list_size = len(box_points_list)
+	current_box_points = box_points_list[update_count]
+
+	# Take the current *point* onto the end of *current_box_points*:
+	box_points_index = len(current_box_points)
+	current_box_points.append(point)
+
+	# See if *point* changed from the last time:
+	if update_count == 0:
+	    # First time, just force a box update:
+	    self._box_recompute("Part._box_point_update(): first point")
+	    if trace:
+		print("  Part._box_update:({0}):first".format(point))
 	else:
-	    # This is the initial insert; so update everything:
-	    points[name] = point
-	    self._box_recompute("_box_point_update")
+	    # Fetch *previous_point*:
+	    previous_box_points = box_points_list[update_count - 1]
+	    previous_point = previous_box_points[box_points_index]
+
+	    # Force box update if the point changed:
+	    if previous_point != point:
+		self._box_recompute("Part._box_point_update(): changed")
+		if trace:
+		    print("  Part._box_update:({0}):changed from {1}".
+		      format(point, previous_point))
+	# We only need to hang on to the *previous_box_points*; remove
+	# any previous one to save a little memory and catch accessing
+	# any stale information:
+	if box_points_index == 0 & update_count >= 2:
+	    box_points_list[update_count - 2] = None
 
 	if trace:
-	    print("<=Part._box_point_update({0}, {1})".format(name, point))
+	    print("<=Part._box_point_update('{0}', {1})".format(name, point))
 
 
     ## @brief Recomputes the bounding box for *self* and any parent *Box*'s.
@@ -1999,6 +2024,7 @@ class Part:
 	assert isinstance(label, str)
 	# For debugging:
 	trace = False
+	#trace = True
 	if trace:
 	    print("=>Part._box_recompute({0}, {1})".format(self._name, label))
 
@@ -2013,7 +2039,13 @@ class Part:
 	bz = big
 
 	# Sweep through each *point*:
-	for point in self._box_points.values():
+	ezcad = self._ezcad
+	update_count = ezcad._update_count
+	box_points_list = self._box_points_list
+	box_points = []
+	if update_count < len(box_points_list):
+	    box_points = box_points_list[update_count]
+	for point in box_points:
 	    # Update *wx* and *ex* with *x* as appropriate.
 	    x = point.x
             if x > ex:
@@ -2072,6 +2104,7 @@ class Part:
 	    self.dz = tz - bz
 
             # Keep track if we have changed:
+	    #print("Part._box_recompute('{0}'): changed".format(label))
 	    self._box_changed_count += 1
 
 	    # Compute averate X/Y/Z:
@@ -2336,67 +2369,81 @@ class Part:
 		base_signatures[signature] = name
 		self._name = name
 
-		# Deal with the part *places*:
-		lines = []
-		place_parts = {}
-		places = self._places.values()
-		for place in places:
-		    place_part = place._part
-		    place_parts[place_part._name] = place_part
-		for part in place_parts.values():
-		    lines.append("use <{0}.scad>;".format(part._name))
+		# Now we see whether we need to write out the file and
+		# run it through openscad:
+		signature_hash = hashlib.sha1(signature).hexdigest()
+		self._signature_hash = signature_hash
+		stl_file_name = "{0}_{1}.stl".format(name, signature_hash)
+		if not os.path.isfile(stl_file_name):
+		    # We need to write out the .scad file:
 
-		# Write out the module:
-		lines.append("module {0}() {{".format(name))
+		    # Deal with the part *places*:
+		    lines = []
+		    place_parts = {}
+		    places = self._places.values()
+		    for place in places:
+			place_part = place._part
+			place_parts[place_part._name] = place_part
+		    for part in place_parts.values():
+			lines.append("use <{0}.scad>;".format(part._name))
 
-		# Get the difference() followed union():
-		lines.append("  difference() {")
-		lines.append("    union() {")
+		    # Write out the module:
+		    lines.append("module {0}() {{".format(name))
 
-		# Output the *scan_union_lines*:
-		for union_line in scad_union_lines:
-		    lines.append(union_line)
+		    # Get the difference() followed union():
+		    lines.append("  difference() {")
+		    lines.append("    union() {")
 
-		# Close off union():
-		lines.append("    }")
+		    # Output the *scan_union_lines*:
+		    for union_line in scad_union_lines:
+			lines.append(union_line)
 
-		# Output *scad_difference_lines*:
-		for difference_line in scad_difference_lines:
-		    lines.append(difference_line)
+		    # Close off union():
+		    lines.append("    }")
 
-		# Close off difference():
-		lines.append("  }")
+		    # Output *scad_difference_lines*:
+		    for difference_line in scad_difference_lines:
+			lines.append(difference_line)
 
-		# Perform all the placements:
-		for place in places:
-		    #print("Part._manufacture.place={0}".format(place))
-		    self._scad_transform(lines, center = place._center,
-		      axis = place._axis, rotate = place._rotate,
-		      translate = place._translate);
-		    lines.append("{0}();".format(place._part._name))
+		    # Close off difference():
+		    lines.append("  }")
 
-		# Close off the module:
-		lines.append("}")
-		lines.append("")
+		    # Perform all the placements:
+		    for place in places:
+			#print("Part._manufacture.place={0}".format(place))
+			self._scad_transform(lines, center = place._center,
+			  axis = place._axis, rotate = place._rotate,
+			  translate = place._translate);
+			lines.append("{0}();".format(place._part._name))
 
-		# Call the module we just produced:
-		lines.append("{0}();".format(name))
-		lines.append("")
+		    # Close off the module:
+		    lines.append("}")
+		    lines.append("")
 
-		# Write out *scad_file*:
-		scad_file = open(name + ".scad", "w")
-		scad_file.write("\n".join(lines))
-		scad_file.close()
+		    # Call the module we just produced:
+		    lines.append("{0}();".format(name))
+		    lines.append("")
 
-		# Run the command:
-		if self._is_part:
-		    ignore_file = open("/dev/null", "w")
-		    command = [ "openscad",
-		      "-o", "{0}.stl".format(name),
-		      "{0}.scad".format(name) ]
-		    print("command=", command)
-		    subprocess.call(command, stderr=ignore_file) 
-		    ignore_file.close()
+		    # Write out *scad_file*:
+		    scad_file_name = "{0}.scad".format(name)
+		    scad_file = open(scad_file_name, "w")
+		    scad_file.write("\n".join(lines))
+		    scad_file.close()
+
+		    # Delete any previous *.stl file:
+		    previous_stl_files = glob.glob("{0}_*.stl".format(name))
+		    for previous_stl_file in previous_stl_files:
+			os.remove(previous_stl_file)
+
+		    # Run the command:
+		    if self._is_part:
+			ignore_file = open("/dev/null", "w")
+			command = [ "openscad",
+			  "-o", stl_file_name,
+			  "{0}.scad".format(name) ]
+			print("command=", command)
+			subprocess.call(command, stderr=ignore_file) 
+			ignore_file.close()
 
 	if False:
 	    # For now, write out an offset file:
@@ -2973,7 +3020,8 @@ class Part:
 	    if self._is_part:
 		# Read in the .stl file that was generated by OpenSCAD:
 		name = self._name
-		stl_file = open("{0}.stl".format(name), "r")
+		stl_file_name = "{0}_{1}.stl".format(name, self._signature_hash)
+		stl_file = open(stl_file_name, "r")
 		stl_lines = stl_file.readlines()
 		stl_file.close()
 
