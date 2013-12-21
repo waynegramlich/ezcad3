@@ -53,66 +53,61 @@ class Wheel_Assembly(Part):
 	self.gear_box_shelf_ = Gear_Box_Shelf(self)
 	self.gear_box_top_ = Gear_Box_Top(self)
 	self.horizontal_shaft_ = Horizontal_Shaft(self)
-	self.non_wheel_side_gear_box_side_ = \
-	  Gear_Box_Side(self, False)
+	self.non_wheel_side_gear_box_side_ = Gear_Box_Side(self, False)
 	self.horizontal_shim_ = Shim(self)
 	self.vertical_shim_ = Shim(self)
 	self.turn_table_ = Turn_Table(self)
 	self.vertical_shaft_ = Vertical_Shaft(self)
 	self.wheel_ = Wheel(self)
-	self.wheel_side_gear_box_side_ = \
-	  Gear_Box_Side(self, True)
+	self.wheel_side_gear_box_side_ = Gear_Box_Side(self, True)
  
-	# Screws:
-	self.bn_screw_ = Fastener(self)
-	self.bs_screw_ = Fastener(self)
+	# Screws {Bottom,Shelf,Top}x{Cover,Side}x{North,South}x{East,West}:
+	self.bcne_screw_ = Fastener(self)
+	self.bcnw_screw_ = Fastener(self)
+	#self.bcse_screw_ = Fastener(self)
+	#self.bcsw_screw_ = Fastener(self)
 
     def construct(self):
 	""" *Wheel_Assembly*: Construct method. """
+
 	# The origin of this assembly is at the logical intersection
 	# of the vertical shaft and the horizontal shaft.  The horizontal
 	# axis is aligned with the Y axis; this causes the wheel to be
-	# oriented in the roll in the X direction.
+	# oriented to roll in the direction of the X axis.
 
-	# *synchro_drive is the up-level parent of *self*:
-	synchro_drive = self.up
-	wheel_side_bearing = self.wheel_side_bearing_
-	non_wheel_side_bearing = self.non_wheel_side_bearing_
-	pulley_bearing = self.pulley_bearing_
-	vertical_bearing = self.vertical_bearing_
-	horizontal_bevel_gear = self.horizontal_bevel_gear_
-	vertical_bevel_gear = self.vertical_bevel_gear_
-	gear_box = self.gear_box_
-	horizontal_shim = self.horizontal_shim_
-	vertical_shim = self.vertical_shim_
-	vertical_shaft = self.vertical_shaft_
-	twist_timing_pulley = self.twist_timing_pulley_
+	# Grab some values from *wheel_assembly* (i.e. *self*):
+	wheel_assembly = self
+	gear_box = wheel_assembly.gear_box_
+	gear_box_side = self.wheel_side_gear_box_side_
+	gear_box_shelf = self.gear_box_shelf_
+	horizontal_bevel_gear = wheel_assembly.horizontal_bevel_gear_
+	horizontal_shim = wheel_assembly.horizontal_shim_
+	non_wheel_side_bearing = wheel_assembly.non_wheel_side_bearing_
+	pulley_bearing = wheel_assembly.pulley_bearing_
+	synchro_drive = wheel_assembly.up
+	turn_table = self.turn_table_
+	twist_timing_pulley = wheel_assembly.twist_timing_pulley_
+	vertical_bearing = wheel_assembly.vertical_bearing_
+	vertical_bevel_gear = wheel_assembly.vertical_bevel_gear_
+	vertical_shaft = wheel_assembly.vertical_shaft_
+	vertical_shim = wheel_assembly.vertical_shim_
+	wheel_side_bearing = wheel_assembly.wheel_side_bearing_
 
-	# Screws:
-	bn_screw = self.bn_screw_
-	bn_screw.configure(comment = "Bottom North Screw",
+	# Grab some values from *synchro_drive*:
+	motor_assembly = synchro_drive.motor_assembly_
+	motor_base = motor_assembly.motor_base_
+
+	# Screws {Bottom,Shelf,Top}x{Cover,Side}x{North,South}x{East,West}:
+	wheel_assembly.bcne_screw_.configure(
+	  comment = "Bottom Cover North East Screw",
 	  diameter_pitch = "#4-40",
 	  start = gear_box.bne,
 	  end = gear_box.bnw)
-	bs_screw = self.bs_screw_
-	bs_screw.configure(comment = "Bottom South Screw",
+	wheel_assembly.bcnw_screw_.configure(
+	  comment = "Bottom Cover North West Screw",
 	  diameter_pitch = "#4-40",
 	  start = gear_box.bse,
 	  end = gear_box.bsw)
-
-	# Grep some some values from *gear_box_side":
-	gear_box_side = self.wheel_side_gear_box_side_
-	gear_box_side_bearing_lip_dy = \
-	  gear_box_side.bearing_lip_dy_l
-
-	# Grab some values from *motor_base* (from *motor_assembly*):
-	motor_assembly = synchro_drive.motor_assembly_
-	motor_base = motor_assembly.motor_base_
-	motor_base_dz = motor_base.dz_l
-
-	# Grab some values from *turn_table*:
-	turn_table = self.turn_table_
-	turn_table_height = turn_table.height_l
 
 	# Compute various locations along the Y axis:
 	zero = L()
@@ -121,15 +116,16 @@ class Wheel_Assembly(Part):
 	y2 = y1 + horizontal_shim.width_l
 	y3 = y2 + wheel_side_bearing.width_l / 2
 	y4 = y2 + wheel_side_bearing.width_l
-	y5 = y4 + gear_box_side_bearing_lip_dy
+	y5 = y4 + gear_box_side.bearing_lip_dy_l
 
 	# Define some constants:
-	self.gear_box_shelf_sz_l = \
-	  gear_box_shelf_sz = vertical_bevel_gear.nz_l + vertical_shim.width_l
+	self.pocket_wall_dx_l = L(mm = 3.00)
+	self.pocket_wall_dy_l = L(mm = 3.00)
+	self.pocket_dz_l = L(mm = 6.00)
 
 	# Update the timing pulley:
 	self.twist_timing_pulley_.update(
-	  lip_width = turn_table_height + L(mm = 1.000) + motor_base_dz,
+	  lip_width = turn_table.height_l + L(mm = 1.000) + motor_base.dz,
 	  shaft_diameter = vertical_shaft.diameter_l + L(inch = "1/4"))
 
 	# Place various items into the wheel assembly:
@@ -142,10 +138,13 @@ class Wheel_Assembly(Part):
 	  rotate = degrees_90, translate = P(zero, -y3, zero))
 	non_wheel_side_bearing.place(axis = x_axis,
 	  rotate = degrees_90, translate = P(zero,  y3, zero))
-	vertical_bearing.place(translate =
-	  P(zero, zero, gear_box_shelf_sz + vertical_bearing.width_l / 2))
+	vertical_bearing.place(translate = P(zero, zero, gear_box_shelf.t.z -
+	  gear_box_shelf.bearing_lip_dz_l - vertical_bearing.width_l / 2))
+	pulley_bearing.place(translate = P(zero, zero,
+	  gear_box.t.z + twist_timing_pulley.dz - vertical_bearing.width_l / 2))
 
-	# Place the horizontal bevel gear.  (The vertical one auto places):
+	# Place the horizontal bevel gear.  (The vertical bevel gear is
+	# is already placed relative to the origin.):
 	horizontal_bevel_gear.place(axis = x_axis, rotate = degrees_90)
 
 	# Place the shims on next to the bevel gears:
@@ -341,16 +340,16 @@ class Gear_Box(Part):
 	y4 = y2 + bearing.width_l
 	y5 = y4 + gear_box_side.bearing_lip_dy_l
 
-	# Specify *dx*, *dy*, *nz*, and *sz*:
+	# Specify *dx*, *dy*, *tz*, and *bz*:
 	dx = L(mm = 40.00)
 	dy  = y5 * 2
-	nz = L(mm = 75.00)
-	sz = L(mm = -20.00)
+	tz = L(mm = 75.00)
+	bz = L(mm = -25.00)
 
 	# Now specify the virtual box for the gear box:
 	self.virtual_box(comment = "Virtual box for gear box",
-	  corner1 = P(-dx / 2, -dy / 2, sz),
-	  corner2 = P( dx / 2,  dy / 2, nz))
+	  corner1 = P(-dx / 2, -dy / 2, bz),
+	  corner2 = P( dx / 2,  dy / 2, tz))
 
 class Gear_Box_Bottom(Part):
     def construct(self):
@@ -360,31 +359,29 @@ class Gear_Box_Bottom(Part):
 	gear_box_cover = wheel_assembly.gear_box_cover_
 	gear_box_side = wheel_assembly.wheel_side_gear_box_side_
 
-	dz = L(mm = 4.00)
+	# Specify the *base_dz* height and mount dx/dy/dz:
+	base_dz = L(mm = 5.00)
+	mount_dx = self.dx - 2 * wheel_assembly.pocket_wall_dx_l
+	mount_dy = self.dy - 2 * wheel_assembly.pocket_wall_dy_l
+	mount_dz = wheel_assembly.pocket_dz_l
+
+	z0 = gear_box.b.z
+	z1 = z0 + base_dz
+	z2 = z1 + mount_dz
 
 	# Get the basic base in place:
-	self.block(comment = "Bevel Gear Box Top Block",
+	self.block(comment = "Gear Box Bottom Block",
 	  material = Material("plastic", "ABS"),
 	  color = Color("grey"),
 	  corner1 = P(gear_box.w.x + gear_box_cover.dx,
-	    gear_box.s.y + gear_box_cover.dy, gear_box.b.z),
+	    gear_box.s.y + gear_box_side.dy, z0),
 	  corner2 = P(gear_box.e.x - gear_box_cover.dx,
-	    gear_box.n.y - gear_box_cover.dy, gear_box.b.z + dz))
+	    gear_box.n.y - gear_box_side.dy, z2))
 
-	# Add some stuff to mount to:
-	#mount_dy2 = gear_box.dy / 2 - gear_box_side_thin_dy
-	#self.block(comment = "Bevel Gear Box Top Mount Block",
-	#  corner1 =
-	#  P(gear_box.w.x + gear_box_cover.dx, -mount_dy2, z0),
-	#  corner2 =
-	#  P(gear_box.e.x - gear_box_cover.dx,  mount_dy2, z2))
-
-	# Pocket out some ..
-	#self.simple_pocket(comment = "Top Pocket",
-	#  corner1 = P(gear_box.w.x + mount_dx + gear_box_cover.dx,
-	#    -mount_dy2 + mount_dy, z0),
-	#  corner2 = P(gear_box.e.x - mount_dx - gear_box_cover.dx,
-	#    mount_dy2 - mount_dy, z1))
+	# Pocket out some the mounting area:
+	self.simple_pocket(comment = "Gear Box Bottom Pocket",
+	  bottom_corner = P(-mount_dx / 2, -mount_dy / 2, z1),
+	  top_corner = P( mount_dx / 2,  mount_dy / 2, z2))
 
 class Gear_Box_Cover(Part):
     def construct(self):
@@ -404,59 +401,59 @@ class Gear_Box_Cover(Part):
 
 class Gear_Box_Shelf(Part):
     def construct(self):
-	# Grab some values from *wheel_assembly:
+	# Grab some values from *wheel_assembly*:
 	wheel_assembly = self.up
-	gear_box = wheel_assembly.gear_box_
-	gear_box_shelf_sz = wheel_assembly.gear_box_shelf_sz_l
-
-	# Grab some values form *bearing*:
 	bearing = wheel_assembly.wheel_side_bearing_
-	bearing_diameter = bearing.diameter_l
-	bearing_width = bearing.width_l
-
-	# Grab some values from *gear_box_cover*:
+	gear_box = wheel_assembly.gear_box_
 	gear_box_cover = wheel_assembly.gear_box_cover_
-
-	# Grab some values from *gear_box_side*:
 	gear_box_side = wheel_assembly.wheel_side_gear_box_side_
-	gear_box_side_thin_dy = gear_box_side.thin_dy_l
-
-	# Grab some values from *twist_timing_pulley*:
 	twist_timing_pulley = wheel_assembly.twist_timing_pulley_
-	twist_timing_pulley_shaft_diameter = \
-	  twist_timing_pulley.shaft_diameter_l
+	vertical_bevel_gear = wheel_assembly.vertical_bevel_gear_
+	vertical_shim = wheel_assembly.vertical_shim_
 
 	# Remember some values into *self*:
 	self.bearing_lip_dz_l = bearing_lip_dz = L(mm = 2.00)
-	self.dz_l = dz = bearing_width + bearing_lip_dz
-	
-	dx2 =gear_box.e.x - gear_box_cover.dx
-	dy2 = gear_box.dy / 2 - gear_box_side_thin_dy
-	z0 = gear_box_shelf_sz
-	z1 = z0 + bearing_width
-	z2 = z0 + dz
+	pocket_dx = gear_box.dx - \
+	  2 * gear_box_cover.dx - 2 * wheel_assembly.pocket_wall_dx_l
+	pocket_dy = gear_box.dy - \
+	  2 * gear_box_side.dy - 2 * wheel_assembly.pocket_wall_dy_l
+	pocket_dz = wheel_assembly.pocket_dz_l
+
+	# Compute various Z coordinates:
+	z1 = vertical_bevel_gear.major_diameter_l + vertical_shim.dz
+	z0 = z1 - pocket_dz
+	z2 = z1 + bearing.width_l
+	z3 = z2 + bearing_lip_dz
+
+	dx = gear_box.dx - 2 * gear_box_cover.dx
+	dy = gear_box.dy - 2 * gear_box_side.dy
 
 	# Generate the shelf block:
 	self.block(comment = "Shelf Block",
 	  material = Material("plastic", "ABS"),
 	  color = Color("gold"),
-	  corner1 = P(-dx2, -dy2, z0),
-	  corner2 = P( dx2,  dy2, z2))
+	  corner1 = P(-dx / 2, -dy / 2, z0),	# should z0
+	  corner2 = P( dx / 2,  dy / 2, z3))
 
 	# Cut a hole for the shaft:
 	zero = L()
 	self.hole(comment = "Shaft Hole",
-	  diameter = twist_timing_pulley_shaft_diameter,
+	  diameter = twist_timing_pulley.shaft_diameter_l,
 	  start = P(zero, zero, z0),
-	  end = P(zero, zero, z2),
+	  end = P(zero, zero, z3),
 	  flags = "t")
 
 	# Cut a bearing hole:
 	self.hole(comment = "Bearing Hole",
-	  diameter = bearing_diameter,
+	  diameter = bearing.diameter_l,
 	  start = P(zero, zero, z0),
-	  end = P(zero, zero, z1),
+	  end = P(zero, zero, z2),
 	  flags = "f")
+
+	# Cut out the pocket:
+	self.simple_pocket(comment = "Mount Pocket",
+	  bottom_corner = P(-pocket_dx / 2, -pocket_dy / 2, z0),
+	  top_corner = P( pocket_dx / 2,  pocket_dy / 2, z1))
 
 class Gear_Box_Side(Part):
     def __init__(self, up, wheel_side):
@@ -486,53 +483,25 @@ class Gear_Box_Side(Part):
 	gear_box_top = wheel_assembly.gear_box_top_
 	horizontal_shaft = wheel_assembly.horizontal_shaft_
 	
-	# Grab some miscellaneous values:
-	gear_box_top_base_dz = gear_box_top.base_dz_l
-	gear_box_shelf_sz = wheel_assembly.gear_box_shelf_sz_l
-	gear_box_shelf_dz = gear_box_shelf.dz_l
-	horizontal_shaft_diameter = horizontal_shaft.diameter_l
-
-	# Figure out the various dimensions of the shelf:
-	self.shelf_nub_dy_l = shelf_nub_dy = L(mm = 5.00)
-	self.shelf_nub_dz_l = shelf_nub_dz = L(mm = 5.00)
-	self.shelf_nub_sz_l = shelf_nub_sz = \
-	  gear_box_shelf_sz + gear_box_shelf_dz
-	self.shelf_nub_nz_l = shelf_nub_nz = shelf_nub_sz + shelf_nub_dz
-
 	self.bearing_lip_dy_l = bearing_lip_dy = L(mm = 2.00)
-	self.thin_dy_l = thin_dy = bearing.width_l + bearing_lip_dy
-	self.thick_dy_l = thick_dy = thin_dy + shelf_nub_dy
 		
 	# Identify various points on the Y axis:
 	y1 = gear_box.dy / 2
 	y2 = y1 - bearing_lip_dy
-	y3 = y1 - thin_dy
-	y4 = y1 - thick_dy
+	y3 = y2 - bearing.width_l
 	if wheel_side:
 	    y1 = -y1
 	    y2 = -y2
 	    y3 = -y3
-	    y4 = -y4
 
 	# Do the main block:
 	self.block(comment = self._name + " Main Block",
 	  material = Material("plastic", "abs"),
 	  color = Color("orange"),
 	  corner1 =
-	    P(gear_box.w.x + gear_box_cover.dx, y1, gear_box_bottom.t.z),
+	    P(gear_box.w.x + gear_box_cover.dx, y1, gear_box.b.z),
 	  corner2 = P(gear_box.e.x - gear_box_cover.dx, y3,
-	    gear_box.t.z - gear_box_top_base_dz))
-
-	# Do the shelf block:
-	corner1 = \
-	  P(gear_box.w.x + gear_box_cover.dx, y3, shelf_nub_sz)
-	corner2 = \
-	  P(gear_box.e.x - gear_box_cover.dx, y4, shelf_nub_nz)
-	self.block(comment = self._name + " Shelf Block",
-	  material = Material("plastic", "abs"),
-	  color = Color("orange"),
-	  corner1 = corner1,
-	  corner2 = corner2)
+	    gear_box.t.z - gear_box_top.base_dz_l))
 
 	# Do the bearing hole:
 	zero = L()
@@ -544,7 +513,7 @@ class Gear_Box_Side(Part):
 
 	# Do a full shaft hole for the *wheel_side*:
 	if wheel_side:
-	    diameter = (horizontal_shaft_diameter + bearing.diameter_l) / 2
+	    diameter = (horizontal_shaft.diameter_l + bearing.diameter_l) / 2
 	    self.hole(comment = "Shaft hole",
 	      diameter = diameter,
 	      start = P(zero, y3, zero),
@@ -600,64 +569,50 @@ class Gear_Box_Top(Part):
 	Part.__init__(self, up)
 
     def construct(self):
-	self.base_dz_l = base_dz = L(mm = 4.00)
-	self.mount_dx_l = mount_dx = L(mm = 2.00)
-	self.mount_dy_l = mount_dy = L(mm = 2.00)
-	self.mount_dz_l = mount_dz = L(mm = 6.00)
-
 	# Grab some values from *wheel_assembly*:
 	wheel_assembly = self.up
 	gear_box = wheel_assembly.gear_box_
-
-	# Grab some values from *gear_box_cover*:
 	gear_box_cover = wheel_assembly.gear_box_cover_
-
-	# Grab some values from *gear_box_side*:
 	gear_box_side = wheel_assembly.wheel_side_gear_box_side_
-	gear_box_side_thin_dy = gear_box_side.thin_dy_l
-
-	# Grab some values from *turn_table*:
 	turn_table = wheel_assembly.turn_table_
-	turn_table_size = turn_table.size_l
-	turn_table_bottom_hole_pitch1 = turn_table.bottom_hole_pitch1_l
-	turn_table_bottom_hole_diameter1 = turn_table.bottom_hole_diameter1_l
-
-	# Grab some values from *twist_timing_pulley*:
 	twist_timing_pulley = wheel_assembly.twist_timing_pulley_
-	twist_timing_pulley_holes_count = twist_timing_pulley.holes_count_i
-	twist_timing_pulley_hole_diameter = twist_timing_pulley.hole_diameter_l
-	twist_timing_pulley_holes_radius = twist_timing_pulley.holes_radius_l
-	twist_timing_pulley_shaft_diameter = \
-	  twist_timing_pulley.shaft_diameter_l
 
+	# Specify some sizes:
+	self.base_dz_l = base_dz = L(mm = 5.00)
+	self.pocket_dx_l = pocket_dx = \
+	  gear_box.dx - 2 * gear_box_cover.dx - L(mm = 6.00)
+	self.pocket_dy_l = pocket_dy = \
+	  gear_box.dy - 2 * gear_box_side.dy - L(mm = 6.00)
+	self.pocket_dz_l = pocket_dz = L(mm = 8.00)
+
+	# Compute various heights:
 	z3 = gear_box.t.z
 	z2 = z3 - base_dz / 2
 	z1 = z3 - base_dz
-	z0 = z1 - mount_dz
+	z0 = z1 - pocket_dz
 
 	# Get the basic base in place:
 	self.block(comment = "Bevel Gear Box Top Block",
 	  material = Material("plastic", "ABS"),
 	  color = Color("azure"),
-	  corner1 = P(-turn_table_size / 2, -turn_table_size / 2, z1),
-	  corner2 = P( turn_table_size / 2,  turn_table_size / 2, z3))
+	  corner1 = P(-turn_table.size_l / 2, -turn_table.size_l / 2, z1),
+	  corner2 = P( turn_table.size_l / 2,  turn_table.size_l / 2, z3))
 
-	# Add some stuff to mount to:
-	mount_dy2 = gear_box.dy / 2 - gear_box_side_thin_dy
+	# Add some stuff to mount to (merge it into the block):
 	self.block(comment = "Bevel Gear Box Top Mount Block",
-	  corner1 =
-	  P(gear_box.w.x + gear_box_cover.dx, -mount_dy2, z0),
-	  corner2 =
-	  P(gear_box.e.x - gear_box_cover.dx,  mount_dy2, z2))
+	  corner1 = P(gear_box.w.x + gear_box_cover.dx,
+	    gear_box.s.y + gear_box_side.dy, z0),
+	  corner2 = P(gear_box.e.x - gear_box_cover.dx,
+	    gear_box.n.y - gear_box_side.dy, z2))
 
 	# Do the twist timing pulley holes:
-	angle_delta = Angle(360) / twist_timing_pulley_holes_count
-	for index in range(twist_timing_pulley_holes_count):
+	angle_delta = Angle(360) / twist_timing_pulley.holes_count_i
+	for index in range(twist_timing_pulley.holes_count_i):
 	    angle = index * angle_delta
-	    x = twist_timing_pulley_holes_radius.cosine(angle)
-	    y = twist_timing_pulley_holes_radius.sine(angle)
+	    x = twist_timing_pulley.holes_radius_l.cosine(angle)
+	    y = twist_timing_pulley.holes_radius_l.sine(angle)
 	    self.hole(comment = "Hole {0}".format(index),
-	      diameter = twist_timing_pulley_hole_diameter,
+	      diameter = twist_timing_pulley.hole_diameter_l,
 	      start = P(x, y, z3),
 	      end = P(x, y, z1),
 	      flags = "t")
@@ -665,29 +620,27 @@ class Gear_Box_Top(Part):
 	# Do the shaft hole:
 	zero = L()
 	self.hole(comment = "Shaft Hole",
-	  diameter = twist_timing_pulley_shaft_diameter,
+	  diameter = twist_timing_pulley.shaft_diameter_l,
 	  start = P(zero, zero, z3),
 	  end = P(zero, zero, z0),
 	  flags = "t")
 
 	# Do the turn table mounting holes:
 	for x_sign in [-1, 1]:
-	    x = x_sign * turn_table_bottom_hole_pitch1 / 2
+	    x = x_sign * turn_table.bottom_hole_pitch1_l / 2
 	    for y_sign in [-1, 1]:
-		y = y_sign * turn_table_bottom_hole_pitch1 / 2
+		y = y_sign * turn_table.bottom_hole_pitch1_l / 2
 		self.hole(comment =
 		  "Turn Table Hole [{0}, {1}]".format(x_sign, y_sign),
-		  diameter = turn_table_bottom_hole_diameter1,
+		  diameter = turn_table.bottom_hole_diameter1_l,
 		  start = P(x, y, z0),
 		  end = P(x, y, z3),
 		  flags = "t")
 
-	# Pocket out some ..
+	# Perform the top pocket:
 	self.simple_pocket(comment = "Top Pocket",
-	  corner1 = P(gear_box.w.x + mount_dx + gear_box_cover.dx,
-	    -mount_dy2 + mount_dy, z0),
-	  corner2 = P(gear_box.e.x - mount_dx - gear_box_cover.dx,
-	    mount_dy2 - mount_dy, z1))
+	  top_corner = P(-pocket_dx / 2, -pocket_dy / 2, z0),
+	  bottom_corner = P( pocket_dx / 2,  pocket_dy / 2, z1))
 
 class Shim(Part):
     def __init__(self, up):

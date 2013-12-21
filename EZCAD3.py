@@ -4747,7 +4747,7 @@ class Part:
 	    part.show(indent + " ")
 
     def simple_pocket(self, comment = "no comment",
-      corner1 = None, corner2 = None, pocket_top = "t",
+      bottom_corner = None, top_corner = None, pocket_top = "t",
       center = None, axis = None, rotate = None, translate = None):
 	""" {Part} construct: Create a block with corners at {corner1} and
 	    {corner2}.  The block is made of {material} and visualized as
@@ -4758,17 +4758,17 @@ class Part:
 
 	# Deal with argument defaults:
 	none_type = type(None)
-	if type(corner1) == none_type:
+	if type(bottom_corner) == none_type:
 	    zero = L(0.0)
-	    corner1 = P(zero, zero, zero)
-	if type(corner2) == none_type:
+	    bottom_corner = P(zero, zero, zero)
+	if type(top_corner) == none_type:
 	    one = L.mm(1.0)
-	    corner2 = P(one, one, one)
+	    top_corner = P(one, one, one)
 
 	# Check argument types:
 	assert isinstance(comment, str)
-	assert isinstance(corner1, P)
-	assert isinstance(corner2, P)
+	assert isinstance(bottom_corner, P)
+	assert isinstance(top_corner, P)
 	assert type(center) == none_type or isinstance(center, P)
 	assert type(axis) == none_type or isinstance(axis, P)
 	assert type(rotate) == none_type or isinstance(rotate, Angle)
@@ -4777,12 +4777,12 @@ class Part:
 
 	# Make sure that the corners are diagonal from bottom south west
 	# to top north east:
-	x1 = min(corner1.x, corner2.x)
-	x2 = max(corner1.x, corner2.x)
-	y1 = min(corner1.y, corner2.y)
-	y2 = max(corner1.y, corner2.y)
-	z1 = min(corner1.z, corner2.z)
-	z2 = max(corner1.z, corner2.z)
+	x1 = min(bottom_corner.x, top_corner.x)
+	x2 = max(bottom_corner.x, top_corner.x)
+	y1 = min(bottom_corner.y, top_corner.y)
+	y2 = max(bottom_corner.y, top_corner.y)
+	z1 = min(bottom_corner.z, top_corner.z)
+	z2 = max(bottom_corner.z, top_corner.z)
 	#print("Part.box:{0:m}:{1:m},{2:m}:{3:m},{4:m}:{5:m}". \
 	#  format(x1, x2, y1, y2, z1, z2))
 
