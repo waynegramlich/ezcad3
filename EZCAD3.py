@@ -1736,7 +1736,8 @@ class EZCAD3:
 
     DIMENSIONS_MODE = 0
     MANUFACTURE_MODE = 1
-    VISUALIZATION_MODE = 2
+    STL_MODE = 2
+    VISUALIZATION_MODE = 3
 
     def __init__(self, minor):
 	""" {EZCAD}: Initialize the contents of {self} to contain
@@ -1804,8 +1805,8 @@ class Part:
 	self._name = name
 	#self._places = {}
 	self._rotate = None
-	self._scad_difference_lines = None
-	self._scad_union_lines = None
+	self._scad_difference_lines = []
+	self._scad_union_lines = []
 	self._signature_hash = None
 	self._translate = None
 	self.up = up
@@ -1907,6 +1908,24 @@ class Part:
 	raise AttributeError("Part instance has no attribute named '{0}'". \
 	  format(name))
 
+    def _bounding_box_check(self, indent):
+	box_points_list = self._box_points_list
+	box_points_list_size = len(box_points_list)
+	assert box_points_list_size > 0
+	current_box_points = box_points_list[-1]
+	previous_box_points = current_box_points
+	if box_points_list_size > 1:
+	    previous_box_points = box_points_list[-2]
+	print("{0}{1}: {2} {3}".format(indent * " ", self._name,
+	  len(previous_box_points), len(previous_box_points)))
+
+	for attribute_name in dir(self):
+	    if not attribute_name.startswith("_") and \
+	      attribute_name.endswith("_"):
+		sub_part = getattr(self, attribute_name)
+		assert isinstance(sub_part, Part)
+		sub_part._bounding_box_check(indent + 1)
+
     def _bounding_box_update(self, bounding_box, comment, place):
 	""" *Part*: Updated *self* with *bounding_box*, *place* and
 	    *comment*. """
@@ -1990,6 +2009,9 @@ class Part:
 	box_points_index = len(current_box_points)
 	current_box_points.append(point)
 
+	#FIXME: For debuggin only!!!
+	point._name = name
+
 	# See if *point* changed from the last time:
 	if update_count == 0:
 	    # First time, just force a box update:
@@ -1999,14 +2021,27 @@ class Part:
 	else:
 	    # Fetch *previous_point*:
 	    previous_box_points = box_points_list[update_count - 1]
-	    previous_point = previous_box_points[box_points_index]
+	    previous_box_points_size = len(previous_box_points)
+	    if box_points_index < previous_box_points_size:
+		previous_point = previous_box_points[box_points_index]
 
-	    # Force box update if the point changed:
-	    if previous_point != point:
-		self._box_recompute("Part._box_point_update(): changed")
-		if trace:
-		    print("  Part._box_update:({0}):changed from {1}".
-		      format(point, previous_point))
+		# Force box update if the point changed:
+		if previous_point != point:
+		    self._box_recompute("Part._box_point_update(): changed")
+		    if trace:
+			print("  Part._box_update:({0}):changed from {1}".
+			  format(point, previous_point))
+		elif previous_point._name != point._name:
+                    #FIXME: This test is for debugging only!!!
+		    print("Part._box_point_update('{0}', {1}):skew: {0} != {1}".
+		      format(name, point, previous_point._name, point._name))
+	    else:
+		# How did this happen?:
+		print("Part._box_point_update('{0}', {1}): skew {2}<{3}: {4}".
+		  format(name, point, box_points_index,
+		  previous_box_points_size,
+		  previous_box_points[previous_box_points_size - 1]._name))
+
 	# We only need to hang on to the *previous_box_points*; remove
 	# any previous one to save a little memory and catch accessing
 	# any stale information:
@@ -2335,29 +2370,35 @@ class Part:
 	for attribute_name in dir(self):
 	    if not attribute_name.startswith("_") and \
 	      attribute_name.endswith("_"):
-		attribute = getattr(self, attribute_name)
-		assert isinstance(attribute, Part), \
-		  "{0}.{1} is not a Part".format(self.name, attribute)
-		attribute._manufacture(ezcad)
+		sub_part = getattr(self, attribute_name)
+		assert isinstance(sub_part, Part), \
+		  "{0}.{1} is not a Part".format(self.name, attribute_name)
+		sub_part._manufacture(ezcad)
 
-	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	# Now run construct this node:
+	self.construct()
+
+	if ezcad._mode == EZCAD3.STL_MODE:
 	    # Now manufacture this node:
-	    scad_difference_lines = []
-	    scad_union_lines = []
-	    self._scad_difference_lines = scad_difference_lines
-	    self._scad_union_lines = scad_union_lines
-	    self.construct()
-	    self._scad_difference_lines = None
-	    self._scad_union_lines = None
+	    #scad_difference_lines = []
+	    #scad_union_lines = []
+	    #self._scad_difference_lines = scad_difference_lines
+	    #self._scad_union_lines = scad_union_lines
+	    #self.construct()
+	    #self._scad_difference_lines = None
+	    #self._scad_union_lines = None
 
-	    # Find all the *sub_parts* from *self*:
+	    scad_difference_lines = self._scad_difference_lines
+	    scad_union_lines = self._scad_union_lines
+
 	    sub_parts = []
 	    sub_part_names = []
+	    # Find all the *sub_parts* from *self*:
 	    for attribute_name in dir(self):
-		if not attribute_name.startswith("_") and \
-		  attribute_name.endswith("_"):
-		    sub_part = getattr(self, attribute_name)
-		    assert isinstance(sub_part, Part)
+	    	if not attribute_name.startswith("_") and \
+	    	  attribute_name.endswith("_"):
+	    	    sub_part = getattr(self, attribute_name)
+	    	    assert isinstance(sub_part, Part)
 		    sub_parts.append(sub_part)
 		    sub_part_names.append(sub_part._name)
 
@@ -2928,6 +2969,7 @@ class Part:
 	    print("Dimensions update {0}".format(ezcad._update_count + 1))
 	    changed = self._dimensions_update(ezcad, -1000000)
 	    #changed = self._dimensions_update(ezcad, 0)
+	    #self._bounding_box_check(0)
 	    print("Part.process: {0} dimension(s) changed\n".format(changed))
 	    ezcad._update_count += 1
 
@@ -2940,9 +2982,15 @@ class Part:
 	# Now visit *self* and all of its children:
 	ezcad._mode = EZCAD3.MANUFACTURE_MODE
 	self._manufacture(ezcad)
+	ezcad._update_count += 1
+
+	ezcad._mode = EZCAD3.STL_MODE
+	self._manufacture(ezcad)
+	ezcad._update_count += 1
 
 	ezcad._mode = EZCAD3.VISUALIZATION_MODE
 	self._manufacture(ezcad)
+	ezcad._update_count += 1
 
 	# Close the XML Stream.
 	#ezcad.xml_indent_pop()
@@ -4814,8 +4862,9 @@ class Part:
 	  axis = axis, rotate = rotate, translate = translate)
 	forward_matrix = place._forward_matrix
 
-	difference_lines = self._scad_difference_lines
-	if type(difference_lines) != none_type:
+	ezcad = self._ezcad
+	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	    difference_lines = self._scad_difference_lines
 
 	    assert x1 < x2, "x1={0} should be less than x2={1}".format(x1, x2)
 	    assert y1 < y2, "y1={0} should be less than y2={1}".format(y1, y2)
@@ -5450,6 +5499,20 @@ class Fastener(Part):
 	  start = self.start,
 	  end = self.end)
 
+    def drill(self, part = None):
+	""" *Fastener*: """
+
+	# Check argument types:
+	none_type = type(None)
+	assert type(part) == none_type or isinstance(part, Part)
+
+	# Drill the hole:
+	if isinstance(part, Part):
+	    part.hole(comment = self.comment,
+	      diameter = self.major_diameter,
+	      start = self.start,
+	      end = self.end,
+	      flags = "t")
 
 ## @brief *Place* specifies where another *Part* is to be placed.
 #
