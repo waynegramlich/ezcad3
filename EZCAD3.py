@@ -2025,6 +2025,9 @@ class Part:
     def _box_recompute(self, label):
 	""" *Part*: (Internal use only) Recompute the bounding box corners. """
 
+	ezcad = self._ezcad
+	update_count = ezcad._update_count
+
 	assert isinstance(label, str)
 	# For debugging:
 	trace = False
@@ -2080,19 +2083,19 @@ class Part:
 	if self.ex != ex or self.wx != wx or \
 	  self.ny != ny or self.sy != sy or \
 	  self.tz != tz or self.bz != bz:
-	    if trace:
+	    if update_count > 10 or trace:
 		if self.ex != ex:
-		    print("ex:{0} => {1}".format(self.ex, ex))
+		    print("{0}:ex:{1} => {2}".format(self._name, self.ex, ex))
 		if self.wx != wx:
-		    print("wx:{0} => {1}".format(self.wx, wx))
+		    print("{0}:wx:{1} => {2}".format(self._name, self.wx, wx))
 		if self.ny != ny:
-		    print("ny:{0} => {1}".format(self.ny, ny))
+		    print("{0}:ny:{1} => {2}".format(self._name, self.ny, ny))
 		if self.sy != sy:
-		    print("sy:{0} => {1}".format(self.sy, sy))
+		    print("{0}:sy:{1} => {2}".format(self._name, self.sy, sy))
 		if self.tz != tz:
-		    print("tz:{0} => {1}".format(self.tz, tz))
+		    print("{0}:tz:{1} => {2}".format(self._name, self.tz, tz))
 		if self.bz != bz:
-		    print("bz:{0} => {1}".format(self.bz, bz))
+		    print("{0}:bz:{1} => {2}".format(self._name, self.bz, bz))
 
 	    # Bounding box changed:
 	    self.ex = ex
@@ -2267,7 +2270,7 @@ class Part:
 		if changed > 0:
 		    #print("here 2")
 		    pass
-		if trace >= 0:
+		if ezcad._update_count > 10 or trace >= 0:
 		    print("{0}Part._dimensions_update:{1}.{2} ({3}=>{4})". \
 		      format(' ' * trace, name, attribute_name,
 		      before_value, after_value))
@@ -2308,6 +2311,8 @@ class Part:
 	# Determine whether *box* has changed:
 	after_box_changed_count = self._box_changed_count
 	if before_box_changed_count != after_box_changed_count:
+	    if ezcad._update_count > 10:
+		print("{0} bounding box changed".format(name))
 	    changed += 1
 
 	if trace >= 0:
@@ -2345,9 +2350,27 @@ class Part:
 	    self._scad_difference_lines = None
 	    self._scad_union_lines = None
 
+	    # Find all the *sub_parts* from *self*:
+	    sub_parts = []
+	    sub_part_names = []
+	    for attribute_name in dir(self):
+		if not attribute_name.startswith("_") and \
+		  attribute_name.endswith("_"):
+		    sub_part = getattr(self, attribute_name)
+		    assert isinstance(sub_part, Part)
+		    sub_parts.append(sub_part)
+		    sub_part_names.append(sub_part._name)
+
+	    # Remove duplicates from *sub_parts* and *sub_part_names* and sort:
+	    sub_parts = list(set(sub_parts))
+	    sub_parts.sort(key = lambda sub_part: sub_part._name)
+	    sub_part_names = list(set(sub_part_names))
+	    sub_part_names.sort()
+
 	    # The *signature* for the Part (i.e. *self*) is the concatenation
 	    # of *scad_union_lines* and *scad_difference_lines*:
-	    signature = "\n".join(scad_union_lines + scad_difference_lines)
+	    signature = "\n".join(
+	      scad_union_lines + scad_difference_lines + sub_part_names)
             signature_hash = hashlib.sha1(signature).hexdigest()
 	    self._signature_hash = signature_hash
 
@@ -2396,27 +2419,9 @@ class Part:
 		    lines = []
 		    #place_parts = {}
 
-		    # Find all the *sub_parts* from *self*:
-		    sub_parts = []
-		    for attribute_name in dir(self):
-			if not attribute_name.startswith("_") and \
-			  attribute_name.endswith("_"):
-			    sub_part = getattr(self, attribute_name)
-			    assert isinstance(sub_part, Part)
-			    sub_parts.append(sub_part)
-
-		    # Remove duplicates from *sub_parts* and sort:
-		    sub_parts = list(set(sub_parts))
-		    sub_parts.sort(key=lambda sub_part: sub_part._name)
-		    for sub_part in sub_parts:
-			lines.append("use <{0}.scad>;".format(sub_part._name))
-
-		    #places = self._places.values()
-		    #for place in places:
-		    #	place_part = place._part
-		    #	place_parts[place_part._name] = place_part
-		    #for part in place_parts.values():
-		    #	lines.append("use <{0}.scad>;".format(part._name))
+		    # Output the use list:
+		    for sub_part_name in sub_part_names:
+			lines.append("use <{0}.scad>;".format(sub_part_name))
 
 		    # Write out the module:
 		    lines.append("module {0}() {{".format(name))
