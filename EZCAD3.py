@@ -87,15 +87,22 @@ class L:
     #  @returns *self* / *number*
     #
     # <I>__div__</I>() returns *self* / *number*.  *number* must be either
-    # be an *int* or a *float*.
-    def __div__(self, number):
+    # be an *int*, *float*, or *L*.  For a divisor that is an *int* or *float*,
+    # the returned result is of type *L*.  For a divisor that is an *L* type,
+    # the returned quotient result is of type *float*.
+    def __div__(self, divisor):
 	""" *L*: Return {self} / {scalar}. """
 
 	# Check argument types:
-	assert isinstance(number, float) or isinstance(number, int)
+	assert isinstance(divisor, float) or \
+	  isinstance(divisor, int) or isinstance(divisor, L)
 
-	# Return result:
-	return L(self._mm / number)
+	if isinstance(divisor, L):
+	    result = self._mm / divisor._mm
+	else:
+	    result = L(mm = self._mm / divisor)
+
+	return result
 
     ## @brief Returns *True* if *self* equals *length*.
     #  @param self is the first argument of the equality test.
@@ -449,14 +456,12 @@ class P:
     def __mul__(self, scalar):
 	""" P: Return the result of muliplying {self} by {scalar}. """
 
-	return P(self.part, \
-	  self.x * scalar, self.y * scalar, self.z * scalar)
+	return P(self.x * scalar, self.y * scalar, self.z * scalar)
 
     def __rmul__(self, scalar):
 	""" P: Return the result of muliplying {self} by {scalar}. """
 
-	return P(self.part, \
-	  self.x * scalar, self.y * scalar, self.z * scalar)
+	return P(self.x * scalar, self.y * scalar, self.z * scalar)
 
     def __ne__(self, point):
 	""" P: Return {True} if {self} is not equal to {point}. """
@@ -5404,23 +5409,26 @@ class Fastener(Part):
 	""" *Fastener*: """
 	Part.__init__(self, up)
 	zero = L()
-	self.comment = "NO COMMENT"
+	self.comment_s = "NO_COMMENT"
 	self.color = Color("black")
 	self.material = Material("steel", "stainless")
-	self.start = P()
-	self.end = P()
-	self.diameter_pitch = ""
-	self.diameter = zero
-	self.pitch = zero
-	self.major_diameter = zero
-	self.pitch = zero
-	self.thread75 = zero
-	self.thread50 = zero
-	self.close_fit = zero
-	self.free_fit = zero	
+	self.start_p = P()
+	self.end_p = P()
+	self.flags_s = ""
+	self.major_diameter_l = zero
+	self.pitch_l = zero
+	self.thread75_l = zero
+	self.thread50_l = zero
+	self.close_fit_l = zero
+	self.free_fit_l = zero	
+	self.hex_insert_b = False
+	self.nut_height_l = zero
+	self.hex_nut_edge_width_l = zero
+	self.hex_nut_tip_width_l = zero
 
     def configure(self, comment = None, material = None, color = None,
-      diameter_pitch = None, start = None, end = None):
+      flags = None, start = None, end = None,
+      head_washer_diameter = None, tail_washer_diameter = None):
      	""" *Fastener*: """
 
 	# Check argument types:
@@ -5428,76 +5436,105 @@ class Fastener(Part):
 	assert type(comment) == none_type or isinstance(comment, str)
 	assert type(material) == none_type or isinstance(material, Material)
 	assert type(color) == none_type or isinstance(color, Color)
-	assert type(diameter_pitch) == none_type or \
-	  isinstance(diameter_pitch, str)
+	assert type(flags) == none_type or isinstance(flags, str)
 	assert type(start) == none_type or isinstance(start, P)
 	assert type(end) == none_type or isinstance(end, P)
 	
+	major_diameter = None
+
 	if isinstance(comment, str):
-	    self.comment = comment
+	    self.comment_s = comment
 	if isinstance(material, Material):
 	    self.material = material
 	if isinstance(color, Color):
 	    self.color = color
-	if isinstance(diameter_pitch, str):
-	    self.diameter_pitch = diameter_pitch
-	    if diameter_pitch == "#0-80":
-		major_diameter = L(inch = .0600)
-		pitch = L(inch = "1/80")
-		thread75 = L(inch = "3/64")
-		thread50 = L(inch = .0520)
-		close_fit = L(inch = 0.0635)
-		free_fit = L(inch = 0.0700)
-	    elif diameter_pitch == "#1-72":
-		major_diameter = L(inch = .0730)
-		pitch = L(inch = "1/72")
-		thread75 = L(inch = .0595)
-		thread50 = L(inch = .0635)
-		close_fit = L(inch = 0.0760)
-		free_fit = L(inch = 0.0810)
-	    elif diameter_pitch == "#2-56":
-		major_diameter = L(inch = .0860)
-		pitch = L(inch = "1/56")
-		thread75 = L(inch = .0700)
-		thread50 = L(inch = .0730)
-		close_fit = L(inch = 0.0890)
-		free_fit = L(inch = 0.0960)
-	    elif diameter_pitch == "#4-40":
-		major_diameter = L(inch = .1120)
-		pitch = L(inch = "1/40")
-		thread75 = L(inch = .0890)
-		thread50 = L(inch = .0960)
-		close_fit = L(inch = 0.1160)
-		free_fit = L(inch = 0.1285)
-	    elif diameter_pitch == "#6-32":
-		major_diameter = L(inch = .1380)
-		pitch = L(inch = "1/32")
-		thread75 = L(inch = .1065)
-		thread50 = L(inch = .1160)
-		close_fit = L(inch = 0.1440)
-		free_fit = L(inch = 0.1495)
-	    else:
-		assert False, "Screw in complete"
-	    self.major_diameter = major_diameter
-	    self.pitch = pitch
-	    self.thread75 = thread75
-	    self.thread50 = thread50
-	    self.close_fit = close_fit
-	    self.free_fit = free_fit
+	if isinstance(flags, str):
+	    self.flags_s = flags
+	    for flag in flags.split(':'):
+		if flag == "#0-80":
+		    major_diameter = L(inch = .0600)
+		    pitch = L(inch = "1/80")
+		    thread75 = L(inch = "3/64")
+		    thread50 = L(inch = .0520)
+		    close_fit = L(inch = 0.0635)
+		    free_fit = L(inch = 0.0700)
+		    # Nut dims form page 1568 of Mach. Handbook (26th ed.):
+		    nut_height = L(inch = 0.050)
+		    hex_nut_edge_width = L(inch = "5/32")
+		    hex_nut_tip_width = L(inch = 0.180)
+		elif flag == "#1-72":
+		    major_diameter = L(inch = .0730)
+		    pitch = L(inch = "1/72")
+		    thread75 = L(inch = .0595)
+		    thread50 = L(inch = .0635)
+		    close_fit = L(inch = 0.0760)
+		    free_fit = L(inch = 0.0810)
+		    nut_height = L(inch = 0.050)
+		    hex_nut_edge_width = L(inch = "5/32")
+		    hex_nut_tip_width = L(inch = 0.180)
+		elif flag == "#2-56":
+		    major_diameter = L(inch = .0860)
+		    pitch = L(inch = "1/56")
+		    thread75 = L(inch = .0700)
+		    thread50 = L(inch = .0730)
+		    close_fit = L(inch = 0.0890)
+		    free_fit = L(inch = 0.0960)
+		    nut_height = L(inch = 0.066)
+		    hex_nut_edge_width = L(inch = "3/16")
+		    hex_nut_tip_width = L(inch = 0.217)
+		elif flag == "#4-40":
+		    major_diameter = L(inch = .1120)
+		    pitch = L(inch = "1/40")
+		    thread75 = L(inch = .0890)
+		    thread50 = L(inch = .0960)
+		    close_fit = L(inch = 0.1160)
+		    free_fit = L(inch = 0.1285)
+		    nut_height = L(inch = 0.098)
+		    hex_nut_edge_width = L(inch = "1/4")
+		    hex_nut_tip_width = L(inch = 0.289)
+		elif flag == "#6-32":
+		    major_diameter = L(inch = .1380)
+		    pitch = L(inch = "1/32")
+		    thread75 = L(inch = .1065)
+		    thread50 = L(inch = .1160)
+		    close_fit = L(inch = 0.1440)
+		    free_fit = L(inch = 0.1495)
+		    nut_height = L(inch = 0.114)
+		    hex_nut_edge_width = L(inch = "5/16")
+		    hex_nut_tip_width = L(inch = 0.361)
+		elif flag == "hi":
+		    # Hex insert
+		    self.hex_insert_b = True
+		else:
+		    assert False, \
+		      "Unrecognized flag ('{0}') in flags('{1}')". \
+		      format(flag, flags)
+
+	if isinstance(major_diameter, L):
+	    self.major_diameter_l = major_diameter
+	    self.pitch_l = pitch
+	    self.thread75_l = thread75
+	    self.thread50_l = thread50
+	    self.close_fit_l = close_fit
+	    self.free_fit_l = free_fit
+	    self.nut_height_l = nut_height
+	    self.hex_nut_edge_width_l = hex_nut_edge_width
+	    self.hex_nut_tip_width_l = hex_nut_tip_width
+
 	if isinstance(start, P):
-	    self.start = start
+	    self.start_p = start
 	if isinstance(end, P):
-	    self.end = end
+	    self.end_p = end
 
     def construct(self):
 	""" *Fastener*: """
 
-	self.cylinder(comment = self.comment,
+	self.cylinder(comment = self.comment_s,
 	  material = self.material,
 	  color = self.color,
-	  diameter = self.major_diameter,
-	  start = self.start,
-	  end = self.end)
+	  diameter = self.major_diameter_l,
+	  start = self.start_p,
+	  end = self.end_p)
 
     def drill(self, part = None):
 	""" *Fastener*: """
@@ -5508,11 +5545,30 @@ class Fastener(Part):
 
 	# Drill the hole:
 	if isinstance(part, Part):
-	    part.hole(comment = self.comment,
-	      diameter = self.major_diameter,
-	      start = self.start,
-	      end = self.end,
+	    start = self.start_p
+            end = self.end_p
+	    part.hole(comment = self.comment_s,
+	      diameter = self.major_diameter_l,
+	      start = start,
+	      end = end,
 	      flags = "t")
+
+	    if self.hex_insert_b:
+		direction = end - start
+		direction_length = direction.length()
+		nut_height = self.nut_height_l
+		ratio = nut_height / direction_length
+		insert_end = end + (direction * ratio)
+		#print("end={0} start={1} dir={2} dir_len={3} nut_height={4}".
+		#  format(end, start, direction, direction_length, nut_height))
+		#print("ratio={0} insert_end = {1}".format(ratio, insert_end))
+
+		part.hole(comment = self.comment_s,
+		  diameter = self.hex_nut_tip_width_l,
+		  start = end,
+		  end = insert_end,
+		  sides = 6,
+		  flags = "f")
 
 ## @brief *Place* specifies where another *Part* is to be placed.
 #

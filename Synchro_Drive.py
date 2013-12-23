@@ -119,7 +119,7 @@ class Wheel_Assembly(Part):
 	  gear_box.dx - 2 * gear_box_cover.dx -  2 * pocket_wall_dx
 	self.pocket_dy_l = \
 	  gear_box.dy - 2 * gear_box_side.dy - 2 * pocket_wall_dy
-	self.pocket_dz_l = L(mm = 6.00)
+	self.pocket_dz_l = L(mm = 8.00)
 
 	# Update the timing pulley:
 	self.twist_timing_pulley_.update(
@@ -543,42 +543,42 @@ class Gear_Box_Screws(Part):
 	# Configure all 8 screws:
 	en_screw.configure(
 	  comment = "East Side North Screw",
-	  diameter_pitch = "#4-40",
+	  flags = "#4-40:hi",
 	  start = P(x7, y4, z),
 	  end = P(x5, y4, z))
 	es_screw.configure(
 	  comment = "East Side South Screw",
-	  diameter_pitch = "#4-40",
+	  flags = "#4-40:hi",
 	  start = P(x7, y3, z),
 	  end = P(x5, y3, z))
 	wn_screw.configure(
 	  comment = "West Side North Screw",
-	  diameter_pitch = "#4-40",
+	  flags = "#4-40:hi",
 	  start = P(x0, y4, z),
 	  end = P(x2, y4, z))
 	ws_screw.configure(
 	  comment = "West Side South Screw",
-	  diameter_pitch = "#4-40",
+	  flags = "#4-40:hi",
 	  start = P(x0, y3, z),
 	  end = P(x2, y3, z))
 	ne_screw.configure(
 	  comment = "North Side East Screw",
-	  diameter_pitch = "#4-40",
+	  flags = "#4-40:hi",
 	  start = P(x4, y7, z),
 	  end = P(x4, y5, z))
 	nw_screw.configure(
 	  comment = "North Side West Screw",
-	  diameter_pitch = "#4-40",
+	  flags = "#4-40:hi",
 	  start = P(x3, y7, z),
 	  end = P(x3, y5, z))
 	se_screw.configure(
 	  comment = "South Side East Screw",
-	  diameter_pitch = "#4-40",
+	  flags = "#4-40:hi",
 	  start = P(x4, y0, z),
 	  end = P(x4, y2, z))
 	sw_screw.configure(
 	  comment = "South Side West Screw",
-	  diameter_pitch = "#4-40",
+	  flags = "#4-40:hi",
 	  start = P(x3, y0, z),
 	  end = P(x3, y2, z))
 
@@ -1242,9 +1242,9 @@ class Turn_Table_Bottom_Screws(Part):
 
 		screw.configure(
 		  comment = "[{0},{1}] Turn_Table_Screw".format(x_sign, y_sign),
-		  diameter_pitch = "#2-56",
-		  start = P(x, y, z1),
-		  end = P(x, y, z3))
+		  flags = "#2-56:hi",
+		  start = P(x, y, z3),
+		  end = P(x, y, z1))
 
 	# Now drill some holes in *gear_box_top*:
 	screw0.drill(gear_box_top)
