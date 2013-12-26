@@ -529,10 +529,10 @@ class P:
 
     def distance(self, point):
 	assert isinstance(point, P)
-	dx = (self.x - point.x).inches()
-	dy = (self.y - point.y).inches()
-	dz = (self.z - point.z).inches()
-	length = Lenght.inch(math.sqrt(dx * dx + dy * dy + dz * dz))
+	dx = (self.x - point.x)._mm
+	dy = (self.y - point.y)._mm
+	dz = (self.z - point.z)._mm
+	length = L(mm = math.sqrt(dx * dx + dy * dy + dz * dz))
 	return length
 
     def dot_product(self, point):
@@ -1208,13 +1208,13 @@ class Material:
 	""" *Material*: Initialize *self* to contain *generic* and
 	    *specific*. """
 
-	self.generic = generic
-	self.specific = specific
+	self._generic = generic
+	self._specific = specific
 
     def __format__(self, format):
 	""" *Material*: Return *self* formatted as a string. """
 
-	return "[{0}, {1}]".format(self.generic, self.specific)
+	return "[{0}, {1}]".format(self._generic, self._specific)
 
 class Bounding_Box:
 
@@ -1243,6 +1243,10 @@ class Bounding_Box:
 	self.sy = sy
 	self.tz = tz
 	self.bz = bz
+
+    def __format__(self, format):
+	return "[wx={0}:ex={1} sy={2}:ny={3} bz={4}:tz={5}". \
+	  format(self.wx, self.ex, self.sy, self.ny, self.bz, self.tz)
 
 class Color:
     COLORS = {
@@ -1482,7 +1486,7 @@ class Contour:
 	    # Compute the bend radius:
 	    bend.compute(before_bend, after_bend)
 
-    def bounding_box_compute(self, extrude_axis):
+    def bounding_box_compute(self, start, end):
 	""" *Contour*: Compute bounding box for *self* extruded in
 	    *extrude_axis* direction. """
 
@@ -1498,9 +1502,12 @@ class Contour:
 	bz = big
 
 	# Grap *dx*, *dy*, and *dz* from *extrude_axis*:
-	dx = extrude_axis.x
-	dy = extrude_axis.y
-	dz = extrude_axis.z
+	start_x = start.x
+	start_y = start.y
+	start_z = start.z
+	end_x = end.x
+	end_y = end.y
+	end_z = end.z
 
 	for bend in self.bends:
 	    # Extract *x*, *y*, *z* from *point*:
@@ -1510,12 +1517,12 @@ class Contour:
 	    z = point.z
 
 	    # Adjust the bounding box bounaries:
-	    ex = ex.maximum(x).maximum(x + dx)
-	    wx = wx.minimum(x).minimum(x + dx)
-	    ny = ny.maximum(y).maximum(y + dy)
-	    sy = sy.minimum(y).minimum(y + dy)
-	    tz = tz.maximum(z).maximum(z + dz)
-	    bz = tz.minimum(z).minimum(z + dz)
+	    ex = ex.maximum(start_x + x).maximum(end_x + x)
+	    wx = wx.minimum(start_x + x).minimum(end_x + x)
+	    ny = ny.maximum(start_y + y).maximum(end_y + y)
+	    sy = sy.minimum(start_y + y).minimum(end_y + y)
+	    tz = tz.maximum(start_z + z).maximum(end_z + z)
+	    bz = tz.minimum(start_z + z).minimum(end_z + z)
 	    
 	# Return the 8 points that are the bounding box of *self*:
 	bounding_box = Bounding_Box(ex, wx, ny, sy, tz, bz)
@@ -1744,16 +1751,19 @@ class EZCAD3:
     STL_MODE = 2
     VISUALIZATION_MODE = 3
 
-    def __init__(self, minor):
+    def __init__(self, minor = None, adjust = L()):
 	""" {EZCAD}: Initialize the contents of {self} to contain
 	    {major} and {minor} version numbers. """
 
 	#print "EZCAD.__init__() called"
 
 	# Check argument types:
+	none_type = type(None)
 	assert minor == 0
+	assert isinstance(adjust, L)
 
 	# Load up {self}:
+	self._adjust = adjust
 	self._mode = EZCAD3.DIMENSIONS_MODE
 	self._major = 3
 	self._minor = minor
@@ -1931,9 +1941,14 @@ class Part:
 		assert isinstance(sub_part, Part)
 		sub_part._bounding_box_check(indent + 1)
 
-    def _bounding_box_update(self, bounding_box, comment, place):
+    def _bounding_box_update(self, bounding_box, comment, place,
+      trace = -1000000):
 	""" *Part*: Updated *self* with *bounding_box*, *place* and
 	    *comment*. """
+
+	if trace >= 0:
+	    print("{0}=>Part._bounding_box_update(comment={1})".
+	      format(trace * ' ', comment))
 
 	# Check argument types:
 	assert isinstance(bounding_box, Bounding_Box)
@@ -1963,21 +1978,25 @@ class Part:
 
 	# Compute bounding box after rotation and translation:
 	self._box_point_update(comment + "[TNE]",
-	  forward_matrix.point_multiply(tne))
+	  forward_matrix.point_multiply(tne), trace = trace + 1)
 	self._box_point_update(comment + "[TNW]",
-	  forward_matrix.point_multiply(tnw))
+	  forward_matrix.point_multiply(tnw), trace = trace + 1)
 	self._box_point_update(comment + "[TSE]",
-	  forward_matrix.point_multiply(tse))
+	  forward_matrix.point_multiply(tse), trace = trace + 1)
 	self._box_point_update(comment + "[TSW]",
-	  forward_matrix.point_multiply(tsw))
+	  forward_matrix.point_multiply(tsw), trace = trace + 1)
 	self._box_point_update(comment + "[BNE]",
-	  forward_matrix.point_multiply(bne))
+	  forward_matrix.point_multiply(bne), trace = trace + 1)
 	self._box_point_update(comment + "[BNW]",
-	  forward_matrix.point_multiply(bnw))
+	  forward_matrix.point_multiply(bnw), trace = trace + 1)
 	self._box_point_update(comment + "[BSE]",
-	  forward_matrix.point_multiply(bse))
+	  forward_matrix.point_multiply(bse), trace = trace + 1)
 	self._box_point_update(comment + "[BSW]",
-	  forward_matrix.point_multiply(bsw))
+	  forward_matrix.point_multiply(bsw), trace = trace + 1)
+
+	if trace >= 0:
+	    print("{0}<=Part._bounding_box_update(comment={1})".
+	      format(trace * ' ', comment))
 
     ## @brief Updates *name*'d *point* in *self* for bounding box calcuation.
     #  @param self is the *Part* to update.
@@ -1988,7 +2007,7 @@ class Part:
     # (a *Part* object) to be *point*.  If the value of *point* has changed
     # from the last time it was updated, the bounding box for *self* is
     # recomputed.
-    def _box_point_update(self, name, point):
+    def _box_point_update(self, name, point, trace = -1000000):
 	""" *Part*: Insert/update the point named *name* to *point*. """
 
 	# Check argument types:
@@ -1996,10 +2015,9 @@ class Part:
 	assert isinstance(point, P)
 
 	# Set *trace* to *True* if tracing is desired:
-	trace = False
-	#trace = True
-	if trace:
-	    print("=>Part._box_point_update('{0}', {1})".format(name, point))
+	if trace >= 0:
+	    print("{0}=>Part._box_point_update('{1}', {2})".
+	      format(trace * ' ', name, point))
 
 	# Get *current_box_points* from *box_points_list*:
 	box_points_list = self._box_points_list
@@ -2014,15 +2032,16 @@ class Part:
 	box_points_index = len(current_box_points)
 	current_box_points.append(point)
 
-	#FIXME: For debuggin only!!!
+	#FIXME: For debugging only!!!
 	point._name = name
 
 	# See if *point* changed from the last time:
 	if update_count == 0:
 	    # First time, just force a box update:
 	    self._box_recompute("Part._box_point_update(): first point")
-	    if trace:
-		print("  Part._box_update:({0}):first".format(point))
+	    if trace >= 0:
+		print("{0}  Part._box_update:({1}):first".
+		  format(trace * ' ', point))
 	else:
 	    # Fetch *previous_point*:
 	    previous_box_points = box_points_list[update_count - 1]
@@ -2033,13 +2052,16 @@ class Part:
 		# Force box update if the point changed:
 		if previous_point != point:
 		    self._box_recompute("Part._box_point_update(): changed")
-		    if trace:
-			print("  Part._box_update:({0}):changed from {1}".
-			  format(point, previous_point))
+		    if trace >= 0:
+			print("{0}  Part._box_update:({1}):changed from {2}".
+			  format(trace * ' ', point, previous_point))
 		elif previous_point._name != point._name:
                     #FIXME: This test is for debugging only!!!
-		    print("Part._box_point_update('{0}', {1}):skew: {0} != {1}".
-		      format(name, point, previous_point._name, point._name))
+		    distance = previous_point.distance(point)
+		    if distance >= L(inch = .00001):
+			print("Part._box_point_update('{0}',{1}):skew:{0}!={1}".
+			  format(name, point,
+			  previous_point._name, point._name))
 	    else:
 		# How did this happen?:
 		print("Part._box_point_update('{0}', {1}): skew {2}<{3}: {4}".
@@ -2053,8 +2075,9 @@ class Part:
 	if box_points_index == 0 & update_count >= 2:
 	    box_points_list[update_count - 2] = None
 
-	if trace:
-	    print("<=Part._box_point_update('{0}', {1})".format(name, point))
+	if trace >= 0:
+	    print("{0}<=Part._box_point_update('{1}', {2})".
+	      format(trace * ' ', name, point))
 
 
     ## @brief Recomputes the bounding box for *self* and any parent *Box*'s.
@@ -2596,17 +2619,33 @@ class Part:
 	#print("<=Part._manufacture:{0}".format(self._name))
 
     def block(self, comment = "no comment", material = None, color = None,
-      corner1 = None, corner2 = None, welds = "",
-      center = None, axis = None, rotate = None, translate = None):
+      corner1 = None, corner2 = None, welds = "", trace = False,
+      center = None, axis = None, rotate = None, translate = None, top = None):
 	""" {Part} construct: Create a block with corners at {corner1} and
 	    {corner2}.  The block is made of {material} and visualized as
 	    {color}. """
 
+	if trace:
+	    print("=>Part.block(comment={0}".format(comment))
+
 	#print "block_corners('{0}', {1}, {2}, '{3}', '{4}')".format( \
 	#  self.name, corner1, corner2, color, material)
 
-	# Deal with argument defaults:
+	# Check argument status:
 	none_type = type(None)
+	assert type(comment) == none_type or isinstance(comment, str)
+	assert type(corner1) == none_type or isinstance(corner1, P)
+	assert type(corner2) == none_type  or isinstance(corner2, P)
+	assert type(material) == none_type or isinstance(material, Material)
+	assert type(welds) == none_type or isinstance(welds, str)
+	assert type(color) == none_type or isinstance(color, Color)
+	assert type(center) == none_type or isinstance(center, P)
+	assert type(axis) == none_type or isinstance(axis, P)
+	assert type(rotate) == none_type or isinstance(rotate, Angle)
+	assert type(translate) == none_type or isinstance(translate, P)
+	assert isinstance(top, str)
+
+	# Deal with argument defaults:
 	self._color_material_update(color, material)
 	color = self._color
 	material = self._material
@@ -2622,17 +2661,6 @@ class Part:
 	# Record the *color* and *material*:
 	self._material = material
 	self._color = color
-
-	# Check argument types:
-	assert isinstance(comment, str)
-	assert isinstance(corner1, P)
-	assert isinstance(corner2, P)
-	assert isinstance(material, Material)
-	assert isinstance(color, Color)
-	assert type(center) == none_type or isinstance(center, P)
-	assert type(axis) == none_type or isinstance(axis, P)
-	assert type(rotate) == none_type or isinstance(rotate, Angle)
-	assert type(translate) == none_type or isinstance(translate, P)
 
 	# Make sure that the corners are diagonal from bottom south west
 	# to top north east:
@@ -2677,8 +2705,8 @@ class Part:
 	  forward_matrix.point_multiply(bsw))
 	#print("after box={0:m}".format(box))
 
+
 	ezcad = self._ezcad
-	assert isinstance(ezcad, EZCAD3)
 
 	self._is_part = True
 	#print("Part.block:{0}._is_part = True".format(self._name))
@@ -2697,6 +2725,7 @@ class Part:
 	    # "{0}.block '{1}': equal Z coordinates: corner1={2} corner2={3}". \
 	    # format(self._name, comment, corner1, corner2)
 
+
 	    # Now make the block a little bigger for "welding":
 	    weld_extra = L(mm = 0.01)
 	    if welds.find("t") >= 0:
@@ -2711,6 +2740,27 @@ class Part:
 		x2 += weld_extra	
 	    if welds.find("w") >= 0:
 		x1 -= weld_extra
+
+	    # Deal with *adjust*:
+	    zero = L()
+	    adjust = ezcad._adjust
+	    if top == "t" or top == "b":
+		x1 -= adjust
+		x2 += adjust
+		y1 -= adjust
+		y2 += adjust
+	    elif top == "n" or top == "s":
+		x1 -= adjust
+		x2 += adjust
+		z1 -= adjust
+		z2 += adjust
+	    elif top == "e" or top == "w":
+		y1 -= adjust
+		y2 += adjust
+		z1 -= adjust
+		z2 += adjust
+	    else:
+		assert adjust == zero, "Part.Block: top argument not set"
 
 	    #print "c1=({0},{1},{2}) c2=({3},{4},{5})".format( \
 	    #  x1, y1, z1, x2, y2, z2)
@@ -2733,6 +2783,9 @@ class Part:
 	      "        cube([{0:m}, {1:m}, {2:m}]);".format(
 	      x2 - x1, y2 - y1, z2 - z1))
 
+	if trace:
+	    print("<=Part.block(comment={0}".format(comment))
+
 
     def construct(self):
 	assert False, \
@@ -2740,10 +2793,12 @@ class Part:
 
     def extrude(self, comment = "no_comment", material = None, color = None,
       outer_path = [], inner_paths = [[]], start = None, end = None,
-      center = None, axis = None, rotate = None, translate = None):
+      center = None, axis = None, rotate = None, translate = None,
+      trace = -1000000):
 	""" *Part*: """
 
-	#print("=>Part.extrude()")
+	if trace >= 0:
+	    print("{0}=>Part.extrude()".format(trace * ' '))
 
 	# Check argument types:
 	assert isinstance(comment, str)
@@ -2771,9 +2826,13 @@ class Part:
 	place = Place(part = None, name = comment, center = center,
 	  axis = axis, rotate = rotate, translate = translate)
 
-	bounding_box = contour.bounding_box_compute(extrude_axis)
+	bounding_box = contour.bounding_box_compute(start, end)
+	if trace >= 0:
+	    print("{0} Part.extrude:bounding_box={0}".
+	     format(trace * ' ', bounding_box))
 
-	self._bounding_box_update(bounding_box, comment, place)
+	self._bounding_box_update(bounding_box,
+	  comment, place, trace = trace + 1)
 
 	self._is_part = True
 	ezcad = self._ezcad
@@ -2791,16 +2850,19 @@ class Part:
 	    contour.bends_compute()
 	    contour.output(scad_union_lines, indent = 6)
 
-	#print("<=Part.extrude()")
+	if trace >= 0:
+	    print("{0}<=Part.extrude()".format(trace * ' '))
 	    
     def cylinder(self, comment = "NO_COMMENT",
       material = Material(), color = Color(),
       diameter = L(mm = 1.0), start = P(), end = P(z = L(mm = 1.0)),
-      sides = -1, welds = "", flags = ""):
+      sides = -1, sides_angle = Angle(), welds = "", flags = "", adjust = L(),
+      trace = -1000000):
 	""" *Part*: Place a *diameter* wide cylinder from *start* to *end*. """
 
-	#print("=>Part.cylinder(diam={0} start={1} end={2})".
-	#  format(diameter, start, end))
+	if trace >= 0:
+	    print("{0}=>Part.cylinder(diam={1} start={2} end={3})".
+	      format(trace * ' ', diameter, start, end))
 
 	# Check argument types:
 	none_type = type(None)
@@ -2811,19 +2873,25 @@ class Part:
 	assert isinstance(start, P)
 	assert isinstance(end, P)
 	assert isinstance(sides, int)
+	assert isinstance(sides_angle, Angle)
 	assert isinstance(welds, str)
 	assert isinstance(flags, str)
+
+	ezcad = self._ezcad
+	adjust = ezcad._adjust
 
 	union_lines = self._scad_union_lines
 	self._cylinder(lines = union_lines, indent = 6, is_solid = True,
 	  comment = comment, material = material, color = color,
-	  diameter = diameter, start = start, end = end, sides = sides)
+	  diameter = diameter, start = start, end = end, sides = sides,
+	  adjust = adjust, sides_angle = sides_angle, trace = trace + 1)
 
-	#print("<=Part.cylinder()")
+	if trace >= 0:
+	    print("{0}<=Part.cylinder()".format(trace * ' '))
 
     def hole(self, comment = "NO_COMMENT", diameter = L(mm = 1.0),
-      start = P(), end = P(z = L(mm = 1.0)),
-      sides = -1, top = "t", flags = ""):
+      start = P(), end = P(z = L(mm = 1.0)), sides = -1, sides_angle = Angle(),
+      top = "t", flags = ""):
 	""" Part construct: Make a {diameter} hole in {part} with starting
 	    at {start_point} and ending at {end_point}.  {comment} will
 	    show in any error messages and any generated G-code.  The
@@ -2834,7 +2902,7 @@ class Part:
 		'f'	flat hole (i.e. Flat)
 		'p'	tip hole (drill tip stops at {end_point} (i.e. tiP)
 
-	      Allowed additional flags:	  
+	      Allowed additional flags:
 		'u' upper hole edge should be chamfered (i.e. Upper)
 		'l' lower hole edge should be chamfered (i.e. Lower)
 		'm' hole is to be milled (i.e. Milled)
@@ -2848,6 +2916,8 @@ class Part:
 	assert isinstance(end, P)
 	assert isinstance(flags, str)
 	assert isinstance(top, str)
+	assert isinstance(sides, int)
+	assert isinstance(sides_angle, Angle)
 
 	flat_hole = flags.find("f") >= 0
 	through_hole = not flat_hole
@@ -2863,22 +2933,25 @@ class Part:
 	lines = self._scad_difference_lines
 	if show:
 	    lines = self._scad_union_lines
+
+	ezcad = self._ezcad
+	adjust = ezcad._adjust
 	self._cylinder(lines = lines, indent = 4, is_solid = False,
-	  comment = comment, material = None, color = None,
-	  diameter = diameter, start = start, end = end, sides = sides)
+	  comment = comment, material = None, color = None, adjust = -adjust,
+	  diameter = diameter, start = start, end = end, sides = sides,
+	  sides_angle = sides_angle)
 
     def _cylinder(self, lines = None, indent = 0, is_solid = True,
-      comment = None, material = None, color = None,
-      diameter = None, start = None, end = None, sides = None):
+      comment = None, material = None, color = None, adjust = None,
+      diameter = None, start = None, end = None, sides = None,
+      sides_angle = None, trace = -1000000):
 	""" *Part*: Deal with commonality between holes (i.e. material
 	    removal) and cylinders made out of a *material*. """
 
-	trace = False
-	#trace = True
-	if trace:
-	    print(("=>Part._cylinder(comment='{0}', is_solid={1}," + 
-	     " diameter={2}, start={3}, end={4}").
-	     format(comment, is_solid, diameter, start, end))
+	if trace >= 0:
+	    print(("{0}=>Part._cylinder(comment='{1}', is_solid={2}," + 
+	     " diameter={3}, start={4}, end={5}").
+	     format(trace * ' ', comment, is_solid, diameter, start, end))
 
 	# Check argument types:
 	none_type = type(None)
@@ -2892,6 +2965,8 @@ class Part:
 	assert isinstance(start, P)
 	assert isinstance(end, P)
 	assert isinstance(sides, int)
+	assert isinstance(adjust, L)
+	assert isinstance(sides_angle, Angle)
 
 	# Update the *color* and *material* of this part:
 	self._color_material_update(color, material)
@@ -2921,13 +2996,17 @@ class Part:
 	if is_solid:
 	    #print("comment={0} radius={1} half_length={2}". \
 	    #  format(comment, radius, half_length))
+	    
 	    bounding_box = Bounding_Box(radius, -radius,
 	      radius, -radius, half_length, -half_length)
+	    if trace >= 0:
+		print("{0}  bounding_box={1}".format(trace * ' ', bounding_box))
+		print("{0}  center={1}".format(trace * ' ', center))
 	    place = Place(part = None, name = comment,
 	      center = None, axis = orthogonal_axis, rotate = rotate_angle,
-	      translate = center)
-	    self._bounding_box_update(bounding_box, comment, place)
-
+	      translate = center, trace = trace + 1)
+	    self._bounding_box_update(bounding_box,
+	      comment, place, trace = trace + 1)
 
 	# Extract some values from {ezcad}:
 	if self._ezcad._mode == EZCAD3.MANUFACTURE_MODE:
@@ -2950,15 +3029,19 @@ class Part:
 	      center = None, axis = orthogonal_axis, rotate = rotate_angle,
 	      translate = center)
 
+	    if sides_angle != Angle():
+		lines.append("{0}rotate(a={1}, v=[0, 0, 1])".
+		  format(spaces, sides_angle))
+
 	    # Output the cylinder in a vertical orientation centered on the
 	    # origin.  It is processed before either rotation or translation:
             lines.append(
 	      "{0}  cylinder(r={1:m}, h={2:m}, center = true, $fn={3});".
-	      format(spaces, diameter / 2.0, length, sides))
+	      format(spaces, diameter / 2 + adjust, length, sides))
             lines.append("")
 	
-	if trace:
-	    print("<=Part._cylinder()")
+	if trace >= 0:
+	    print("{0}<=Part._cylinder()".format(trace * ' '))
 
     def process(self, ezcad):
 	""" {Part}: Generate the XML control file for *self*. """
@@ -4846,18 +4929,44 @@ class Part:
 
 	# Deal with *top* argument:
 	extra = L(mm = 1.0)
+	ezcad = self._ezcad
+	adjust = ezcad._adjust
 	if pocket_top == "t":
 	    z2 += extra
+	    x1 += adjust
+	    x2 -= adjust
+	    y1 += adjust
+	    y2 -= adjust
 	elif pocket_top == "b":
 	    z1 -= extra
+	    x1 += adjust
+	    x2 -= adjust
+	    y1 += adjust
+	    y2 -= adjust
 	elif pocket_top == "n":
 	    y2 += extra
+	    x1 += adjust
+	    x2 -= adjust
+	    z1 += adjust
+	    z2 -= adjust
 	elif pocket_top == "s":
 	    y1 -= extra
+	    x1 += adjust
+	    x2 -= adjust
+	    z1 += adjust
+	    z2 -= adjust
 	elif pocket_top == "e":
 	    x2 += extra
+	    y1 += adjust
+	    y2 -= adjust
+	    z1 += adjust
+	    z2 -= adjust
 	elif pocket_top == "w":
 	    x1 -= extra
+	    y1 += adjust
+	    y2 -= adjust
+	    z1 += adjust
+	    z2 -= adjust
 	else:
             assert False, \
 	      "pocket_top = '{0}' instead of 't', 'b', 'n', 's', 'e', or 'w'". \
@@ -5425,9 +5534,10 @@ class Fastener(Part):
 	self.nut_height_l = zero
 	self.hex_nut_edge_width_l = zero
 	self.hex_nut_tip_width_l = zero
+	self.sides_angle_a = Angle()
 
     def configure(self, comment = None, material = None, color = None,
-      flags = None, start = None, end = None,
+      flags = None, start = None, end = None, sides_angle = None,
       head_washer_diameter = None, tail_washer_diameter = None):
      	""" *Fastener*: """
 
@@ -5439,6 +5549,7 @@ class Fastener(Part):
 	assert type(flags) == none_type or isinstance(flags, str)
 	assert type(start) == none_type or isinstance(start, P)
 	assert type(end) == none_type or isinstance(end, P)
+	assert type(sides_angle) == none_type or isinstance(sides_angle, Angle)
 	
 	major_diameter = None
 
@@ -5448,6 +5559,8 @@ class Fastener(Part):
 	    self.material = material
 	if isinstance(color, Color):
 	    self.color = color
+	if isinstance(sides_angle, Angle):
+	    self.sides_angle_a = sides_angle
 	if isinstance(flags, str):
 	    self.flags_s = flags
 	    for flag in flags.split(':'):
@@ -5502,6 +5615,26 @@ class Fastener(Part):
 		    nut_height = L(inch = 0.114)
 		    hex_nut_edge_width = L(inch = "5/16")
 		    hex_nut_tip_width = L(inch = 0.361)
+		elif flag == "#10-24":
+		    major_diameter = L(inch = 0.1900)
+		    pitch = L(inch = "1/24")
+		    thread75 = L(inch = 0.1495)
+		    thread50 = L(inch = 0.1610)
+		    close_fit = L(inch = 0.1960)
+		    free_fit = L(inch = 0.2010)
+		    nut_height = L(inch = 0.130)
+		    hex_nut_edge_width = L(inch = "3/8")
+		    hex_nut_tip_width = L(inch = 0.433)
+		elif flag == "#10-32":
+		    major_diameter = L(inch = 0.1900)
+		    pitch = L(inch = "1/32")
+		    thread75 = L(inch = 0.1590)
+		    thread50 = L(inch = 0.1695)
+		    close_fit = L(inch = 0.1960)
+		    free_fit = L(inch = 0.2010)
+		    nut_height = L(inch = 0.130)
+		    hex_nut_edge_width = L(inch = "3/8")
+		    hex_nut_tip_width = L(inch = 0.433)
 		elif flag == "hi":
 		    # Hex insert
 		    self.hex_insert_b = True
@@ -5536,19 +5669,36 @@ class Fastener(Part):
 	  start = self.start_p,
 	  end = self.end_p)
 
-    def drill(self, part = None):
+    def drill(self, part = None, select = None):
 	""" *Fastener*: """
 
 	# Check argument types:
 	none_type = type(None)
 	assert type(part) == none_type or isinstance(part, Part)
+	assert isinstance(select, str)
 
 	# Drill the hole:
 	if isinstance(part, Part):
 	    start = self.start_p
             end = self.end_p
+
+	    if select == "thread":
+		material = self._material
+		generic = material._generic
+		if generic == "steel" or generic == "iron":
+		    diameter = self.thread50_l
+		else:
+		    diameter = self.thread75_l
+	    elif select == "close":
+		diameter = self.close_fit_l
+	    elif select == "free":
+		diameter = self.free_fit_l
+	    else:
+		assert False, "select='{0}', not 'thread', 'close' or 'free'".\
+		  format(select)
+
 	    part.hole(comment = self.comment_s,
-	      diameter = self.major_diameter_l,
+	      diameter = diameter,
 	      start = start,
 	      end = end,
 	      flags = "t")
@@ -5556,18 +5706,19 @@ class Fastener(Part):
 	    if self.hex_insert_b:
 		direction = end - start
 		direction_length = direction.length()
+		normalized_direction = direction.normalize()
 		nut_height = self.nut_height_l
-		ratio = nut_height / direction_length
-		insert_end = end + (direction * ratio)
+		insert_end = end - (normalized_direction * nut_height._mm)
 		#print("end={0} start={1} dir={2} dir_len={3} nut_height={4}".
 		#  format(end, start, direction, direction_length, nut_height))
-		#print("ratio={0} insert_end = {1}".format(ratio, insert_end))
+		#print("insert_end = {0}".format(insert_end))
 
 		part.hole(comment = self.comment_s,
 		  diameter = self.hex_nut_tip_width_l,
 		  start = end,
 		  end = insert_end,
 		  sides = 6,
+		  sides_angle = self.sides_angle_a,
 		  flags = "f")
 
 ## @brief *Place* specifies where another *Part* is to be placed.
@@ -5584,8 +5735,8 @@ class Place:
     """ A {Place} represents the placement of a part relative to the
 	origin of an assembly. """
 
-    def __init__(self, part = None, name = None,
-      center = None, axis = None, rotate = None, translate = None):
+    def __init__(self, part = None, name = None, center = None,
+      axis = None, rotate = None, translate = None, trace = -100000):
 	""" Place: Initialize {self} to contain {home_part}, {placed_part},
 	    {center_point}, {axis_point}, {rotate_angle}, and
 	    {translate_point}. """
@@ -5598,8 +5749,9 @@ class Place:
 	assert type(translate) == none_type or isinstance(translate, P)
 
 	# Deal with default argument values:
-	#if type(name) == none_type:
-	#    name = part._name
+	name = "no_name"
+	if isinstance(part, Part):
+	    name = part._name
 	if type(center) == none_type:
 	    center = P()
 	if type(axis) == none_type:
@@ -5617,19 +5769,21 @@ class Place:
 	#assert type(part) == none_type or isinstance(part, Part)
 	#assert isinstance(name, str)
 
-	#print (("Place.__init__(part={0}, name={1}, center={2}, " + \
-	#  "axis={3}, rotate={4}, translate={5})"). \
-	#  format(part_name, name, center, axis, rotate, translate))
+	if trace >= 0:
+	    print(("{0}=>Place.__init__(part={1}, name={2}, center={3}, " + \
+	      "axis={4}, rotate={5}, translate={6})").
+	      format(trace * ' ', part_name,
+		name, center, axis, rotate, translate))
 
 	# Extract some values from {rotate_center}:
-	center_x = center.x.inches()
-	center_y = center.y.inches()
-	center_z = center.z.inches()
+	center_x = center.x._mm
+	center_y = center.y._mm
+	center_z = center.z._mm
 
 	# Extract some values from {axis_point}:
-	axis_x = axis.x.inches()
-	axis_y = axis.y.inches()
-	axis_z = axis.z.inches()
+	axis_x = axis.x._mm
+	axis_y = axis.y._mm
+	axis_z = axis.z._mm
 	#print "axis=({0},{1},{2})".format(axis_x, axis_y, axis_z)
 
 	# Normalize rotate axis:
@@ -5648,14 +5802,16 @@ class Place:
 	  Matrix.translate_create(center_x, center_y, center_z)
 
 	# Extract some values from {translate_point}:
-	translate_x = translate.x.inches()
-	translate_y = translate.y.inches()
-	translate_z = translate.z.inches()
+	translate_x = translate.x._mm
+	translate_y = translate.y._mm
+	translate_z = translate.z._mm
 
 	# Create {translate_matrix}:
 	translate_matrix = \
 	  Matrix.translate_create(translate_x, translate_y, translate_z)
-	#print "translate_matrix=\n", translate_matrix
+	if trace >= 0:
+	    print("{0}translate_matrix={1}".
+	      format(trace * ' ', translate_matrix))
 
 	#print "Place(): cm=\n{0}\nrm=\n{1}\nrcm=\n{2}\ntm=\n{3}\n". \
 	#  format(center_matrix.mat, rotate_matrix.mat, \
@@ -5665,8 +5821,9 @@ class Place:
 	forward_matrix = center_matrix * \
 	  rotate_matrix * center_reverse_matrix * translate_matrix
 	reverse_matrix = forward_matrix.inverse()
-	#print "Place(): forward=\n{0}\nreverse=\n{0}\n". \
-	#  format(forward_matrix.mat, reverse_matrix.mat)
+	if trace >= 0:
+	    print("{0}Place(): forward=\n{1}\nreverse=\n{2}\n". \
+	      format(trace * ' ', forward_matrix.mat, reverse_matrix.mat))
 
 	# Load up *self*:
 	self._axis = axis
@@ -5677,6 +5834,9 @@ class Place:
 	self._reverse_matrix = reverse_matrix
 	self._rotate = rotate
 	self._translate = translate
+
+	if trace >= 0:
+	    print("{0}<=Trace.__init__()".format(trace * ' '))
 
     def __eq__(self, place):
 	""" Place: Return {True} if {self} is equal to {place}. """
