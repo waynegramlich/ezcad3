@@ -5571,7 +5571,7 @@ class Fastener(Part):
 		    thread50 = L(inch = .0520)
 		    close_fit = L(inch = 0.0635)
 		    free_fit = L(inch = 0.0700)
-		    # Nut dims form page 1568 of Mach. Handbook (26th ed.):
+		    # Nut dims from page 1568 of Mach. Handbook (26th ed.):
 		    nut_height = L(inch = 0.050)
 		    hex_nut_edge_width = L(inch = "5/32")
 		    hex_nut_tip_width = L(inch = 0.180)

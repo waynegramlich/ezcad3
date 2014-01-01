@@ -113,12 +113,12 @@ Static Public Attributes</h2></td></tr>
 <tr class="memitem:a75c473ed6568f032c51f5d6af6c3c0ee"><td class="memItemLeft" align="right" valign="top">tuple&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classEZCAD3_1_1L.html#a75c473ed6568f032c51f5d6af6c3c0ee">whole_fraction</a> = inch.split(&quot;-&quot;)</td></tr>
 <tr class="memitem:a0870cc773cc84e7852b049911f2122cc"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a0870cc773cc84e7852b049911f2122cc"></a>
 tuple&#160;</td><td class="memItemRight" valign="bottom"><b>whole</b> = float(<a class="el" href="classEZCAD3_1_1L.html#a75c473ed6568f032c51f5d6af6c3c0ee">whole_fraction</a>[0])</td></tr>
-<tr class="memitem:ab9e814e680c454403cf2245976518656"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="ab9e814e680c454403cf2245976518656"></a>
-list&#160;</td><td class="memItemRight" valign="bottom"><b>faction</b> = <a class="el" href="classEZCAD3_1_1L.html#a75c473ed6568f032c51f5d6af6c3c0ee">whole_fraction</a>[1]</td></tr>
+<tr class="memitem:ad50a6d73ea1330fe75d8441c4438d0a1"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="ad50a6d73ea1330fe75d8441c4438d0a1"></a>
+list&#160;</td><td class="memItemRight" valign="bottom"><b>fraction</b> = <a class="el" href="classEZCAD3_1_1L.html#a75c473ed6568f032c51f5d6af6c3c0ee">whole_fraction</a>[1]</td></tr>
 <tr class="memitem:ad86b71e35be8f28a6f6716c2f2784d10"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="ad86b71e35be8f28a6f6716c2f2784d10"></a>
 float&#160;</td><td class="memItemRight" valign="bottom"><b>whole</b> = 0.0</td></tr>
 <tr class="memitem:a105f131ff1954ba80e7ff60d507383cb"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a105f131ff1954ba80e7ff60d507383cb"></a>
-&#160;</td><td class="memItemRight" valign="bottom"><b>fraction</b> = <a class="el" href="classEZCAD3_1_1L.html#a8bb0d73e89eb963aa36f192bbd57a6c5">inches</a></td></tr>
+&#160;</td><td class="memItemRight" valign="bottom"><b>fraction</b> = inch</td></tr>
 <tr class="memitem:a5cb12db4032c33bfca55e256bad6e3a7"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a5cb12db4032c33bfca55e256bad6e3a7"></a>
 tuple&#160;</td><td class="memItemRight" valign="bottom"><b>numerator_denominator</b> = fraction.split(&quot;/&quot;)</td></tr>
 <tr class="memitem:af5a9ca84856db074152b4a06d448bc7c"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="af5a9ca84856db074152b4a06d448bc7c"></a>
@@ -127,14 +127,14 @@ tuple&#160;</td><td class="memItemRight" valign="bottom"><b>numerator</b> = floa
 tuple&#160;</td><td class="memItemRight" valign="bottom"><b>denominator</b> = float(numerator_denominator[1])</td></tr>
 <tr class="memitem:abca458bcee65de262d91b62a0dd127b5"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="abca458bcee65de262d91b62a0dd127b5"></a>
 &#160;</td><td class="memItemRight" valign="bottom"><b>inch</b> = whole+numerator/denominator</td></tr>
+<tr class="memitem:afa49ae73d77175f41a26452c2b374dab"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classEZCAD3_1_1L.html#afa49ae73d77175f41a26452c2b374dab">result</a> = self._mm/divisor._mm</td></tr>
+<tr class="memitem:afa49ae73d77175f41a26452c2b374dab"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="afa49ae73d77175f41a26452c2b374dab"></a>
+tuple&#160;</td><td class="memItemRight" valign="bottom"><b>result</b> = <a class="el" href="classEZCAD3_1_1L.html">L</a>(mm = self._mm / divisor)</td></tr>
 <tr class="memitem:a24fdaede62eb3600379ac0f18df495a2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classEZCAD3_1_1L.html#a24fdaede62eb3600379ac0f18df495a2">value</a> = self._mm</td></tr>
 <tr class="memitem:aac903cbcdbe68016d273b0a2a5c5a833"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="aac903cbcdbe68016d273b0a2a5c5a833"></a>
 list&#160;</td><td class="memItemRight" valign="bottom"><b>format</b> = format[:-1]</td></tr>
-<tr class="memitem:afa49ae73d77175f41a26452c2b374dab"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="afa49ae73d77175f41a26452c2b374dab"></a>
+<tr class="memitem:aee4e68f9858c46f795ad3494fc5bba9d"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="aee4e68f9858c46f795ad3494fc5bba9d"></a>
 string&#160;</td><td class="memItemRight" valign="bottom"><b>result</b> = &quot;{0}&quot;</td></tr>
-<tr class="memitem:afa49ae73d77175f41a26452c2b374dab"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="afa49ae73d77175f41a26452c2b374dab"></a>
-tuple&#160;</td><td class="memItemRight" valign="bottom"><b>result</b> = (&quot;{0:&quot; + format + &quot;}&quot;)</td></tr>
-<tr class="memitem:a863276496da1b5f4cc5cae900ae01039"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classEZCAD3_1_1L.html#a863276496da1b5f4cc5cae900ae01039">result</a> = self</td></tr>
 <tr class="memitem:a266f8254f5257633892143af185a71b0"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a266f8254f5257633892143af185a71b0"></a>
 &#160;</td><td class="memItemRight" valign="bottom"><b>mm</b> = self.mm</td></tr>
 </table>
@@ -185,7 +185,7 @@ tuple&#160;</td><td class="memItemRight" valign="bottom"><b>result</b> = (&quot;
 </div><div class="memdoc">
 
 <p>Initialize <em>self</em> (an <em><a class="el" href="classEZCAD3_1_1L.html" title="L corresponds to a length.">L</a></em> object) to the sum of <em>mm</em> + <em>cm</em> + <em>inch</em> + <em>ft</em>. </p>
-<pre class="fragment">A *L* represents a length. </pre> <dl class="params"><dt>Parameters</dt><dd>
+<dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">self</td><td>is the <em><a class="el" href="classEZCAD3_1_1L.html" title="L corresponds to a length.">L</a></em> object to initialize. </td></tr>
     <tr><td class="paramname">mm</td><td>is the number of millimeters to add in. </td></tr>
@@ -251,7 +251,7 @@ tuple&#160;</td><td class="memItemRight" valign="bottom"><b>result</b> = (&quot;
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>number</em>&#160;</td>
+          <td class="paramname"><em>divisor</em>&#160;</td>
         </tr>
         <tr>
           <td></td>
@@ -270,7 +270,7 @@ tuple&#160;</td><td class="memItemRight" valign="bottom"><b>result</b> = (&quot;
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd><em>self</em> / <em>number</em></dd></dl>
-<p><em>__div__</em>() returns <em>self</em> / <em>number</em>. <em>number</em> must be either be an <em>int</em> or a <em>float</em>. </p>
+<p><em>__div__</em>() returns <em>self</em> / <em>number</em>. <em>number</em> must be either be an <em>int</em>, <em>float</em>, or <em><a class="el" href="classEZCAD3_1_1L.html" title="L corresponds to a length.">L</a></em>. For a divisor that is an <em>int</em> or <em>float</em>, the returned result is of type <em><a class="el" href="classEZCAD3_1_1L.html" title="L corresponds to a length.">L</a></em>. For a divisor that is an <em><a class="el" href="classEZCAD3_1_1L.html" title="L corresponds to a length.">L</a></em> type, the returned quotient result is of type <em>float</em>. </p>
 
 </div>
 </div>
@@ -299,7 +299,7 @@ tuple&#160;</td><td class="memItemRight" valign="bottom"><b>result</b> = (&quot;
 </div><div class="memdoc">
 
 <p>Returns <em>True</em> if <em>self</em> equals <em>length</em>. </p>
-<pre class="fragment">*L*: Return {self} / {scalar}. </pre> <dl class="params"><dt>Parameters</dt><dd>
+<dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">self</td><td>is the first argument of the equality test. </td></tr>
     <tr><td class="paramname">length</td><td>is the second argument of the equality test. </td></tr>
@@ -887,7 +887,7 @@ that the returned angle is in the correct quadrant. </pre>
 </div>
 </div>
 <h2>Member Data Documentation</h2>
-<a class="anchor" id="a863276496da1b5f4cc5cae900ae01039"></a>
+<a class="anchor" id="afa49ae73d77175f41a26452c2b374dab"></a>
 <div class="memitem">
 <div class="memproto">
 <table class="mlabels">
@@ -895,7 +895,7 @@ that the returned angle is in the correct quadrant. </pre>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">EZCAD3.L.result = self</td>
+          <td class="memname">tuple EZCAD3.L.result = self._mm/divisor._mm</td>
         </tr>
       </table>
   </td>
@@ -904,7 +904,7 @@ that the returned angle is in the correct quadrant. </pre>
   </tr>
 </table>
 </div><div class="memdoc">
-<pre class="fragment">*L*: Return |*self*|. </pre><pre class="fragment">L: Return the maximum of {self} and {length}. </pre><pre class="fragment">L: Return the minimum of {self} and {length}. </pre> 
+<pre class="fragment">*L*: Return {self} / {scalar}. </pre><pre class="fragment">*L*: Return |*self*|. </pre><pre class="fragment">L: Return the maximum of {self} and {length}. </pre><pre class="fragment">L: Return the minimum of {self} and {length}. </pre> 
 </div>
 </div>
 <a class="anchor" id="a24fdaede62eb3600379ac0f18df495a2"></a>
@@ -953,7 +953,7 @@ that the returned angle is in the correct quadrant. </pre>
 </div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Sat Nov 16 2013 23:53:13 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
+Generated on Tue Dec 31 2013 18:14:28 for EZCAD by &#160;<a href="http://www.doxygen.org/index.html">
 <img class="footer" src="doxygen.png" alt="doxygen"/>
 </a> 1.8.1.2
 </small></address>

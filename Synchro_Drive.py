@@ -29,6 +29,7 @@ class Motor_Assembly(Part):
 	zero = L()
 	self.base_bz_l = base_bz = gear_box.t.z + turn_table.height_l
 
+
 class Wheel_Assembly(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
@@ -57,9 +58,9 @@ class Wheel_Assembly(Part):
 	self.top_shim_ = Shim(self)
 	self.turn_table_ = Turn_Table(self)
 	self.turn_table_bottom_screws_ = Turn_Table_Bottom_Screws(self)
-	#  teeth_count = 19, belt_class = "XL",
-        self.twist_timing_pulley_ = Timing_Pulley(self)
-	self.twist_timing_pulley_screws_ = Twist_Timing_Pulley_Screws(self)
+        self.twist_pulley_ = Pulley(self)
+	self.twist_pulley_top_ = Pulley_Top(self)
+	self.twist_pulley_screws_ = Twist_Pulley_Screws(self)
 	self.vertical_shaft_ = Vertical_Shaft(self)
 	self.west_gear_box_cover_ = Gear_Box_Cover(self)
 	self.wheel_ = Wheel(self)
@@ -74,6 +75,7 @@ class Wheel_Assembly(Part):
 
 	# Grab some values from *wheel_assembly* (i.e. *self*):
 	wheel_assembly = self
+	bottom_bearing = wheel_assembly.bottom_bearing_
 	gear_box = wheel_assembly.gear_box_
 	gear_box_cover = wheel_assembly.west_gear_box_cover_
 	gear_box_bottom = self.gear_box_bottom_
@@ -83,36 +85,43 @@ class Wheel_Assembly(Part):
 	gear_box_shelf_screws = self.gear_box_shelf_screws_
 	gear_box_top = self.gear_box_top_
 	gear_box_top_screws = self.gear_box_top_screws_
+	north_bearing = wheel_assembly.north_bearing_
+	south_bearing = wheel_assembly.south_bearing_
 	south_bevel_gear = wheel_assembly.south_bevel_gear_
 	south_shim = wheel_assembly.south_shim_
-	north_bearing = wheel_assembly.north_bearing_
 	top_bearing = wheel_assembly.top_bearing_
-	synchro_drive = wheel_assembly.up
-	turn_table = self.turn_table_
-	twist_timing_pulley = wheel_assembly.twist_timing_pulley_
-	bottom_bearing = wheel_assembly.bottom_bearing_
 	top_bevel_gear = wheel_assembly.top_bevel_gear_
-	vertical_shaft = wheel_assembly.vertical_shaft_
 	top_shim = wheel_assembly.top_shim_
-	south_bearing = wheel_assembly.south_bearing_
+	turn_table = self.turn_table_
+	twist_pulley = wheel_assembly.twist_pulley_
+	twist_pulley_top = wheel_assembly.twist_pulley_top_
+	vertical_shaft = wheel_assembly.vertical_shaft_
 
-	# Configure *twist_timing_pulley*:
+	synchro_drive = wheel_assembly.up
+	motor_assembly = synchro_drive.motor_assembly_
+	motor_base = motor_assembly.motor_base_
+
+	# Configure *twist_pulley*:
+	#  teeth_count = 19, belt_class = "XL",
 	#  belt_width = L(inch = "1/8") + L(inch = .005),
-	twist_timing_pulley.configure(
-	  teeth_count = 44,
+	twist_pulley.configure(
+	  teeth_count = 46,
 	  belt_class = "MXL",
-	  lip_extra = L(mm = 2),
-	  lip_width = L(mm = 5),
-	  belt_width = L(mm = 4),
+	  lip_extra = L(mm = 0.5),
+	  lip_height = turn_table.dz + motor_base.dz + L(mm = 1.000),
+	  belt_width = L(inch = "1/8") + L(inch = .005),
 	  bearing_diameter = top_bearing.diameter_l,
 	  bearing_sides = top_bearing.sides_i,
 	  bearing_width = top_bearing.width_l,
 	  shaft_diameter = L(inch = "1/2"),
+	  holes_count = 8,
 	  bottom_z = gear_box.t.z)
 
-	# Grab some values from *synchro_drive*:
-	motor_assembly = synchro_drive.motor_assembly_
-	motor_base = motor_assembly.motor_base_
+	twist_pulley_top.configure(
+	  lip_diameter = twist_pulley.lip_diameter_l,
+	  lip_height = L(mm = 2.00),
+	  shaft_diameter = (top_bearing.diameter_l + top_bearing.bore_l) / 2,
+	  bottom_z = twist_pulley.t.z)
 
 	# Compute various locations along the Y axis:
 	zero = L()
@@ -125,18 +134,13 @@ class Wheel_Assembly(Part):
 
 	# The pockets that screws go to are all the same for the top, shelf,
 	# and bottom:
-	self.pocket_wall_dx_l = pocket_wall_dx = L(mm = 3.00)
-	self.pocket_wall_dy_l = pocket_wall_dy = L(mm = 3.00)
+	self.pocket_wall_dx_l = pocket_wall_dx = L(mm = 4.00)
+	self.pocket_wall_dy_l = pocket_wall_dy = L(mm = 4.00)
 	self.pocket_dx_l = \
 	  gear_box.dx - 2 * gear_box_cover.dx -  2 * pocket_wall_dx
 	self.pocket_dy_l = \
 	  gear_box.dy - 2 * gear_box_side.dy - 2 * pocket_wall_dy
 	self.pocket_dz_l = L(mm = 8.00)
-
-	# Update the timing pulley:
-	#self.twist_timing_pulley_.update(
-	#  lip_width = turn_table.height_l + L(mm = 1.000) + motor_base.dz,
-	#  shaft_diameter = vertical_shaft.diameter_l + L(inch = "1/4"))
 
 	# Place various items into the wheel assembly:
 	one = L(mm = 1.0)
@@ -150,7 +154,7 @@ class Wheel_Assembly(Part):
 	  rotate = degrees_90, translate = P(zero,  y3, zero))
 	bottom_bearing.place(translate = P(zero, zero, gear_box_shelf.t.z -
 	  gear_box_shelf.bearing_lip_dz_l - bottom_bearing.width_l / 2))
-	p = P(zero, zero, twist_timing_pulley.t.z - top_bearing.width_l / 2)
+	p = P(zero, zero, twist_pulley.t.z - top_bearing.width_l / 2)
 	top_bearing.place(translate = p)
 
 	# Place the horizontal bevel gear.  (The vertical bevel gear is
@@ -184,7 +188,7 @@ class Bearing(Part):
 	self.bore_l = bore = L(inch = "3/8")
 	self.diameter_l = diameter = L(inch = "7/8")
 	self.width_l = width = L(inch = "9/32")
-	self.sides_i = sides = 30
+	self.sides_i = sides = 60
 
 	zero = L()
 	self.cylinder(comment = "Bearing Cylinder",
@@ -556,26 +560,31 @@ class Gear_Box_Screws(Part):
 	sw_screw = self.sw_screw_
 
 	# Configure all 8 screws:
+	sides_angle = Angle(deg = 30)
 	en_screw.configure(
 	  comment = "East Side North Screw",
 	  flags = "#4-40:hi",
 	  start = P(x7, y4, z),
-	  end = P(x5, y4, z))
+	  end = P(x5, y4, z),
+	  sides_angle = sides_angle)
 	es_screw.configure(
 	  comment = "East Side South Screw",
 	  flags = "#4-40:hi",
 	  start = P(x7, y3, z),
-	  end = P(x5, y3, z))
+	  end = P(x5, y3, z),
+	  sides_angle = sides_angle)
 	wn_screw.configure(
 	  comment = "West Side North Screw",
 	  flags = "#4-40:hi",
 	  start = P(x0, y4, z),
-	  end = P(x2, y4, z))
+	  end = P(x2, y4, z),
+	  sides_angle = sides_angle)
 	ws_screw.configure(
 	  comment = "West Side South Screw",
 	  flags = "#4-40:hi",
 	  start = P(x0, y3, z),
-	  end = P(x2, y3, z))
+	  end = P(x2, y3, z),
+	  sides_angle = sides_angle)
 	ne_screw.configure(
 	  comment = "North Side East Screw",
 	  flags = "#4-40:hi",
@@ -630,7 +639,7 @@ class Gear_Box_Shelf(Part):
 	gear_box = wheel_assembly.gear_box_
 	gear_box_cover = wheel_assembly.west_gear_box_cover_
 	gear_box_side = wheel_assembly.south_gear_box_side_
-	twist_timing_pulley = wheel_assembly.twist_timing_pulley_
+	twist_pulley = wheel_assembly.twist_pulley_
 	top_bevel_gear = wheel_assembly.top_bevel_gear_
 	top_shim = wheel_assembly.top_shim_
 
@@ -644,8 +653,9 @@ class Gear_Box_Shelf(Part):
 	z0 = top_bevel_gear.major_diameter_l + top_shim.dz - pocket_dz
 	z1 = z0 + pocket_dz / 2
 	z2 = z1 + pocket_dz / 2
-	z3 = z2 + bearing.width_l
-	z4 = z3 + bearing_lip_dz
+	z3 = z2 + top_shim.dz
+	z4 = z3 + bearing.width_l
+	z5 = z4 + bearing_lip_dz
 	self.screw_z_l = z1
 
 	dx = gear_box.dx - 2 * gear_box_cover.dx
@@ -656,28 +666,29 @@ class Gear_Box_Shelf(Part):
 	  material = Material("plastic", "ABS"),
 	  color = Color("gold"),
 	  corner1 = P(-dx / 2, -dy / 2, z0),	# should z0
-	  corner2 = P( dx / 2,  dy / 2, z4),
+	  corner2 = P( dx / 2,  dy / 2, z5),
 	  top = "b")
 
 	# Cut a hole for the shaft:
 	zero = L()
 	self.hole(comment = "Shaft Hole",
-	  diameter = twist_timing_pulley.shaft_diameter_l,
+	  diameter = twist_pulley.shaft_diameter_l,
 	  start = P(zero, zero, z0),
-	  end = P(zero, zero, z4),
+	  end = P(zero, zero, z5),
 	  flags = "t")
 
 	# Cut a bearing hole:
 	self.hole(comment = "Bearing Hole",
 	  diameter = bearing.diameter_l,
 	  start = P(zero, zero, z0),
-	  end = P(zero, zero, z3),
-	  flags = "f")
+	  end = P(zero, zero, z4),
+	  flags = "f",
+	  sides = 60)
 
 	# Cut out the pocket:
 	self.simple_pocket(comment = "Mount Pocket",
 	  bottom_corner = P(-pocket_dx / 2, -pocket_dy / 2, z0),
-	  top_corner = P( pocket_dx / 2,  pocket_dy / 2, z1))
+	  top_corner = P( pocket_dx / 2,  pocket_dy / 2, z2))
 
 class Gear_Box_Side(Part):
     def __init__(self, up, south_side):
@@ -736,7 +747,8 @@ class Gear_Box_Side(Part):
 	  diameter = bearing.diameter_l,
 	  start = P(zero, y3, zero),
 	  end = P(zero, y2, zero),
-	  flags = "f")
+	  flags = "f",
+	  sides = 60)
 
 	# Do a full shaft hole for the *south_side*:
 	if south_side:
@@ -758,7 +770,7 @@ class Gear_Box_Top(Part):
 	gear_box_cover = wheel_assembly.west_gear_box_cover_
 	gear_box_side = wheel_assembly.south_gear_box_side_
 	turn_table = wheel_assembly.turn_table_
-	twist_timing_pulley = wheel_assembly.twist_timing_pulley_
+	twist_pulley = wheel_assembly.twist_pulley_
 
 	# Grab the pocket size from *wheel_assembly*:
 	pocket_dx = wheel_assembly.pocket_dx_l
@@ -795,7 +807,7 @@ class Gear_Box_Top(Part):
 	# Do the shaft hole:
 	zero = L()
 	self.hole(comment = "Shaft Hole",
-	  diameter = twist_timing_pulley.shaft_diameter_l,
+	  diameter = twist_pulley.shaft_diameter_l,
 	  start = P(zero, zero, z4),
 	  end = P(zero, zero, z0),
 	  flags = "t")
@@ -848,214 +860,11 @@ class Motor_Base(Part):
 	  diameter = turn_table_bore,
 	  start = P(zero, zero, z1),
 	  end =   P(zero, zero, z0),
-	  flags = "t")
+	  flags = "t",
+	  sides = 60)
 	#print("<=Motor_Base.construct()")
 
-class Shim(Part):
-    def __init__(self, up):
-	Part.__init__(self, up)
-
-    def construct(self):
-
-	wheel_assembly = self.up
-	bearing = wheel_assembly.south_bearing_
-	bearing_diameter = bearing.diameter_l
-	bearing_bore = bearing.bore_l
-
-	self.bore_l = bore = bearing_bore
-	self.diameter_l = diameter = (bearing_diameter + bore) / 2
-	self.width_l = width = L(inch = .010)
-	
-	zero = L()
-	self.cylinder(comment = "Shim Cylinder",
-	  material = Material("steel", "stainless"),
-	  color = Color("coral"),
-	  diameter = diameter,
-	  start = P(zero, zero, zero),
-	  end = P(zero, zero, width))
-
-class Test(Part):
-    def __init__(self, up):
-	Part.__init__(self, up)
-	self.test_block_ = Test_Block(self)
-	self.test_block_screws_ = Test_Block_Screws(self)
-	self.bearing_ = Bearing(self)
-
-    def construct(self):
-	bearing = self.bearing_
-	test_block = self.test_block_
-	zero = L()
-	bearing.place(translate =
-	  P(zero, zero, test_block.bearing_lip_dz_l + bearing.width_l / 2))
-
-class Test_Block(Part):
-    def construct(self):
-	test = self.up
-	bearing = test.bearing_
-
-	dx = L(inch = 2.000)
-	dy = L(inch = 2.000)
-
-	self.pocket_wall_dx_l = pocket_wall_dx = L(mm = 4.00)
-	self.pocket_wall_dy_l = pocket_wall_dy = L(mm = 4.00)
-	self.pocket_dx_l = pocket_dx = dx - 2 * pocket_wall_dx
-	self.pocket_dy_l = pocket_dy = dy - 2 * pocket_wall_dy
-	self.pocket_dz_l = pocket_dz = L(mm = 14.00)
-	self.bearing_lip_dz_l = bearing_lip_dz = L(mm = 2.00)
-
-	x0 = -dx / 2
-	x1 = x0 + pocket_wall_dx
-	x2 = x1 + pocket_dx / 2
-	x3 = x2 + pocket_dx / 2
-	x4 = x3 + pocket_wall_dx
-
-	y0 = -dy / 2
-	y1 = y0 + pocket_wall_dy
-	y2 = y1 + pocket_dy / 2
-	y3 = y2 + pocket_dy / 2
-	y4 = y3 + pocket_wall_dy
-
-	z0 = L()
-	z1 = z0 + bearing_lip_dz
-	z2 = z1 + bearing.width_l
-	z3 = z2 + pocket_dz
-
-	self.block(comment = "Test Block",
-	  material = Material("plastic", "ABS"),
-	  color = Color("cyan"),
-	  corner1 = P(x0, y0, z0),
-	  corner2 = P(x4, y4, z3),
-	  top = "t")
-	self.simple_pocket(comment = "Pocket",
-	  bottom_corner = P(x1, y1, z2),
-	  top_corner =    P(x3, y3, z3),
-	  pocket_top = "t")
-	self.hole(comment = "bearing hole",
-	  diameter = bearing.diameter_l,
-	  start = P(x2, y2, z3),
-	  end = P(x2, y2, z1),
-	  sides = bearing.sides_i,
-	  flags = "f")
-	self.hole(comment = "shaft hole",
-	  diameter = (bearing.diameter_l + bearing.bore_l)/2,
-	  start = P(x2, y2, z3),
-	  end = P(x2, y2, z0),
-	  flags = "t")
-
-class Test_Block_Screws(Part):
-    def __init__(self, up):
-	Part.__init__(self, up)
-	self.screw_2_56_bottom_ = Fastener(self)
-	self.screw_4_40_bottom_ = Fastener(self)
-	self.screw_6_32_bottom_ = Fastener(self)
-	self.screw_10_24_bottom_ = Fastener(self)
-	self.screw_2_56_side_ = Fastener(self)
-	self.screw_4_40_side_ = Fastener(self)
-	self.screw_6_32_side_ = Fastener(self)
-	self.screw_10_24_side_ = Fastener(self)
-
-    def construct(self):
-        test = self.up
-	test_block = test.test_block_
-	bearing = test.bearing_
-
-	pocket_wall_dx = test_block.pocket_wall_dx_l
-	pocket_wall_dy = test_block.pocket_wall_dy_l
-	pocket_dx = test_block.pocket_dx_l
-	pocket_dy = test_block.pocket_dy_l
-
-	x0 = test_block.w.x
-	x1 = x0 + pocket_wall_dx
-	x2 = x1 + pocket_dx * 0.20
-	x3 = x2 + pocket_dx * 0.30
-	x4 = x3 + pocket_dx * 0.30
-	x5 = x4 + pocket_dx * 0.20
-	x6 = x5 + pocket_wall_dx
-	#print("x0={0} x1={1} x2={2} x3={3} x4={4} x5={5} x6={6}".
-	#  format(x0, x1, x2, x3, x4, x5, x6))
-
-	y0 = test_block.s.y
-	y1 = y0 + pocket_wall_dy
-	y2 = y1 + pocket_dy * 0.20
-	y3 = y2 + pocket_dy * 0.30
-	y4 = y3 + pocket_dy * 0.30
-	y5 = y4 + pocket_dy * 0.20
-	y6 = y5 + pocket_wall_dy
-	#print("y0={0} y1={1} y2={2} y3={3} y4={4} y5={5} y6={6}".
-	#  format(y0, y1, y2, y3, y4, y5, y6))
-
-	z0 = test_block.b.z
-	z1 = z0 + test_block.bearing_lip_dz_l
-	z2 = z1 + bearing.width_l
-	z3 = z2 + test_block.pocket_dz_l / 2
-	z4 = z3 + test_block.pocket_dz_l / 2
-	#print("z0={0} z1={1} z2={2} z3={3} z4={4}".format(z0, z1, z2, z3, z4))
-
-	screw_2_56_bottom  = self.screw_2_56_bottom_
-	screw_4_40_bottom  = self.screw_4_40_bottom_
-	screw_6_32_bottom  = self.screw_6_32_bottom_
-	screw_10_24_bottom = self.screw_10_24_bottom_
-	screw_2_56_side  = self.screw_2_56_side_
-	screw_4_40_side  = self.screw_4_40_side_
-	screw_6_32_side  = self.screw_6_32_side_
-	screw_10_24_side = self.screw_10_24_side_
-
-	screw_2_56_bottom.configure(
-	  comment = "2-56 bottom",
-	  flags = "#2-56:hi",
-	  start = P(x2, y2, z0),
-	  end = P(x2, y2, z2))
-	screw_4_40_bottom.configure(
-	  comment = "4-40 bottom",
-	  flags = "#4-40:hi",
-	  start = P(x2, y4, z0),
-	  end = P(x2, y4, z2))
-	screw_6_32_bottom.configure(
-	  comment = "6-32 bottom",
-	  flags = "#6-32:hi",
-	  start = P(x4, y2, z0),
-	  end = P(x4, y2, z2))
-	screw_10_24_bottom.configure(
-	  comment = "10-24 bottom",
-	  flags = "#10-24:hi",
-	  start = P(x4, y4, z0),
-	  end = P(x4, y4, z2))
-
-	zero = L()
-	degrees30 = Angle(deg = 30)
-	screw_2_56_side.configure(
-	  comment = "2-56 side",
-	  flags = "#2-56:hi",
-	  start = P(x0, y3, z3),
-	  end = P(x1, y3, z3))
-	screw_4_40_side.configure(
-	  comment = "4-40 side",
-	  flags = "#4-40:hi",
-	  start = P(x3, y0, z3),
-	  end = P(x3, y1, z3),
-	  sides_angle = degrees30)
-	screw_6_32_side.configure(
-	  comment = "6-32 side",
-	  flags = "#6-32:hi",
-	  start = P(x6, y3, z3),
-	  end = P(x5, y3, z3))
-	screw_10_24_side.configure(
-	  comment = "10-24 side",
-	  flags = "#10-24:hi",
-	  start = P(x3, y6, z3),
-	  end = P(x3, y5, z3),
-	  sides_angle = degrees30)
-
-	screw_2_56_bottom.drill(test_block, select = "close")
-	screw_4_40_bottom.drill(test_block, select = "close")
-	screw_6_32_bottom.drill(test_block, select = "close")
-	screw_10_24_bottom.drill(test_block, select = "close")
-	screw_2_56_side.drill(test_block, select = "close")
-	screw_4_40_side.drill(test_block, select = "close")
-	screw_6_32_side.drill(test_block, select = "close")
-	screw_10_24_side.drill(test_block, select = "close")
-
-class Timing_Pulley(Part):
+class Pulley(Part):
     def __init__(self, up):
 	# Initialize *Part* super class:
 	Part.__init__(self, up)
@@ -1064,9 +873,9 @@ class Timing_Pulley(Part):
 	zero = L()
 	self.belt_class_s = "MXL"
 	self.teeth_count_i = 20
-	self.belt_width_l = L(inch = "1/4")
+	self.belt_width_l = L(inch = "1/8")
 	self.lip_extra_l = L(inch = "1/8")
-	self.lip_width_l = L(inch = 10)
+	self.lip_height_l = L(inch = 10)
 	self.holes_count_i = 4
 	self.hole_diameter_l = zero
 	self.bearing_diameter_l = zero
@@ -1075,7 +884,7 @@ class Timing_Pulley(Part):
 	self.bottom_z_l = zero
 
     def configure(self, belt_class = None, teeth_count = None,
-      belt_width = None, lip_extra = None, lip_width = None,
+      belt_width = None, lip_extra = None, lip_height = None,
       holes_count = None, hole_diameter = None, bearing_diameter = None,
       bearing_sides = None, bearing_width = None, shaft_diameter = None,
       bottom_z = None):
@@ -1089,8 +898,8 @@ class Timing_Pulley(Part):
 	  isinstance(belt_width, L) and belt_width > zero
 	assert type(lip_extra) == none_type or \
 	  isinstance(lip_extra, L) and lip_extra > zero
-	assert type(lip_width) == none_type or \
-	  isinstance(lip_width, L) and lip_width > zero
+	assert type(lip_height) == none_type or \
+	  isinstance(lip_height, L) and lip_height > zero
 	assert type(holes_count) == none_type or \
 	  isinstance(holes_count, int) and holes_count >= 0
 	assert type(hole_diameter) == none_type or \
@@ -1113,8 +922,8 @@ class Timing_Pulley(Part):
 	    self.belt_width_l = belt_width
 	if isinstance(lip_extra, L):
 	    self.lip_extra_l = lip_extra
-	if isinstance(lip_width, L):
-	    self.lip_width_l = lip_width
+	if isinstance(lip_height, L):
+	    self.lip_height_l = lip_height
 	if isinstance(holes_count, int):
 	    self.holes_count_i = holes_count
 	if isinstance(hole_diameter, L):
@@ -1131,13 +940,13 @@ class Timing_Pulley(Part):
 	    self.bottom_z_l = bottom_z
 
     def construct(self):
-	""" *Timing_Pulley* construct method. """
+	""" *Pulley* construct method. """
 
 	# Grab some value out of *self*:
 	belt_class = self.belt_class_s
 	teeth_count = self.teeth_count_i
 	belt_width = self.belt_width_l
-	lip_width = self.lip_width_l
+	lip_height = self.lip_height_l
 	lip_extra = self.lip_extra_l
 	holes_count = self.holes_count_i
 	hole_diameter = self.hole_diameter_l
@@ -1287,24 +1096,42 @@ class Timing_Pulley(Part):
 	# Compute the various Z heights:
 	zero = L()
 	z0 = bottom_z			# Bottom
-	z1 = z0 + lip_width / 2		# Extend into lip to force a weld
-	z2 = z0 + lip_width		# Lip top and gear bottom
+	z1 = z0 + lip_height / 2	# Extend into lip to force a weld
+	z2 = z0 + lip_height		# Lip top and gear bottom
 	z3 = z2 + belt_width		# Gear top
-	#print("Timing_Pulley.construct():z0={0} z1={1} z2={2} z3={3}".
+	#print("Pulley.construct():z0={0} z1={1} z2={2} z3={3}".
 	#  format(z0, z1, z2, z3))
 
-	r1 = tooth_radius
-	r2 = r1 - height
-	self.holes_radius_l = holes_radius = (r2 + bearing_diameter / 2) / 2
+	shaft_radius = shaft_diameter / 2
+	bearing_radius = bearing_diameter / 2
+
+	# Compute various locations along the radius
+	r0 = shaft_radius
+	r1 = bearing_radius
+	r2 = (tooth_radius - height + bearing_radius) / 2
+	r3 = tooth_radius - 2 * height
+	r4 = tooth_radius - height
+	r5 = tooth_radius
+	r6 = tooth_radius + lip_extra
+	#r3 = tooth_radius - height
+	#r4 = tooth_radius
+	#r5 = tooth_radius + height
+	#r6 = tooth_radius + height + lip_extra
+	#print("r0={0} r1={1} r2={2} r3={3} r4={4} r5={5} r6={6}".
+	#  format(r0, r1, r2, r3, r4, r5, r6))
+
+	self.holes_radius_l = holes_radius =  r2
+	self.tooth_diameter_l = tooth_diameter = 2 * tooth_radius
+	self.lip_diameter_l = lip_diameter = 2 * r6
 
 	self.cylinder(comment = "Pulley Lip",
 	  material = Material("plastic", "ABS"),
 	  color = Color("crimson"),
-	  diameter = tooth_radius * 2 + lip_extra,
+	  diameter = lip_diameter,
 	  start = P(zero, zero, z0),
 	  end = P(zero, zero, z2),
 	  sides = teeth_count)
-	#print("Timing_Pulley.construct():after lip:dx={0} dy={1} dz={2}".
+	#print("Pulley.construct():after lip:dx={0} dy={1} dz={2}".
 	#  format(self.dx, self.dy, self.dz))
 	
 	quick = False
@@ -1328,34 +1155,21 @@ class Timing_Pulley(Part):
 
 		# Add everything to the *outer_path*:
 		outer_path.append(
-		  Bend(P(r2.cosine(angle0), r2.sine(angle0), zero), zero))
+		  Bend(P(r4.cosine(angle0), r4.sine(angle0), zero), zero))
 		outer_path.append(
-		  Bend(P(r2.cosine(angle1), r2.sine(angle1), zero), zero))
+		  Bend(P(r4.cosine(angle1), r4.sine(angle1), zero), zero))
 		outer_path.append(
-		  Bend(P(r1.cosine(angle2), r1.sine(angle2), zero), zero))
+		  Bend(P(r3.cosine(angle2), r3.sine(angle2), zero), zero))
 		outer_path.append(
-		  Bend(P(r1.cosine(angle3), r1.sine(angle3), zero), zero))
+		  Bend(P(r3.cosine(angle3), r3.sine(angle3), zero), zero))
 
 	    # Now extrude the shape:
 	    self.extrude(comment = "Gear",
 	      outer_path = outer_path,
 	      start = P(zero, zero, z1),
 	      end = P(zero, zero, z3))
-	    #print("Timing_Pulley.construct():after extrd:dx={0} dy={1} dz={2}".
+	    #print("Pulley.construct():after extrd:dx={0} dy={1} dz={2}".
 	    #  format(self.dx, self.dy, self.dz))
-
-	# Put in the 
-	if False and holes_count > 0 and hole_diameter > zero:
-	    angle_delta = Angle(deg = 360) / holes_count
-	    for index in range(holes_count):
-		angle = angle_delta * index
-		x = holes_radius.cosine(angle)
-		y = holes_radius.sine(angle)
-		self.hole(comment = "Screw hole {0}".format(index),
-		  diameter = hole_diameter,
-		  start = P(x, y, z3),
-		  end = P(x, y, z0),
-		  flags = "t")
 
 	if shaft_diameter > zero:
 	    self.hole(comment = "Shaft Hole",
@@ -1364,6 +1178,8 @@ class Timing_Pulley(Part):
 	      end = P(zero, zero, zero),
 	      flags = "t")
 
+	#print("bearing_diameter={0} bearing_width={1}".
+	#  format(bearing_diameter, bearing_width))
 	if bearing_diameter > zero and bearing_width > zero:
 	    self.hole(comment = "Bearing Hole",
 	      diameter = bearing_diameter,
@@ -1371,6 +1187,271 @@ class Timing_Pulley(Part):
 	      end = P(zero, zero, z3 - bearing_width),
 	      flags = "f",
 	      sides = bearing_sides)
+
+class Pulley_Top(Part):
+    def __init__(self, up):
+	# Initialize *Part* super class:
+	Part.__init__(self, up)
+
+	# Initialize configuration varaibles for *self*:
+	zero = L()
+	self.lip_diameter_l = zero
+	self.lip_height_l = zero
+	self.shaft_diameter_l = zero
+	self.bottom_z_l = L()
+
+    def configure(self, lip_diameter = None, lip_height = None,
+      bottom_z = None, shaft_diameter = None):
+
+	# Check argument types:
+	zero = L()
+	none_type = type(None)
+      	assert type(lip_diameter) == none_type or isinstance(lip_diameter, L)
+      	assert type(lip_height) == none_type or isinstance(lip_height, L)
+      	assert type(bottom_z) == none_type or isinstance(bottom_z, L)
+	assert type(shaft_diameter) == none_type or \
+	  isinstance(shaft_diameter, L)
+
+	# Remember the arguments;
+	if isinstance(lip_diameter, L):
+	    self.lip_diameter_l = lip_diameter
+	if isinstance(lip_height, L):
+	    self.lip_height_l = lip_height
+	if isinstance(bottom_z, L):
+	    self.bottom_z_l = bottom_z
+	if isinstance(shaft_diameter, L):
+	    self.shaft_diameter_l = shaft_diameter
+
+    def construct(self):
+	""" *Pulley* construct method. """
+
+	z0 = self.bottom_z_l
+	z1 = z0 + self.lip_height_l
+
+	# Grab some value out of *self*:
+	zero = L()
+	x = zero
+	y = zero
+	self.cylinder(comment = "Pulley Top Cylinder",
+	  material = Material("plastic", "ABS"),
+	  color = Color("pink"),
+	  diameter = self.lip_diameter_l,
+	  start = P(x, y, z0),
+	  end = P(x, y, z1),
+	  sides = 60)
+
+	shaft_diameter = self.shaft_diameter_l
+	if shaft_diameter > zero:
+	    self.hole(comment = "Shaft hole",
+	      diameter = shaft_diameter,
+	      start = P(x, y, z1),
+	      end = P(x, y, z0),
+	      flags = "t",
+	      sides = 60)
+
+class Shim(Part):
+    def __init__(self, up):
+	Part.__init__(self, up)
+
+    def construct(self):
+
+	wheel_assembly = self.up
+	bearing = wheel_assembly.south_bearing_
+	bearing_diameter = bearing.diameter_l
+	bearing_bore = bearing.bore_l
+
+	self.bore_l = bore = bearing_bore = L(inch = 0.388)
+	self.diameter_l = diameter = L(inch = 0.625)
+	self.width_l = width = L(inch = 0.055)
+	
+	zero = L()
+	self.cylinder(comment = "Shim Cylinder",
+	  material = Material("steel", "stainless"),
+	  color = Color("coral"),
+	  diameter = diameter,
+	  start = P(zero, zero, zero),
+	  end = P(zero, zero, width))
+
+class Test(Part):
+    def __init__(self, up):
+	Part.__init__(self, up)
+	self.test_block_ = Test_Block(self)
+	self.test_block_screws_ = Test_Block_Screws(self)
+	self.bearing_ = Bearing(self)
+
+    def construct(self):
+	bearing = self.bearing_
+	test_block = self.test_block_
+	zero = L()
+	bearing.place(translate =
+	  P(zero, zero, test_block.bearing_lip_dz_l + bearing.width_l / 2))
+
+class Test_Block(Part):
+    def construct(self):
+	test = self.up
+	bearing = test.bearing_
+
+	dx = L(inch = 2.000)
+	dy = L(inch = 2.000)
+
+	self.pocket_wall_dx_l = pocket_wall_dx = L(mm = 6.00)
+	self.pocket_wall_dy_l = pocket_wall_dy = L(mm = 6.00)
+	self.pocket_dx_l = pocket_dx = dx - 2 * pocket_wall_dx
+	self.pocket_dy_l = pocket_dy = dy - 2 * pocket_wall_dy
+	self.pocket_dz_l = pocket_dz = L(mm = 14.00)
+	self.bearing_lip_dz_l = bearing_lip_dz = L(mm = 2.00)
+
+	x0 = -dx / 2
+	x1 = x0 + pocket_wall_dx
+	x2 = x1 + pocket_dx / 2
+	x3 = x2 + pocket_dx / 2
+	x4 = x3 + pocket_wall_dx
+
+	y0 = -dy / 2
+	y1 = y0 + pocket_wall_dy
+	y2 = y1 + pocket_dy / 2
+	y3 = y2 + pocket_dy / 2
+	y4 = y3 + pocket_wall_dy
+
+	z0 = L()
+	z1 = z0 + bearing_lip_dz
+	z2 = z1 + bearing.width_l
+	z3 = z2 + pocket_dz
+
+	self.block(comment = "Test Block",
+	  material = Material("plastic", "ABS"),
+	  color = Color("cyan"),
+	  corner1 = P(x0, y0, z0),
+	  corner2 = P(x4, y4, z3),
+	  top = "t")
+	self.simple_pocket(comment = "Pocket",
+	  bottom_corner = P(x1, y1, z2),
+	  top_corner =    P(x3, y3, z3),
+	  pocket_top = "t")
+	self.hole(comment = "bearing hole",
+	  diameter = bearing.diameter_l,
+	  start = P(x2, y2, z3),
+	  end = P(x2, y2, z1),
+	  sides = bearing.sides_i,
+	  flags = "f")
+	self.hole(comment = "shaft hole",
+	  diameter = (bearing.diameter_l + bearing.bore_l)/2,
+	  start = P(x2, y2, z3),
+	  end = P(x2, y2, z0),
+	  flags = "t")
+
+class Test_Block_Screws(Part):
+    def __init__(self, up):
+	Part.__init__(self, up)
+	self.screw_2_56_bottom_ = Fastener(self)
+	self.screw_4_40_bottom_ = Fastener(self)
+	self.screw_6_32_bottom_ = Fastener(self)
+	self.screw_10_24_bottom_ = Fastener(self)
+	self.screw_2_56_side_ = Fastener(self)
+	self.screw_4_40_side_ = Fastener(self)
+	self.screw_6_32_side_ = Fastener(self)
+	self.screw_10_24_side_ = Fastener(self)
+
+    def construct(self):
+        test = self.up
+	test_block = test.test_block_
+	bearing = test.bearing_
+
+	pocket_wall_dx = test_block.pocket_wall_dx_l
+	pocket_wall_dy = test_block.pocket_wall_dy_l
+	pocket_dx = test_block.pocket_dx_l
+	pocket_dy = test_block.pocket_dy_l
+
+	x0 = test_block.w.x
+	x1 = x0 + pocket_wall_dx
+	x2 = x1 + pocket_dx * 0.15
+	x3 = x2 + pocket_dx * 0.35
+	x4 = x3 + pocket_dx * 0.35
+	x5 = x4 + pocket_dx * 0.15
+	x6 = x5 + pocket_wall_dx
+	#print("x0={0} x1={1} x2={2} x3={3} x4={4} x5={5} x6={6}".
+	#  format(x0, x1, x2, x3, x4, x5, x6))
+
+	y0 = test_block.s.y
+	y1 = y0 + pocket_wall_dy
+	y2 = y1 + pocket_dy * 0.15
+	y3 = y2 + pocket_dy * 0.35
+	y4 = y3 + pocket_dy * 0.35
+	y5 = y4 + pocket_dy * 0.15
+	y6 = y5 + pocket_wall_dy
+	#print("y0={0} y1={1} y2={2} y3={3} y4={4} y5={5} y6={6}".
+	#  format(y0, y1, y2, y3, y4, y5, y6))
+
+	z0 = test_block.b.z
+	z1 = z0 + test_block.bearing_lip_dz_l
+	z2 = z1 + bearing.width_l
+	z3 = z2 + test_block.pocket_dz_l / 2
+	z4 = z3 + test_block.pocket_dz_l / 2
+	#print("z0={0} z1={1} z2={2} z3={3} z4={4}".format(z0, z1, z2, z3, z4))
+
+	screw_2_56_bottom  = self.screw_2_56_bottom_
+	screw_4_40_bottom  = self.screw_4_40_bottom_
+	screw_6_32_bottom  = self.screw_6_32_bottom_
+	screw_10_24_bottom = self.screw_10_24_bottom_
+	screw_2_56_side  = self.screw_2_56_side_
+	screw_4_40_side  = self.screw_4_40_side_
+	screw_6_32_side  = self.screw_6_32_side_
+	screw_10_24_side = self.screw_10_24_side_
+
+	screw_2_56_bottom.configure(
+	  comment = "2-56 bottom",
+	  flags = "#2-56:hi",
+	  start = P(x2, y2, z0),
+	  end = P(x2, y2, z2))
+	screw_4_40_bottom.configure(
+	  comment = "4-40 bottom",
+	  flags = "#4-40:hi",
+	  start = P(x2, y4, z0),
+	  end = P(x2, y4, z2))
+	screw_6_32_bottom.configure(
+	  comment = "6-32 bottom",
+	  flags = "#6-32:hi",
+	  start = P(x4, y2, z0),
+	  end = P(x4, y2, z2))
+	screw_10_24_bottom.configure(
+	  comment = "10-24 bottom",
+	  flags = "#10-24:hi",
+	  start = P(x4, y4, z0),
+	  end = P(x4, y4, z2))
+
+	zero = L()
+	degrees30 = Angle(deg = 30)
+	screw_2_56_side.configure(
+	  comment = "2-56 side",
+	  flags = "#2-56:hi",
+	  start = P(x0, y3, z3),
+	  end = P(x1, y3, z3))
+	screw_4_40_side.configure(
+	  comment = "4-40 side",
+	  flags = "#4-40:hi",
+	  start = P(x3, y0, z3),
+	  end = P(x3, y1, z3),
+	  sides_angle = degrees30)
+	screw_6_32_side.configure(
+	  comment = "6-32 side",
+	  flags = "#6-32:hi",
+	  start = P(x6, y3, z3),
+	  end = P(x5, y3, z3))
+	screw_10_24_side.configure(
+	  comment = "10-24 side",
+	  flags = "#10-24:hi",
+	  start = P(x3, y6, z3),
+	  end = P(x3, y5, z3),
+	  sides_angle = degrees30)
+
+	screw_2_56_bottom.drill(test_block, select = "close")
+	screw_4_40_bottom.drill(test_block, select = "close")
+	screw_6_32_bottom.drill(test_block, select = "close")
+	screw_10_24_bottom.drill(test_block, select = "close")
+	screw_2_56_side.drill(test_block, select = "close")
+	screw_4_40_side.drill(test_block, select = "close")
+	screw_6_32_side.drill(test_block, select = "close")
+	screw_10_24_side.drill(test_block, select = "close")
 
 class Turn_Table(Part):
     def __init__(self, up):
@@ -1494,9 +1575,10 @@ class Turn_Table_Sheet(Part):
 	# Bore the hole through the center:
 	self.hole(comment = "Bore Hole",
 	  diameter = turn_table_bore,
-	  start = P(zero, zero, zero),
-	  end =   P(zero, zero, turn_table_sheet_thickness),
-	  flags = "t")
+	  start = P(zero, zero, z1),
+	  end =   P(zero, zero, z0),
+	  flags = "t",
+	  sides = 60)
 
 	# Do the the holes:
 	for x_sign in [-1, 1]:
@@ -1528,44 +1610,61 @@ class Turn_Table_Sheet(Part):
 		      end = P(x2, y2, z0),
 		      flags = "t")
 
-class Twist_Timing_Pulley_Screws(Part):
+class Twist_Pulley_Screws(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
 	self.screw0_ = Fastener(self)
 	self.screw1_ = Fastener(self)
 	self.screw2_ = Fastener(self)
 	self.screw3_ = Fastener(self)
+	self.screw4_ = Fastener(self)
+	self.screw5_ = Fastener(self)
 
     def construct(self):
+	# Grab some values from *wheel_assembly*:
 	wheel_assembly = self.up
-	twist_timing_pulley = wheel_assembly.twist_timing_pulley_
 	gear_box = wheel_assembly.gear_box_
 	gear_box_top = wheel_assembly.gear_box_top_
+	twist_pulley = wheel_assembly.twist_pulley_
+	twist_pulley_top = wheel_assembly.twist_pulley_top_
 
+	# Create the 6 screws:
 	screw0 = self.screw0_
 	screw1 = self.screw1_
 	screw2 = self.screw2_
 	screw3 = self.screw3_
-	screws = [screw0, screw1, screw2, screw3]
+	screw4 = self.screw4_
+	screw5 = self.screw5_
+	screws = [screw0, screw1, screw2, screw3, screw4, screw5]
 
+	# Compute some Z axis locations:
 	z0 = gear_box.t.z - gear_box_top.base_dz_l
 	z1 = z0 + gear_box_top.base_dz_l
-	z2 = z1 + twist_timing_pulley.dz
-	#print("Twist_Timing_Pulley_Screws:z0={0} z1={1} z2={2}".
+	z2 = z1 + twist_pulley.dz
+	z3 = z2 + twist_pulley_top.dz
+	#print("Twist_Pulley_Screws:z0={0} z1={1} z2={2}".
 	#  format(z0, z1, z2))
 
-	angle_delta = Angle(360) / twist_timing_pulley.holes_count_i
-	for index in range(twist_timing_pulley.holes_count_i):
+	holes_count = len(screws)
+	angle_delta = Angle(deg = 360) / holes_count
+	holes_radius = twist_pulley.holes_radius_l
+	angle_adjust = Angle(deg = 30)
+	for index in range(holes_count):
 	    screw = screws[index]
-	    angle = index * angle_delta
-	    x = twist_timing_pulley.holes_radius_l.cosine(angle)
-	    y = twist_timing_pulley.holes_radius_l.sine(angle)
-	    screw.configure(comment = "Hole {0}".format(index),
-	      flags = "#2-56:hi",
-	      start = P(x, y, z2),
-	      end = P(x, y, z0))
-	    screw.drill(gear_box_top, select="close")
-	    screw.drill(twist_timing_pulley, select="close")
+	    angle = index * angle_delta + angle_adjust
+	    x = holes_radius.cosine(angle)
+	    y = holes_radius.sine(angle)
+	    #print("holes_radius={0} x={1} y={2}".format(holes_radius, x, y))
+	    screw.configure(comment = "Pulley Hole {0}".format(index),
+	      flags = "#0-80:hi",
+	      start = P(x, y, z3),
+	      end = P(x, y, z0),
+	      sides_angle = Angle(deg = 30))
+	    screw.drill(gear_box_top, select = "close")
+	    screw.drill(twist_pulley, select = "close")
+	    screw.drill(twist_pulley_top, select = "close")
+
+	#print("Pulley_Screw.dz={0:.3i}in".format(z3 - z0))
 
 class Wheel(Part):
     def construct(self):
@@ -1608,6 +1707,8 @@ class Horizontal_Shaft(Part):
 	  start = P(zero, wheel.w.x, zero),
           end =   P(zero, gear_box.n.y - gear_box_side.bearing_lip_dy_l, zero))
 
+	#print("Horizontal_Shaft.dy={0:i}in".format(self.dy))
+
 class Vertical_Shaft(Part):
     def construct(self):
 	wheel_assembly = self.up
@@ -1627,9 +1728,107 @@ class Vertical_Shaft(Part):
 	  start = P(zero, zero, bevel_gear_major_diameter - bevel_gear_height),
           end = P(zero, zero, L(mm = 100.0)))
 
+	#print("Vertical_Shaft.dz={0:i}in".format(self.dz))
+
+class Bearing_Starter(Part):
+    def construct(self):
+	zero = L()
+	self.cylinder(comment = "Basic Cylinder",
+	  material = Material("plastic", "ABS"),
+	  color = Color("cyan"),
+	  diameter = L(inch = 1.200),
+	  start = P(),
+	  end = P(zero, zero, L(inch = 0.500)),
+	  sides = 60)
+	self.hole(comment = "Bearing Hole",
+	  diameter = L(inch = "7/8") + L(inch = 0.025),
+	  start = self.t,
+	  end = P(zero, zero, self.t.z - L(inch = "1/8")),
+	  flags = "f",
+	  sides = 60)
+
+class Bearing_Ender(Part):
+    def construct(self):
+	zero = L()
+	self.cylinder(comment = "Basic Cylinder",
+	  material = Material("plastic", "ABS"),
+	  color = Color("cyan"),
+	  diameter = L(inch = "7/8"),
+	  start = P(),
+	  end = P(zero, zero, L(inch = "3/8")),
+	  sides = 60)
+	self.hole(comment = "Shaft_Hole",
+	  diameter = L(inch = "3/8"),
+	  start = self.t,
+	  end = self.b,
+	  flags = "t",
+	  sides = 60)
+	self.hole(comment = "Bearing Lip",
+	  diameter = L(inch = "3/4"),
+	  start = self.t,
+	  end = P(zero, zero, self.t.z - L(inch = "1/16")),
+	  flags = "f",
+	  sides = 60)
+
+class Bevel_Gear_Jig(Part):
+    def construct(self):
+	# Mat   Teeth  PD   OD  Bore  Height  Hub Diam  Hub Height  Maj Diam
+	# 16 Pitch:
+	# Nylon   16 1.000 1.090 .375 3/4      3/4       7/16        1-1/16
+	zero = L()
+	dx = L(inch = 1.500)
+	dy = L(inch = 1.500)
+	dz = L(inch = "7/16")
+
+	pocket_dx = L(inch = "1/4")
+	pocket_dy = L(inch = "1/4")
+
+	hub_height = L(inch = "7/16")
+	hub_diameter = L(inch = "3/4") + L(inch = .010)
+	outside_diameter = L(inch = 1.090) + L(inch = .010)
+	height = L(inch = "3/4")
+
+	z0 = zero
+	z1 = z0 + hub_height / 2
+	z2 = z1 + hub_height / 2
+	z3 = height
+
+	self.block(comment = "Jig Block",
+	  material = Material("plastic", "ABS"),
+	  color = Color("cyan"),
+	  corner1 = P(-dx/2, -dy/2, z0),
+	  corner2 = P( dx/2,  dy/2, z3),
+	  top = "t")
+	self.simple_pocket(comment = "SW Pocket",
+	  bottom_corner = P(-dx/2, -dy/2, z0),
+	  top_corner = P(-dx/2 + pocket_dx, -dy/2 + pocket_dy, z3))
+	self.simple_pocket(comment = "SE Pocket",
+	  bottom_corner = P( dx/2, -dy/2, z0),
+	  top_corner = P(dx/2 - pocket_dx,  -dy/2 + pocket_dy, z3))
+	self.hole(comment = "Teeth Hole",
+	  diameter = outside_diameter,
+	  start = P(zero, zero, z3),
+	  end = P(zero, zero, z2),
+	  sides = 60)
+	self.hole(comment = "Hub Hole",
+	  diameter = hub_diameter, 
+	  start = P(zero, zero, z2),
+	  end = P(zero, zero, z0),
+	  sides = 60)
+	self.hole(comment = "Set Screw Hole",
+	  diameter = L(inch = .0890),
+	  start = P(zero, dy/2, z1),
+	  end = P(zero, zero, z1),
+	  flags = "t")
+	
+
 if __name__ == "__main__":
     ezcad = EZCAD3(0, adjust = L(mm = -0.10))
+    #ezcad = EZCAD3(0)
     #test = Synchro_Drive(None)
-    test = Test(None)
+    #test = Test(None)
+    #test = Bearing_Starter(None)
+    #test = Bearing_Ender(None)
+    test = Bevel_Gear_Jig(None)
     test.process(ezcad)
 

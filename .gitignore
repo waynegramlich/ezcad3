@@ -1,7 +1,11 @@
 *~
+*.dxf
+*.gcode
 *.off
 *.pyc
 *.scad
 *.stl
+*.tmp
 *.wrl
+*.x3g
 Camera*
