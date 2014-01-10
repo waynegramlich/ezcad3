@@ -51,7 +51,7 @@ class L:
 	    if len(whole_fraction) == 2:
 		whole = float(whole_fraction[0])
 		fraction = whole_fraction[1]
-            elif len(whole_fraction) == 1:
+	    elif len(whole_fraction) == 1:
 		whole = 0.0
 		fraction = inch
 	    else:
@@ -678,7 +678,7 @@ class Angle:
     """ An {Angle} represents an angle. """
 
     ## *PI* respresents the irrational number &pi;.
-    PI = 3.14159265358979323846
+    PI = math.pi
 
     ## *TWO_PI* represents 2&pi;.
     TWO_PI = 2 * PI
@@ -699,7 +699,7 @@ class Angle:
 	# Initliaze the final value:
 	radians = float(rad)
 	if deg != 0.0:
-	    radians += float(deg) * Angle.PI / 180.0
+	    radians += float(deg) * math.pi / 180.0
 	self.radians = radians
 	#print("Angle.__init__(deg={0}, rad={1})=>{2}".
 	#  format(deg, rad, radians))
@@ -769,10 +769,10 @@ class Angle:
 	elif format.endswith("d"):
 	    # Do degrees:
             format = format[:-1]
-            value = value * 180.0 / Angle.PI
+            value = value * 180.0 / math.pi
         else:
 	    # Assume degrees output by default:
-            value *= 180.0 / Angle.PI
+            value *= 180.0 / math.pi
 
 	if len(format) == 0:
 	    result = "{0}".format(value)
@@ -923,7 +923,7 @@ class Angle:
 
 	assert isinstance(scalar_degrees, float) or \
 	  isinstance(scalar_degrees, int)
-	return Angle(rad = scalar_degrees * Angle.PI / 180.0)
+	return Angle(rad = scalar_degrees * math.pi / 180.0)
 
     ## @brief Returns *self* converted degrees as a *float*.
     #  @param self is the *Angle* to convert to degrees.
@@ -933,7 +933,7 @@ class Angle:
     def degrees(self):
 	""" Angle: Convert {self} back into degrees and return it. """
 
-	return self.radians * 180.0 / Angle.PI
+	return self.radians * 180.0 / math.pi
 
     ## @brief Returns *self*/2.
     #  @param self is the *Angle* object to divide by 2.
@@ -1203,6 +1203,13 @@ class Bend:
 	self._before_fraction = tangent_length / db_length
 	self._after_fraction = tangent_length / eb_length
 
+    def copy(self):
+	""" *Bend* """
+	result = Bend(self.point, self.radius)
+	result._px = self._px
+	result._py = self._py
+	return result
+
 class Material:
     def __init__(self, generic = "plastic", specific = "ABS"):
 	""" *Material*: Initialize *self* to contain *generic* and
@@ -1449,33 +1456,336 @@ class Color:
 	return "[r={0:.2f}, g={1:.2f}, b={2:.2f}, a={3:.2f}]".format(
 	  self.red, self.green, self.blue, self.alpha)
 
+class Indexed_Point:
+    def __init__(self, x, y, label, index):
+	""" *Indexed_Point*: """
+	self.x = x
+	self.y = y
+	self.label = label
+	self.index = index
+
+class Indexed_Points:
+    def __init__(self):
+	self._indexed_points = []
+	self._table = {}
+	self._paths = []
+
+    def lookup(self, x, y, label):
+	# Check argument types:
+	assert isinstance(x, float)
+	assert isinstance(y, float)
+	assert isinstance(label, str)
+
+	# Is *point* alread in *table*?:
+	key = (x, y)
+	table = self._table
+	if key in table:
+	    # Yes; lookup previously stored index:
+	    indexed_point = table[key]
+	else:
+	    # No; create new *index* and store it away:
+	    indexed_points = self._indexed_points
+	    index = len(indexed_points)
+	    indexed_point = Indexed_Point(x, y, label, index)
+	    indexed_points.append(indexed_point)
+	    table[key] = indexed_point
+	return indexed_point
+
+    def polygon_append(self, lines, indent):
+	# Check argument types:
+	assert isinstance(lines, list)
+	assert isinstance(indent, int) and indent >= 0
+
+	# Output the .scad contents:
+	spaces = " " * indent
+	lines.append("{0}polygon(".format(spaces))
+	lines.append("{0} points = [".format(spaces))
+	self.points_append(lines, spaces)
+	lines.append("{0} ], paths = [".format(spaces))
+	self.paths_append(lines, spaces)
+	lines.append("{0} ]);".format(spaces))
+
+    def path_create(self):
+	path = []
+	self._paths.append(path)
+	return path
+
+    def points_append(self, lines, spaces):
+	# Check argument types:
+	assert isinstance(lines, list)
+	assert isinstance(spaces, str)
+
+	indexed_points = self._indexed_points
+	size = len(indexed_points)
+	for index in range(size):
+	    indexed_point = indexed_points[index]
+	    suffix = ","
+	    if index >= size - 1:
+		suffix = ""
+	    lines.append("{0}  [{1:.3f}, {2:.3f}]{3}".
+	      format(spaces, indexed_point.x, indexed_point.y, suffix))
+
+    def paths_append(self, lines, spaces):
+	paths = self._paths
+	paths_size = len(paths)
+	for paths_index in range(paths_size):
+	    path = paths[paths_index]
+	    path_size = len(path)
+	    lines.append("{0}  [".format(spaces))
+	    for path_index in range(path_size):
+		indexed_point = path[path_index]
+		path_suffix = ","
+		if path_index >= path_size - 1:
+		    path_suffix = ""
+		lines.append("{0}    {1}{2}".
+		  format(spaces, indexed_point.index, path_suffix))
+
+	    paths_suffix = ","
+	    if paths_index >= paths_size + 1:
+		paths_suffix = ""
+	    lines.append("{0}  ]{1}".format(spaces, paths_suffix))
+
 class Contour:
 
-    def __init__(self, bends, extrude_axis):
+    def __init__(self):
 	""" *Contour*: Initialize *self* with *bends* and *extrude_axis*. """
 
-	# Check argument values:
-	assert isinstance(bends, list) 
-	assert isinstance(extrude_axis, P)
-
-	# Make sure we have enough *Bend*'s actually make sense:
-	assert len(bends) >= 3, \
-	  "A contour must have at least 3 bends"
-
 	# Load *self*
-	self.extrude_axis = extrude_axis
-	self.bends = bends
-	self._indexed_points = []
-	self._indexed_points_table = {}
+	self._bends = []
 
-    def bends_compute(self):
-	""" *Contour*: Deal with each *Bend* in *self*. """
+    def __format__(self, format):
+	""" *Contour*: """
+	result = "{"
+	bends = self._bends
+	for index in range(len(bends)):
+	    bend = bends[index]
+	    result += "[{0}]: {1}, {2} ". \
+              format(index, bend.point, bend.radius)
+	return result + "}"
+
+    def adjust(self, delta = L(), start = P(), end = P(),
+      maximum_radius = L(mm = 1.e10), minimum_radius = L(mm = 0)):
+	""" *Contour*: """
+
+	# Check argument types:
+	assert isinstance(delta, L)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+	assert isinstance(maximum_radius, L)
+	assert isinstance(minimum_radius, L)
+
+	trace = False
+	#trace = True
+	if trace:
+	    print("=>Contour.adjust():len(bends)={0}".format(len(self._bends)))
+
+	extrude_axis = end - start
+
+	# The process is to loop around *bend* and adjust segment in or out
+	# by *delta* depending upon when the the sign of *delta* is negative
+	# or positive.  The following steps occur:
+	#
+	# 1. Take a pair of Bends in sequence to get the end-points of
+	#    a line.  Compute the direction vector and a perpendicular
+	#    vector.  Move each end-point by *delta* along the perpendicular.
+	#
+	# 2. Find the intersections of each of the adjusted line segments.
+	#    This is done via the determanent method describe at
+	#
+	#        http://mathworld.wolfram.com/Line-LineIntersection.html
+	#
+	# 3. Adjust the bend radius up or down appropriately.
+
+	self.project(axis = extrude_axis)
+
+	adjusted_contour = Contour()
+	bends = self._bends
+	bends_size = len(bends)
+	for bends_index in range(bends_size):
+	    # The intersection computation is easier to transcribe if we
+	    # use the same notation as used in mathwolrd.com description.
+	    # The first line goes through points (x1, y1) and (x2, y2) and
+	    # the second line goes through points (x3, y3) and (x4, y4).
+	    # We will use (*ox1*, *oy1*), (*ox2*, *oy2*), (*ox3*, *oy3*)
+	    # and (*ox4*, *oy4*) to represent the [o]iginal points.
+	    # We will use (*ax1*, *ay1*), (*ax2*, *ay2*), (*ax3*, *ay3*)
+	    # and (*ax4*, *ay4*) to represent the [a]djusted points.
+            # Note that using this notation, (*ox2*, *oy2*) is the same
+	    # as (*ox3*, *oy3*), but (*ax2*, *ay2*) is not the same as
+	    # (*ax3*, *ay3).
+
+	    # *bend1* occurs *bend2* occurs before *bend3*:
+	    bend1 = bends[(bends_index - 1) % bends_size]
+	    bend2 = bends[bends_index]
+	    bend3 = bends[(bends_index + 1) % bends_size]
+	    if trace:
+		print("bends_index={0}".format(bends_index))
+	    
+	    # Get the [o]riginal X/Y values:
+	    ox1 = bend1._px
+	    oy1 = bend1._py
+	    ox2 = bend2._px
+	    oy2 = bend2._py
+	    ox3 = bend2._px
+	    oy3 = bend2._py
+	    ox4 = bend3._px
+	    oy4 = bend3._py
+	    if trace:
+		print(
+		  "[{0}]:o1=({1},{2}) o2=({3},{4}) o3=({5},{6}) o4=({7},{8})".
+		  format(bends_index, ox1, oy1, ox2, oy2, ox3, oy3, ox4, oy4))
+
+	    # Compute vector (*odx12*, *ody12*) from (*ox1*, *oy1*) to
+	    # (*ox2*, *oy2*):
+	    odx12 = ox2 - ox1
+	    ody12 = oy2 - oy1
+
+	    # Compute the vector (*odx34*, *ody34*) from (*ox3*, *oy3*) to
+	    # (*ox4*, *oy4*):
+	    odx34 = ox4 - ox3
+	    ody34 = oy4 - oy3
+	    if trace:
+		print("[{0}]:od12=({1},{2}) od34=({3},{4})".
+		  format(bends_index, odx12, ody12, odx34, ody34))
+
+	    # Compute the lengths of (*dx12*, *dy12*) and (*dx34*, *dy34*):
+	    length12 = math.sqrt(odx12 * odx12 + ody12 * ody12)
+	    length34 = math.sqrt(odx34 * odx34 + ody34 * ody34)
+	    if trace:
+		print("[{0}]:len12={1} len34={2}".
+		  format(bends_index, length12, length34))
+
+	    # Due to constraint propagation, sometimes we get some points
+	    # that land on top of one another.  Just fake it for now:
+	    if length12 <= 0.0:
+		length12 = 0.1
+	    if length34 <= 0.0:
+		length34 = 0.1
+
+	    # Compute perpendicular normal (*ndx12*, *ndy12*) from
+	    # (*dx12*, *dy12*) and normal (*ndx34*, *ndy34*) from
+	    # (*dx34*, *dy34*):
+	    ndx12 =  ody12 / length12
+	    ndy12 = -odx12 / length12
+	    ndx34 =  ody34 / length34
+	    ndy34 = -odx34 / length34
+	    if trace:
+		print("[{0}]:n12=({1},{2}) n34=({3},{4})".
+		  format(bends_index, ndx12, ndy12, ndx34, ndy34))
+
+	    # Compute [a]djusted bend points (*ax1*, *ay1*), (*ax2*, *ay2*),
+	    # (*ax3*, *ay3*), and (*ax4*, *ay4*):
+	    d = delta._mm
+	    ax1 = ox1 + d * ndx12
+	    ay1 = oy1 + d * ndy12
+	    ax2 = ox2 + d * ndx12
+	    ay2 = oy2 + d * ndy12
+	    ax3 = ox3 + d * ndx34
+	    ay3 = oy3 + d * ndy34
+	    ax4 = ox4 + d * ndx34
+	    ay4 = oy4 + d * ndy34
+	    if trace:
+		print(
+		  "[{0}]:a1=({1},{2}) a2=({3},{4}) a3=({5},{6}) a4=({7},{8})".
+		  format(bends_index, ax1, ay1, ax2, ay2, ax3, ay3, ax4, ay4))
+
+	    # Now find the intersection of (*x1a*, *y1a*) - (*x2a*, *y2a*)
+	    # and (*x2b*, *y2b*) - (*x3b*, *y3b*).  The computed formulas
+	    # are taken from:
+	    #
+	    #    http://mathworld.wolfram.com/Line-LineIntersection.html
+	    #
+	    #
+	    #        | |x1 y1|        |        | |x1 y1|        |
+	    #        | |     |  x1-x2 |        | |     |  y1-y2 |
+	    #        | |x2 y2|        |        | |x2 y2|        |
+	    #        |                |        |                |
+	    #        | |x3 y3|        |        | |x3 y3|        |
+	    #        | |     |  x3-x4 |        | |     |  y3-y4 |
+	    #        | |y4 y4|        |        | |y4 y4|        |
+	    #    x = ------------------    y = ------------------
+	    #        |  x1-x2   y1-y2 |        |  x1-x2   y1-y2 |
+	    #        |  x3-x4   y3-y4 |        |  x3-x4   y3-y4 |
+	    #
+	    
+	    # Compute *det12* and *det34*:
+	    det12 = ax1 * ay2 - ax2 * ay1	# = det2(x1, y1, x2, y2)
+	    det34 = ax3 * ay4 - ax4 * ay3	# = det2(x3, y3, x4, y4)
+	    # Compute x numerator = det2(det12, x1 - x2, det34, x3 - x4):
+	    x_numerator = det12 * (ax3 - ax4) - det34 * (ax1 - ax2)
+	    # Compute y numerator = det2(det12, y1 - y2, det34, y3 - y4):
+	    y_numerator = det12 * (ay3 - ay4) - det34 * (ay1 - ay2)
+	    # Compute denomonator = det2(x1 - x2, y1 - y2, x3 - x4, y3 - y4):
+	    denominator = (ax1 - ax2) * (ay3 - ay4) - (ax3 - ax4) * (ay1 - ay2)
+	    # Sometimes constraint propagation causes a *denominator* of 0.
+	    # Set it to non-zero to fake it:
+	    if denominator == 0.0:
+		denominator = 0.01
+	    # Compute final [i]ntersection location (*ix*, *iy):
+	    ix = x_numerator / denominator
+	    iy = y_numerator / denominator
+	    if trace:
+		print("[{0}]:det12={1} det34={2}".
+		  format(bends_index, det12, det34))
+		print("[{0}]:x_num={1} y_num={2} denom={3}".
+		  format(bends_index, x_numerator, y_numerator, denominator))
+		print("[{0}]:ix={1} iy={2}".format(bends_index, ix, iy))
+
+	    # Now we get to adjust the radius.  When *delta* < 0 we are
+	    # making the contour smaller.  The direction of the turn is
+	    # what we use to tell the difference:
+	    bearing12 = math.atan2(ody12, odx12)
+	    bearing34 = math.atan2(ody34, ody34)
+	    delta_bearing = bearing34 - bearing12
+	    pi = math.pi
+	    if delta_bearing < pi:
+		delta_bearing += 2.0 * pi
+	    elif delta_bearing > pi:
+		delta_bearing += 2.0 * pi
+
+	    new_radius = bend2.radius._mm
+	    if delta_bearing < 0.0:
+		# Turn clockwise:
+		new_radius += delta
+	    else:
+		# Turn counter-clockwise:
+		new_radius -= d
+
+	    if new_radius < minimum_radius._mm:
+		new_radius = minimum_radius._mm
+	    elif new_radius > maximum_radius._mm:
+		new_radius = maximum_radius._mm
+
+	    zero = L()
+	    adjusted_contour.bend_append(
+	      P(L(mm = ix), L(mm = iy), zero), L(mm = new_radius))
+
+	if trace:
+	    print("<=Contour.adjust():len(bends)={0}".format(len(self._bends)))
+	return adjusted_contour
+
+    def bend_append(self, point = P(), radius = L()):
+	""" *Contour*: """
+
+	# Chech argument types:
+	assert isinstance(point, P)
+	assert isinstance(radius, L)
+
+	# Create and append the bend:
+	bend = Bend(point, radius)
+	self._bends.append(bend)
+
+    def bends_compute(self, axis = None):
+	""" *Contour*: """
+
+	# Check argument types:
+	assert isinstance(axis, P)
 
 	# Project all the 3D points down to 2D:
-	self.project()
+	self.project(axis)
 
 	# Find the bend centers:
-	bends = self.bends
+	bends = self._bends
 	bends_size = len(bends)
 	for index in range(bends_size):
 	    # Extract three *Bend*'s in sequence
@@ -1483,7 +1793,7 @@ class Contour:
 	    bend = bends[index]
 	    after_bend= bends[(index + 1) % bends_size]
 
-	    # Compute the bend radius:
+	    # Compute the bend radius center point:
 	    bend.compute(before_bend, after_bend)
 
     def bounding_box_compute(self, start, end):
@@ -1509,7 +1819,7 @@ class Contour:
 	end_y = end.y
 	end_z = end.z
 
-	for bend in self.bends:
+	for bend in self._bends:
 	    # Extract *x*, *y*, *z* from *point*:
 	    point = bend.point
 	    x = point.x
@@ -1528,40 +1838,21 @@ class Contour:
 	bounding_box = Bounding_Box(ex, wx, ny, sy, tz, bz)
 	return bounding_box
 
-    def indexed_point_lookup(self, x, y, label):
-	""" *Contour*: Return (index, (x, y), label) that specifies a point. """
+    def path_append(self, extrude_axis = None,
+      indexed_points = None, maximum_angle = Angle(deg=16.0)):
+	""" *Contour*: Append a path to *indexed_points*. """
+	assert isinstance(indexed_points, Indexed_Points)
+	assert isinstance(maximum_angle, Angle)
+	assert isinstance(extrude_axis, P)
 
-	# Check argument types:
-	assert isinstance(x, float)
-	assert isinstance(y, float)
-	assert isinstance(label, str)
+	# Compute the bend information:
+	self.bends_compute(extrude_axis)
 
-	# Get the *indexed_points* list and *indexed_points_table*:
-	indexed_points = self._indexed_points
-	indexed_points_table = self._indexed_points_table
-
-	# See if *point* is in *indexed_points_table*:
-	point = (x, y)
-	if point in indexed_points_table:
-	    # Already there; just return the previous value:
-	    indexed_point = indexed_points_table[point]
-	else:
-	    # Not there yet; put it in: 
-            indexed_point = (len(indexed_points), point, label)
-	    indexed_points_table[point] = indexed_point
-	    indexed_points.append(indexed_point)
-	return indexed_point
-
-    def output(self, lines, indent = 0, maximum_angle = Angle(deg=16.0)):
-	""" *Contour*: Output the OpenSCAD code for *self*. """
-	assert isinstance(indent, int)
-	assert indent >= 0
-
-	pi = Angle.PI
+	pi = math.pi
 	r2d = 180.0 / pi 
 
-	path = []
-	bends = self.bends
+	path = indexed_points.path_create()
+	bends = self._bends
 	bends_size = len(bends)
 	for index in range(bends_size):
 	    before_bend = bends[(index - 1) % bends_size]
@@ -1569,8 +1860,10 @@ class Contour:
 	    #bend_after = bends[(index + 1) % bends_size]
 	    before_total_fraction = \
 	      before_bend._after_fraction + bend._before_fraction
-	    if before_total_fraction > 1.0:
-		assert False, "We have a bogus edge"
+	    if before_total_fraction > 1.000000001:
+		assert False, "We have a bogus edge {0} + {1} > {2}". \
+		  format(before_bend._after_fraction, bend._before_fraction,
+		  before_total_fraction)
 
 	    #print("Bend[{0}]:{1}".format(index, bend))
 
@@ -1583,7 +1876,7 @@ class Contour:
 	    center_y = bend._center_y
 
 	    if before_total_fraction < 1.0:
-		indexed_point = self.indexed_point_lookup(
+		indexed_point = indexed_points.lookup(
 		  before_tangent_x, before_tangent_y,
 		  format("Bend[{0}]:before tangent".format(index)))
 		path.append(indexed_point)
@@ -1628,53 +1921,30 @@ class Contour:
 	    #print("step_count={0} step_angle={1:.4f}".
 	    #  format(step_count, step_angle * r2d))
 
+	    # Now output the step-wise approximation for the arc:
 	    for step_index in range(1, step_count):
 		angle = before_angle + float(step_index) * step_angle
 		x = center_x + radius * math.cos(angle)
 		y = center_y + radius * math.sin(angle)
-		indexed_point = self.indexed_point_lookup(x, y,
+		indexed_point = indexed_points.lookup(x, y,
 		  "Bend[{0}]:Step[{1}]".format(index, step_index))
 		path.append(indexed_point)
 
 	    if radius > 0.0:
-		indexed_point = self.indexed_point_lookup(
+		indexed_point = indexed_points.lookup(
 		  after_tangent_x, after_tangent_y,
 		  "Bend[{0}]:after tangent".format(index))
 		path.append(indexed_point)
 
-	# Output the .scad contents:
-	spaces = " " * indent
-	lines.append("{0}polygon(".format(spaces))
-	lines.append("{0} points = [".format(spaces))
-	indexed_points = self._indexed_points
-	indexed_points_size = len(indexed_points)
-	for point_index in range(indexed_points_size):
-	    indexed_point = indexed_points[point_index]
-	    point = indexed_point[1]
-	    x = point[0]
-	    y = point[1]
-            suffix = ","
-            if point_index + 1 == indexed_points_size:
-		suffix = ""
-	    lines.append("{0}  [{1:.3f}, {2:.3f}]{3}".
-	      format(spaces, x, y, suffix))
-	lines.append("{0} ], paths = [".format(spaces))
-	lines.append("{0}  [".format(spaces))
-	for point_index in range(indexed_points_size):
-	    indexed_point = indexed_points[point_index]
-	    index = indexed_point[0]
-            suffix = ","
-            if point_index + 1 == indexed_points_size:
-		suffix = ""
-	    lines.append("{0}   {1}{2}".format(spaces, index, suffix))
-	lines.append("{0}  ]".format(spaces))
-	lines.append("{0} ]".format(spaces))
-	lines.append("{0});".format(spaces))
+    def project(self, axis = None):
+	""" *Contour*: """
 
-    def project(self):
+	#print("=>Contour.project(axis={0}".format(axis))
+
+	# Check argument types:
+	assert isinstance(axis, P)
 	
 	# Extract X/Y/Z values from *axis*:
-	axis = self.extrude_axis
 	axis_x = axis.x._mm
 	axis_y = axis.y._mm
 	axis_z = axis.z._mm
@@ -1695,15 +1965,13 @@ class Contour:
 	self.use_z_axis = use_z_axis
 
 	# For now, constrain *axis* to be in X, Y, or Z direction:
-	assert use_x_axis or use_y_axis or use_z_axis, \
-	  "axis must align with X, Y, or Z axis"
+	if not (use_x_axis or use_y_axis or use_z_axis):
+	    print("Contour.project: axis must align with X, Y, or Z axis")
+	    use_z_axis = True
 
 	# For each *bend* in bends, perform the project from 3D down to 2D:
 	plane = None
-	bends = self.bends
-	for bend in bends:
-	    assert isinstance(bend, Bend)
-
+	for bend in self._bends:
 	    # Grab the X/Y/Z coordinates for *point*:
 	    point = bend.point
 	    px = point.x._mm
@@ -1742,6 +2010,8 @@ class Contour:
 
 	# Keep track of *plane*
 	self.plane = plane
+
+	#print("<=Contour.project(axis={0}".format(axis))
 
 class EZCAD3:
     """ EZCAD3 is the top level engine that executes the design. """
@@ -1867,12 +2137,12 @@ class Part:
 	print("[{0}:{1},{2}:{3},{4}:{5}]".format(
 	  self.wx._mm, self.ex._mm,
 	  self.sy._mm, self.ny._mm,
-	  self.sz._mm, self.tz._mm))
+	  self.bz._mm, self.tz._mm))
 
 	return format_string.format(self._name,
 	  self.wx, self.ex,
 	  self.sy, self.ny,
-	  self.sz, self.tz)
+	  self.bz, self.tz)
 
     def __getattr__(self, name):
 	""" *Part*: ..."""
@@ -2792,17 +3062,19 @@ class Part:
 	  "No construct() method defined for part '{0}'".format(self._name)
 
     def extrude(self, comment = "no_comment", material = None, color = None,
-      outer_path = [], inner_paths = [[]], start = None, end = None,
+      outer_contour = None, inner_contours = None, start = None, end = None,
       center = None, axis = None, rotate = None, translate = None,
       trace = -1000000):
 	""" *Part*: """
 
 	if trace >= 0:
-	    print("{0}=>Part.extrude()".format(trace * ' '))
+	    print("{0}=>Part.extrude({1})".format(trace * ' ', outer_contour))
 
 	# Check argument types:
 	assert isinstance(comment, str)
 	none_type = type(None)
+	if type(inner_contours) == none_type:
+	    inner_contours = []
 	if type(material) == none_type:
 	    material = self._material
 	    if type(material) == none_type:
@@ -2811,8 +3083,8 @@ class Part:
 	    color = self._color
 	    if type(color) == none_type:
 		color = Color()
-	assert isinstance(outer_path, list)
-	assert isinstance(inner_paths, list)
+	assert isinstance(outer_contour, Contour)
+	assert isinstance(inner_contours, list)
 	assert isinstance(start, P)
 	assert isinstance(end, P)
 
@@ -2822,11 +3094,11 @@ class Part:
 
 	extrude_axis = end - start
 	height = extrude_axis.length()
-	contour = Contour(outer_path, extrude_axis)
 	place = Place(part = None, name = comment, center = center,
 	  axis = axis, rotate = rotate, translate = translate)
 
-	bounding_box = contour.bounding_box_compute(start, end)
+	zero = L()
+	bounding_box = outer_contour.bounding_box_compute(start, end)
 	if trace >= 0:
 	    print("{0} Part.extrude:bounding_box={0}".
 	     format(trace * ' ', bounding_box))
@@ -2839,16 +3111,25 @@ class Part:
 	assert isinstance(ezcad, EZCAD3)
 
 	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	    # Set up the transform and extrude:
             scad_union_lines = self._scad_union_lines
+	    #FIXME: Deal with other orientations:
 	    scad_union_lines.append(
 	      "{0}translate([{1:m}, {2:m}, {3:m}])".
-	      format(" " * 6, start.x, start.y, start.z))
+	      format(" " * 6, zero, zero, start.z))
             scad_union_lines.append(
 	      "{0}linear_extrude(height = {1})".format(" " * 6, height))
 	    
-	    #print("Part.extrude(): manufacture")
-	    contour.bends_compute()
-	    contour.output(scad_union_lines, indent = 6)
+	    # Construct the polygon information using *indexed_points*:
+	    indexed_points = Indexed_Points()
+	    outer_contour.path_append(
+	      indexed_points = indexed_points,
+	      extrude_axis = extrude_axis)
+	    for inner_contour in inner_contours:
+		inner_contour.path_append(
+		  indexed_points = indexed_points,
+		  extrude_axis = extrude_axis)
+	    indexed_points.polygon_append(scad_union_lines, 6)
 
 	if trace >= 0:
 	    print("{0}<=Part.extrude()".format(trace * ' '))
@@ -2856,6 +3137,7 @@ class Part:
     def cylinder(self, comment = "NO_COMMENT",
       material = Material(), color = Color(),
       diameter = L(mm = 1.0), start = P(), end = P(z = L(mm = 1.0)),
+      start_diameter = None, end_diameter = None,
       sides = -1, sides_angle = Angle(), welds = "", flags = "", adjust = L(),
       trace = -1000000):
 	""" *Part*: Place a *diameter* wide cylinder from *start* to *end*. """
@@ -2876,6 +3158,10 @@ class Part:
 	assert isinstance(sides_angle, Angle)
 	assert isinstance(welds, str)
 	assert isinstance(flags, str)
+	assert type(start_diameter) == none_type or \
+	  isinstance(start_diameter, L)
+	assert type(end_diameter) == none_type or \
+	  isinstance(end_diameter, L)
 
 	ezcad = self._ezcad
 	adjust = ezcad._adjust
@@ -2884,14 +3170,16 @@ class Part:
 	self._cylinder(lines = union_lines, indent = 6, is_solid = True,
 	  comment = comment, material = material, color = color,
 	  diameter = diameter, start = start, end = end, sides = sides,
-	  adjust = adjust, sides_angle = sides_angle, trace = trace + 1)
+	  adjust = adjust, sides_angle = sides_angle, trace = trace + 1,
+	  start_diameter = start_diameter, end_diameter = end_diameter)
 
 	if trace >= 0:
 	    print("{0}<=Part.cylinder()".format(trace * ' '))
 
-    def hole(self, comment = "NO_COMMENT", diameter = L(mm = 1.0),
-      start = P(), end = P(z = L(mm = 1.0)), sides = -1, sides_angle = Angle(),
-      top = "t", flags = ""):
+    def hole(self, comment = "NO_COMMENT", diameter = None,
+      start = None, end = None, sides = -1, sides_angle = Angle(),
+      top = "t", flags = "", start_diameter = None, end_diameter = None,
+      trace = -10000):
 	""" Part construct: Make a {diameter} hole in {part} with starting
 	    at {start_point} and ending at {end_point}.  {comment} will
 	    show in any error messages and any generated G-code.  The
@@ -2908,16 +3196,27 @@ class Part:
 		'm' hole is to be milled (i.e. Milled)
 	"""
 
+	if trace >= 0:
+	    print("{0}=>Part.hole(d={1}, st={2}, end={3}, std={4} ed={5})".
+	      format(' ' * trace, diameter, start, end,
+	       start_diameter, end_diameter))
+
 	# Check argument types:
+	none_type = type(None)
 	assert isinstance(comment, str)
 	assert isinstance(sides, int)
-	assert isinstance(diameter, L)
+	assert type(diameter) == none_type or isinstance(diameter, L)
 	assert isinstance(start, P)
 	assert isinstance(end, P)
 	assert isinstance(flags, str)
 	assert isinstance(top, str)
 	assert isinstance(sides, int)
 	assert isinstance(sides_angle, Angle)
+	assert type(start_diameter) == none_type or \
+	  isinstance(start_diameter, L)
+	assert type(end_diameter) == none_type or isinstance(end_diameter, L)
+	assert isinstance(diameter, L) or \
+	  (isinstance(start_diameter, L) and isinstance(end_diameter, L))
 
 	flat_hole = flags.find("f") >= 0
 	through_hole = not flat_hole
@@ -2939,19 +3238,28 @@ class Part:
 	self._cylinder(lines = lines, indent = 4, is_solid = False,
 	  comment = comment, material = None, color = None, adjust = -adjust,
 	  diameter = diameter, start = start, end = end, sides = sides,
-	  sides_angle = sides_angle)
+	  sides_angle = sides_angle, start_diameter = start_diameter,
+	  end_diameter = end_diameter, trace = trace + 1)
+
+	if trace >= 0:
+	    print("{0}<=Part.hole(d={1}, st={2}, end={3}, std={4} ed={5})".
+	      format(' ' * trace, diameter, start, end,
+	       start_diameter, end_diameter))
+
 
     def _cylinder(self, lines = None, indent = 0, is_solid = True,
       comment = None, material = None, color = None, adjust = None,
       diameter = None, start = None, end = None, sides = None,
-      sides_angle = None, trace = -1000000):
+      sides_angle = None, trace = -1000000, start_diameter = None,
+      end_diameter = None):
 	""" *Part*: Deal with commonality between holes (i.e. material
 	    removal) and cylinders made out of a *material*. """
 
 	if trace >= 0:
 	    print(("{0}=>Part._cylinder(comment='{1}', is_solid={2}," + 
-	     " diameter={3}, start={4}, end={5}").
-	     format(trace * ' ', comment, is_solid, diameter, start, end))
+	     " diameter={3}, start_diam={4}, end_diam={5}, start={6}, end={7}").
+	     format(trace * ' ', comment, is_solid, diameter, start_diameter,
+	     end_diameter, start, end))
 
 	# Check argument types:
 	none_type = type(None)
@@ -2961,12 +3269,17 @@ class Part:
 	assert isinstance(is_solid, bool)
 	assert type(material) == none_type or isinstance(material, Material)
 	assert type(color) == none_type or isinstance(color, Color)
-	assert isinstance(diameter, L)
+	assert type(diameter) == none_type or isinstance(diameter, L)
 	assert isinstance(start, P)
 	assert isinstance(end, P)
 	assert isinstance(sides, int)
 	assert isinstance(adjust, L)
 	assert isinstance(sides_angle, Angle)
+	assert type(start_diameter) == none_type or \
+	  isinstance(start_diameter, L)
+	assert type(end_diameter) == none_type or isinstance(end_diameter, L)
+	assert isinstance(diameter, L) or \
+	  (isinstance(start_diameter, L) and isinstance(end_diameter, L))
 
 	# Update the *color* and *material* of this part:
 	self._color_material_update(color, material)
@@ -2974,7 +3287,6 @@ class Part:
 	material = self._material
 
 	# Compute center axis of the *cylinder*, its *length* and its *center*:
-	radius = diameter / 2
 	axis = end - start
 	length = axis.length()
 	half_length = length / 2
@@ -2997,6 +3309,15 @@ class Part:
 	    #print("comment={0} radius={1} half_length={2}". \
 	    #  format(comment, radius, half_length))
 	    
+	    maximum_diameter = zero
+	    if isinstance(diameter, L):
+		maximum_diameter = diameter
+	    if isinstance(start_diameter, L):
+		maximum_diameter = maximum_diameter.maximum(start_diameter)
+	    if isinstance(end_diameter, L):
+		maximum_diameter = maximum_diameter.maximum(end_diameter)
+            radius = maximum_diameter / 2
+
 	    bounding_box = Bounding_Box(radius, -radius,
 	      radius, -radius, half_length, -half_length)
 	    if trace >= 0:
@@ -3033,11 +3354,25 @@ class Part:
 		lines.append("{0}rotate(a={1}, v=[0, 0, 1])".
 		  format(spaces, sides_angle))
 
+	    if type(start_diameter) == none_type:
+		start_diameter = diameter
+	    if type(end_diameter) == none_type:
+		end_diameter = diameter
+            r1 = end_diameter / 2
+	    if r1 > zero:
+		r1 += adjust
+	    r2 = start_diameter / 2
+	    if r2 > zero:
+		r2 += adjust
+	    assert r1 >= zero and r2 >= zero, \
+	      "sd={0} ed={1} a={2} r1={3} r2={4}".format(start_diameter,
+	      end_diameter, adjust, r1, r2)
+
 	    # Output the cylinder in a vertical orientation centered on the
 	    # origin.  It is processed before either rotation or translation:
-            lines.append(
-	      "{0}  cylinder(r={1:m}, h={2:m}, center = true, $fn={3});".
-	      format(spaces, diameter / 2 + adjust, length, sides))
+            lines.append(("{0}  cylinder(r1={1:m}, r2={2:m}, h={3:m}," +
+	      " center = true, $fn={4});").format(spaces,
+	      r1, r2, length, sides))
             lines.append("")
 	
 	if trace >= 0:
@@ -5005,7 +5340,7 @@ class Part:
       corner1_point, corner2_point, radius, flags):
 	""" Part construct: Mill a pocket in {self} where {corner1_point}
 	    and {corner2_point} specify a diagonal across the pocket.  The
-	    radius of the inside corners is {radisu}.  {flags} can have
+	    radius of the inside corners is {radius}.  {flags} can have
 	    the character 't' for a pocket that goes {self} and 'u' to
 	    specify that an upper chamfer is requested.  {comment} will
 	    show up in error messages and any generated G-code. """
@@ -5530,11 +5865,13 @@ class Fastener(Part):
 	self.thread50_l = zero
 	self.close_fit_l = zero
 	self.free_fit_l = zero	
+	self.flat_head_diameter_l = zero
 	self.hex_insert_b = False
 	self.nut_height_l = zero
 	self.hex_nut_edge_width_l = zero
 	self.hex_nut_tip_width_l = zero
 	self.sides_angle_a = Angle()
+	self.flat_head_point_angle_a = Angle()
 
     def configure(self, comment = None, material = None, color = None,
       flags = None, start = None, end = None, sides_angle = None,
@@ -5575,6 +5912,7 @@ class Fastener(Part):
 		    nut_height = L(inch = 0.050)
 		    hex_nut_edge_width = L(inch = "5/32")
 		    hex_nut_tip_width = L(inch = 0.180)
+		    flat_head_diameter = L(inch = 0.119)
 		elif flag == "#1-72":
 		    major_diameter = L(inch = .0730)
 		    pitch = L(inch = "1/72")
@@ -5585,6 +5923,7 @@ class Fastener(Part):
 		    nut_height = L(inch = 0.050)
 		    hex_nut_edge_width = L(inch = "5/32")
 		    hex_nut_tip_width = L(inch = 0.180)
+		    flat_head_diameter = L(inch = 0.146)
 		elif flag == "#2-56":
 		    major_diameter = L(inch = .0860)
 		    pitch = L(inch = "1/56")
@@ -5595,6 +5934,7 @@ class Fastener(Part):
 		    nut_height = L(inch = 0.066)
 		    hex_nut_edge_width = L(inch = "3/16")
 		    hex_nut_tip_width = L(inch = 0.217)
+		    flat_head_diameter = L(inch = 0.172)
 		elif flag == "#4-40":
 		    major_diameter = L(inch = .1120)
 		    pitch = L(inch = "1/40")
@@ -5605,6 +5945,7 @@ class Fastener(Part):
 		    nut_height = L(inch = 0.098)
 		    hex_nut_edge_width = L(inch = "1/4")
 		    hex_nut_tip_width = L(inch = 0.289)
+		    flat_head_diameter = L(inch = 0.225)
 		elif flag == "#6-32":
 		    major_diameter = L(inch = .1380)
 		    pitch = L(inch = "1/32")
@@ -5615,6 +5956,7 @@ class Fastener(Part):
 		    nut_height = L(inch = 0.114)
 		    hex_nut_edge_width = L(inch = "5/16")
 		    hex_nut_tip_width = L(inch = 0.361)
+		    flat_head_diameter = L(inch = 0.279)
 		elif flag == "#10-24":
 		    major_diameter = L(inch = 0.1900)
 		    pitch = L(inch = "1/24")
@@ -5625,6 +5967,7 @@ class Fastener(Part):
 		    nut_height = L(inch = 0.130)
 		    hex_nut_edge_width = L(inch = "3/8")
 		    hex_nut_tip_width = L(inch = 0.433)
+		    flat_head_diameter = L(inch = 0.385)
 		elif flag == "#10-32":
 		    major_diameter = L(inch = 0.1900)
 		    pitch = L(inch = "1/32")
@@ -5635,6 +5978,10 @@ class Fastener(Part):
 		    nut_height = L(inch = 0.130)
 		    hex_nut_edge_width = L(inch = "3/8")
 		    hex_nut_tip_width = L(inch = 0.433)
+		    flat_head_diameter = L(inch = 0.385)
+		elif flag == "fh":
+		    #print("Fastener.drill(): flat_head")
+		    self.flat_head_point_angle_a = Angle(deg = 81)
 		elif flag == "hi":
 		    # Hex insert
 		    self.hex_insert_b = True
@@ -5653,6 +6000,7 @@ class Fastener(Part):
 	    self.nut_height_l = nut_height
 	    self.hex_nut_edge_width_l = hex_nut_edge_width
 	    self.hex_nut_tip_width_l = hex_nut_tip_width
+	    self.flat_head_diameter_l = flat_head_diameter
 
 	if isinstance(start, P):
 	    self.start_p = start
@@ -5669,8 +6017,12 @@ class Fastener(Part):
 	  start = self.start_p,
 	  end = self.end_p)
 
-    def drill(self, part = None, select = None):
+    def drill(self, part = None, select = None, trace = -1000000):
 	""" *Fastener*: """
+
+	if trace >= 0:
+	    print("{0}=>Fastener.drill({1}, '{2}')".
+	      format(' ' * trace, part, select))
 
 	# Check argument types:
 	none_type = type(None)
@@ -5703,6 +6055,65 @@ class Fastener(Part):
 	      end = end,
 	      flags = "t")
 
+	    flat_head_point_angle = self.flat_head_point_angle_a
+	    if flat_head_point_angle > Angle():
+		# Most flat head screws have an 80 degree point angle.
+		# Thus, in the crude diagram below.  The head diameter
+		# (HD) is the distance AD which is the sum of AC and CD.
+		# The point angle is <DBA which is the sum of <CBD and
+		# <CBA = b + b = 80.  Thus, angle <CBA = b = 80/2 = 40 degrees.
+		#
+		#  --- A
+		#   ^  |\
+		#   |  |a\
+		#   |  |  \
+		#   |  |  b\---------------------+
+		#  HD  C----B                    |
+		#   |  |  b/---------------------+
+		#   |  |  /
+		#   |  |a/
+		#   V  |/
+		#  --- D
+                #
+		# What we need is the distance CB.  Triagle ABC is a right
+		# triangle.  We know angle <CBA is 40 degrees, and thus angle
+		# <CAB is 90 - 40 = 50 degrees.
+		#
+		# Let r = the length of the hyptoneuse (i.e. distance AB).
+		# Let h = the length along the screw axis (i.e. distance BC).
+		# Let w = the half width of the screw head (i.e. distance AC).
+		#
+		#    r * sin(a) = h              (1)
+		#    r * sin(b) = w              (2)
+		#    a + b = 90 degrees          (3)
+		#
+		# We know w and we know b, and we want h:
+		#
+		#    h/sin(a) = w/sin(b)         (4)
+		#    h = w * sin(a)/sin(b)       (5)
+		#    h = w * sin(90-b)/sin(b)    (6)
+
+		flat_head_diameter = self.flat_head_diameter_l
+		w = flat_head_diameter / 2
+		b = flat_head_point_angle / 2
+		h = w * ((Angle(deg = 90) - b).sine() / b.sine())
+		normalized_direction = (end - start).normalize()
+		if trace >= 0:
+		    print("{0}head_radius={1} half_point_angle={2} h={3}".
+		      format(' ' * trace, w, b, h))
+
+		flat_head_start = start - normalized_direction * h._mm
+		flat_head_end = start + normalized_direction * h._mm
+		#print("Part[{0}]:start={1} end={2} normalize={3} fh_end={4}".
+		#  format(part._name,
+		#    start, end, normalized_direction, flat_head_end))
+		part.hole(comment = "Flat Head:" + self.comment_s,
+		  start_diameter = 2 * flat_head_diameter,
+		  end_diameter = L(),
+		  start = flat_head_start,
+		  end = flat_head_end,
+		  trace = trace + 1)
+
 	    if self.hex_insert_b:
 		direction = end - start
 		direction_length = direction.length()
@@ -5713,13 +6124,18 @@ class Fastener(Part):
 		#  format(end, start, direction, direction_length, nut_height))
 		#print("insert_end = {0}".format(insert_end))
 
-		part.hole(comment = self.comment_s,
+		part.hole(comment = "Hex Insert:" + self.comment_s,
 		  diameter = self.hex_nut_tip_width_l,
 		  start = end,
 		  end = insert_end,
 		  sides = 6,
 		  sides_angle = self.sides_angle_a,
 		  flags = "f")
+
+	if trace >= 0:
+	    print("{0}<=Fastener.drill({1}, '{2}')".
+	      format(' ' * trace, part, select))
+
 
 ## @brief *Place* specifies where another *Part* is to be placed.
 #
