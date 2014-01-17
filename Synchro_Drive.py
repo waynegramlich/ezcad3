@@ -23,21 +23,41 @@ class Motor_Assembly(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
 	self.motor_base_ = Motor_Base(self)
-	self.twist_motor_ = Motor(self)
+	self.drive_magnet_ = Magnet(self)
 	self.drive_motor_ = Motor(self)
+	self.drive_belt_ = Belt(self)
+	self.drive_motor_pulley_ = Pulley(self)
+	self.pcb_ = PCB(self)
 	self.twist_belt_ = Belt(self)
+	self.twist_magnet_ = Magnet(self)
+	self.twist_motor_ = Motor(self)
+	self.twist_motor_pulley_ = Pulley(self)
+	self.twist_motor_pulley_top_ = Pulley_Top(self)
 
     def construct(self):
+	# Grab some values from *self*:
+	motor_assembly = self
+	drive_belt = motor_assembly.drive_belt_
+	drive_magnet = motor_assembly.drive_magnet_
+	drive_motor = motor_assembly.drive_motor_
+	drive_motor_pulley = motor_assembly.drive_motor_pulley_
+	#drive_motor_pulley_top = motor_assembly.drive_motor_pulley_top_
+	motor_base = motor_assembly.motor_base_
+	pcb = motor_assembly.pcb_
 	synchro_drive = self.up
+	twist_magnet = motor_assembly.twist_magnet_
+	twist_motor = motor_assembly.twist_motor_
+	twist_motor_pulley = motor_assembly.twist_motor_pulley_
+	twist_motor_pulley_top = motor_assembly.twist_motor_pulley_top_
+	twist_belt = motor_assembly.twist_belt_
+
+	# Grab some values from *wheel_assembly:
 	wheel_assembly = synchro_drive.wheel_assembly_
 	gear_box = wheel_assembly.gear_box_
 	turn_table = wheel_assembly.turn_table_
-	wheel = wheel_assembly.wheel_
-	motor_base = self.motor_base_
-	twist_motor = self.twist_motor_
-	drive_motor = self.drive_motor_
-	twist_belt = self.twist_belt_
 	twist_wheel_pulley = wheel_assembly.twist_wheel_pulley_
+	drive_wheel_pulley = wheel_assembly.drive_wheel_pulley_
+	wheel = wheel_assembly.wheel_
 
 	# If the wheel radius is R and its witdh is W, (R+W/2)*sqrt(2)
 	# is a pretty close approximation to the radius of the *wheel_sweep*,
@@ -46,10 +66,12 @@ class Motor_Assembly(Part):
 	self.motor_shaft_radius_l = motor_shaft_radius = \
 	  wheel_sweep + twist_motor.spur_gear_body_diameter_l / 2 - \
 	  twist_motor.shaft_offset_l
+	zero = L()
 
 	self.twist_motor_angle_a = twist_motor_angle = Angle(deg = 75)
 	self.drive_motor_angle_a = drive_motor_angle = Angle(deg = 53)
 
+	# Compute the twist/drive motor shaft locations:
 	self.twist_motor_x_l = twist_motor_x = \
 	  wheel_sweep.cosine(twist_motor_angle)
 	self.twist_motor_y_l = twist_motor_y = \
@@ -59,11 +81,14 @@ class Motor_Assembly(Part):
 	self.drive_motor_y_l = drive_motor_y = \
 	  wheel_sweep.sine(drive_motor_angle)
 
-	
+	self.drive_motor_shaft_x_l = drive_motor_shaft_x = drive_motor_x
+	self.drive_motor_shaft_y_l = drive_motor_shaft_y = \
+	  drive_motor_y - drive_motor.shaft_offset_l
 	self.twist_motor_shaft_x_l = twist_motor_shaft_x = twist_motor_x
 	self.twist_motor_shaft_y_l = twist_motor_shaft_y = \
 	  twist_motor_y - twist_motor.shaft_offset_l
 
+	# Do the *twist_motor* configuration:
 	twist_motor.configure(
 	  x = twist_motor_x,
 	  y = twist_motor_y,
@@ -75,14 +100,13 @@ class Motor_Assembly(Part):
 	  z = motor_base.b.z,
 	  spur_gear_body_dz = L(mm = 18.50))
 
+	# Do the *twist_belt* configuration:
 	twist_wheel_pulley_lip_bz = \
 	  twist_wheel_pulley.b.z + twist_wheel_pulley.lip_height_l
 	twist_wheel_pulley_lip_tz = twist_wheel_pulley.t.z
 	twist_wheel_pulley_lip_cz = \
 	  (twist_wheel_pulley_lip_bz + twist_wheel_pulley_lip_tz) / 2
-
 	twist_belt_height = L(inch = "1/8")
-	zero = L()
 	twist_belt.configure(
 	  r1 = twist_wheel_pulley.tooth_radius_l,
 	  x1 = zero,
@@ -93,6 +117,87 @@ class Motor_Assembly(Part):
 	  y2 = twist_motor_shaft_y,
 	  z2 = twist_wheel_pulley_lip_cz + twist_belt_height / 2,
 	  width = twist_wheel_pulley.tooth_height_l)
+
+	# Do the *twist_motor_pulley* configuration:
+	twist_motor_pulley.configure(
+	  belt_class = twist_wheel_pulley.belt_class_s,
+	  teeth_count = twist_wheel_pulley.teeth_count_i,
+	  lip_extra = twist_wheel_pulley.lip_extra_l,
+	  lip_height = L(mm = 2.00),
+	  belt_width = twist_wheel_pulley.belt_width_l,
+	  belt_width_extra = twist_wheel_pulley.belt_width_extra_l,
+	  shaft_diameter = twist_motor.shaft_diameter_l,
+	  x = twist_motor_shaft_x,
+	  y = twist_motor_shaft_y,
+	  bottom_z = motor_base.b.z + motor_base.floor_dz_l + L(mm = 0.50))
+
+	# Do the *drive_motor_pulley* configuration:
+	drive_motor_pulley.configure(
+	  belt_class = drive_wheel_pulley.belt_class_s,
+	  teeth_count = drive_wheel_pulley.teeth_count_i,
+	  lip_extra = drive_wheel_pulley.lip_extra_l,
+	  lip_height = (drive_wheel_pulley.t.z -
+	    drive_wheel_pulley.belt_width_l - 
+	    drive_wheel_pulley.belt_width_extra_l) -  twist_motor_pulley.b.z,
+	  belt_width = drive_wheel_pulley.belt_width_l,
+	  belt_width_extra = drive_wheel_pulley.belt_width_extra_l,
+	  x = drive_motor_shaft_x,
+	  y = drive_motor_shaft_y,
+	  bottom_z = twist_motor_pulley.b.z)
+
+	# Do the *drive_belt* configuration:
+	drive_wheel_pulley_lip_bz = \
+	  drive_wheel_pulley.b.z + drive_wheel_pulley.lip_height_l
+	drive_wheel_pulley_lip_tz = drive_wheel_pulley.t.z
+	drive_wheel_pulley_lip_cz = \
+	  (drive_wheel_pulley_lip_bz + drive_wheel_pulley_lip_tz) / 2
+	drive_belt_height = L(inch = "1/8")
+	drive_belt.configure(
+	  r1 = drive_wheel_pulley.tooth_radius_l,
+	  x1 = zero,
+	  y1 = zero,
+	  z1 = drive_wheel_pulley_lip_cz - drive_belt_height / 2,
+	  r2 = drive_wheel_pulley.tooth_radius_l,
+	  x2 = drive_motor_shaft_x,
+	  y2 = drive_motor_shaft_y,
+	  z2 = drive_wheel_pulley_lip_cz + drive_belt_height / 2,
+	  width = drive_wheel_pulley.tooth_height_l)
+
+	# Configure *drive_magnet*:
+	drive_magnet.configure(
+	  diameter = L(inch = "1/4"),
+	  dz = L(inch = "1/8"),
+	  x = drive_motor_shaft_x,
+	  y = drive_motor_shaft_y,
+	  z_bottom = drive_motor.t.z)
+
+	# Configure *twist_magnet*:
+	twist_magnet.configure(
+	  diameter = L(inch = "1/4"),
+	  dz = L(inch = "1/8"),
+	  x = twist_motor_shaft_x,
+	  y = twist_motor_shaft_y,
+	  z_bottom = twist_motor.t.z)
+
+	# Configure *twist_motor_pulley_top*:
+	twist_motor_pulley_top.configure(
+	  hub_diameter = twist_motor.shaft_diameter_l + L(mm = 6),
+	  hub_dz = L(mm = 6.00),
+	  magnet_diameter = twist_magnet.dx,
+	  magnet_dz = twist_magnet.dz,
+	  lip_diameter = twist_wheel_pulley.dx,
+	  lip_dz = L(mm = 2.00),
+	  shaft_diameter = twist_motor.shaft_diameter_l,
+	  x = twist_motor_shaft_x,
+	  y = twist_motor_shaft_y,
+	  z_bottom = twist_motor_pulley.t.z)
+
+	dz = L(mm = 1.6)
+	x1 = L(mm = 5)
+	y1 = L(mm = 50)
+	pcb.configure(x1 = x1, y1 = y1,
+	  x2 = x1 + L(mm = 100), y2 = y1 + L(mm = 100),
+	  dz = dz, z_bottom = motor_base.t.z - dz)
 
 	zero = L()
 	self.base_bz_l = base_bz = gear_box.t.z + turn_table.height_l
@@ -105,6 +210,8 @@ class Wheel_Assembly(Part):
 	# List all of the sub-*Part*'s that make up a wheel assembly:
 
 	self.bottom_bearing_ = Bearing(self)
+	self.drive_wheel_pulley_ = Pulley(self)
+	self.drive_wheel_pulley_top_ = Pulley_Top(self)
 	self.gear_box_ = Gear_Box(self)
 	self.gear_box_bottom_ = Gear_Box_Bottom(self)
 	self.gear_box_bottom_screws_ = Gear_Box_Screws(self, label="Bottom")
@@ -144,15 +251,17 @@ class Wheel_Assembly(Part):
 	# Grab some values from *wheel_assembly* (i.e. *self*):
 	wheel_assembly = self
 	bottom_bearing = wheel_assembly.bottom_bearing_
+	drive_wheel_pulley = wheel_assembly.drive_wheel_pulley_
+	drive_wheel_pulley_top = wheel_assembly.drive_wheel_pulley_top_
 	gear_box = wheel_assembly.gear_box_
 	gear_box_cover = wheel_assembly.west_gear_box_cover_
-	gear_box_bottom = self.gear_box_bottom_
-	gear_box_bottom_screws = self.gear_box_bottom_screws_
-	gear_box_side = self.south_gear_box_side_
-	gear_box_shelf = self.gear_box_shelf_
-	gear_box_shelf_screws = self.gear_box_shelf_screws_
-	gear_box_top = self.gear_box_top_
-	gear_box_top_screws = self.gear_box_top_screws_
+	gear_box_bottom = wheel_assembly.gear_box_bottom_
+	gear_box_bottom_screws = wheel_assembly.gear_box_bottom_screws_
+	gear_box_side = wheel_assembly.south_gear_box_side_
+	gear_box_shelf = wheel_assembly.gear_box_shelf_
+	gear_box_shelf_screws = wheel_assembly.gear_box_shelf_screws_
+	gear_box_top = wheel_assembly.gear_box_top_
+	gear_box_top_screws = wheel_assembly.gear_box_top_screws_
 	north_bearing = wheel_assembly.north_bearing_
 	south_bearing = wheel_assembly.south_bearing_
 	south_bevel_gear = wheel_assembly.south_bevel_gear_
@@ -160,7 +269,7 @@ class Wheel_Assembly(Part):
 	top_bearing = wheel_assembly.top_bearing_
 	top_bevel_gear = wheel_assembly.top_bevel_gear_
 	top_shim = wheel_assembly.top_shim_
-	turn_table = self.turn_table_
+	turn_table = wheel_assembly.turn_table_
 	twist_wheel_pulley = wheel_assembly.twist_wheel_pulley_
 	twist_wheel_pulley_top = wheel_assembly.twist_wheel_pulley_top_
 	vertical_shaft = wheel_assembly.vertical_shaft_
@@ -168,29 +277,48 @@ class Wheel_Assembly(Part):
 	synchro_drive = wheel_assembly.up
 	motor_assembly = synchro_drive.motor_assembly_
 	motor_base = motor_assembly.motor_base_
+	twist_motor_pulley = motor_assembly.twist_motor_pulley_
 
-	# Configure *twist_wheel_pulley*:
-	#  teeth_count = 19, belt_class = "XL",
-	#  belt_width = L(inch = "1/8") + L(inch = .005),
+	lip_height = (twist_motor_pulley.t.z - \
+	  twist_motor_pulley.belt_width_l - \
+	  twist_motor_pulley.belt_width_extra_l) - turn_table.b.z
 	twist_wheel_pulley.configure(
 	  teeth_count = 46,
 	  belt_class = "MXL",
 	  lip_extra = L(mm = 0.5),
-	  lip_height = turn_table.dz + motor_base.floor_dz_l +
-	    twist_wheel_pulley_top.lip_height_l + L(mm = 3.000),
-	  belt_width = L(inch = "1/8") + L(inch = .005),
+	  lip_height = lip_height,
+	  belt_width = L(inch = "1/8"),
+	  belt_width_extra = L(mm = 0.10),
 	  bearing_diameter = top_bearing.diameter_l,
 	  bearing_sides = top_bearing.sides_i,
 	  bearing_width = top_bearing.width_l,
 	  shaft_diameter = L(inch = "1/2"),
-	  holes_count = 8,
 	  bottom_z = gear_box.t.z)
 
 	twist_wheel_pulley_top.configure(
 	  lip_diameter = twist_wheel_pulley.lip_diameter_l,
-	  lip_height = L(mm = 2.00),
+	  lip_dz = L(mm = 2.00),
 	  shaft_diameter = (top_bearing.diameter_l + top_bearing.bore_l) / 2,
-	  bottom_z = twist_wheel_pulley.t.z)
+	  z_bottom = twist_wheel_pulley.t.z)
+
+	drive_wheel_pulley.configure(
+	  teeth_count = 46,
+	  belt_class = "MXL",
+	  lip_extra = L(mm = 0.50),
+	  lip_height = L(mm = 2.00),
+	  belt_width = L(inch = "1/8"),
+	  belt_width_extra = L(mm = 0.10),
+	  shaft_diameter = vertical_shaft.diameter_l,
+	  bottom_z = twist_wheel_pulley_top.t.z + L(mm = 1.00))
+
+	drive_wheel_pulley_top.configure(
+	  hub_diameter = vertical_shaft.dx + L(mm = 10),
+	  hub_dz = L(mm = 6),
+	  lip_diameter = drive_wheel_pulley.dx,
+	  lip_dz = L(mm = 2),
+	  set_screw = True,
+	  shaft_diameter = vertical_shaft.dx,
+	  z_bottom = drive_wheel_pulley.t.z)
 
 	# Compute various locations along the Y axis:
 	zero = L()
@@ -1002,10 +1130,62 @@ class Gear_Box_Top(Part):
 	  bottom_corner = P( pocket_dx / 2,  pocket_dy / 2, z2),
 	  pocket_top = "b")
 
+# The D42DAI from http://www.kjmagnetics.com/ is a 1/4" by 1/8"
+# thick nickel plated diametrically magnetized magnet for $.38/each.
+# The D82DIA is 1/2" x 1/8" for $1.13/each.
+
+class Magnet(Part):
+    def __init__(self, up):
+	Part.__init__(self, up)
+	zero = L()
+	Part.diameter_l = L(mm = 5.93)
+	Part.x_l = zero
+	Part.y_l = zero
+	Part.z_bottom_l = zero
+	Part.dz_l = L(mm = 2.93)
+
+    def configure(self, diameter = None,
+      x = None, y = None, z_bottom = None, dz = None):
+	# Perform argument checks:
+	none_type = type(None)
+	assert type(diameter) == none_type or isinstance(diameter, L)
+	assert type(x) == none_type or isinstance(x, L)
+	assert type(y) == none_type or isinstance(y, L)
+	assert type(z_bottom) == none_type or isinstance(z_bottom, L)
+	assert type(dz) == none_type or isinstance(dz, L)
+
+	# Load up *self*:
+	if isinstance(diameter, L):
+	    self.diameter_l = diameter
+	if isinstance(x, L):
+	    self.x_l = x
+	if isinstance(y, L):
+	    self.y_l = y
+	if isinstance(z_bottom, L):
+	    self.z_bottom_l = z_bottom
+	if isinstance(dz, L):
+	    self.dz_l = dz
+
+    def construct(self):
+	# Grab some values from *self*:
+	x = self.x_l
+	y = self.y_l
+	z_bottom = self.z_bottom_l 
+	dz = self.dz_l
+
+	# Represent the magnet using a cylinder:
+	self.cylinder(comment = "Magnet",
+	  material = Material("iron", "magnetic"),
+	  color = Color("cyan"),
+	  diameter = self.diameter_l,
+	  start = P(x, y, z_bottom),
+	  end = P(x, y, z_bottom + dz))
+
 class Motor(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
 	zero = L()
+	self.shaft_diameter_l = zero
 	self.spur_gear_body_dz_l = zero
 	self.x_l = zero
 	self.y_l = zero
@@ -1050,7 +1230,7 @@ class Motor(Part):
 	z6 = z5 + L(mm = 4.00)				# Round shaft
 	z7 = z6 + L(mm = 12.00)				# Shaft with flat
 
-	d1 = L(mm = 6.00)		# Motor shaft diameter
+	self.shaft_diameter_l = d1 = L(mm = 6.00)	# Motor shaft diameter
 	d2 = L(mm = 9.00)		# Motor hub diameter
 	self.spur_gear_hub_diameter_l = d3 = L(mm = 12.00) # Spur gear hub diam.
 	d4 = L(mm = 33.00)		# Motor body diameter
@@ -1097,6 +1277,7 @@ class Motor_Base(Part):
 	drive_motor = motor_assembly.drive_motor_
 	twist_motor = motor_assembly.twist_motor_
 	wheel_assembly = synchro_drive.wheel_assembly_
+	vertical_shaft = wheel_assembly.vertical_shaft_
 	wheel = wheel_assembly.wheel_
 	turn_table = wheel_assembly.turn_table_
 
@@ -1104,54 +1285,93 @@ class Motor_Base(Part):
 	turn_table_bore = turn_table.bore_l
 
 	self.floor_dz_l = floor_dz = twist_motor.spur_gear_hub_dz_l
-	self.dz_l = dz = L(mm = 11.00)
+	self.dz_l = dz = \
+	  vertical_shaft.t.z + L(mm = 2) - motor_assembly.base_bz_l
 	self.ny_l = ny = L(mm = 135.00)
 	self.ex_l = ex = L(mm = 85.00)
+	self.wall_width_l = wall_width = L(mm = 6)
 
 	z0 = motor_assembly.base_bz_l
 	z1 = z0 + floor_dz / 2
 	z2 = z1 + floor_dz / 2
 	z3 = z0 + dz
+	#print("Motor_Base: z0={0} z1={1} z2={2} z3={3}".format(z0, z1, z2, z3))
 
-	zero = L()
-	outer_contour = Contour()
-	outer_contour.bend_append(
-	  P(-turn_table.dx / 2, -turn_table.dy / 2, zero), zero)
-	outer_contour.bend_append(
-	  P( turn_table.dx / 2, -turn_table.dy / 2, zero), zero)
-	outer_contour.bend_append(
-	  P( ex, zero, zero), zero)
-	outer_contour.bend_append(
-	  P( ex,  ny, zero), zero)
-	outer_contour.bend_append(
-	  P(zero,  ny, zero), zero)
-	outer_contour.bend_append(
-	  P(zero,  turn_table.dy, zero), zero)
-	outer_contour.bend_append(
-	  P(-turn_table.dx / 2,  turn_table.dy / 2, zero), zero)
+	#                K-----------------------------L
+	#                |                             |
+	#                |                             |
+	#                |                             |
+	#                |                             |
+	#                |                             |
+	#                J                             M
+	#               /                             /
+	#              /                             /
+	#             ~	                            ~
+	#            /                             /
+	#           I                             /
+	#           | O                          /
+	#       +---+ - - - - - - - +           /
+	#       | O |             O .          /
+	#   G---+---H               .         /
+	#   | O .                   .        /
+	#   |   .                   .       /
+	#   |   .         O         .      /
+	#   |   .                   .     /
+	#   | O .                   .    /
+	#   F---+---E           B---+---A
+	#       | O |           | O .
+	#       +---+ - - - - - + - +
+	#           | O       O |
+	#           D-----------C
+
+	z = zero = L()
+	ww = wall_width
+	ttx2 = turn_table.dx / 2
+	tty2 = turn_table.dy / 2
+	clearance = cl =L(mm = 10)
+	jkx = L(mm = 5)
+	jmy = ny - L(mm = 20)
+
+	bottom_contour = Contour()
+	bottom_contour.bend_append(P( ex,         jmy,       z), z)	# M
+	bottom_contour.bend_append(P( ex,         ny,        z), z)	# L
+	bottom_contour.bend_append(P( jkx,        ny,        z), z)	# K
+	bottom_contour.bend_append(P( jkx,        jmy,       z), z)	# J
+	bottom_contour.bend_append(P(-ttx2 + cl,  tty2 + ww, z), z)	# I
+	bottom_contour.bend_append(P(-ttx2 + cl,  tty2 - cl, z), z)	# H
+	bottom_contour.bend_append(P(-ttx2 - ww,  tty2 - cl, z), z)	# G
+	bottom_contour.bend_append(P(-ttx2 - ww, -tty2 + cl, z), z)	# F
+	bottom_contour.bend_append(P(-ttx2 + cl, -tty2 + cl, z), z)	# E
+	bottom_contour.bend_append(P(-ttx2 + cl, -tty2 - ww, z), z)	# D
+	bottom_contour.bend_append(P( ttx2 - cl, -tty2 - ww, z), z)	# C
+	bottom_contour.bend_append(P( ttx2 - cl, -tty2 + cl, z), z)	# B
+	bottom_contour.bend_append(P( ttx2 + ww, -tty2 + cl, z), z)	# A
 
 	start = P(zero, zero, z0)
 	end = P(zero, zero, z1)
-	inner_contour = outer_contour.adjust(
-	  delta = -L(mm = 4.00),
+	inner_contour = bottom_contour.adjust(
+	  delta = -wall_width,
 	  start = start,
 	  end = end,
 	  maximum_radius = zero)
 
-	#print("outer_contour={0}".format(outer_contour))
+	#print("bottom_contour={0}".format(bottom_contour))
 	#print("inner_contour={0}".format(inner_contour))
 
-	self.extrude(comment = "Motor Base Bottom",
+	self.block(comment = "Turn Table",
 	  material = Material("plastic", "ABS"),
 	  color = Color("lavender"),
-	  outer_contour = outer_contour,
+	  corner1 = P( -turn_table.dx / 2, -turn_table.dy / 2, z0),
+	  corner2 = P(  turn_table.dx / 2,  turn_table.dy / 2, z2),
+	  top = "n")
+
+	self.extrude(comment = "Motor Base Bottom",
+	  outer_contour = bottom_contour,
 	  start = P(zero, zero, z0),
 	  end = P(zero, zero, z2))
 
 	self.extrude(comment = "Motor Base Wall",
-	  material = Material("plastic", "ABS"),
-	  color = Color("lavender"),
-	  outer_contour = outer_contour,
+	  outer_contour = bottom_contour,
 	  inner_contours = [inner_contour],
 	  start = P(zero, zero, z1),
 	  end = P(zero, zero, z3))
@@ -1189,6 +1409,75 @@ class Motor_Base(Part):
 
 	#print("<=Motor_Base.construct()")
 
+class PCB(Part):
+    def __init__(self, up):
+	Part.__init__(self, up)
+	zero = L()
+	self.dz_l = zero
+	self.x1_l = zero
+	self.y1_l = zero
+	self.x2_l = zero
+	self.y2_l = zero
+	self.z_bottom_l = zero
+
+    def configure(self, dz = None, x1 = None, y1 = None, x2 = None, y2 = None,
+      z_bottom = None):
+	# Check argument types:
+	none_type = type(None)
+	assert type(x1) == none_type or isinstance(x1, L)
+	assert type(y1) == none_type or isinstance(y1, L)
+	assert type(x2) == none_type or isinstance(x2, L)
+	assert type(y2) == none_type or isinstance(y2, L)
+	assert type(dz) == none_type or isinstance(dz, L)
+	assert type(z_bottom) == none_type or isinstance(z_bottom, L)
+
+	# Load up *self*:
+	if isinstance(dz, L):
+	    self.dz_l = dz
+	if isinstance(x1, L):
+	    self.x1_l = x1
+	if isinstance(y1, L):
+	    self.y1_l = y1
+	if isinstance(x2, L):
+	    self.x2_l = x2
+	if isinstance(y2, L):
+	    self.y2_l = y2
+	if isinstance(z_bottom, L):
+	    self.z_bottom_l = z_bottom
+
+    def construct(self):
+	z0 = self.z_bottom_l
+	z1 = z0 + self.dz_l
+	#print("PCB.construct: z0={0} z1={1}".format(z0, z1))
+
+	x1 = self.x1_l
+	y1 = self.y1_l
+	x2 = self.x2_l
+	y2 = self.y2_l
+	center_z0 = P((x1 + x2) / 2, (y1 + y2) / 2, z0)
+	center_z1 = P((x1 + x2) / 2, (y1 + y2) / 2, z1)
+
+	z = zero = L()
+	outer_contour = Contour()
+	outer_contour.bend_append(P(x2, y1, z), z)
+	outer_contour.bend_append(P(x2, y2, z), z)
+	outer_contour.bend_append(P(x1, y2, z), z)
+	outer_contour.bend_append(P(x1, y1, z), z)
+
+	inner_contour = outer_contour.adjust(
+	  delta = -L(mm = 10),
+	  maximum_radius = z,
+	  start = center_z0,
+	  end = center_z1)
+
+	self.extrude(comment = "PCB block",
+	  material = Material("pcb", "fr4"),
+	  color = Color("light_green"),
+	  outer_contour = outer_contour,
+	  inner_contours = [inner_contour],
+	  start = center_z0,
+	  end = center_z1)
+
 class Pulley(Part):
     def __init__(self, up):
 	# Initialize *Part* super class:
@@ -1199,11 +1488,11 @@ class Pulley(Part):
 	self.belt_class_s = "MXL"
 	self.teeth_count_i = 20
 	self.belt_width_l = L(inch = "1/8")
+	self.belt_width_extra_l = zero
 	self.lip_extra_l = L(inch = "1/8")
 	self.lip_height_l = L(inch = 10)
-	self.holes_count_i = 4
-	self.hole_diameter_l = zero
 	self.bearing_diameter_l = zero
+	self.bearing_sides_i = 16
 	self.bearing_width_l = zero
 	self.shaft_diameter_l = zero
 	self.bottom_z_l = zero
@@ -1211,10 +1500,10 @@ class Pulley(Part):
 	self.y_l = zero
 
     def configure(self, belt_class = None, teeth_count = None,
-      belt_width = None, lip_extra = None, lip_height = None,
-      holes_count = None, hole_diameter = None, bearing_diameter = None,
-      bearing_sides = None, bearing_width = None, shaft_diameter = None,
-      bottom_z = None, x = None, y = None):
+      belt_width = None, belt_width_extra = None,
+      lip_extra = None, lip_height = None,
+      bearing_diameter = None, bearing_sides = None, bearing_width = None,
+      shaft_diameter = None, bottom_z = None, x = None, y = None):
 
 	# Check argument types:
 	zero = L()
@@ -1222,15 +1511,12 @@ class Pulley(Part):
       	assert type(belt_class) == none_type or  isinstance(belt_class, str)
 	assert type(teeth_count) == none_type or isinstance(teeth_count, int)
 	assert type(belt_width) == none_type or \
-	  isinstance(belt_width, L) and belt_width > zero
+	  isinstance(belt_width, L) and belt_width >= zero
+	assert type(belt_width_extra) == none_type or \
+	  isinstance(belt_width_extra, L) and belt_width_extra >= zero
 	assert type(lip_extra) == none_type or \
-	  isinstance(lip_extra, L) and lip_extra > zero
-	assert type(lip_height) == none_type or \
-	  isinstance(lip_height, L) and lip_height > zero
-	assert type(holes_count) == none_type or \
-	  isinstance(holes_count, int) and holes_count >= 0
-	assert type(hole_diameter) == none_type or \
-	  isinstance(hole_diameter, L) and hole_diameter > zero
+	  isinstance(lip_extra, L) and lip_extra >= zero
+	assert type(lip_height) == none_type or isinstance(lip_height, L)
 	assert type(bearing_diameter) == none_type or \
 	  isinstance(bearing_diameter, L)
 	assert type(bearing_sides) == none_type or \
@@ -1249,14 +1535,12 @@ class Pulley(Part):
 	    self.teeth_count_i = teeth_count
 	if isinstance(belt_width, L):
 	    self.belt_width_l = belt_width
+	if isinstance(belt_width_extra, L):
+	    self.belt_width_extra_l = belt_width_extra
 	if isinstance(lip_extra, L):
 	    self.lip_extra_l = lip_extra
 	if isinstance(lip_height, L):
 	    self.lip_height_l = lip_height
-	if isinstance(holes_count, int):
-	    self.holes_count_i = holes_count
-	if isinstance(hole_diameter, L):
-	    self.hole_diameter_l = hole_diameter
 	if isinstance(bearing_diameter, L):
 	    self.bearing_diameter_l = bearing_diameter
 	if isinstance(bearing_sides, int):
@@ -1268,9 +1552,9 @@ class Pulley(Part):
 	if isinstance(bottom_z, L):
 	    self.bottom_z_l = bottom_z
 	if isinstance(x, L):
-	    self.x = x
+	    self.x_l = x
 	if isinstance(y, L):
-	    self.y = y
+	    self.y_l = y
 
     def construct(self):
 	""" *Pulley* construct method. """
@@ -1279,10 +1563,9 @@ class Pulley(Part):
 	belt_class = self.belt_class_s
 	teeth_count = self.teeth_count_i
 	belt_width = self.belt_width_l
+	belt_width_extra = self.belt_width_extra_l
 	lip_height = self.lip_height_l
 	lip_extra = self.lip_extra_l
-	holes_count = self.holes_count_i
-	hole_diameter = self.hole_diameter_l
 	bearing_diameter = self.bearing_diameter_l
 	bearing_width = self.bearing_width_l
 	bearing_sides = self.bearing_sides_i
@@ -1431,10 +1714,14 @@ class Pulley(Part):
 	zero = L()
 	z0 = bottom_z			# Bottom
 	z1 = z0 + lip_height / 2	# Extend into lip to force a weld
-	z2 = z0 + lip_height		# Lip top and gear bottom
-	z3 = z2 + belt_width		# Gear top
-	#print("Pulley.construct():z0={0} z1={1} z2={2} z3={3}".
-	#  format(z0, z1, z2, z3))
+	z2 = z1 + lip_height / 2	# Lip top and gear bottom
+	z3 = z2 + belt_width_extra / 2 	# Gear top
+	z4 = z3 + belt_width / 2
+	z5 = z4 + belt_width / 2
+	z6 = z5 + belt_width_extra / 2	# Gear top
+	#print(("Pulley.construct(): " +
+	#  "z0={0} z1={1} z2={2} z3={3} z4={4} z5={5} z6={6}").
+	#  format(z0, z1, z2, z3, z4, z5, z6))
 
 	shaft_radius = shaft_diameter / 2
 	bearing_radius = bearing_diameter / 2
@@ -1463,8 +1750,8 @@ class Pulley(Part):
 	  start = P(x, y, z0),
 	  end = P(x, y, z2),
 	  sides = teeth_count)
-	#print("Pulley.construct():after lip:dx={0} dy={1} dz={2}".
-	#  format(self.dx, self.dy, self.dz))
+	#print("Pulley.construct():after lip:dx={0} dy={1} dz={2} x={3} y={4}".
+	#  format(self.dx, self.dy, self.dz, x, y))
 	
 	quick = False
 	#quick = True
@@ -1472,7 +1759,7 @@ class Pulley(Part):
 	    self.cylinder(comment = "Pulley Gear",
 	    diameter = tooth_radius * 2,
 	    start = P(zero, zero, z1),
-	    end = P(zero, zero, z3),
+	    end = P(zero, zero, z6),
 	    sides = teeth_count)
 	else:
 	    # Compute *outer_path*:
@@ -1499,15 +1786,15 @@ class Pulley(Part):
 	    self.extrude(comment = "Gear",
 	      outer_contour = outer_contour,
 	      start = P(x, y, z1),
-	      end = P(x, y, z3))
+	      end = P(x, y, z6))
 	    #print("Pulley.construct():after extrd:dx={0} dy={1} dz={2}".
 	    #  format(self.dx, self.dy, self.dz))
 
 	if shaft_diameter > zero:
 	    self.hole(comment = "Shaft Hole",
 	      diameter = shaft_diameter,
-	      start = P(x, y, z3),
-	      end = P(x, y, zero),
+	      start = P(x, y, z6),
+	      end = P(x, y, z0),
 	      flags = "t")
 
 	#print("bearing_diameter={0} bearing_width={1}".
@@ -1515,8 +1802,8 @@ class Pulley(Part):
 	if bearing_diameter > zero and bearing_width > zero:
 	    self.hole(comment = "Bearing Hole",
 	      diameter = bearing_diameter,
-	      start = P(x, y, z3),
-	      end = P(x, y, z3 - bearing_width),
+	      start = P(x, y, z6),
+	      end = P(x, y, z6 - bearing_width),
 	      flags = "f",
 	      sides = bearing_sides)
 
@@ -1527,67 +1814,127 @@ class Pulley_Top(Part):
 
 	# Initialize configuration varaibles for *self*:
 	zero = L()
+	one = L(mm = 1)
+	self.hub_diameter_l = zero
+	self.hub_dz_l = zero
 	self.lip_diameter_l = zero
-	self.lip_height_l = zero
-	self.shaft_diameter_l = zero
-	self.bottom_z_l = zero
+	self.lip_dz_l = zero
+	self.magnet_diameter_l = zero
+	self.magnet_dz_l = zero
+	self.set_screw_b = False
+	self.shaft_diameter_l = -one
 	self.x_l = zero
 	self.y_l = zero
+	self.z_bottom_l = zero
 
-    def configure(self, x = None, y = None, lip_diameter = None,
-      lip_height = None, bottom_z = None, shaft_diameter = None):
+    def configure(self, hub_diameter = None, hub_dz = None, ip_diameter = None,
+      lip_diameter = None, magnet_diameter = None, magnet_dz = None,
+      lip_dz = None, shaft_diameter = None, set_screw = None,
+      x = None, y = None, z_bottom = None):
 
 	# Check argument types:
 	zero = L()
 	none_type = type(None)
-	assert type(x) == none_type or isinstance(x, L)
-	assert type(y) == none_type or isinstance(y, L)
-      	assert type(lip_diameter) == none_type or isinstance(lip_diameter, L)
-      	assert type(lip_height) == none_type or isinstance(lip_height, L)
-      	assert type(bottom_z) == none_type or isinstance(bottom_z, L)
+	assert type(hub_diameter) == none_type or isinstance(hub_diameter, L)
+	assert type(hub_dz) == none_type or isinstance(hub_dz, L)
+	assert type(lip_diameter) == none_type or isinstance(lip_diameter, L)
+	assert type(lip_dz) == none_type or isinstance(lip_dz, L)
+	assert type(magnet_diameter) == none_type or \
+	  isinstance(magnet_diameter, L)
+	assert type(magnet_dz) == none_type or isinstance(magnet_dz, L)
+	assert type(set_screw) == none_type or isinstance(set_screw, bool)
 	assert type(shaft_diameter) == none_type or \
 	  isinstance(shaft_diameter, L)
+	assert type(x) == none_type or isinstance(x, L)
+	assert type(y) == none_type or isinstance(y, L)
+	assert type(z_bottom) == none_type or isinstance(z_bottom, L)
 
-	# Remember the arguments;
+	# Remember the arguments:
+	if isinstance(hub_diameter, L):
+	    self.hub_diameter_l = hub_diameter
+	if isinstance(hub_dz, L):
+	    self.hub_dz_l = hub_dz
 	if isinstance(lip_diameter, L):
 	    self.lip_diameter_l = lip_diameter
-	if isinstance(lip_height, L):
-	    self.lip_height_l = lip_height
-	if isinstance(bottom_z, L):
-	    self.bottom_z_l = bottom_z
+	if isinstance(lip_dz, L):
+	    self.lip_dz_l = lip_dz
+	if isinstance(magnet_diameter, L):
+	    self.magnet_diameter_l = magnet_diameter
+	if isinstance(magnet_dz, L):
+	    self.magnet_dz_l = magnet_dz
+	if isinstance(set_screw, bool):
+	    self.set_screw_b = set_screw
 	if isinstance(shaft_diameter, L):
 	    self.shaft_diameter_l = shaft_diameter
 	if isinstance(x, L):
 	    self.x_l = x
 	if isinstance(y, L):
 	    self.y_l = y
+	if isinstance(z_bottom, L):
+	    self.z_bottom_l = z_bottom
 
     def construct(self):
-	""" *Pulley* construct method. """
+	""" *Pulley_Top* construct method. """
 
-	z0 = self.bottom_z_l
-	z1 = z0 + self.lip_height_l
+	z0 = self.z_bottom_l				# Bottom
+	z1 = z0 + self.lip_dz_l / 2			# Half way thru lip
+	z2 = z1 + self.lip_dz_l / 2			# Lip top
+	z3 = z2 + self.hub_dz_l / 2			# Set screw hight
+	z4 = z3 + self.hub_dz_l / 2 - self.magnet_dz_l	# Magnet bottom
+	z5 = z4 + self.magnet_dz_l			# Top
 
 	# Grab some value out of *self*:
 	zero = L()
 	x = self.x_l
 	y = self.y_l
-	self.cylinder(comment = "Pulley Top Cylinder",
+	#print("Pulley_Top.construct():x={0} y={1} z0={2} z1={3} z2={4} z3={5}".
+	#  format(x, y, z0, z1, z2, z3))
+
+	# Do the lip:
+	lip_diameter = self.lip_diameter_l
+	self.cylinder(comment = "Lip Cylinder",
 	  material = Material("plastic", "ABS"),
 	  color = Color("pink"),
-	  diameter = self.lip_diameter_l,
+	  diameter = lip_diameter,
 	  start = P(x, y, z0),
-	  end = P(x, y, z1),
+	  end = P(x, y, z2),
 	  sides = 60)
 
+	# Do the hub (weld it into the lip using *z1*):
+	hub_diameter = self.hub_diameter_l
+	if hub_diameter > zero:
+	    self.cylinder(comment = "Hub Cylinder",
+	    diameter = hub_diameter,
+	    start = P(x, y, z1),
+	    end = P(x, y, z5),
+	    sides = 30)
+
+	# Do the shaft hole:
 	shaft_diameter = self.shaft_diameter_l
-	if shaft_diameter > zero:
-	    self.hole(comment = "Shaft hole",
+	if isinstance(shaft_diameter, L) and shaft_diameter > zero:
+	    self.hole(comment = "Shaft Hole",
 	      diameter = shaft_diameter,
-	      start = P(x, y, z1),
+	      start = P(x, y, z5),
 	      end = P(x, y, z0),
 	      flags = "t",
 	      sides = 60)
+
+	# Do the set screw hole:
+	if self.set_screw_b:
+	    self.hole(comment = "Set Screw Hole",
+	      diameter = L(inch = .0890),	# #43 drill for #4-40 tap
+	      start = P(x, y + lip_diameter, z3),
+	      end = P(x, y, z3),
+	      flags = "t")
+
+	# Do magnet hole:
+	magnet_diameter = self.magnet_diameter_l
+	if magnet_diameter > zero:
+	    self.hole(comment = "Magnet hole",
+	      diameter = magnet_diameter,
+	      start = P(x, y, z5),
+	      end = P(x, y, z4),
+	      flags = "f")
 
 class Shim(Part):
     def __init__(self, up):
@@ -1615,16 +1962,27 @@ class Shim(Part):
 class Test(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
-	self.test_block_ = Test_Block(self)
-	self.test_block_screws_ = Test_Block_Screws(self)
-	self.bearing_ = Bearing(self)
+	self.pulley_top_ = Pulley_Top(self)
+	#self.test_block_ = Test_Block(self)
+	#self.test_block_screws_ = Test_Block_Screws(self)
+	#self.bearing_ = Bearing(self)
 
     def construct(self):
-	bearing = self.bearing_
-	test_block = self.test_block_
-	zero = L()
-	bearing.place(translate =
-	  P(zero, zero, test_block.bearing_lip_dz_l + bearing.width_l / 2))
+	pulley_top = self.pulley_top_
+	pulley_top.configure(
+	  hub_diameter = L(mm = 20),
+	  hub_dz = L(mm = 8),
+	  magnet_diameter = L(mm = 8),
+	  magnet_dz = L(mm = 2.50),
+	  set_screw = True,
+	  shaft_diameter = L(mm = 6),
+	  lip_diameter = L(mm = 25),
+	  lip_dz = L(mm = 2))
+	#bearing = self.bearing_
+	#test_block = self.test_block_
+	#zero = L()
+	#bearing.place(translate =
+	#  P(zero, zero, test_block.bearing_lip_dz_l + bearing.width_l / 2))
 
 class Test_Block(Part):
     def construct(self):
@@ -2066,7 +2424,7 @@ class Vertical_Shaft(Part):
 	  color = Color("cyan"),
 	  diameter = diameter,
 	  start = P(zero, zero, bevel_gear_major_diameter - bevel_gear_height),
-          end = P(zero, zero, L(mm = 100.0)))
+          end = P(zero, zero, L(mm = 108.5)))
 
 	#print("Vertical_Shaft.dz={0:i}in".format(self.dz))
 
@@ -2161,7 +2519,6 @@ class Bevel_Gear_Jig(Part):
 	  end = P(zero, zero, z1),
 	  flags = "t")
 	
-
 class Counter_Sink(Part):
     def __init__(self, up):
 	Part.__init__(self, up)

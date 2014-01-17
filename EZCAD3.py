@@ -1966,8 +1966,10 @@ class Contour:
 
 	# For now, constrain *axis* to be in X, Y, or Z direction:
 	if not (use_x_axis or use_y_axis or use_z_axis):
-	    print("Contour.project: axis must align with X, Y, or Z axis")
+	    print("Contour.project: axis must align with X, Y, or Z axis: {0}".
+	    format(axis))
 	    use_z_axis = True
+	    assert EZCAD3.ezcad._update_count != 4
 
 	# For each *bend* in bends, perform the project from 3D down to 2D:
 	plane = None
@@ -3364,15 +3366,19 @@ class Part:
 	    r2 = start_diameter / 2
 	    if r2 > zero:
 		r2 += adjust
-	    assert r1 >= zero and r2 >= zero, \
+	    assert r1 + r2 > zero, \
 	      "sd={0} ed={1} a={2} r1={3} r2={4}".format(start_diameter,
 	      end_diameter, adjust, r1, r2)
+	    command = ("{0}  cylinder(r1={1:m}, r2={2:m}, h={3:m}," +
+	      " center = true, $fn={4});").format(spaces,
+	      r1, r2, length, sides)
+	    if trace >= 0:
+		print("{0}Part._cylinder: r1={1} r2={2} command='{3}'".
+		  format(trace * ' ', r1, r2, command))
 
 	    # Output the cylinder in a vertical orientation centered on the
 	    # origin.  It is processed before either rotation or translation:
-            lines.append(("{0}  cylinder(r1={1:m}, r2={2:m}, h={3:m}," +
-	      " center = true, $fn={4});").format(spaces,
-	      r1, r2, length, sides))
+            lines.append(command)
             lines.append("")
 	
 	if trace >= 0:
