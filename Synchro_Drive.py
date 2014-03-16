@@ -4,12 +4,161 @@ from EZCAD3 import *
 
 # Assemblies:
 
+class Base(Part):
+    def __init__(self, up):
+	Part.__init__(self,up)
+	self.left_front_synchro_ = Synchro_Drive(self)
+	self.right_front_synchro_ = Synchro_Drive(self)
+
+    def construct(self):
+	left_front_synchro = self.left_front_synchro_
+	right_front_synchro = self.right_front_synchro_
+
+	one = L(mm = 1.00)
+	zero = L()
+	self.twist_axis_dy_l = twist_axis_dy = L(inch = 16.00)
+	z_axis = P(zero, zero, one)
+
+	front_right = P(zero, -twist_axis_dy / 2, zero)
+	front_left = P(zero, twist_axis_dy / 2, zero)
+	left_front_synchro.place(translate = front_right)
+	right_front_synchro.place(translate = front_left,
+	  axis = z_axis, rotate = Angle(180))
+
+class Strut_Assembly(Part):
+    def __init__(self, up):
+	Part.__init__(self, up)
+	#self.strut1_ = Strut(self)
+	self.strut_top_ = Strut_Top(self)
+
+    def construct(self):
+	# Grab some relevant *Part*'s:
+	synchro_drive = self.up
+	motor_assembly = synchro_drive.motor_assembly_
+	motor_base = motor_assembly.motor_base_
+
+	# Grab coordnates for point J:
+	j_x = motor_base.j_x_l
+	j_y = motor_base.j_y_l
+
+class Strut(Part):
+    def __init__(self, up):
+	Part.__init__(self, up)
+
+    def construct(self):
+	# Grab some relevant *Part*'s:
+	strut_assembly = self.up
+	synchro_drive = strut_assembly.up
+	motor_assembly = synchro_drive.motor_assembly_
+	motor_base = motor_assembly.motor_base_
+
+class Strut_Top(Part):
+    def __init__(self, up):
+	Part.__init__(self, up)
+
+    def construct(self):
+	# Grab some *Part*'s from the *Part* tree:
+	strut_assembly = self.up
+	synchro = strut_assembly.up
+	base = synchro.up
+	motor_assembly = synchro.motor_assembly_
+	motor_base = motor_assembly.motor_base_
+	
+	# Grab distance between the two twist axes from *base*:
+	twist_axis_dy = base.twist_axis_dy_l
+
+	# Point J and/or M in *motor_base* of the motor assembly
+	# is the closest that strut assembly can get to its partner
+	# on the other side.  Points Q and R are mirror image of
+	# points J and M across the X axis line that goes through
+	# the pair origin O.
+	#
+	#                  +-------+
+	#                 /        |
+	#                /     o   |
+	#               /          |
+	#              /          /
+	#             /          /
+	#            /          /
+	#           /          /
+	#          M          J Q----------R
+	#          |          | | Right    |
+	#          |          | | Strut    |
+	#          | Left     | | Assembly |
+	#          | Motor    | T----------S
+	#          | Assembly |  ||      ||
+	#          +----------+  ||      ||
+	#           ||      ||   ||      ||
+	#           ||      || O ||      ||
+	#           ||      ||   ||      ||
+	#           ||      ||  +----------+
+	#           ||      ||  | Right    |
+	#          R----------Q | Motor    |
+	#          | Left     | | Assembly |
+	#          | Strut    | |          |
+	#          | Assembly | |          |
+	#          S----------T J          M
+	#                      /          /
+	#                     /          /
+	#                    /          /
+	#                   /          /
+	#                  |          /
+	#                  |   o     /
+	#                  |        /
+	#                  +-------+
+	#
+	# +Y
+	#  ^
+	#  |
+	#  O----> +X
+	#
+	# where:
+	#    "O"  is the origin of the *Synchro_Pair*.
+	#    "o"  is the twist axis for each motor assembly.  Note that
+	#         the twist axis aligns in Y with "O".
+	#    "||" Is a strut pair (upper and lower.)
+	#    "J"  is an inside point for the motor base assembly.
+	#    "M"  is an outside point for the motor base assembly,
+	#         where Jy = My on the same motor assembly.
+	#    "Q"  Mirror of "J"
+	#    "R"  Mirror of "M"
+	
+	# Grab X/Y coordinates of J and M from *motor_base*:
+	j_x = motor_base.j_x_l
+	j_y = motor_base.j_y_l
+	m_x = motor_base.m_x_l
+	m_y = motor_base.m_y_l
+
+	# Length of the top strut in Y:
+	self.dy_l = dy = L(mm = 50.00)
+
+	# Compute the X/Y locations of Q, R, S, and T.  Remember, the
+	# origin coordinates are still around the sychro twist axis.
+	self.q_x_l = q_x = j_x
+	self.q_y_l = q_y = twist_axis_dy - j_y
+	self.r_x_l = r_x = m_x
+	self.r_y_l = r_y = twist_axis_dy - m_y
+	self.s_x_l = s_x = r_x
+	self.s_y_l = s_y = r_y - dy
+	self.t_x_l = t_x = q_x
+	self.t_y_l = t_y = q_y - dy
+
+	z0 = motor_base.b.z
+	z3 = motor_base.t.z
+
+	self.block(comment = "Strut Top Block",
+	  color = Color("orange"),
+	  corner1 = P(q_x, q_y, z0),
+	  corner2 = P(s_x, s_y, z3),
+	  top = "t")
+
 class Synchro_Drive(Part):
 
     def __init__(self, up):
 	Part.__init__(self, up)
 	self.wheel_assembly_ = Wheel_Assembly(self)
 	self.motor_assembly_ = Motor_Assembly(self)
+	#self.strut_assembly_ = Strut_Assembly(self)
 
     def construct(self):
 	zero = L()
@@ -30,6 +179,7 @@ class Motor_Assembly(Part):
 	self.drive_motor_pulley_ = Pulley(self)
 	self.drive_motor_pulley_screws_ = Drive_Motor_Pulley_Screws(self)
 	self.drive_motor_pulley_top_ = Pulley_Top(self)
+	self.end_screws_ = End_Screws(self)
 	self.pcb_ = PCB(self)
 	self.twist_belt_ = Belt(self)
 	self.twist_magnet_ = Magnet(self)
@@ -676,7 +826,7 @@ class Bevel_Gear_Data:
       major_diameter = None, cost1_24 = None, cost25_99 = None,
       cost100_249 = None, cost250_999 = None, cost_1000_plus = None):
 
-        # Check argument types:
+	# Check argument types:
 	assert isinstance(part_name, str)
 	assert isinstance(material, Material)
 	assert isinstance(pitch, int)
@@ -784,9 +934,6 @@ class Drive_Motor_Pulley_Screws(Part):
 	pulley_x = drive_motor_pulley.x_l
 	pulley_y = drive_motor_pulley.y_l
 
-	print("Drive_Motor_Pulley_Screws():x={0} y={1} z0={2} z1={3}".
-	  format(pulley_x, pulley_y, z0, z1))
-
 	holes_count = len(screws)
 	angle_delta = Angle(deg = 360) / holes_count
 	holes_radius = drive_motor_pulley.holes_radius_l
@@ -851,6 +998,72 @@ class Drive_Wheel_Pulley_Screws(Part):
 	      sides_angle = Angle(deg = 30))
 	    screw.drill(drive_wheel_pulley, select = "close")
 	    screw.drill(drive_wheel_pulley_top, select = "close")
+
+	#print("Pulley_Screw.dz={0:.3i}in".format(z3 - z0))
+
+class End_Screws(Part):
+    def __init__(self, up):
+	Part.__init__(self, up)
+	self.screw0_ = Fastener(self)
+	self.screw1_ = Fastener(self)
+	self.screw2_ = Fastener(self)
+	self.screw3_ = Fastener(self)
+
+    def construct(self):
+	# Grab some values from *motor_assembly*:
+	motor_assembly = self.up
+	motor_base = motor_assembly.motor_base_
+
+	# Grab some value from *motor_base*:
+	c_x = motor_base.c_x_l
+	c_y = motor_base.c_y_l
+	d_x = motor_base.d_x_l
+	d_y = motor_base.d_y_l
+	floor_dz = motor_base.floor_dz_l
+	wall_width = motor_base.wall_width_l
+
+	# Create the 6 screws:
+	screw0 = self.screw0_
+	screw1 = self.screw1_
+	screw2 = self.screw2_
+	screw3 = self.screw3_
+
+	# Compute some Z axis locations:
+	x0 = d_x + wall_width
+	x3 = c_x - wall_width
+	dx = x3 - x0
+	x1 = x0 + .20 * dx
+	x2 = x0 + .80 * dx
+
+	y0 = motor_base.s.y
+	y1 = y0 + wall_width
+
+	z0 = motor_base.b.z
+	z1 = z0 + floor_dz
+	z4 = motor_base.t.z
+	dz = z4 - z1
+	z2 = z1 + .25 * dz
+	z3 = z1 + .75 * dz
+
+	screw_records = [ \
+	  (screw0, x1, z2), \
+	  (screw1, x2, z2), \
+	  (screw2, x1, z3), \
+	  (screw3, x2, z3) ]
+
+	for index in range(len(screw_records)):
+	    screw_record = screw_records[index]
+	    screw = screw_record[0]
+	    x = screw_record[1]
+	    z = screw_record[2]
+	    
+	    #print("End_Screws:start={0} end={1}".format(start, end))
+	    screw.configure(comment = "End Screw {0}".format(index),
+	      flags = "#6-32:hi",
+	      start = P(x, y0, z),
+	      end = P(x, y1, z),
+	      sides_angle = Angle(deg = 30))
+	    screw.drill(motor_base, select = "close")
 
 	#print("Pulley_Screw.dz={0:.3i}in".format(z3 - z0))
 
@@ -1467,7 +1680,7 @@ class Motor_Base(Part):
 	self.z4_l = z4 = z0 + dz
 	#print("Motor_Base: z0={0} z1={1} z2={2} z4={3}".format(z0, z1, z2, z4))
 
-        # Below is the crude (not to scale) ASCII art for the locations
+	# Below is the crude (not to scale) ASCII art for the locations
 	# of the base contour (letters A-M are the corners).  O indicates
 	# a screw hole and S indicates the shaft hole.
 	#
@@ -1508,7 +1721,7 @@ class Motor_Base(Part):
 	jx = kx = L(mm = 5)
 	#jy = motor_assembly.twist_motor_y_l - shaft_offset
 	jy = L(mm = 75)
-        #my = motor_assembly.drive_motor_y_l - shaft_offset
+	#my = motor_assembly.drive_motor_y_l - shaft_offset
 	my = L(mm = 70)
 	#print("my={0} pcb.s.y={1} pcb.n.y={2}".format(my, pcb.s.y, pcb.n.y))
 
@@ -1828,7 +2041,7 @@ class Motor_Base_Screws(Part):
 	      ("B", mount_angle2, screw_b) )
 
 	    # Do each screw:
-            for screw_record in screw_records:
+	    for screw_record in screw_records:
 		screw_label = screw_record[0]
 		angle = screw_record[1]
 		screw = screw_record[2]
@@ -3086,7 +3299,8 @@ class Counter_Sink_Block(Part):
 if __name__ == "__main__":
     ezcad = EZCAD3(0, adjust = L(mm = -0.10))
     #ezcad = EZCAD3(0)
-    test = Synchro_Drive(None)
+    #test = Synchro_Drive(None)
+    test = Base(None)
     #test = Test(None)
     #test = Bearing_Starter(None)
     #test = Bearing_Ender(None)
