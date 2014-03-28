@@ -28,7 +28,7 @@ class Base(Part):
 class Strut_Assembly(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
-	#self.strut1_ = Strut(self)
+	#self.strut_ = Strut(self)
 	self.strut_top_ = Strut_Top(self)
 
     def construct(self):
@@ -49,8 +49,25 @@ class Strut(Part):
 	# Grab some relevant *Part*'s:
 	strut_assembly = self.up
 	synchro_drive = strut_assembly.up
+	strut_top = strut_assembly.strut_top_
 	motor_assembly = synchro_drive.motor_assembly_
-	motor_base = motor_assembly.motor_base_
+
+	y0 = motor_assembly.n.y
+	y1 = strut_top.n.y
+	x0 = L(inch = "1/4")
+	x1 = -L(inch = "1/4")
+
+	z0 = motor_assembly.t.z
+	z1 = z0 + L(inch = 0.125)
+
+	corner1 = P(x0, y0, z0)
+	corner2 = P(x1, y1, z1)
+	print("Strut: c1={0} c2={1}".format(corner1, corner2))
+	self.block(comment = "Strut",
+	  color = Color("violet"),
+	  corner1 = corner1,
+	  corner2 = corner2,
+	  top = "t")
 
 class Strut_Top(Part):
     def __init__(self, up):
@@ -158,7 +175,7 @@ class Synchro_Drive(Part):
 	Part.__init__(self, up)
 	self.wheel_assembly_ = Wheel_Assembly(self)
 	self.motor_assembly_ = Motor_Assembly(self)
-	#self.strut_assembly_ = Strut_Assembly(self)
+	self.strut_assembly_ = Strut_Assembly(self)
 
     def construct(self):
 	zero = L()
@@ -1671,7 +1688,7 @@ class Motor_Base(Part):
 	self.dz_l = dz = L(mm = 30.00)
 	self.ny_l = ny = L(mm = 123.00)
 	self.ex_l = ex = L(mm = 105.00)
-	self.wall_width_l = wall_width = L(mm = 6)
+	self.wall_width_l = wall_width = L(mm = 6.00)
 
 	self.z0_l = z0 = motor_assembly.base_bz_l
 	self.z1_l = z1 = z0 + floor_dz / 2
@@ -1684,7 +1701,15 @@ class Motor_Base(Part):
 	# of the base contour (letters A-M are the corners).  O indicates
 	# a screw hole and S indicates the shaft hole.
 	#
-	#                K-----------------------------L
+	#                U---V                     Y---Z
+	#                |   |                     |   |
+	#                |   |                     |   |
+	#                |   |                     |   |
+	#                |   |                     |   |
+	#                |   |                     |   |
+	#                |   |                     |   |
+	#                |   |                     |   |
+	#                K...W---------------------X...L
 	#                | O                         O |
 	#                |                             |
 	#                |                             |
@@ -1695,21 +1720,21 @@ class Motor_Base(Part):
 	#              /                             /
 	#             ~	                            ~
 	#            /                             /
-	#           I O                           /
-	#           |                            /
-	#       +---+ - - - - - - - +           /
-	#       | O |             O .          /
-	#   G---+---H               .         /
-	#   | O .                   .        /
-	#   |   .                   .       /
-	#   |   .         S         .      /
-	#   |   .                   .     /
-	#   | O .                   .  O /
-	#   F---+---E           B---+---A
-	#       | O |           | O .
-	#       +---+ - - - - - + - +
-	#           | O       O |
-	#           D-----------C
+	#   HH------I O ----------------+         /
+	#   |       |                   .        /
+	#   |   O   |               O   .       /
+	#   |       |                   .      /
+	#   G-------H                   .     /
+	#   | O                         .    /
+	#   |                           .   /
+	#   |             S             .  /
+	#   |                           . /
+	#   | O                        O./
+	#   F-------E           B-------A
+	#   |       |           |       |
+	#   |   O   |           |   O   |
+	#   |       | O       O |       |
+	#   EE------D-----------C------BB
 
 	z = zero = L()
 	shaft_offset = twist_motor.shaft_offset_l
@@ -1780,84 +1805,137 @@ class Motor_Base(Part):
 	self.screw_l_x_l = l_x - ww2
 	self.screw_l_y_l = l_y - ww2
 
+	yyy = L(mm = 50.00)
+	strut_width = L(inch = 0.500)
+
 	self.m_x_l = m_x = ex
 	self.m_y_l = m_y = my
 	self.screw_m_x_l = m_x - ww2
 	self.screw_m_y_l = m_y + ww2
 
-	# Now construct the contour:
+	pcb_n_y = m_y + L(mm = 100)
+
+
+	self.u_x_l = u_x = k_x
+	self.u_y_l = u_y = pcb_n_y
+
+	self.v_x_l = v_x = u_x + strut_width
+	self.v_x_l = v_y = pcb_n_y
+
+	self.w_x_l = w_x = v_x
+	self.w_y_l = w_y = k_y
+
+	self.x_x_l = x_x = l_x - strut_width
+	self.x_y_l = x_y = w_y
+
+	self.y_x_l = y_x = x_x
+	self.y_y_l = y_y = pcb_n_y
+
+	self.z_x_l = z_x = l_x
+	self.z_y_l = z_y = pcb_n_y
+
+	self.hh_x = hh_x = g_x
+	self.hh_y = hh_y = i_y
+
+	self.ee_x = ee_x = f_x
+	self.ee_y = ee_y = d_y
+
+	self.bb_x = bb_x = a_x
+	self.bb_y = bb_y = c_y
+
+	self.attach_radius_l = attach_radius = L(inch = 0.24)
+	self.turn_radius_l = turn_radius = (a_x - b_x) / 2 - L(inch = .001)
+
+	# Make sure the bottom is made out of a single *bottom_contour*
+	# extrusion:
 	bottom_contour = Contour()
-	bottom_contour.bend_append(P(m_x, m_y, z), z)	# M
-	bottom_contour.bend_append(P(l_x, l_y, z), z)	# L
-	bottom_contour.bend_append(P(k_x, k_y, z), z)	# K
-	bottom_contour.bend_append(P(j_x, j_y, z), z)	# J
-	bottom_contour.bend_append(P(i_x, i_y, z), z)	# I
-	bottom_contour.bend_append(P(h_x, h_y, z), z)	# H
-	bottom_contour.bend_append(P(g_x, g_y, z), z)	# G
-	bottom_contour.bend_append(P(f_x, f_y, z), z)	# F
-	bottom_contour.bend_append(P(e_x, e_y, z), z)	# E
-	bottom_contour.bend_append(P(d_x, d_y, z), z)	# D
-	bottom_contour.bend_append(P(c_x, c_y, z), z)	# C
-	bottom_contour.bend_append(P(b_x, b_y, z), z)	# B
-	bottom_contour.bend_append(P(a_x, a_y, z), z)	# A
+	bottom_contour.bend_append(P(m_x, m_y, z), z)			# M
+	bottom_contour.bend_append(P(z_x, z_y, z), attach_radius)	# Z
+	bottom_contour.bend_append(P(y_x, y_y, z), attach_radius)	# Y
+	bottom_contour.bend_append(P(x_x, x_y, z), z)			# X
+	bottom_contour.bend_append(P(w_x, w_y, z), z)			# W
+	bottom_contour.bend_append(P(v_x, v_y, z), attach_radius)	# V
+	bottom_contour.bend_append(P(u_x, u_y, z), attach_radius)	# U
+	bottom_contour.bend_append(P(j_x, j_y, z), z)			# J
+	bottom_contour.bend_append(P(i_x, i_y, z), z)			# I
+	bottom_contour.bend_append(P(hh_x, hh_y, z), turn_radius)	# HH
+	bottom_contour.bend_append(P(ee_x, ee_y, z), turn_radius)	# EE
+	bottom_contour.bend_append(P(bb_x, bb_y, z), turn_radius)	# BB
+	bottom_contour.bend_append(P(a_x, a_y, z), z)			# A
+
+	self.extrude(comment = "Motor Bottom Contour Extrusion",
+	  material = Material("plastic", "ABS"),
+	  color = Color("lavender"),
+	  outer_contour = bottom_contour,
+	  start = P(zero, zero, z0),
+	  end = P(zero, zero, z2))
+
+	# Now construct the wall out of a wall extrusion:
+	outer_contour = Contour()
+	outer_contour.bend_append(P(m_x, m_y, z), z)		# M
+	outer_contour.bend_append(P(l_x, l_y, z), z)		# L
+	outer_contour.bend_append(P(k_x, k_y, z), z)		# K
+	outer_contour.bend_append(P(j_x, j_y, z), z)		# J
+	outer_contour.bend_append(P(i_x, i_y, z), z)		# I
+	outer_contour.bend_append(P(h_x, h_y, z), turn_radius)	# H
+	outer_contour.bend_append(P(g_x, g_y, z), z)		# G
+	outer_contour.bend_append(P(f_x, f_y, z), z)		# F
+	outer_contour.bend_append(P(e_x, e_y, z), turn_radius)	# E
+	outer_contour.bend_append(P(d_x, d_y, z), z)		# D
+	outer_contour.bend_append(P(c_x, c_y, z), z)		# C
+	outer_contour.bend_append(P(b_x, b_y, z), turn_radius)	# B
+	outer_contour.bend_append(P(a_x, a_y, z), z)		# A
 
 	# *start* and *end* specify the extrude direction axis:
 	start = P(zero, zero, z0)
 	end = P(zero, zero, z1)
 
 	# Make an *inner_contour* that is *wall_width* inside *outer_contour*:
-	inner_contour = bottom_contour.adjust(
+	inner_contour = outer_contour.adjust(
 	  delta = -wall_width,
 	  start = start,
-	  end = end,
-	  maximum_radius = zero)
+	  end = end)
 
-	#print("bottom_contour={0}".format(bottom_contour))
+	#print("outer_contour={0}".format(outer_contour))
 	#print("inner_contour={0}".format(inner_contour))
 
-	#FIXME: Should use the PCB bounding box which is currently broken!!!:
-	extra = L(mm = .01)
-	self.simple_pocket(comment = "PCB pocket",
-	  bottom_corner = P(jx - extra, my, z3),
-	  top_corner = P(ex + extra, ny + extra, z4))
-
-	# The turn table has three corners that poke out and need to be covered:
-	turn_table_extra = 2 * wall_width
-	turn_table_extra_dx = turn_table.dx + turn_table_extra
-	turn_table_extra_dy = turn_table.dx + turn_table_extra
-	self.block(comment = "Turn Table",
-	  material = Material("plastic", "ABS"),
-	  color = Color("lavender"),
-	  corner1 = P( -turn_table_extra_dx / 2, -turn_table_extra_dy / 2, z0),
-	  corner2 = P(  turn_table_extra_dx / 2,  turn_table_extra_dy / 2, z2),
-	  top = "n")
-
-	# Put in a base:
-	self.extrude(comment = "Motor Base Bottom",
-	  outer_contour = bottom_contour,
-	  start = P(zero, zero, z0),
-	  end = P(zero, zero, z2))
-
-	# Now put a wall around the outside:
+	# Now put a wall around and force it to "weld" into the base:
 	self.extrude(comment = "Motor Base Wall",
-	  outer_contour = bottom_contour,
+	  outer_contour = outer_contour,
 	  inner_contours = [inner_contour],
 	  start = P(zero, zero, z1),
 	  end = P(zero, zero, z4))
 
+	self.attach_dx_l = attach_dx = L(inch = "1/2")
+	pcb_n_y = m_y + L(mm = 100)
+
 	# Now put on some attach panels:
 	# FIXME: *pcb* bounding box is broken:
-	pcb_n_y = m_y + L(mm = 100)
-	self.attach_dx_l = attach_dx = L(inch = "1/2")
-	self.block(comment = "West Attach",
-	  corner1 = P(k_x,             k_y - ww2, z0),
-	  corner2 = P(k_x + attach_dx, pcb_n_y, z3),
-	  top = "e")
-	self.attach_dx_l = attach_dx = L(inch = "1/2")
-	self.block(comment = "West Attach",
-	  corner1 = P(l_x - attach_dx, l_y - ww2, z0),
-	  corner2 = P(l_x,             pcb_n_y,   z3),
-	  top = "w")
+	r = attach_radius
+	east_attach_contour = Contour()
+	east_attach_contour.bend_append(P(k_x,             k_y - ww2, z), z)
+	east_attach_contour.bend_append(P(k_x + attach_dx, k_y - ww2, z), z)
+	east_attach_contour.bend_append(P(k_x + attach_dx, pcb_n_y,   z), r)
+	east_attach_contour.bend_append(P(k_x,             pcb_n_y,   z), r)
+	self.extrude(comment = "East Attach",
+	  outer_contour = east_attach_contour,
+	  start = P(z, z, z1),
+	  end =   P(z, z, z4))
+
+	west_attach_contour = Contour()
+	west_attach_contour.bend_append(P(l_x,             l_y - ww2, z), z)
+	west_attach_contour.bend_append(P(l_x - attach_dx, l_y - ww2, z), z)
+	west_attach_contour.bend_append(P(l_x - attach_dx, pcb_n_y,   z), r)
+	west_attach_contour.bend_append(P(l_x,             pcb_n_y,   z), r)
+	self.extrude(comment = "West Attach",
+	  outer_contour = west_attach_contour,
+	  start = P(z, z, z1),
+	  end =   P(z, z, z4))
+
+	#self.block(comment = "West Attach",
+	#  corner1 = P(l_x - attach_dx, l_y - ww2, z1),
+	#  corner2 = P(l_x,             pcb_n_y,   z3),
+	#  top = "w")
 
 	# Define the screw locatons for the attach panels:
 	self.screw_n_x_l = k_x + attach_dx / 2
@@ -1905,6 +1983,10 @@ class Motor_Base(Part):
 
 	#print("<=Motor_Base.construct()")
 
+	# Now put on some attach panels:
+	# FIXME: *pcb* bounding box is broken:
+	# Install the the turn table mouting holes.  These are oversized
+	# so that the two timing belts can be tightened:
 	hole_pitch = turn_table_bottom_hole_pitch1
 	for dx in (-hole_pitch/2, hole_pitch/2):
 	    for dy in (-hole_pitch/2, hole_pitch/2):
@@ -1913,6 +1995,13 @@ class Motor_Base(Part):
 		  start = P(dx, dy, z2),
 		  end = P(dx, dy, z0),
 		  flags = "t")
+
+	# Make room for the PCB to fit in:
+	# FIXME: Should use the PCB bounding box which is currently broken!!!:
+	extra = L(mm = .01)
+	self.simple_pocket(comment = "PCB pocket",
+	  bottom_corner = P(j_x - extra, m_y, z3),
+	  top_corner = P(m_x + extra, z_y + extra, z4))
 
 class Motor_Base_Screws(Part):
     def __init__(self, up):

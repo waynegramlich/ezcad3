@@ -1741,15 +1741,15 @@ class Contour:
 	    if delta_bearing < pi:
 		delta_bearing += 2.0 * pi
 	    elif delta_bearing > pi:
-		delta_bearing += 2.0 * pi
+		delta_bearing -= 2.0 * pi
 
 	    new_radius = bend2.radius._mm
 	    if delta_bearing < 0.0:
 		# Turn clockwise:
-		new_radius += delta
+		new_radius += delta._mm
 	    else:
 		# Turn counter-clockwise:
-		new_radius -= d
+		new_radius -= delta._mm
 
 	    if new_radius < minimum_radius._mm:
 		new_radius = minimum_radius._mm
@@ -1767,7 +1767,7 @@ class Contour:
     def bend_append(self, point = P(), radius = L()):
 	""" *Contour*: """
 
-	# Chech argument types:
+	# Check argument types:
 	assert isinstance(point, P)
 	assert isinstance(radius, L)
 
@@ -1860,10 +1860,12 @@ class Contour:
 	    #bend_after = bends[(index + 1) % bends_size]
 	    before_total_fraction = \
 	      before_bend._after_fraction + bend._before_fraction
-	    if before_total_fraction > 1.000000001:
-		assert False, "We have a bogus edge {0} + {1} > {2}". \
-		  format(before_bend._after_fraction, bend._before_fraction,
-		  before_total_fraction)
+	    if before_total_fraction > 1.00001:
+		#assert False,
+		#  "We have a bogus edge {0} + {1} = {2} > 1.00001". \
+		#  format(before_bend._after_fraction, bend._before_fraction,
+		#  before_total_fraction)
+		pass
 
 	    #print("Bend[{0}]:{1}".format(index, bend))
 
