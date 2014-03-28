@@ -1691,11 +1691,13 @@ class Motor_Base(Part):
 	self.wall_width_l = wall_width = L(mm = 6.00)
 
 	self.z0_l = z0 = motor_assembly.base_bz_l
-	self.z1_l = z1 = z0 + floor_dz / 2
-	self.z2_l = z2 = z1 + floor_dz / 2
-	self.z3_l = z3 = z0 + dz - pcb.dz
-	self.z4_l = z4 = z0 + dz
-	#print("Motor_Base: z0={0} z1={1} z2={2} z4={3}".format(z0, z1, z2, z4))
+	self.z1_l = z1 = z0 + L(mm = 0.60)
+	self.z2_l = z2 = z1 + L(mm = 1.20)
+	self.z3_l = z3 = z0 + floor_dz / 2
+	self.z4_l = z4 = z3 + floor_dz / 2
+	self.z5_l = z5 = z0 + dz - pcb.dz
+	self.z6_l = z6 = z0 + dz
+	#print("Motor_Base: z0={0} z3={1} z4={2} z6={3}".format(z0, z3, z4, z6))
 
 	# Below is the crude (not to scale) ASCII art for the locations
 	# of the base contour (letters A-M are the corners).  O indicates
@@ -1848,6 +1850,30 @@ class Motor_Base(Part):
 
 	# Make sure the bottom is made out of a single *bottom_contour*
 	# extrusion:
+	helper_contour = Contour()
+	helper_contour.bend_append(P(m_x, m_y, z), z)			# M
+	helper_contour.bend_append(P(z_x, z_y, z), z)			# Z
+	helper_contour.bend_append(P(y_x - L(mm=20), y_y, z), L(mm=10))	# Y
+	helper_contour.bend_append(P(x_x, x_y, z), z)			# X
+	helper_contour.bend_append(P(w_x, w_y, z), z)			# W
+	helper_contour.bend_append(P(v_x + L(mm=20), v_y, z), L(mm=10))	# V
+	helper_contour.bend_append(P(u_x, u_y, z), z)			# U
+	helper_contour.bend_append(P(j_x, j_y, z), z)			# J
+	#helper_contour.bend_append(P(i_x, i_y, z), z)			# I
+	helper_contour.bend_append(P(hh_x, hh_y + L(mm=20), z), L(mm=10)) # HH
+	helper_contour.bend_append(P(ee_x, ee_y, z), z)			# EE
+	helper_contour.bend_append(P(bb_x + L(mm=20), bb_y, z), L(mm=10)) # BB
+	#helper_contour.bend_append(P(a_x, a_y, z), z)			# A
+
+	self.extrude(comment = "Motor Bottom Helper Extrusion",
+	  material = Material("plastic", "ABS"),
+	  color = Color("lavender"),
+	  outer_contour = helper_contour,
+	  start = P(zero, zero, z0),
+	  end = P(zero, zero, z2))
+
+	# Make sure the bottom is made out of a single *bottom_contour*
+	# extrusion:
 	bottom_contour = Contour()
 	bottom_contour.bend_append(P(m_x, m_y, z), z)			# M
 	bottom_contour.bend_append(P(z_x, z_y, z), attach_radius)	# Z
@@ -1867,8 +1893,8 @@ class Motor_Base(Part):
 	  material = Material("plastic", "ABS"),
 	  color = Color("lavender"),
 	  outer_contour = bottom_contour,
-	  start = P(zero, zero, z0),
-	  end = P(zero, zero, z2))
+	  start = P(zero, zero, z1),
+	  end = P(zero, zero, z4))
 
 	# Now construct the wall out of a wall extrusion:
 	outer_contour = Contour()
@@ -1888,7 +1914,7 @@ class Motor_Base(Part):
 
 	# *start* and *end* specify the extrude direction axis:
 	start = P(zero, zero, z0)
-	end = P(zero, zero, z1)
+	end = P(zero, zero, z3)
 
 	# Make an *inner_contour* that is *wall_width* inside *outer_contour*:
 	inner_contour = outer_contour.adjust(
@@ -1903,8 +1929,8 @@ class Motor_Base(Part):
 	self.extrude(comment = "Motor Base Wall",
 	  outer_contour = outer_contour,
 	  inner_contours = [inner_contour],
-	  start = P(zero, zero, z1),
-	  end = P(zero, zero, z4))
+	  start = P(zero, zero, z3),
+	  end = P(zero, zero, z6))
 
 	self.attach_dx_l = attach_dx = L(inch = "1/2")
 	pcb_n_y = m_y + L(mm = 100)
@@ -1919,8 +1945,8 @@ class Motor_Base(Part):
 	east_attach_contour.bend_append(P(k_x,             pcb_n_y,   z), r)
 	self.extrude(comment = "East Attach",
 	  outer_contour = east_attach_contour,
-	  start = P(z, z, z1),
-	  end =   P(z, z, z4))
+	  start = P(z, z, z3),
+	  end =   P(z, z, z6))
 
 	west_attach_contour = Contour()
 	west_attach_contour.bend_append(P(l_x,             l_y - ww2, z), z)
@@ -1929,12 +1955,12 @@ class Motor_Base(Part):
 	west_attach_contour.bend_append(P(l_x,             pcb_n_y,   z), r)
 	self.extrude(comment = "West Attach",
 	  outer_contour = west_attach_contour,
-	  start = P(z, z, z1),
-	  end =   P(z, z, z4))
+	  start = P(z, z, z3),
+	  end =   P(z, z, z6))
 
 	#self.block(comment = "West Attach",
-	#  corner1 = P(l_x - attach_dx, l_y - ww2, z1),
-	#  corner2 = P(l_x,             pcb_n_y,   z3),
+	#  corner1 = P(l_x - attach_dx, l_y - ww2, z3),
+	#  corner2 = P(l_x,             pcb_n_y,   z5),
 	#  top = "w")
 
 	# Define the screw locatons for the attach panels:
@@ -1950,8 +1976,8 @@ class Motor_Base(Part):
 	# Make a hole for the shaft/wheel pulley/drive pulley to poke through:
 	# Leave some extra *clearance* so that the belts can be tightened.
 	self.hole(comment = "Twist/Drive Shaft Hole",
-	  diameter = turn_table_bore + L(mm = 3.00),
-	  start = P(zero, zero, z2),
+	  diameter = turn_table_bore + L(mm = 13.00),
+	  start = P(zero, zero, z4),
 	  end =   P(zero, zero, z0),
 	  flags = "t",
 	  sides = 60)
@@ -1964,7 +1990,7 @@ class Motor_Base(Part):
 	twist_shaft_y = twist_motor_y - twist_motor.shaft_offset_l
 	self.hole(comment = "Twist Motor Shaft Hole",
 	  diameter = twist_hub_diameter,
-	  start = P(twist_motor_x, twist_shaft_y, z2),
+	  start = P(twist_motor_x, twist_shaft_y, z4),
 	  end =   P(twist_motor_x, twist_shaft_y, z0),
 	  flags = "t",
 	  sides = 30)
@@ -1976,7 +2002,7 @@ class Motor_Base(Part):
 	drive_shaft_y = drive_motor_y - drive_motor.shaft_offset_l
 	self.hole(comment = "Drive Motor Shaft Hole",
 	  diameter = drive_hub_diameter,
-	  start = P(drive_motor_x, drive_shaft_y, z2),
+	  start = P(drive_motor_x, drive_shaft_y, z4),
 	  end =   P(drive_motor_x, drive_shaft_y, z0),
 	  flags = "t",
 	  sides = 30)
@@ -1992,7 +2018,7 @@ class Motor_Base(Part):
 	    for dy in (-hole_pitch/2, hole_pitch/2):
 		self.hole(comment = "Turntable_hole ({0},{1})".format(dx, dy),
 		  diameter = L(inch = 0.375),
-		  start = P(dx, dy, z2),
+		  start = P(dx, dy, z4),
 		  end = P(dx, dy, z0),
 		  flags = "t")
 
@@ -2000,8 +2026,8 @@ class Motor_Base(Part):
 	# FIXME: Should use the PCB bounding box which is currently broken!!!:
 	extra = L(mm = .01)
 	self.simple_pocket(comment = "PCB pocket",
-	  bottom_corner = P(j_x - extra, m_y, z3),
-	  top_corner = P(m_x + extra, z_y + extra, z4))
+	  bottom_corner = P(j_x - extra, m_y, z5),
+	  top_corner = P(m_x + extra, z_y + extra, z6))
 
 class Motor_Base_Screws(Part):
     def __init__(self, up):
@@ -2145,7 +2171,7 @@ class Motor_Base_Screws(Part):
 
 		screw.configure(
 		  comment = "{0} Screw {1}".format(motor_label, screw_label),
-		  start = P(x, y, mb.z1_l),
+		  start = P(x, y, mb.z3_l),
 		  end = P(x, y, motor_z),
 		  flags = "M3x.05")
 
@@ -2154,8 +2180,8 @@ class Motor_Base_Screws(Part):
 		mb.hole(comment = "{0} Screw {1} Recess".
 		  format(motor_label, screw_label),
 		  diameter = washer_diameter + L(mm = 1.0),
-		  start = P(x, y, mb.z2_l),
-		  end = P(x, y, mb.z1_l),
+		  start = P(x, y, mb.z4_l),
+		  end = P(x, y, mb.z3_l),
 		  flags = "f")
 
 		# Now drill the holes:
@@ -3396,4 +3422,11 @@ if __name__ == "__main__":
     #test = Bevel_Gear_Jig(None)
     #test = Counter_Sink(None)
     test.process(ezcad)
+
+
+
+
+
+
+
 
