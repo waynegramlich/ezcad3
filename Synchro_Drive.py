@@ -189,6 +189,7 @@ class Motor_Assembly(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
 	self.motor_base_ = Motor_Base(self)
+	self.motor_base_cover_ = Motor_Base_Cover(self)
 	self.motor_base_screws_ = Motor_Base_Screws(self)
 	self.drive_belt_ = Belt(self)
 	self.drive_magnet_ = Magnet(self)
@@ -1691,8 +1692,8 @@ class Motor_Base(Part):
 	self.wall_width_l = wall_width = L(mm = 6.00)
 
 	self.z0_l = z0 = motor_assembly.base_bz_l
-	self.z1_l = z1 = z0 + L(mm = 0.60)
-	self.z2_l = z2 = z1 + L(mm = 1.20)
+	self.z1_l = z1 = z0 + L(mm = 0.20)
+	self.z2_l = z2 = z1 + L(mm = 0.20)
 	self.z3_l = z3 = z0 + floor_dz / 2
 	self.z4_l = z4 = z3 + floor_dz / 2
 	self.z5_l = z5 = z0 + dz - pcb.dz
@@ -1897,7 +1898,7 @@ class Motor_Base(Part):
 	  end = P(zero, zero, z4))
 
 	# Now construct the wall out of a wall extrusion:
-	outer_contour = Contour()
+	self.outer_countour_o = outer_contour = Contour()
 	outer_contour.bend_append(P(m_x, m_y, z), z)		# M
 	outer_contour.bend_append(P(l_x, l_y, z), z)		# L
 	outer_contour.bend_append(P(k_x, k_y, z), z)		# K
@@ -2029,6 +2030,25 @@ class Motor_Base(Part):
 	  bottom_corner = P(j_x - extra, m_y, z5),
 	  top_corner = P(m_x + extra, z_y + extra, z6))
 
+class Motor_Base_Cover(Part):
+    def construct(self):
+	#print("=>Motor_Base.construct()")
+	motor_assembly = self.up
+	motor_base = motor_assembly.motor_base_
+
+	zero = L()
+	z0 = motor_base.t.z
+	z1 = z0 + L(mm = 3.0)
+
+	outer_contour = motor_base.outer_countour_o
+	self.extrude(
+	  comment="Motor_Base_Cover",
+	  material = Material("plastic", "ABS"),
+	  color = Color("yellow"),
+	  outer_contour = outer_contour,
+	  start = P(zero, zero, z0),
+	  end = P(zero, zero, z1))
+
 class Motor_Base_Screws(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
@@ -2057,6 +2077,7 @@ class Motor_Base_Screws(Part):
 	pcb = motor_assembly.pcb_
 	drive_motor = motor_assembly.drive_motor_
 	twist_motor = motor_assembly.twist_motor_
+	mbc = motor_assembly.motor_base_cover_
 
 	self._pcb_holes_file = open("pcb_holes.txt", "w")
 	self._x1 = x1 = pcb.x1_l
@@ -2087,11 +2108,14 @@ class Motor_Base_Screws(Part):
 	    screw_y = screw_record[3]
 	    screw.configure(
 	      comment = "Screw {0}".format(screw_letter),
-	      start = P(screw_x, screw_y, mb.t.z),
+	      start = P(screw_x, screw_y, mbc.t.z),
 	      end = P(screw_x, screw_y, mb.b.z),
 	      flags = "#4-40")
 	    screw.drill(
 	      part = mb,
+	      select = "close")
+	    screw.drill(
+	      part = mbc,
 	      select = "close")
 	    if "JKLM".find(screw_letter) >= 0:
 		screw.drill(
