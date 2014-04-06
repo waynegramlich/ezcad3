@@ -326,6 +326,7 @@ class Motor_Assembly(Part):
 	  lip_height = drive_motor_pulley_lip_height,
 	  name = "Drive_Motor_Pulley",
 	  set_screw_dz = drive_motor_pulley_lip_height / 2,
+	  shaft_diameter = drive_motor.shaft_diameter_l,
 	  teeth_count = drive_wheel_pulley.teeth_count_i,
 	  x = drive_motor_shaft_x,
 	  y = drive_motor_shaft_y,
