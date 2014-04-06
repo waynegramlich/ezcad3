@@ -1053,7 +1053,7 @@ class End_Screws(Part):
 	x1 = x0 + .20 * dx
 	x2 = x0 + .80 * dx
 
-	y0 = motor_base.s.y
+	y0 = motor_base.d_y_l
 	y1 = y0 + wall_width
 
 	z0 = motor_base.b.z
@@ -1852,20 +1852,21 @@ class Motor_Base(Part):
 	# Make sure the bottom is made out of a single *bottom_contour*
 	# extrusion:
 	r = L(mm = 10)
+	lip_y = L(mm = 4.5)
 	helper_contour = Contour()
 	helper_contour.bend_append(P(m_x, m_y, z), z)			# M
-	helper_contour.bend_append(P(z_x, z_y, z), z)			# Z
-	helper_contour.bend_append(P(y_x - L(mm=20), y_y, z), r)	# Y
+	helper_contour.bend_append(P(z_x, z_y + lip_y, z), z)		# Z
+	helper_contour.bend_append(P(y_x - L(mm=30), y_y + lip_y, z), r) # Y
 	helper_contour.bend_append(P(x_x, x_y, z), z)			# X
 	helper_contour.bend_append(P(w_x, w_y, z), z)			# W
-	helper_contour.bend_append(P(v_x + L(mm=20), v_y, z), r)	# V
-	helper_contour.bend_append(P(u_x - L(mm=20), u_y, z), r)	# U
+	helper_contour.bend_append(P(v_x + L(mm=30), v_y + lip_y, z), r) # V
+	helper_contour.bend_append(P(u_x - L(mm=30), u_y + lip_y, z), r) # U
 	helper_contour.bend_append(P(k_x, k_y, z), z)			# K
 	helper_contour.bend_append(P(j_x, j_y, z), z)			# J
 	#helper_contour.bend_append(P(i_x, i_y, z), z)			# I
 	helper_contour.bend_append(P(hh_x, hh_y + L(mm=20), z), r)	# HH
-	helper_contour.bend_append(P(ee_x, ee_y, z), z)			# EE
-	helper_contour.bend_append(P(bb_x + L(mm=20), bb_y, z), r)	# BB
+	helper_contour.bend_append(P(ee_x, ee_y - lip_y, z), z)		# EE
+	helper_contour.bend_append(P(bb_x + L(mm=20), bb_y - lip_y, z), r) # BB
 	#helper_contour.bend_append(P(a_x, a_y, z), z)			# A
 
 	self.extrude(comment = "Motor Bottom Helper Extrusion",
