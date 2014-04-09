@@ -216,6 +216,7 @@ class Motor_Assembly(Part):
 	drive_motor_pulley_top = motor_assembly.drive_motor_pulley_top_
 	#drive_motor_pulley_top = motor_assembly.drive_motor_pulley_top_
 	motor_base = motor_assembly.motor_base_
+	motor_base_cover = motor_assembly.motor_base_cover_
 	pcb = motor_assembly.pcb_
 	synchro_drive = self.up
 	twist_magnet = motor_assembly.twist_magnet_
@@ -227,6 +228,8 @@ class Motor_Assembly(Part):
 	# Define some constants:
 	zero = L()
 	sqrt2 = math.sqrt(2)
+
+	motor_base_cover.invisible_set()
 
 	# Grab some values from *wheel_assembly:
 	wheel_assembly = synchro_drive.wheel_assembly_
@@ -326,6 +329,7 @@ class Motor_Assembly(Part):
 	  lip_height = drive_motor_pulley_lip_height,
 	  name = "Drive_Motor_Pulley",
 	  set_screw_dz = drive_motor_pulley_lip_height / 2,
+	  shaft_diameter = drive_motor.shaft_diameter_l,
 	  teeth_count = drive_wheel_pulley.teeth_count_i,
 	  x = drive_motor_shaft_x,
 	  y = drive_motor_shaft_y,
