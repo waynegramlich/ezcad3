@@ -510,6 +510,8 @@ class Wheel_Assembly(Part):
 	motor_base = motor_assembly.motor_base_
 	twist_motor_pulley = motor_assembly.twist_motor_pulley_
 
+	belt_width_extra = L(inch=.012)
+
 	lip_height = (twist_motor_pulley.t.z - \
 	  twist_motor_pulley.belt_width_l - \
 	  twist_motor_pulley.belt_width_extra_l) - turn_table.b.z
@@ -519,7 +521,7 @@ class Wheel_Assembly(Part):
 	  bearing_width = top_bearing.width_l,
 	  belt_class = "MXL",
 	  belt_width = L(inch = "1/8"),
-	  belt_width_extra = L(mm = 0.10),
+	  belt_width_extra = belt_width_extra,
 	  lip_extra = L(mm = 0.5),
 	  lip_height = lip_height,
 	  name = "Twist_Wheel_Pulley",
@@ -536,7 +538,7 @@ class Wheel_Assembly(Part):
 	drive_wheel_pulley.configure(
 	  belt_class = "MXL",
 	  belt_width = L(inch = "1/8"),
-	  belt_width_extra = L(mm = 0.10),
+	  belt_width_extra = belt_width_extra,
 	  holes_radius = L(mm = 10.00),
 	  lip_extra = L(mm = 0.50),
 	  lip_height = L(mm = 2.00),
