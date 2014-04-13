@@ -267,20 +267,63 @@ class Motor_Assembly(Part):
 	#print("belt_teeth={0} motor_shaft_radius={1}".
 	# format(belt_teeth, motor_shaft_radius))
 
+	# Normally the position of the twist and drive motor shafts
+	# is computed using polar coordinates from the main shaft.
+	# All of these various positions of everything are written
+	# into a file called pcb_holes.txt which is shown below:
+	#
+	# pcb corner1: pcb_x=150.0 pcb_y=150.0 x=5.0 y=70.0
+	# pcb corner2: pcb_x=50.0 pcb_y=50.0 x=105.0 y=170.0
+	# drive_shaft: pcb_x=107.890135052 pcb_y=121.189510914
+	#   x=47.1098649476 y=98.810489086
+	# twist_shaft: pcb_x=77.4986166491 pcb_y=140.925993734
+	#   x=77.5013833509 y=79.0740062661
+	# J #4-40:: pcb_x=147.0 pcb_y=145.0 x=8.0 y=75.0
+	# K #4-40:: pcb_x=147.0 pcb_y=100.0 x=8.0 y=120.0
+	# L #4-40:: pcb_x=53.0 pcb_y=100.0 x=102.0 y=120.0
+	# M #4-40:: pcb_x=53.0 pcb_y=147.0 x=102.0 y=73.0
+	# N #6-32: pcb_x=143.65 pcb_y=90.65 x=11.35 y=129.35
+	# O #6-32: pcb_x=143.65 pcb_y=56.35 x=11.35 y=163.65
+	# P #6-32: pcb_x=56.35 pcb_y=90.65 x=98.65 y=129.35
+	# Q #6-32: pcb_x=56.35 pcb_y=56.35 x=98.65 y=163.65
+	#
+	# After the PCB has been manufactured using these numbers,
+	# everything has to be made relative to the M corner on
+	# the Motor_Base.  The M corner is (PCBc2.x-3, PCBc1.y+3).
+
+	motor_base_m_x = motor_base.m_x_l
+	motor_base_m_y = motor_base.m_y_l
+	pcb_corner1_x = motor_base_m_x - L(mm=102) + L(mm=5) - L(mm=3)
+	pcb_corner1_y = motor_base_m_y - L(mm=73) + L(mm=70) + L(mm=3)
+
+	# Offsets from PCB corner1 to twist and drive motor shaft:
+	twist_motor_dx = L(mm=77.5013833509 - 5)
+	twist_motor_dy = L(mm=79.0740062661 - 70)
+	drive_motor_dx = L(mm=47.1098649476 - 5)
+	drive_motor_dy = L(mm=98.8104890861 - 70)
+
+	self.twist_motor_x_l = twist_motor_x = pcb_corner1_x + twist_motor_dx
+	self.twist_motor_y_l = twist_motor_y = pcb_corner1_y + twist_motor_dy
+	self.drive_motor_x_l = drive_motor_x = pcb_corner1_x + drive_motor_dx
+	self.drive_motor_y_l = drive_motor_y = pcb_corner1_y + drive_motor_dy
+	  
+	#print("twist_motor=({0},{1}".format(twist_motor_x, twist_motor_y))
+	#print("drive_motor=({0},{1}".format(drive_motor_x, drive_motor_y))
+
 	#self.twist_motor_angle_a = twist_motor_angle = Angle(deg = 66)
 	#self.drive_motor_angle_a = drive_motor_angle = Angle(deg = 48)
 	self.twist_motor_angle_a = twist_motor_angle = Angle(deg = 48)
 	self.drive_motor_angle_a = drive_motor_angle = Angle(deg = 66)
 
+	# Use this code *before* PCB is manufactured:
 	# Compute the twist/drive motor shaft locations:
-	self.twist_motor_x_l = twist_motor_x = \
-	  motor_shaft_radius.cosine(twist_motor_angle)
-	self.twist_motor_y_l = twist_motor_y = \
-	  motor_shaft_radius.sine(twist_motor_angle)
-	self.drive_motor_x_l = drive_motor_x = \
-	  motor_shaft_radius.cosine(drive_motor_angle)
-	self.drive_motor_y_l = drive_motor_y = \
-	  motor_shaft_radius.sine(drive_motor_angle)
+	#self.twist_motor_x_l = twist_motor_x = \
+	#  motor_shaft_radius.cosine(twist_motor_angle)
+	#self.twist_motor_y_l = twist_motor_y = \
+	#  motor_shaft_radius.sine(twist_motor_angle)
+	#self.drive_motor_x_l = drive_motor_x = \
+	#  motor_shaft_radius.cosine(drive_motor_angle)
+	#self.drive_motor_y_l = drive_motor_y = \
 
 	self.drive_motor_shaft_x_l = drive_motor_shaft_x = drive_motor_x
 	self.drive_motor_shaft_y_l = drive_motor_shaft_y = \
@@ -353,9 +396,11 @@ class Motor_Assembly(Part):
 	  z_bottom = drive_motor_pulley.t.z)
 
 	# Do *pcb* configuration:
+	pcb_x1 = motor_base.m_x_l - L(100)
+	pcb_y1 = motor_base.m_y_l
 	pcb_dz = L(mm = 1.6)
-	pcb_x1 = L(mm = 5)
-	pcb_y1 = L(mm = 70)
+	#pcb_x1 = L(mm = 5)
+	#pcb_y1 = L(mm = 70)
 	pcb.configure(x1 = pcb_x1, y1 = pcb_y1,
 	  x2 = pcb_x1 + L(mm = 100), y2 = pcb_y1 + L(mm = 100),
 	  dz = pcb_dz, z_bottom = motor_base.t.z - pcb_dz)
@@ -1674,6 +1719,7 @@ class Motor(Part):
 
 class Motor_Base(Part):
     def construct(self):
+
 	#print("=>Motor_Base.construct()")
 	motor_assembly = self.up
 	synchro_drive = motor_assembly.up
@@ -1689,12 +1735,15 @@ class Motor_Base(Part):
 	turn_table_bore = turn_table.bore_l
 	turn_table_bottom_hole_pitch1 = turn_table.bottom_hole_pitch1_l
 
+	x_adjust = L(mm=-3)
+	y_adjust = L(mm=-4)
+
 	self.floor_dz_l = floor_dz = twist_motor.spur_gear_hub_dz_l
 	#self.dz_l = dz = \
 	#  vertical_shaft.t.z + L(mm = 2) - motor_assembly.base_bz_l
-	self.dz_l = dz = L(mm = 30.00)
-	self.ny_l = ny = L(mm = 123.00)
-	self.ex_l = ex = L(mm = 105.00)
+	self.dz_l = dz = L(mm = 33.00)
+	self.ny_l = ny = L(mm = 123.00) + y_adjust
+	self.ex_l = ex = L(mm = 105.00) + x_adjust
 	self.wall_width_l = wall_width = L(mm = 6.00)
 
 	self.z0_l = z0 = motor_assembly.base_bz_l
@@ -1751,12 +1800,12 @@ class Motor_Base(Part):
 	ww2 = ww / 2
 	ttx2 = turn_table.dx / 2
 	tty2 = turn_table.dy / 2
-	clearance = cl =L(mm = 16)
-	jx = kx = L(mm = 5)
+	clearance = cl =L(mm = 20)
+	jx = kx = L(mm = 5) + x_adjust
 	#jy = motor_assembly.twist_motor_y_l - shaft_offset
-	jy = L(mm = 75)
+	jy = L(mm = 75) + y_adjust
 	#my = motor_assembly.drive_motor_y_l - shaft_offset
-	my = L(mm = 70)
+	my = L(mm = 70) + y_adjust
 	#print("my={0} pcb.s.y={1} pcb.n.y={2}".format(my, pcb.s.y, pcb.n.y))
 
 	# Define locations of each contour corner and screw (if needed):
@@ -1858,10 +1907,10 @@ class Motor_Base(Part):
 	# Make sure the bottom is made out of a single *bottom_contour*
 	# extrusion:
 	r = L(mm = 10)
-	lip_y = L(mm = 4.5)
+	lip_y = L(mm = 4.5) + L(mm=4)
 	helper_contour = Contour()
-	helper_contour.bend_append(P(m_x, m_y, z), z)			# M
-	helper_contour.bend_append(P(z_x, z_y + lip_y, z), z)		# Z
+	helper_contour.bend_append(P(m_x + L(mm=3), m_y, z), r)		# M
+	helper_contour.bend_append(P(z_x + L(mm=3), z_y + lip_y, z), r)	# Z
 	helper_contour.bend_append(P(y_x - L(mm=30), y_y + lip_y, z), r) # Y
 	helper_contour.bend_append(P(x_x, x_y, z), z)			# X
 	helper_contour.bend_append(P(w_x, w_y, z), z)			# W
@@ -1986,7 +2035,7 @@ class Motor_Base(Part):
 	# Make a hole for the shaft/wheel pulley/drive pulley to poke through:
 	# Leave some extra *clearance* so that the belts can be tightened.
 	self.hole(comment = "Twist/Drive Shaft Hole",
-	  diameter = turn_table_bore + L(mm = 13.00),
+	  diameter = turn_table_bore + L(mm = 16.00),
 	  start = P(zero, zero, z4),
 	  end =   P(zero, zero, z0),
 	  flags = "t",
@@ -2027,7 +2076,7 @@ class Motor_Base(Part):
 	for dx in (-hole_pitch/2, hole_pitch/2):
 	    for dy in (-hole_pitch/2, hole_pitch/2):
 		self.hole(comment = "Turntable_hole ({0},{1})".format(dx, dy),
-		  diameter = L(inch = 0.375),
+		  diameter = L(inch = 0.500),
 		  start = P(dx, dy, z4),
 		  end = P(dx, dy, z0),
 		  flags = "t")
@@ -2224,8 +2273,8 @@ class Motor_Base_Screws(Part):
     def x_y_log(self, label, x, y):
 	x1 = self._x1
 	y1 = self._y1
-	self._pcb_holes_file.write("{0}: x={1} y={2}\n".
-	  format(label, L(mm = 150) - (x - x1), L(mm = 150) - (y - y1)))
+	self._pcb_holes_file.write("{0}: pcb_x={1} pcb_y={2} x={3} y={4}\n".
+	  format(label, L(mm = 150) - (x - x1), L(mm = 150) - (y - y1), x, y))
 
 class PCB(Part):
     def __init__(self, up):
