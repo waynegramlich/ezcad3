@@ -320,12 +320,9 @@ class L:
     def absolute(self):
 	""" *L*: Return |*self*|. """
 
-	# Check argument types:
-	assert isinstance(length, L)
-
 	# Perform computation:
 	result = self
-	mm = self.mm
+	mm = self._mm
 	if mm < 0.0:
 	    result = L(-mm)
 	return result
@@ -1014,7 +1011,7 @@ class Angle:
 
 class Bend:
 
-    def __init__(self, point, radius):
+    def __init__(self, point, radius, name = ""):
 	assert isinstance(point, P)
 	assert isinstance(radius, L)
 
@@ -1022,19 +1019,26 @@ class Bend:
 	self.radius = radius
 	self._px = 0.0
 	self._py = 0.0
+	self._name = name
 
     def __format__(self, format):
-	return ("P={0} radius={1} P=({2},{3}) Cx=({4},{5})" + \
-	  " Before=({6},{7}) After=({8},{9}) bf={10:.2f} af={11:.2f}"). \
-	  format(self.point, self.radius,
-	  self._px, self._py, self._center_x, self._center_y,
-	  self._before_tangent_x, self._before_tangent_y,
-	  self._after_tangent_x,  self._after_tangent_y,
-	  self._before_fraction, self._after_fraction)
+	return "Bend(point={0}, radius={1} name='{2}'". \
+	  format(self.point, self.radius, self._name)
+
+	#return ("P={0} radius={1} P=({2},{3}) Cx=({4},{5})" + \
+	#  " Before=({6},{7}) After=({8},{9}) bf={10:.2f} af={11:.2f}"). \
+	#  format(self.point, self.radius,
+	#  self._px, self._py, self._center_x, self._center_y,
+	#  self._before_tangent_x, self._before_tangent_y,
+	#  self._after_tangent_x,  self._after_tangent_y,
+	#  self._before_fraction, self._after_fraction)
 
     def compute(self, before_bend, after_bend):
 	assert isinstance(before_bend, Bend)
 	assert isinstance(after_bend, Bend)
+
+	#print("Bend.compute(): before_bend={0}".format(before_bend))
+	#print("Bend.compute(): after_bend={0}".format(after_bend))
 
         # Below is an ASCII art picture of a *Bend*.  B represents the
 	# *Bend* point (i.e. *self*.*point*).  *D* and *E* are the
@@ -1156,7 +1160,7 @@ class Bend:
 	# Compute <CBE:
 	angle_cbe = angle_dbe / 2.0
 
-	#r2d = 180.0 / Angle.PI
+	r2d = 180.0 / Angle.PI
 	#print("<dbe={0} <cbe={1}".format(angle_dbe * r2d, angle_cbe * r2d))
 
 	# Now compute length:
@@ -1764,7 +1768,7 @@ class Contour:
 	    print("<=Contour.adjust():len(bends)={0}".format(len(self._bends)))
 	return adjusted_contour
 
-    def bend_append(self, point = P(), radius = L()):
+    def bend_append(self, point = P(), radius = L(), name = ""):
 	""" *Contour*: """
 
 	# Check argument types:
@@ -1772,7 +1776,7 @@ class Contour:
 	assert isinstance(radius, L)
 
 	# Create and append the bend:
-	bend = Bend(point, radius)
+	bend = Bend(point, radius, name = name)
 	self._bends.append(bend)
 
     def bends_compute(self, axis = None):
@@ -1791,9 +1795,11 @@ class Contour:
 	    # Extract three *Bend*'s in sequence
 	    before_bend = bends[(index - 1) % bends_size]
 	    bend = bends[index]
-	    after_bend= bends[(index + 1) % bends_size]
+	    after_bend = bends[(index + 1) % bends_size]
 
 	    # Compute the bend radius center point:
+	    #print("bends_compute:before={0} at={1} after={2}".
+	    #  format(before_bend, bend, after_bend))
 	    bend.compute(before_bend, after_bend)
 
     def bounding_box_compute(self, start, end):
@@ -3102,6 +3108,20 @@ class Part:
 	place = Place(part = None, name = comment, center = center,
 	  axis = axis, rotate = rotate, translate = translate)
 
+	# Figure out what axis is the extrude axis:
+	extrude_x = extrude_axis.x.absolute()
+	extrude_y = extrude_axis.y.absolute()
+	extrude_z = extrude_axis.z.absolute()
+	is_x_axis_extrude = False
+	is_y_axis_extrude = False
+	is_z_axis_extrude = False
+	if extrude_x > extrude_y and extrude_x > extrude_z:
+	    is_x_axis_extrude = True
+	if extrude_y > extrude_x and extrude_y > extrude_z:
+	    is_y_axis_extrude = True
+	else:
+	    is_z_axis_extrude = True
+
 	zero = L()
 	bounding_box = outer_contour.bounding_box_compute(start, end)
 	if trace >= 0:
@@ -3118,12 +3138,29 @@ class Part:
 	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
 	    # Set up the transform and extrude:
             scad_union_lines = self._scad_union_lines
-	    #FIXME: Deal with other orientations:
-	    scad_union_lines.append(
-	      "{0}translate([{1:m}, {2:m}, {3:m}])".
-	      format(" " * 6, zero, zero, start.z))
+	    pad = " " * 6
+
+	    # Perform the extrusion in the correct direction:
+	    if is_x_axis_extrude:
+		# Extrude in X after a 90 degree flip around Y axis:
+		scad_union_lines.append(
+		  "{0}translate([{1:m}, 0, 0])".format(pad, start.x))
+		scad_union_lines.append(
+		  "{0}rotate(a={1}, v=[0, 1, 0])".format(pad, Angle(deg=-90)))
+	    elif is_y_axis_extrude:
+		# Extrude in Y after a 90 degree flip around X axis:
+		scad_union_lines.append(
+		  "{0}translate([0, {1:m}, 0])".format(pad, start.y))
+		scad_union_lines.append(
+		  "{0}rotate(a={1}, v=[1, 0, 0])".format(pad, Angle(deg=-90)))
+	    else:
+		# Extrude in Z:
+		scad_union_lines.append(
+		  "{0}translate([0, 0, {1:m}])".format(pad, start.z))
+
+	    # Now do the linear extrude operation:
             scad_union_lines.append(
-	      "{0}linear_extrude(height = {1})".format(" " * 6, height))
+	      "{0}linear_extrude(height = {1})".format(pad, height))
 	    
 	    # Construct the polygon information using *indexed_points*:
 	    indexed_points = Indexed_Points()
