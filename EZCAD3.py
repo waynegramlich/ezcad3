@@ -396,24 +396,27 @@ class L:
 	return L(self._mm * angle.sine())
 
 class P:
-    """ {P} represents a point in 3-space associated with a specific
-	{Part} to provide the frame of reference. """
+    """ {P} represents a point in 3-space. """
 
-    def __init__(self, x = None, y = None, z = None):
+    def __init__(self, x = 0, y = 0, z = 0):
 	""" P: Intialize {self} to contain {part}, {x}, {y}, {z}. """
 
 	# Deal with default arguments:
-	if type(x) == type(None):
-	    x = L(0.0)
-	if type(y) == type(None):
-	    y = L(0.0)
-	if type(z) == type(None):
-	    z = L(0.0)
-
-	# Check argument types:
-	assert isinstance(x, L)
-	assert isinstance(y, L)
-	assert isinstance(z, L)
+	assert isinstance(x, L) or isinstance(x, int) or isinstance(x, float)
+	assert isinstance(y, L) or isinstance(y, int) or isinstance(y, float)
+	assert isinstance(z, L) or isinstance(z, int) or isinstance(z, float)
+	if not isinstance(x, L):
+	    x = float(x)
+	    assert x == 0.0, "Only 0 does not need to be an L() type"
+	    x = L(mm = x)
+	if not isinstance(y, L):
+	    y = float(y)
+	    assert y == 0.0, "Only 0 does not need to be an L() type"
+	    y = L(mm = y)
+	if not isinstance(z, L):
+	    z = float(z)
+	    assert z == 0.0, "Only 0 does not need to be an L() type"
+	    z = L(mm = z)
 
 	# Load up *self*:
 	self.x = x
@@ -1016,6 +1019,7 @@ class Bend:
 	assert isinstance(radius, L)
 
 	self.point = point
+	self.point_tmp = point
 	self.radius = radius
 	self._px = 0.0
 	self._py = 0.0
@@ -1033,9 +1037,14 @@ class Bend:
 	#  self._after_tangent_x,  self._after_tangent_y,
 	#  self._before_fraction, self._after_fraction)
 
-    def compute(self, before_bend, after_bend):
+    def compute(self, before_bend, after_bend, trace = -1000000):
+	""" *Bend*: compute bend information. """
 	assert isinstance(before_bend, Bend)
 	assert isinstance(after_bend, Bend)
+	assert isinstance(trace, int)
+
+	if trace >= 0:
+	    print("{0}=>Bend.compute({1})".format(trace * ' ', self))
 
 	#print("Bend.compute(): before_bend={0}".format(before_bend))
 	#print("Bend.compute(): after_bend={0}".format(after_bend))
@@ -1107,6 +1116,10 @@ class Bend:
 	b = self
 	bx = b._px
 	by = b._py
+
+	if trace >= 0:
+	    print("{0}Bend.compute(): bx={1} by={2}".
+	      format(trace * ' ', bx, by))
 
 	# Extract the X/Y coordinates for D (i.e. *bend1*.*\_point*):
 	d = before_bend
@@ -1206,6 +1219,10 @@ class Bend:
 	# sum to be less than or equal to 1.0:
 	self._before_fraction = tangent_length / db_length
 	self._after_fraction = tangent_length / eb_length
+
+	if trace >= 0:
+	    print("{0}<=Bend.compute({1})".format(trace * ' ', self))
+
 
     def copy(self):
 	""" *Bend* """
@@ -1774,13 +1791,18 @@ class Contour:
 	# Check argument types:
 	assert isinstance(point, P)
 	assert isinstance(radius, L)
+	assert isinstance(name, str)
 
 	# Create and append the bend:
 	bend = Bend(point, radius, name = name)
 	self._bends.append(bend)
 
-    def bends_compute(self, axis = None):
+    def bends_compute(self, axis = None, trace = -1000000):
 	""" *Contour*: """
+
+	if trace >= 0:
+	    print("{0}=>Contour.bends_compute(axis={1}, self={2})".
+	      format(trace * ' ', axis, self))
 
 	# Check argument types:
 	assert isinstance(axis, P)
@@ -1800,7 +1822,10 @@ class Contour:
 	    # Compute the bend radius center point:
 	    #print("bends_compute:before={0} at={1} after={2}".
 	    #  format(before_bend, bend, after_bend))
-	    bend.compute(before_bend, after_bend)
+	    bend.compute(before_bend, after_bend, trace = trace + 1)
+	if trace >= 0:
+	    print("{0}<=Contour.bends_compute(axis={1}, self={2})".
+	      format(trace * ' ', axis, self))
 
     def bounding_box_compute(self, start, end):
 	""" *Contour*: Compute bounding box for *self* extruded in
@@ -1827,7 +1852,7 @@ class Contour:
 
 	for bend in self._bends:
 	    # Extract *x*, *y*, *z* from *point*:
-	    point = bend.point
+	    point = bend.point_tmp
 	    x = point.x
 	    y = point.y
 	    z = point.z
@@ -1844,15 +1869,20 @@ class Contour:
 	bounding_box = Bounding_Box(ex, wx, ny, sy, tz, bz)
 	return bounding_box
 
-    def path_append(self, extrude_axis = None,
-      indexed_points = None, maximum_angle = Angle(deg=16.0)):
+    def path_append(self, extrude_axis = None, indexed_points = None,
+      maximum_angle = Angle(deg=16.0), trace = -1000000):
 	""" *Contour*: Append a path to *indexed_points*. """
 	assert isinstance(indexed_points, Indexed_Points)
 	assert isinstance(maximum_angle, Angle)
 	assert isinstance(extrude_axis, P)
+	assert isinstance(trace, int)
+
+	if trace >= 0:
+	    print("{0}=>Contour.path_append(extrude_axis={1}, self={2})".
+	          format(trace * ' ', extrude_axis, self))
 
 	# Compute the bend information:
-	self.bends_compute(extrude_axis)
+	self.bends_compute(extrude_axis, trace = trace + 1)
 
 	pi = math.pi
 	r2d = 180.0 / pi 
@@ -1944,6 +1974,10 @@ class Contour:
 		  "Bend[{0}]:after tangent".format(index))
 		path.append(indexed_point)
 
+	if trace >= 0:
+	    print("{0}<=Contour.path_append(extrude_axis={1})".
+	      format(trace * ' ', extrude_axis))
+
     def project(self, axis = None):
 	""" *Contour*: """
 
@@ -1990,8 +2024,12 @@ class Contour:
 
 	    if use_x_axis:
 		# Axis is aligned with X:
-		bend._px = py
-		bend._py = pz
+		# This is not obvious.  We put the Z coordinates in the
+		# X axis in order to ensure that when we rotate around
+		# the Y axis by 90 degrees the Z cordinates are up and
+		# down in Z:
+		bend._px = pz
+		bend._py = py
 		if plane == None:
 		    plane = px
 		else:
@@ -3098,6 +3136,7 @@ class Part:
 	assert isinstance(inner_contours, list)
 	assert isinstance(start, P)
 	assert isinstance(end, P)
+	assert isinstance(trace, int)
 
 	# Record the *color* and *material*:
 	self._material = material
@@ -3122,20 +3161,22 @@ class Part:
 	else:
 	    is_z_axis_extrude = True
 
+	# Compute bounding box:
 	zero = L()
 	bounding_box = outer_contour.bounding_box_compute(start, end)
+	self._bounding_box_update(bounding_box,
+	  comment, place, trace = trace + 1)
 	if trace >= 0:
 	    print("{0} Part.extrude:bounding_box={0}".
 	     format(trace * ' ', bounding_box))
-
-	self._bounding_box_update(bounding_box,
-	  comment, place, trace = trace + 1)
 
 	self._is_part = True
 	ezcad = self._ezcad
 	assert isinstance(ezcad, EZCAD3)
 
 	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	    if trace >= 0:
+		print("{0}Part.extrude:manufacture".format(trace * ' '))
 	    # Set up the transform and extrude:
             scad_union_lines = self._scad_union_lines
 	    pad = " " * 6
@@ -3143,18 +3184,21 @@ class Part:
 	    # Perform the extrusion in the correct direction:
 	    if is_x_axis_extrude:
 		# Extrude in X after a 90 degree flip around Y axis:
+		scad_union_lines.append("{0}// X axis extrude".format(pad))
 		scad_union_lines.append(
-		  "{0}translate([{1:m}, 0, 0])".format(pad, start.x))
+		  "{0}translate([{1:m}, 0, 0])".format(pad, end.x))
 		scad_union_lines.append(
 		  "{0}rotate(a={1}, v=[0, 1, 0])".format(pad, Angle(deg=-90)))
 	    elif is_y_axis_extrude:
 		# Extrude in Y after a 90 degree flip around X axis:
+		scad_union_lines.append("{0}// Y axis extrude".format(pad))
 		scad_union_lines.append(
-		  "{0}translate([0, {1:m}, 0])".format(pad, start.y))
+		  "{0}translate([0, {1:m}, 0])".format(pad, end.y))
 		scad_union_lines.append(
-		  "{0}rotate(a={1}, v=[1, 0, 0])".format(pad, Angle(deg=-90)))
+		  "{0}rotate(a={1}, v=[1, 0, 0])".format(pad, Angle(deg=90)))
 	    else:
 		# Extrude in Z:
+		scad_union_lines.append("{0}// Z axis extrude".format(pad))
 		scad_union_lines.append(
 		  "{0}translate([0, 0, {1:m}])".format(pad, start.z))
 
@@ -3166,7 +3210,7 @@ class Part:
 	    indexed_points = Indexed_Points()
 	    outer_contour.path_append(
 	      indexed_points = indexed_points,
-	      extrude_axis = extrude_axis)
+	      extrude_axis = extrude_axis, trace = trace + 1)
 	    for inner_contour in inner_contours:
 		inner_contour.path_append(
 		  indexed_points = indexed_points,
@@ -5333,6 +5377,8 @@ class Part:
 	extra = L(mm = 1.0)
 	ezcad = self._ezcad
 	adjust = ezcad._adjust
+	#print("simple_pocket:B:x1/x2 y1/y2 z1/z2 = {0}/{1} {2}/{3} {4}/{5}".
+	#  format(x1, x2, y1, y2, z1, z2))
 	if pocket_top == "t":
 	    z2 += extra
 	    x1 += adjust
@@ -5373,6 +5419,8 @@ class Part:
             assert False, \
 	      "pocket_top = '{0}' instead of 't', 'b', 'n', 's', 'e', or 'w'". \
 	      format(pocket_top)
+	#print("simple_pocket:A:x1/x2 y1/y2 z1/z2 = {0}/{1} {2}/{3} {4}/{5}".
+	#  format(x1, x2, y1, y2, z1, z2))
 
 	place = Place(part = None, name = comment, center = center,
 	  axis = axis, rotate = rotate, translate = translate)
@@ -5924,7 +5972,7 @@ class Fastener(Part):
     #
     #    http://www.csgnetwork.com/screwmetmachtable.html
     # 
-    #				close (in)	close (mm=in)
+    #				close (in)	free (mm=in)
     # M1.6x0.35 ~= #0-80	  0.0635	1.7 = 0.0669*
     # M1.8x0.35 ~= #1-72	  0.0760*	1.9 = 0.0748
     # M2.2x0.45 ~= #2-56	  0.0890*	2.4 = 0.0866
@@ -6117,8 +6165,8 @@ class Fastener(Part):
 	""" *Fastener*: """
 
 	if trace >= 0:
-	    print("{0}=>Fastener.drill({1}, '{2}')".
-	      format(' ' * trace, part, select))
+	    print("{0}=>Fastener.drill({1}, select='{2}', start={3}, end={4})".
+	      format(' ' * trace, part, select, self.start_p, self.end_p))
 
 	# Check argument types:
 	none_type = type(None)
