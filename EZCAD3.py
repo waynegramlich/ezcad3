@@ -6288,7 +6288,7 @@ class Fastener(Part):
 		      flags = "f")
 
 	if trace >= 0:
-	    print("{0}<=Fastener.drill({1}, '{2}')".
+	    print("{0}<=Fastener.drill({1}, select='{2}')".
 	      format(' ' * trace, part, select))
 
 

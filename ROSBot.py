@@ -815,6 +815,10 @@ class Inner_Outer_Motor_Side(Part):
 	top_z = self.top_z_l
 	y_center = self.y_center_l
 
+	#print("IOMSl.construct: name={0} x={1}:{2} y={3}:{4} z={5}:{6}".
+	#  format(self, -dx/2, dx/2, y_center-dy/2, y_center+dy/2,
+	#  bottom_z, top_z))
+
 	# Grab some *Part*'s from the *motor_assembly*:
 	motor_assembly = self.up
 	gm3_motor = motor_assembly.gm3_motor_
@@ -1032,11 +1036,11 @@ class Right_Motor_Assembly(Part):
 
 	# Configure the various *Part*'s:
 	gm3_motor.configure(y_center = y1)
-	outer_motor_side.configure(dx = dx,
+	inner_motor_side.configure(dx = dx,
 	  side_tongue_dx = x3 - x1, back_center_x = x2, front_center_x = x7,
 	  y_center = y4, bottom_z = z0, top_z = z9,
 	  side_tongue_bottom_z = z1, side_tongue_top_z = z8)
-	inner_motor_side.configure(dx = dx,
+	outer_motor_side.configure(dx = dx,
 	  side_tongue_dx = x3 - x1, back_center_x = x2, front_center_x = x7,
 	  y_center = y11, bottom_z = z0, top_z = z9,
 	  side_tongue_bottom_z = z1, side_tongue_top_z = z8)
@@ -1071,7 +1075,8 @@ class Right_Motor_Assembly(Part):
 	  start = P(x7, y2, z0 + L(mm=5)),
 	  end = P(x7, y5, z0 + L(mm=5)),
 	  flags = "M3x.05")
-	inner_be_screw.drill(part = inner_motor_side, select = "close", trace=0)
+	#print("RMA:y2={0} y5={1}".format(y2, y5))
+	inner_be_screw.drill(part = inner_motor_side, select = "close")
 
 	inner_bw_screw.configure(comment = "Inner BW Screw",
 	  material = Material("Steel", "x"),
