@@ -1,56 +1,48 @@
 #!/usr/bin/env python
 
+# Common metric screw lengths:
+#
+#     http://www.bjg-design.com/designbook/mscrlng1.htm
+#
+#
+# Excerpt from McMaster Carr.
+# Class 12.9 Black Alloy Steel (Metric)- DIN 912.
+# Screw
+# Length	Screw Size
+# 	M1.6  M2   M3   M4   M5   M6   M8   M10  M12  M14  M16  M20  M24  M30
+#    3	  x    -    -    -    -    -    -    -    -    -    -    -    -    -  
+#    4	  x    -    -    -    -    -    -    -    -    -    -    -    -    -  
+#    5	  x    x    -    -    -    -    -    -    -    -    -    -    -    -  
+#    6	  x    x    x    x    -    -    -    -    -    -    -    -    -    -  
+#    8	  -    x    x    x    -    -    -    -    -    -    -    -    -    -  
+#   10	  -    -    x    x    x    x    x    -    -    -    -    -    -    -  
+#   12	  -    x    x    x    x    x    -    -    -    -    -    -    -    -  
+#   14	  -    -    x    x    x    x    -    -    -    -    -    -    -    -  
+#   16	  -    -    x    x    x    x    x    x    -    -    -    -    -    -  
+#   18	  -    -    -    x    x    x    x    -    -    -    -    -    -    -  
+#   20	  -    -    x    x    x    x    x    x    -    -    -    -    -    -  
+#   22	  -    -    -    -    x    x    x    -    -    -    -    -    -    -  
+#   25	  -    -    x    x    x    x    x    x    x    -    -    -    -    -  
+#   30	  -    -    x    x    x    x    x    x    x    x    x    -    -    -  
+#   35	  -    -    x    x    x    x    x    x    x    x    x    -    -    -  
+#   40	  -    -    -    x    x    x    x    x    x    x    x    -    -    -  
+#   45	  -    -    -    -    -    x    x    x    x    -    x    -    -    -  
+#   50	  -    -    -    -    x    x    x    x    x    x    x    x    -    -  
+#   55	  -    -    -    -    x    x    x    x    x    -    -    -    -    -  
+#   60	  -    -    -    -    x    x    x    x    x    x    x    x    x    -  
+#   65	  -    -    -    -    -    x    x    x    x    x    x    x    x    -  
+#   70	  -    -    -    -    -    x    x    x    x    -    -    x    x    -  
+#   75	  -    -    -    -    -    -    x    -    x    -    -    -    -    -  
+#   80	  -    -    -    -    -    -    x    x    x    x    -    x    x    x  
+#   90	  -    -    -    -    -    -    x    x    x    x    -    x    x    x  
+#  100	  -    -    -    -    -    -    x    x    x    x    -    x    x    x  
+#  110	  -    -    -    -    -    -    x    x    x    x    -    x    x    x  
+#  120	  -    -    -    -    -    -    x    x    x    x    -    x    x    x  
+#  150	  -    -    -    -    -    -    x    x    x    x    -    x    x    x 
+
+
 import math
 from EZCAD3 import *
-
-def attach_3mm(contour, part, edge_point, direction, plane):
-    # Check argument types:
-    assert isinstance(contour, Contour)
-    assert isinstance(part, Part)
-    assert isinstance(edge_point, P)
-    assert isinstance(direction, P)
-    assert isinstance(plane, P)
-
-    diredtion_x = diredtion.x
-    diredtion_y = diredtion.y
-    diredtion_z = diredtion.z
-    
-    zero = L()
-    l0 = zero
-    l1 = L(mm=4)
-    l2 = L(mm=6)
-    l3 = L(mm=8)
-
-    w0 = zero
-    w1 = L(mm=1.5)
-    w2 = L(mm=3)
-
-    if plane.z != zero:
-	# XY plane:
-	assert plane.x == zero and plane.y == zero, \
-	  "Only one axis of plane can be non-zero {0}".format(plane)
-	assert direction.z == zero, \
-	  "Direction {0} has non-zero Z component".format(direction)
-	direction_x = driection.x
-	direction_y = driection.y
-	if directionx_x == zero and direction_y != zero:
-	    pass
-        elif direction_x != zero and direction_y == zero:
-	    pass
-	else:
-	    assert False, \
-	      "Direction {0} does not point anywhere".format(direction)
-    elif plane.y != zero:
-	# XZ plane:
-	assert plane.x == zero and plane.z == zero, \
-	  "Only one axis of plane can be non-zero {0}".format(plane)
-    elif plane.x != zero:
-	# YZ plane:
-	assert plane.y == zero and plane.y == zero, \
-	  "Only one axis of plane can be non-zero {0}".format(plane)
-    else:
-	assert False, "Orientation is not aligned with XY, XZ, or YZ plane"
-
 
 class Base(Part):
     def __init__(self, up):
@@ -958,6 +950,8 @@ class Right_Motor_Assembly(Part):
 	self.outer_bw_screw_ = Fastener(self)
 	self.outer_te_screw_ = Fastener(self)
 	self.outer_tw_screw_ = Fastener(self)
+	self.top_back_screw_ = Fastener(self)
+	self.top_front_screw_ = Fastener(self)
 	
     def construct(self):
 	""" Right_Motor_Assembly: construct """
@@ -984,6 +978,8 @@ class Right_Motor_Assembly(Part):
 	outer_te_screw = self.outer_te_screw_
 	outer_tw_screw = self.outer_tw_screw_
 	slot_interrupter1 = dual_slot_encoder.slot_interrupter1_
+	top_back_screw = self.top_back_screw_
+	top_front_screw = self.top_front_screw_
 
 	# Compute interesting X locations in ascending order:
 	zero = L()
@@ -993,11 +989,13 @@ class Right_Motor_Assembly(Part):
 	x2 = x1 + L(mm=2.5)	# Center of back motor side
 	x3 = x2 + L(mm=2.5)	# East edge of back motor side
 	x4 = x3 + L(mm=5)	# West tongue edge
-	x9 = dx/2		# East edge of motor assembly
-	x8 = x9 - L(mm=3)	# East edge of front motor side
-	x7 = x8 - L(mm=2.5)	# Center of front motor side
-	x6 = x7 - L(mm=2.5)	# West edge of front motor side
-	x5 = x6 - L(mm=5)	# East tongue edge
+	x5 = x4 + L(mm=2)	# End of screw mounts
+	x11 = dx/2		# East edge of motor assembly
+	x10 = x11 - L(mm=3)	# East edge of front motor side
+	x9 = x10 - L(mm=2.5)	# Center of front motor side
+	x8 = x9 - L(mm=2.5)	# West edge of front motor side
+	x7 = x8 - L(mm=5)	# East tongue edge
+	x6 = x7 - L(mm=3)	# End of screw mounts
 
 	# Compute interesting Y locations in ascending order:
 	one = L(mm=1)
@@ -1007,17 +1005,21 @@ class Right_Motor_Assembly(Part):
 	#y3 = y2 + outer_motor_side.dy/2 - L(mm=1.5)	# South inner side
 	y4 = y2 + L(mm=1.5)				# Inner side center
 	y5 = y4 + L(mm=1.5)				# North inner side
-	y6 = y2 + gm3_motor.encoder_shaft_dy_l		# Encoder shaft edge
-	y7 = y6 + encoder_disk.dy_l/2			# Encoder disk center
-	y8 = y7 + dual_slot_encoder.disk_offset_dy_l	# PCB center
-	y9 = y8 + dual_slot_encoder_pcb.dx/2		# West PCB edge
-	y10 = y4 + L(mm=25) - L(mm=1.5)			# South outer side
-	y11 = y10 + L(mm=1.5)				# Outer side center
-	y12 = y11 + L(mm=1.5)				# North outer side
-	#print("TLA:y0={0} y1={1} y2={2} y4={3} y5={4}".
-	#  format(y0, y1, y2, y4, y5))
-	#print("TLA:y6={0} y7={1} y8={2} y9={3} y10={4} y11={5} y12={6}".
-	#  format(y6, y7, y8, y9, y10, y11, y12))
+	y6 = y5 + L(mm=7)				# End of mount screws
+	y7 = y2 + gm3_motor.encoder_shaft_dy_l		# Encoder shaft edge
+	y8 = y7 + encoder_disk.dy_l/2			# Encoder disk center
+	y9 = y8 + dual_slot_encoder.disk_offset_dy_l	# PCB center
+	y10 = y4 + L(mm=15)				# Center of assembly
+	y11 = y9 + dual_slot_encoder_pcb.dx/2		# West PCB edge
+	y12 = y10 + L(mm=15) - L(mm=10)			# End mount screws
+	y13 = y12 + L(mm=7)				# South outer side
+	y14 = y13 + L(mm=1.5)				# Outer side center
+	y15 = y14 + L(mm=1.5)				# North outer side
+
+	print("TLA:y0={0} y1={1} y2={2} y4={3} y5={4} y6={5} y7={6} y8={7}".
+	  format(y0, y1, y2, y4, y5, y6, y7, y8))
+	print("TLA:y9={0} y10={1} y11={2} y12={3} y13={4} y14={5} y15={6}".
+	  format(y9, y10, y11, y12, y13, y14, y15))
 	
 	# Compute interesting Z locations in acending order:
 	slot_dz = slot_interrupter1.dz_l.absolute()
@@ -1032,131 +1034,172 @@ class Right_Motor_Assembly(Part):
 	z6 = z5 + dual_slot_encoder_pcb.dz_l/2		# PCB middle
 	z7 = z6 + encoder_mount.dz_l/2			# Encoder mount center
 	z8 = z4 + L(mm=15)				# Top tongue edge
-	z9 = z8 + L(mm=10)				# Top edge motor Asmbly
+	z9 = z8 + L(mm=3)				# End of screw mount
+	z10 = z9 + L(mm=7)				# Top edge of assembly
+	z11 = z10 + L(mm=5)				# Top of mount base
 
 	# Configure the various *Part*'s:
 	gm3_motor.configure(y_center = y1)
 	inner_motor_side.configure(dx = dx,
-	  side_tongue_dx = x3 - x1, back_center_x = x2, front_center_x = x7,
-	  y_center = y4, bottom_z = z0, top_z = z9,
+	  side_tongue_dx = x3 - x1, back_center_x = x2, front_center_x = x9,
+	  y_center = y4, bottom_z = z0, top_z = z10,
 	  side_tongue_bottom_z = z1, side_tongue_top_z = z8)
 	outer_motor_side.configure(dx = dx,
-	  side_tongue_dx = x3 - x1, back_center_x = x2, front_center_x = x7,
-	  y_center = y11, bottom_z = z0, top_z = z9,
+	  side_tongue_dx = x3 - x1, back_center_x = x2, front_center_x = x9,
+	  y_center = y14, bottom_z = z0, top_z = z10,
 	  side_tongue_bottom_z = z1, side_tongue_top_z = z8)
 	#print("RMA:z1={0} z8={1}".format(z1, z8))
-	encoder_disk.configure(y_center = y7)
-	dual_slot_encoder.configure(y_center = y8, z_center = z5)
+	encoder_disk.configure(y_center = y8)
+	dual_slot_encoder.configure(y_center = y9, z_center = z5)
 
-	#print("RMA:x0={0} x6={1} x8={2} x9={3}".format(x0, x6, x8, x9))
-	#print("RMA:z0={0} z9={1}".format(z0, z9))
+	#print("RMA:x0={0} x8={1} x10={2} x11={3}".format(x0, x8, x10, x11))
+	#print("RMA:z0={0} z10={1}".format(z0, z10))
 	back_motor_side.configure(dx = x3 - x1, x_center = (x1 + x3)/2,
-	  dy = y12 - y2, inside_dy = y10 - y5, y_center = (y12 + y2)/2,
-	  dz = z9 - z0, z_tongue_bottom = z1, z_tongue_top = z8,
-	  z_center = (z0 + z9)/2)
-	front_motor_side.configure(dx = x8 - x6, x_center = (x8 + x6)/2,
-	  dy = y12 - y2, inside_dy = y10 - y5, y_center = (y12 + y2)/2,
-	  dz = z9 - z0, z_tongue_bottom = z1, z_tongue_top = z8,
-	  z_center = (z0 + z9)/2)
+	  dy = y15 - y2, inside_dy = y13 - y5, y_center = (y15 + y2)/2,
+	  dz = z10 - z0, z_tongue_bottom = z1, z_tongue_top = z8,
+	  z_center = (z0 + z10)/2)
+	front_motor_side.configure(dx = x10 - x8, x_center = (x10 + x8)/2,
+	  dy = y15 - y2, inside_dy = y13 - y5, y_center = (y15 + y2)/2,
+	  dz = z10 - z0, z_tongue_bottom = z1, z_tongue_top = z8,
+	  z_center = (z0 + z10)/2)
 
 	inner_outer_dx = inner_motor_side.dx_l
-	inner_outer_pitch_dy = y11 - y4
+	inner_outer_pitch_dy = y14 - y4
 	inner_outer_dy = inner_motor_side.dy_l/2 + \
 	  inner_outer_pitch_dy +  outer_motor_side.dy_l/2
-	inner_outer_center_y = (y4 + y11)/2
-	encoder_mount.configure(dx = x6 - x3, tongue_dx = x5 - x4,
+	inner_outer_center_y = (y4 + y14)/2
+	encoder_mount.configure(dx = x8 - x3, tongue_dx = x7 - x4,
 	  dy = inner_outer_dy, y_center = inner_outer_center_y,
 	  z_center = z7)
 
 	# Configure the *inner_motor_side* fasteners:
+	screw_flags = "M3x.05"
+	#screw_flags = "4-40"
 	inner_be_screw.configure(comment = "Inner BE Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x7, y2, z0 + L(mm=5)),
-	  end = P(x7, y5, z0 + L(mm=5)),
-	  flags = "M3x.05")
+	  start = P(x9, y2, z0 + L(mm=5)),
+	  end = P(x9, y6, z0 + L(mm=5)),
+	  flags = screw_flags)
 	#print("RMA:y2={0} y5={1}".format(y2, y5))
 	inner_be_screw.drill(part = inner_motor_side, select = "close")
+	inner_be_screw.nut_ledge(part = front_motor_side, flags="E")
 
 	inner_bw_screw.configure(comment = "Inner BW Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
 	  start = P(x2, y2, z0 + L(mm=5)),
-	  end = P(x2, y5, z0 + L(mm=5)),
-	  flags = "M3x.05")
+	  end = P(x2, y6, z0 + L(mm=5)),
+	  flags = screw_flags)
 	inner_bw_screw.drill(part = inner_motor_side, select = "close")
+	inner_bw_screw.nut_ledge(part = back_motor_side, flags="W")
 
 	inner_te_screw.configure(comment = "Inner TE Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x7, y2, z9 - L(mm=5)),
-	  end = P(x7, y5, z9 - L(mm=5)),
-	  flags = "M3x.05")
+	  start = P(x9, y2, z10 - L(mm=5)),
+	  end = P(x9, y6, z10 - L(mm=5)),
+	  flags = screw_flags)
 	inner_te_screw.drill(part = inner_motor_side, select = "close")
+	inner_te_screw.nut_ledge(part = front_motor_side, flags="E")
 
 	inner_tw_screw.configure(comment = "Inner TW Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x2, y2, z9 - L(mm=5)),
-	  end = P(x2, y5, z9 - L(mm=5)),
-	  flags = "M3x.05")
+	  start = P(x2, y2, z10 - L(mm=5)),
+	  end = P(x2, y6, z10 - L(mm=5)),
+	  flags = screw_flags)
 	inner_tw_screw.drill(part = inner_motor_side, select = "close")
+	inner_tw_screw.nut_ledge(part = back_motor_side, flags="W")
 
 	# Configure the *outer_motor_side* fasteners:
 	outer_be_screw.configure(comment = "Outer BE Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x7, y12, z0 + L(mm=5)),
-	  end = P(x7, y10, z0 + L(mm=5)),
-	  flags = "M3x.05")
+	  start = P(x9, y15, z0 + L(mm=5)),
+	  end = P(x9, y12, z0 + L(mm=5)),
+	  flags = screw_flags)
 	outer_be_screw.drill(part = outer_motor_side, select = "close")
+	outer_be_screw.nut_ledge(part = front_motor_side, flags="E")
 
 	outer_bw_screw.configure(comment = "Outer BW Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x2, y12, z0 + L(mm=5)),
-	  end = P(x2, y10, z0 + L(mm=5)),
-	  flags = "M3x.05")
+	  start = P(x2, y15, z0 + L(mm=5)),
+	  end = P(x2, y12, z0 + L(mm=5)),
+	  flags = screw_flags)
 	outer_bw_screw.drill(part = outer_motor_side, select = "close")
+	outer_bw_screw.nut_ledge(part = back_motor_side, flags="W")
 
 	outer_te_screw.configure(comment = "Outer TE Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x7, y12, z9 - L(mm=5)),
-	  end = P(x7, y10, z9 - L(mm=5)),
-	  flags = "M3x.05")
+	  start = P(x9, y15, z10 - L(mm=5)),
+	  end = P(x9, y12, z10 - L(mm=5)),
+	  flags = screw_flags)
 	outer_te_screw.drill(part = outer_motor_side, select = "close")
+	outer_te_screw.nut_ledge(part = front_motor_side, flags="E")
 
 	outer_tw_screw.configure(comment = "Outer TW Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x2, y12, z9 - L(mm=5)),
-	  end = P(x2, y10, z9 - L(mm=5)),
-	  flags = "M3x.05")
+	  start = P(x2, y15, z10 - L(mm=5)),
+	  end = P(x2, y12, z10 - L(mm=5)),
+	  flags = screw_flags)
 	outer_tw_screw.drill(part = outer_motor_side, select = "close")
+	outer_tw_screw.nut_ledge(part = back_motor_side, flags="W")
 
 	# Configure the *outer_motor_side* fasteners:
 	back_screw.configure(comment = "Back Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x1, y8, z7),
-	  end = P(x3, y8, z7),
-	  flags = "M3x.05")
+	  start = P(x1, y10, z7),
+	  end = P(x5, y10, z7),
+	  flags = screw_flags)
 	back_screw.drill(part = back_motor_side, select = "close")
+	back_screw.nut_ledge(part = encoder_mount, flags="T")
 
 	front_screw.configure(comment = "Front Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x8, y8, z7),
-	  end = P(x6, y8, z7),
-	  flags = "M3x.05")
+	  start = P(x10, y10, z7),
+	  end = P(x6, y10, z7),
+	  flags = screw_flags)
 	front_screw.drill(part = front_motor_side, select = "close")
+	front_screw.nut_ledge(part = encoder_mount, flags="T")
+
+	# Configure the top screw fasteners:
+	top_back_screw.configure(comment = "Top Back Screw",
+	  material = Material("Steel", "x"),
+	  color = Color("black"),
+	  start = P(x2, y10, z11),
+	  end = P(x2, y10, z9),
+	  flags = screw_flags)
+	top_back_screw.nut_ledge(part = back_motor_side, flags="W")
+
+	top_front_screw.configure(comment = "Top Front Screw",
+	  material = Material("Steel", "x"),
+	  color = Color("black"),
+	  start = P(x9, y10, z11),
+	  end = P(x9, y10, z9),
+	  flags = screw_flags)
+	top_front_screw.nut_ledge(part = front_motor_side, flags="E")
 
 	# Deal with visibility here:
 	#gm3_wheel.invisible_set()
+	#encoder_mount.invisible_set()
 	#outer_motor_side.invisible_set()
 	#inner_motor_side.invisible_set()
 	#back_motor_side.invisible_set()
+	#front_motor_side.invisible_set()
+
+	# Deal with visibility here:
+	encoder_mount.dxf_write(center = P(0, y10, z7))
+	inner_motor_side.dxf_write(
+	  center = P(0, y4, z7), plane_normal = P(0, L(mm=1), 0))
+	front_motor_side.dxf_write(
+	  center = P(x9, y10, z7), plane_normal = P(L(mm=1), 0, 0))
+	#inner_motor_side.invisible_set()
 	#front_motor_side.invisible_set()
 
 class ROSBot(Part):

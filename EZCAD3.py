@@ -64,7 +64,8 @@ class L:
 	    inch = whole + numerator / denominator
 		
 	# Load up *self*:
-	self._mm = mm + cm * 10.0 + inch * 25.4 + ft * (12.0 * 25.4)
+	scale = 1.0
+	self._mm = scale * (mm + cm * 10.0 + inch * 25.4 + ft * (12.0 * 25.4))
 
     ## @brief Returns *self* + *length*.
     #  @param self is the first *L* object to sum.
@@ -388,7 +389,7 @@ class L:
     def millimeters(self):
 	""" L: Return a {self} as a scalar in units of millimeters. """
 
-	return self._mm * 25.4
+	return self._mm
 
     def sine(self, angle):
 	""" L: Return {self} * sin(angle). """
@@ -2132,6 +2133,7 @@ class Part:
 	self._axis = None
 	self._center = None
 	self._color = None
+	self._dxf_scad_lines = []
 	self._ezcad = EZCAD3.ezcad
 	self._is_part = False	
 	self._material = None
@@ -2870,6 +2872,25 @@ class Part:
 			subprocess.call(command, stderr=ignore_file) 
 			ignore_file.close()
 
+		    # Write out DXF file:
+		    dxf_scad_lines = self._dxf_scad_lines
+		    if len(dxf_scad_lines) > 0:
+			dxf_scad_file_name = "{0}_Dxf.scad".format(name)
+			dxf_scad_file = open(dxf_scad_file_name, "wa")
+			dxf_scad_file.write("use <{0}.scad>;\n".format(name))
+			for dxf_scad_line in dxf_scad_lines:
+			    dxf_scad_file.write(dxf_scad_line)
+			    dxf_scad_file.write("\n")
+			dxf_scad_file.write("{0}();\n".format(name))
+			dxf_scad_file.close()
+
+		    command = [ "openscad" , "-o", "{0}.dxf".format(name),
+		      "{0}_Dxf.scad".format(name) ]
+		    print("command = {0}".format(command))
+		    ignore_file = open("/dev/null", "w")
+		    subprocess.call(command, stderr=ignore_file)
+		    ignore_file.close()
+
 	if False:
 	    # For now, write out an offset file:
 	    stl_file = open("{0}.stl".format(name), "r")
@@ -3109,6 +3130,45 @@ class Part:
     def construct(self):
 	assert False, \
 	  "No construct() method defined for part '{0}'".format(self._name)
+
+    def dxf_write(self, comment = "no_comment", center = None,
+      plane_normal = P(0, 0, L(mm=1)), rotate = Angle()):
+	""" *Part*: Write out a .dxf file. """
+	# Check argument
+	none_type = type(None)
+	assert isinstance(comment, str)
+	assert isinstance(plane_normal, P)
+	assert type(center) == none_type or isinstance(center, P)
+	assert isinstance(rotate, Angle)
+
+	if not isinstance(center, P):
+	    center = self.c
+
+	scad_lines = []
+	z_axis = P(0, 0, L(mm=1))
+	# OpenSCAD is screwy.  We list the operations in reverse order:
+	# The projection is the *last* operation.  See below:
+	scad_lines.append("projection(cut = true)")
+
+	# If we want to rotate in the X/Y plane, we do this here.
+	# Will occur *after* the rotation and translation below:
+	if rotate != Angle(deg=0):
+	    scad_lines.append("rotate(a={0:d}, v=[0, 0, 1])".format(rotate))
+
+	# If we need to do a rotation, we do this here.  This will occur
+	# *after* the translation (see below):
+	if plane_normal != z_axis:
+	    rotate_axis = plane_normal.cross_product(z_axis)
+	    scad_lines.append("rotate(a={0:d}, v=[{1:m}, {2:m}, {3:m}])".format(
+	      Angle(deg=90), rotate_axis.x, rotate_axis.y, rotate_axis.z))
+
+	# If we need to specify the *center*, we list this command last
+	# so it occurs first:
+	if center != P():
+	    scad_lines.append("translate([{0:m}, {1:m}, {2:m}])".
+	      format(-center.x, -center.y, -center.z))
+
+	self._dxf_scad_lines = scad_lines
 
     def extrude(self, comment = "no_comment", material = None, color = None,
       outer_contour = None, inner_contours = None, start = None, end = None,
@@ -6161,6 +6221,121 @@ class Fastener(Part):
 	  start = self.start_p,
 	  end = self.end_p)
 
+    def nut_ledge(self, part = None, flags = ""):
+        """ *Fastener*: Cut out ledge for a screw and a nut. """
+
+	# Check argument types:
+	none_type = type(None)
+	assert isinstance(part, Part)
+	assert isinstance(flags, str)
+
+	if part._ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	    # Grab some values from *self*:
+	    start = self.start_p
+	    end = self.end_p
+	    nut_height = self.nut_height_l
+	    hex_nut_edge_width = self.hex_nut_edge_width_l
+	    hex_nut_tip_width = self.hex_nut_tip_width_l
+	    close_fit = self.close_fit_l
+	    major_diameter = self.major_diameter_l
+
+	    # Parse *flags*:
+	    surface_normal = P(0, 0, L(mm=1))
+	    for flag in flags.split(":"):
+		if flag == 'N' or flag == 'S':
+		    surface_normal = P(0, L(mm=1), 0)
+		elif flag == 'E' or flag == 'W':
+		    surface_normal = P(L(mm=1), 0, 0)
+		elif flag == 'T' or flag == 'B':
+		    pass
+		else:
+		    assert False, "Unrecognized flag '{0}'".format(flag)
+
+	    # Compute the various screw axes:
+	    screw_axis = (start - end).normalize()
+	    edge_axis = screw_axis.cross_product(surface_normal)
+
+	    # Generate the screw cut out block:
+
+	    # Compute *p1* and *p2* which are the two diagonally opposite
+	    # points on the screw removal cube:
+	    d_edge = (close_fit / 2).millimeters()
+	    p1 = end - \
+	      edge_axis * d_edge - \
+	      surface_normal * (major_diameter*2).millimeters()
+	    p2 = start + \
+ 	      edge_axis * (close_fit/2).millimeters() + \
+	      surface_normal * (major_diameter*2).millimeters()
+
+	    # Compute the cube dimensions (*dx*, *dy*, *dz*) and the
+	    # cube center point (*x*, *y*, *z*):
+	    x = (p1.x + p2.x)/2
+	    y = (p1.y + p2.y)/2
+	    z = (p1.z + p2.z)/2
+	    dx = (p2.x - p1.x).absolute()
+	    dy = (p2.y - p1.y).absolute()
+	    dz = (p2.z - p1.z).absolute()
+
+	    # Print stuff out for debugging:
+	    #print("Fastener:nut_ledge:close_fit={0:m} d_edge={1}".
+	    #  format(close_fit, d_edge))
+	    #print("Fastener:nut_ledge:start={0} end={1}".format(start, end))
+	    #print("Fastener.nut_ledge:screw_axis={0} surf_norm={1} edge={2}".
+	    #  format(screw_axis, surface_normal, edge_axis))
+	    #print("Fastener:nut_ledge:p1={0} p2={1}".format(p1, p2))
+	    #print("Fastener:nut_ledge:x={0} y={1} z={2}".format(x, y, z))
+	    #print("Fastener:nut_ledge:dx={0} dy={1} dz={2}".format(dx, dy, dz))
+
+	    # Output the OpenSCAD command to *difference_lines*:
+	    difference_lines = part._scad_difference_lines
+	    difference_lines.append(
+	      "    // '{0}' nut Ledge screw remove".format(self.comment_s))
+	    difference_lines.append(
+	      "    translate([{0:m}, {1:m}, {2:m}])".format(x, y, z))
+	    difference_lines.append(
+	      "      cube([{0:m}, {1:m}, {2:m}], center=true);".
+	      format(dx, dy, dz))
+
+	    # Generate the hex cut out block:
+	    # Compute the distances along the screw.
+	    screw1 = nut_height.millimeters() / 2
+	    screw2 = screw1 + nut_height.millimeters()
+	    edge1 = (hex_nut_edge_width / 2).millimeters()
+	    edge2 = -edge1
+	    surface1 = (major_diameter * 2).millimeters()
+	    surface2 = -surface1
+
+	    # Compute the two cube corners *p1* and *p2*.
+	    p1 = end + \
+    	      screw_axis * screw1 - \
+	      edge_axis * edge1 - \
+	      surface_normal * surface1
+	    p2 = end + \
+    	      screw_axis * screw2 - \
+	      edge_axis * edge2 - \
+	      surface_normal * surface2
+
+	    # Compute translate for cube center (*x*, *y*, *z*):
+	    x = (p1.x + p2.x) / 2
+	    y = (p1.y + p2.y) / 2
+	    z = (p1.z + p2.z) / 2
+
+	    # Compute dimensions of cube (*dx*, *dy*, *dz*):
+	    dx = (p2.x - p1.x).absolute()
+	    dy = (p2.y - p1.y).absolute()
+	    dz = (p2.z - p1.z).absolute()
+
+	    # Output the nut removal:
+	    difference_lines.append(
+	      "    // '{0}' Nut Ledge nut remove:".format(self.comment_s))
+	    difference_lines.append(
+	      "    translate([{0:m}, {1:m}, {2:m}])".format(x, y, z))
+	    difference_lines.append(
+	      "      cube([{0:m}, {1:m}, {2:m}], center=true);".
+	      format(dx, dy, dz))
+	    difference_lines.append("")
+	
+
     def drill(self, part = None, select = None, trace = -1000000):
 	""" *Fastener*: """
 
@@ -6193,7 +6368,7 @@ class Fastener(Part):
 		assert False, "select='{0}', not 'thread', 'close' or 'free'".\
 		  format(select)
 
-	    part.hole(comment = self.comment_s,
+	    part.hole(comment = "'{0} Drill'".format(self.comment_s),
 	      diameter = diameter,
 	      start = start,
 	      end = end,
