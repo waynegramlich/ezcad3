@@ -44,7 +44,7 @@ class L:
 	       isinstance(inch, str)
 	assert isinstance(ft, float) or isinstance(ft, int)
 
-	# Deal with *inch* argument when it is a string:	
+	# Deal with *inch* argument when it is a string:
 	if isinstance(inch, str):
 	    # We have a string, parse it:
             whole_fraction = inch.split("-")
@@ -2883,6 +2883,7 @@ class Part:
 			    dxf_scad_file.write("\n")
 			dxf_scad_file.write("{0}();\n".format(name))
 			dxf_scad_file.close()
+			self._dxf_scad_lines = []
 
 		    command = [ "openscad" , "-o", "{0}.dxf".format(name),
 		      "{0}_Dxf.scad".format(name) ]

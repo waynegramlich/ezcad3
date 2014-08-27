@@ -46,6 +46,7 @@ from EZCAD3 import *
 
 class Base(Part):
     def __init__(self, up):
+	""" *Base*: initialize. """
 	Part.__init__(self, up)
 	self.dx_l = L(cm=25)
 	self.dy_l = L(cm=25)
@@ -53,6 +54,7 @@ class Base(Part):
 	self.dz_l = L(mm=5.0)
 
     def configure(self, dx = None, dy = None, z0 = None, dz = None):
+	""" *Base*: configure. """
 	# Check argument types:
 	none_type = type(None)
 	assert type(dx) == none_type or isinstance(dx, L)
@@ -70,16 +72,20 @@ class Base(Part):
 	    self.dz_l = dz
 
     def construct(self):
+	""" *Base*: consturct. """
 	dx = self.dx_l
 	dy = self.dy_l
 	dz = self.dz_l
-	z0 = self.z0_l
 
 	x0 = -(dx / 2.0)
 	x1 =   dx / 2.0
+
 	y0 = -(dy / 2.0)
 	y1 =   dy / 2.0
-	z1 = z0 + dz
+
+	z0 = self.z0_l
+	z1 = z0 + dz / 2
+	z2 = z1 + dz / 2
 
 	#print("Base.construct(): x0={0} x1={1} y0={2} y1={3}". \
 	#  format(x0, x1, y0, y1))
@@ -136,6 +142,8 @@ class Base(Part):
 	  inner_contours = inner_contours,
 	  start = P(z, z, z0),
 	  end = P(z, z, z0 + dz))
+
+	self.dxf_write(center = P(0, 0, z1))
 
 class Dual_Slot_Encoder(Part):
     def __init__(self, up):
@@ -276,7 +284,8 @@ class Encoder_Disk(Part):
 	y_center = self.y_center_l
 
 	y0 = y_center - dy/2
-	y1 = y_center + dy/2
+	y1 = y_center
+	y2 = y_center + dy/2
 
 	zero = L()
 	two_pi = Angle.TWO_PI
@@ -337,21 +346,25 @@ class Encoder_Disk(Part):
 	  outer_contour = outer_contour,
 	  inner_contours = slot_contours,
 	  start = P(0, y0, 0),
-	  end   = P(0, y1, 0))
+	  end   = P(0, y2, 0))
 
 	self.hole(comment = "Screw_Hole",
-	  diameter = L(mm=10),
-	  start = P(0, y1, 0),
+	  diameter = L(mm=3),
+	  start = P(0, y2, 0),
 	  end =   P(0, y0, 0),
 	  flags = "t")
+
+	self.dxf_write(center = P(0, y1, 0), plane_normal = P(0, L(mm=1), 0))
 
 class Encoder_Mount(Part):
     def __init__(self, up):
 	""" Encoder_Mount: initialize """
+	self.thick_l = up.thick_l
+	self.thin_l = up.thin_l
 	Part.__init__(self, up)
 	self.dx_l = L(mm=60)
 	self.dy_l = L(mm=35)
-	self.dz_l = L(mm=5)
+	self.dz_l = self.thick_l
 	self.tongue_dx_l = L(mm=50)
 	self.y_center_l = L()
 	self.z_center_l = L()
@@ -388,6 +401,8 @@ class Encoder_Mount(Part):
 	tongue_dx = self.tongue_dx_l
 	y_center = self.y_center_l
 	z_center = self.z_center_l
+	thick = self.thick_l
+	thin = self.thin_l
 
 	# Go get some related *Part*'s:
 	motor_assembly = self.up
@@ -402,14 +417,14 @@ class Encoder_Mount(Part):
 	holes_pitch_dy = dual_slot_encoder_pcb.holes_pitch_dy_l
 
 	# Compute some X locations in ascending order:
-	x0 = -dx/2
-	x1 = -tongue_dx/2
+	x0 = -dx/2			# West mount edge
+	x1 = -tongue_dx/2		# West tongue edge
 	x2 = -pcb_dx/2 + L(mm=2.5)
 	x3 = -pcb_dx/2 + L(mm=10)
 	x4 =  pcb_dx/2 - L(mm=10)
 	x5 =  pcb_dx/2 - L(mm=2.5)
-	x6 =  tongue_dx/2
-	x7 =  dx/2
+	x6 =  tongue_dx/2		# East tongue edge
+	x7 =  dx/2			# East mount edge
 
 	# Compute some Y locations in ascending order:
 	y0 = y_center - dy/2
@@ -422,8 +437,8 @@ class Encoder_Mount(Part):
 	y7 = y_center + dy/2
 
 	# Compute some Z locations in ascending order:
-	z0 = z_center - dz/2
-	z1 = z_center + dz/2
+	z0 = z_center - dz/2		# Bottom surface
+	z1 = z_center + dz/2		# Top surface
 
 	# Compute the outer contour:
 	zero = L()
@@ -617,6 +632,8 @@ class GM3_Wheel(Part):
 class Front_Back_Motor_Side(Part):
     def __init__(self, up):
 	""" *Front_Back_Motor_Side*: initialize. """
+	self.thick_l = up.thick_l
+	self.thin_l = up.thin_l
 	Part.__init__(self, up)
 	self.dx_l = L(mm=5)
 	self.dy_l = L(mm=50)
@@ -734,10 +751,12 @@ class Front_Back_Motor_Side(Part):
 
 class Inner_Outer_Motor_Side(Part):
     def __init__(self, up):
+	self.thick_l = up.thick_l
+	self.thin_l = up.thin_l
 	Part.__init__(self, up)
 	self.bottom_z_l =          L(mm=-5)
 	self.dx_l =                L(mm=80)
-	self.dy_l =                L(mm=3)
+	self.dy_l =                self.thin_l
 	self.encoder_tongue_dz_l = L(mm=10)
 	self.top_z_l =             L(mm=10)
 	self.y_center_l =          L(mm=0)
@@ -930,6 +949,8 @@ class Inner_Outer_Motor_Side(Part):
 class Right_Motor_Assembly(Part):
     def __init__(self, up):
 	""" Right_Motor_Assembly: initialize """
+	self.thin_l = up.thin_l
+	self.thick_l = up.thick_l
 	Part.__init__(self, up)
 	self.back_motor_side_ = Front_Back_Motor_Side(self)
 	self.back_screw_ = Fastener(self)
@@ -952,6 +973,10 @@ class Right_Motor_Assembly(Part):
 	self.outer_tw_screw_ = Fastener(self)
 	self.top_back_screw_ = Fastener(self)
 	self.top_front_screw_ = Fastener(self)
+	self.encoder_se_screw_ = Fastener(self)
+	self.encoder_sw_screw_ = Fastener(self)
+	self.encoder_ne_screw_ = Fastener(self)
+	self.encoder_nw_screw_ = Fastener(self)
 	
     def construct(self):
 	""" Right_Motor_Assembly: construct """
@@ -980,22 +1005,31 @@ class Right_Motor_Assembly(Part):
 	slot_interrupter1 = dual_slot_encoder.slot_interrupter1_
 	top_back_screw = self.top_back_screw_
 	top_front_screw = self.top_front_screw_
+	thick = self.thick_l
+	thin = self.thin_l
+	encoder_se_screw = self.encoder_se_screw_
+	encoder_sw_screw = self.encoder_sw_screw_
+	encoder_ne_screw = self.encoder_ne_screw_
+	encoder_nw_screw = self.encoder_nw_screw_
 
 	# Compute interesting X locations in ascending order:
 	zero = L()
 	dx = L(mm=90)
-	x0 = -dx/2		# West edge of motor assembly
-	x1 = x0 + L(mm=3)	# West edge of back motor side
-	x2 = x1 + L(mm=2.5)	# Center of back motor side
-	x3 = x2 + L(mm=2.5)	# East edge of back motor side
-	x4 = x3 + L(mm=5)	# West tongue edge
-	x5 = x4 + L(mm=2)	# End of screw mounts
-	x11 = dx/2		# East edge of motor assembly
-	x10 = x11 - L(mm=3)	# East edge of front motor side
-	x9 = x10 - L(mm=2.5)	# Center of front motor side
-	x8 = x9 - L(mm=2.5)	# West edge of front motor side
-	x7 = x8 - L(mm=5)	# East tongue edge
-	x6 = x7 - L(mm=3)	# End of screw mounts
+	x0 = -dx/2			# West edge of motor assembly
+	x1 = x0 + L(mm=3)		# West edge of back motor side
+	x2 = x1 + thick/2		# Center of back motor side
+	x3 = x2 + thick/2		# East edge of back motor side
+	x4 = x3 + L(mm=5)		# West tongue edge
+	x5 = x4 + L(mm=2)		# End of screw mounts
+	x6 = -dual_slot_encoder_pcb.dx/2 # West end of encoder pcb
+	x7 = zero			# Center
+        x8 = dual_slot_encoder_pcb.dx/2	# East end of encoder pcb
+	x14 = dx/2			# East edge of motor assembly
+	x13 = x14 - L(mm=3)		# East edge of front motor side
+	x12 = x13 - thick/2		# Center of front motor side
+	x11 = x12 - thick/2		# West edge of front motor side
+	x10 = x11 - L(mm=5)		# East tongue edge
+	x9 = x10 - L(mm=3)		# End of screw mounts
 
 	# Compute interesting Y locations in ascending order:
 	one = L(mm=1)
@@ -1003,23 +1037,24 @@ class Right_Motor_Assembly(Part):
 	y1 = y0 + gm3_motor.wheel_shaft_dy_l + gm3_motor.dy_l/2 # Motor center
 	y2 = y1 + gm3_motor.dy_l/2                      # Disk side Motor edge
 	#y3 = y2 + outer_motor_side.dy/2 - L(mm=1.5)	# South inner side
-	y4 = y2 + L(mm=1.5)				# Inner side center
-	y5 = y4 + L(mm=1.5)				# North inner side
-	y6 = y5 + L(mm=7)				# End of mount screws
-	y7 = y2 + gm3_motor.encoder_shaft_dy_l		# Encoder shaft edge
-	y8 = y7 + encoder_disk.dy_l/2			# Encoder disk center
-	y9 = y8 + dual_slot_encoder.disk_offset_dy_l	# PCB center
-	y10 = y4 + L(mm=15)				# Center of assembly
-	y11 = y9 + dual_slot_encoder_pcb.dx/2		# West PCB edge
-	y12 = y10 + L(mm=15) - L(mm=10)			# End mount screws
-	y13 = y12 + L(mm=7)				# South outer side
-	y14 = y13 + L(mm=1.5)				# Outer side center
-	y15 = y14 + L(mm=1.5)				# North outer side
+	y4 = y2 + thin/2				# Inner side center
+	y5 = y4 + thin/2				# North inner side
+	y7 = y5 + L(mm=7)				# End of mount screws
+	y8 = y2 + gm3_motor.encoder_shaft_dy_l		# Encoder shaft edge
+	y9 = y8 + encoder_disk.dy_l/2			# Encoder disk center
+	y10 = y9 + dual_slot_encoder.disk_offset_dy_l	# PCB center
+	y6 = y10 - dual_slot_encoder_pcb.dy/2		# East PCB edge
+	y11 = y4 + L(mm=15)				# Center of assembly
+	y12 = y10 + dual_slot_encoder_pcb.dy/2		# West PCB edge
+	y13 = y11 + L(mm=15) - L(mm=10)			# End mount screws
+	y14 = y13 + L(mm=7)				# South outer side
+	y15 = y14 + thin/2				# Outer side center
+	y16 = y15 + thin/2				# North outer side
 
-	print("TLA:y0={0} y1={1} y2={2} y4={3} y5={4} y6={5} y7={6} y8={7}".
-	  format(y0, y1, y2, y4, y5, y6, y7, y8))
-	print("TLA:y9={0} y10={1} y11={2} y12={3} y13={4} y14={5} y15={6}".
-	  format(y9, y10, y11, y12, y13, y14, y15))
+	#print("TLA:y0={0} y1={1} y2={2} y4={3} y5={4} y7={5} y8={6} y9={7}".
+	#  format(y0, y1, y2, y4, y5, y7, y8, y9))
+	#print("TLA:y10={0} y11={1} y12={2} y13={3} y14={4} y15={5} y16={6}".
+	#  format(y10, y11, y12, y13, y14, y15, y16))
 	
 	# Compute interesting Z locations in acending order:
 	slot_dz = slot_interrupter1.dz_l.absolute()
@@ -1033,53 +1068,54 @@ class Right_Motor_Assembly(Part):
 	z5 = z4 + slot_base_dz				# PCB bottom
 	z6 = z5 + dual_slot_encoder_pcb.dz_l/2		# PCB middle
 	z7 = z6 + encoder_mount.dz_l/2			# Encoder mount center
-	z8 = z4 + L(mm=15)				# Top tongue edge
-	z9 = z8 + L(mm=3)				# End of screw mount
-	z10 = z9 + L(mm=7)				# Top edge of assembly
-	z11 = z10 + L(mm=5)				# Top of mount base
+	z8 = z7 + encoder_mount.dz_l/2			# Encoder mount top
+	z9 = z4 + L(mm=15)				# Top tongue edge
+	z10 = z9 + L(mm=3)				# End of screw mount
+	z11 = z10 + L(mm=7)				# Top edge of assembly
+	z12 = z11 + L(mm=5)				# Top of mount base
 
 	# Configure the various *Part*'s:
 	gm3_motor.configure(y_center = y1)
 	inner_motor_side.configure(dx = dx,
-	  side_tongue_dx = x3 - x1, back_center_x = x2, front_center_x = x9,
-	  y_center = y4, bottom_z = z0, top_z = z10,
-	  side_tongue_bottom_z = z1, side_tongue_top_z = z8)
+	  side_tongue_dx = x3 - x1, back_center_x = x2, front_center_x = x12,
+	  y_center = y4, bottom_z = z0, top_z = z11,
+	  side_tongue_bottom_z = z1, side_tongue_top_z = z9)
 	outer_motor_side.configure(dx = dx,
-	  side_tongue_dx = x3 - x1, back_center_x = x2, front_center_x = x9,
-	  y_center = y14, bottom_z = z0, top_z = z10,
-	  side_tongue_bottom_z = z1, side_tongue_top_z = z8)
-	#print("RMA:z1={0} z8={1}".format(z1, z8))
-	encoder_disk.configure(y_center = y8)
-	dual_slot_encoder.configure(y_center = y9, z_center = z5)
+	  side_tongue_dx = x3 - x1, back_center_x = x2, front_center_x = x12,
+	  y_center = y15, bottom_z = z0, top_z = z11,
+	  side_tongue_bottom_z = z1, side_tongue_top_z = z9)
+	#print("RMA:z1={0} z9={1}".format(z1, z9))
+	encoder_disk.configure(y_center = y9)
+	dual_slot_encoder.configure(y_center = y10, z_center = z5)
 
-	#print("RMA:x0={0} x8={1} x10={2} x11={3}".format(x0, x8, x10, x11))
-	#print("RMA:z0={0} z10={1}".format(z0, z10))
+	#print("RMA:x0={0} x11={1} x13={2} x14={3}".format(x0, x11, x13, x14))
+	#print("RMA:z0={0} z11={1}".format(z0, z11))
 	back_motor_side.configure(dx = x3 - x1, x_center = (x1 + x3)/2,
-	  dy = y15 - y2, inside_dy = y13 - y5, y_center = (y15 + y2)/2,
-	  dz = z10 - z0, z_tongue_bottom = z1, z_tongue_top = z8,
-	  z_center = (z0 + z10)/2)
-	front_motor_side.configure(dx = x10 - x8, x_center = (x10 + x8)/2,
-	  dy = y15 - y2, inside_dy = y13 - y5, y_center = (y15 + y2)/2,
-	  dz = z10 - z0, z_tongue_bottom = z1, z_tongue_top = z8,
-	  z_center = (z0 + z10)/2)
+	  dy = y16 - y2, inside_dy = y14 - y5, y_center = (y16 + y2)/2,
+	  dz = z11 - z0, z_tongue_bottom = z1, z_tongue_top = z9,
+	  z_center = (z0 + z11)/2)
+	front_motor_side.configure(dx = x13 - x11, x_center = (x13 + x11)/2,
+	  dy = y16 - y2, inside_dy = y14 - y5, y_center = (y16 + y2)/2,
+	  dz = z11 - z0, z_tongue_bottom = z1, z_tongue_top = z9,
+	  z_center = (z0 + z11)/2)
 
 	inner_outer_dx = inner_motor_side.dx_l
-	inner_outer_pitch_dy = y14 - y4
+	inner_outer_pitch_dy = y15 - y4
 	inner_outer_dy = inner_motor_side.dy_l/2 + \
 	  inner_outer_pitch_dy +  outer_motor_side.dy_l/2
-	inner_outer_center_y = (y4 + y14)/2
-	encoder_mount.configure(dx = x8 - x3, tongue_dx = x7 - x4,
+	inner_outer_center_y = (y4 + y15)/2
+	encoder_mount.configure(dx = x11 - x3, tongue_dx = x10 - x4,
 	  dy = inner_outer_dy, y_center = inner_outer_center_y,
 	  z_center = z7)
 
 	# Configure the *inner_motor_side* fasteners:
 	screw_flags = "M3x.05"
-	#screw_flags = "4-40"
+	screw_flags = "#4-40"
 	inner_be_screw.configure(comment = "Inner BE Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x9, y2, z0 + L(mm=5)),
-	  end = P(x9, y6, z0 + L(mm=5)),
+	  start = P(x12, y2, z0 + L(mm=5)),
+	  end = P(x12, y7, z0 + L(mm=5)),
 	  flags = screw_flags)
 	#print("RMA:y2={0} y5={1}".format(y2, y5))
 	inner_be_screw.drill(part = inner_motor_side, select = "close")
@@ -1089,7 +1125,7 @@ class Right_Motor_Assembly(Part):
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
 	  start = P(x2, y2, z0 + L(mm=5)),
-	  end = P(x2, y6, z0 + L(mm=5)),
+	  end = P(x2, y7, z0 + L(mm=5)),
 	  flags = screw_flags)
 	inner_bw_screw.drill(part = inner_motor_side, select = "close")
 	inner_bw_screw.nut_ledge(part = back_motor_side, flags="W")
@@ -1097,8 +1133,8 @@ class Right_Motor_Assembly(Part):
 	inner_te_screw.configure(comment = "Inner TE Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x9, y2, z10 - L(mm=5)),
-	  end = P(x9, y6, z10 - L(mm=5)),
+	  start = P(x12, y2, z11 - L(mm=5)),
+	  end = P(x12, y7, z11 - L(mm=5)),
 	  flags = screw_flags)
 	inner_te_screw.drill(part = inner_motor_side, select = "close")
 	inner_te_screw.nut_ledge(part = front_motor_side, flags="E")
@@ -1106,8 +1142,8 @@ class Right_Motor_Assembly(Part):
 	inner_tw_screw.configure(comment = "Inner TW Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x2, y2, z10 - L(mm=5)),
-	  end = P(x2, y6, z10 - L(mm=5)),
+	  start = P(x2, y2, z11 - L(mm=5)),
+	  end = P(x2, y7, z11 - L(mm=5)),
 	  flags = screw_flags)
 	inner_tw_screw.drill(part = inner_motor_side, select = "close")
 	inner_tw_screw.nut_ledge(part = back_motor_side, flags="W")
@@ -1116,8 +1152,8 @@ class Right_Motor_Assembly(Part):
 	outer_be_screw.configure(comment = "Outer BE Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x9, y15, z0 + L(mm=5)),
-	  end = P(x9, y12, z0 + L(mm=5)),
+	  start = P(x12, y16, z0 + L(mm=5)),
+	  end = P(x12, y13, z0 + L(mm=5)),
 	  flags = screw_flags)
 	outer_be_screw.drill(part = outer_motor_side, select = "close")
 	outer_be_screw.nut_ledge(part = front_motor_side, flags="E")
@@ -1125,8 +1161,8 @@ class Right_Motor_Assembly(Part):
 	outer_bw_screw.configure(comment = "Outer BW Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x2, y15, z0 + L(mm=5)),
-	  end = P(x2, y12, z0 + L(mm=5)),
+	  start = P(x2, y16, z0 + L(mm=5)),
+	  end = P(x2, y13, z0 + L(mm=5)),
 	  flags = screw_flags)
 	outer_bw_screw.drill(part = outer_motor_side, select = "close")
 	outer_bw_screw.nut_ledge(part = back_motor_side, flags="W")
@@ -1134,8 +1170,8 @@ class Right_Motor_Assembly(Part):
 	outer_te_screw.configure(comment = "Outer TE Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x9, y15, z10 - L(mm=5)),
-	  end = P(x9, y12, z10 - L(mm=5)),
+	  start = P(x12, y16, z11 - L(mm=5)),
+	  end = P(x12, y13, z11 - L(mm=5)),
 	  flags = screw_flags)
 	outer_te_screw.drill(part = outer_motor_side, select = "close")
 	outer_te_screw.nut_ledge(part = front_motor_side, flags="E")
@@ -1143,8 +1179,8 @@ class Right_Motor_Assembly(Part):
 	outer_tw_screw.configure(comment = "Outer TW Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x2, y15, z10 - L(mm=5)),
-	  end = P(x2, y12, z10 - L(mm=5)),
+	  start = P(x2, y16, z11 - L(mm=5)),
+	  end = P(x2, y13, z11 - L(mm=5)),
 	  flags = screw_flags)
 	outer_tw_screw.drill(part = outer_motor_side, select = "close")
 	outer_tw_screw.nut_ledge(part = back_motor_side, flags="W")
@@ -1153,8 +1189,8 @@ class Right_Motor_Assembly(Part):
 	back_screw.configure(comment = "Back Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x1, y10, z7),
-	  end = P(x5, y10, z7),
+	  start = P(x1, y11, z7),
+	  end = P(x5, y11, z7),
 	  flags = screw_flags)
 	back_screw.drill(part = back_motor_side, select = "close")
 	back_screw.nut_ledge(part = encoder_mount, flags="T")
@@ -1162,8 +1198,8 @@ class Right_Motor_Assembly(Part):
 	front_screw.configure(comment = "Front Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x10, y10, z7),
-	  end = P(x6, y10, z7),
+	  start = P(x13, y11, z7),
+	  end = P(x9, y11, z7),
 	  flags = screw_flags)
 	front_screw.drill(part = front_motor_side, select = "close")
 	front_screw.nut_ledge(part = encoder_mount, flags="T")
@@ -1172,38 +1208,70 @@ class Right_Motor_Assembly(Part):
 	top_back_screw.configure(comment = "Top Back Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x2, y10, z11),
-	  end = P(x2, y10, z9),
+	  start = P(x2, y11, z12),
+	  end = P(x2, y11, z10),
 	  flags = screw_flags)
 	top_back_screw.nut_ledge(part = back_motor_side, flags="W")
 
 	top_front_screw.configure(comment = "Top Front Screw",
 	  material = Material("Steel", "x"),
 	  color = Color("black"),
-	  start = P(x9, y10, z11),
-	  end = P(x9, y10, z9),
+	  start = P(x12, y11, z12),
+	  end = P(x12, y11, z10),
 	  flags = screw_flags)
 	top_front_screw.nut_ledge(part = front_motor_side, flags="E")
+
+	encoder_se_screw.configure(comment = "Encoder SE Screw",
+	  material = Material("Steel", "x"),
+	  color = Color("black"),
+	  start = P(x8 - L(mm=5), y6 + L(mm=5), z8),
+	  end =   P(x8 - L(mm=5), y6 + L(mm=5), z5),
+	  flags = screw_flags)
+	encoder_se_screw.drill(part = encoder_mount, select = "close")
+
+	encoder_sw_screw.configure(comment = "Encoder SW Screw",
+	  material = Material("Steel", "x"),
+	  color = Color("black"),
+	  start = P(x6 + L(mm=5), y6 + L(mm=5), z8),
+	  end =   P(x6 + L(mm=5), y6 + L(mm=5), z5),
+	  flags = screw_flags)
+	encoder_sw_screw.drill(part = encoder_mount, select = "close")
+
+	encoder_ne_screw.configure(comment = "Encoder NE Screw",
+	  material = Material("Steel", "x"),
+	  color = Color("black"),
+	  start = P(x8 - L(mm=5), y12 - L(mm=5), z8),
+	  end =   P(x8 - L(mm=5), y12 - L(mm=5), z5),
+	  flags = screw_flags)
+	encoder_ne_screw.drill(part = encoder_mount, select = "close")
+
+	encoder_nw_screw.configure(comment = "Encoder NW Screw",
+	  material = Material("Steel", "x"),
+	  color = Color("black"),
+	  start = P(x6 + L(mm=5), y12 - L(mm=5), z8),
+	  end =   P(x6 + L(mm=5), y12 - L(mm=5), z5),
+	  flags = screw_flags)
+	encoder_nw_screw.drill(part = encoder_mount, select = "close")
 
 	# Deal with visibility here:
 	#gm3_wheel.invisible_set()
 	#encoder_mount.invisible_set()
-	#outer_motor_side.invisible_set()
+	outer_motor_side.invisible_set()
 	#inner_motor_side.invisible_set()
 	#back_motor_side.invisible_set()
-	#front_motor_side.invisible_set()
+	front_motor_side.invisible_set()
 
-	# Deal with visibility here:
-	encoder_mount.dxf_write(center = P(0, y10, z7))
+	# Deal .dxf files here:
+	encoder_mount.dxf_write(center = P(0, y11, z7))
 	inner_motor_side.dxf_write(
 	  center = P(0, y4, z7), plane_normal = P(0, L(mm=1), 0))
 	front_motor_side.dxf_write(
-	  center = P(x9, y10, z7), plane_normal = P(L(mm=1), 0, 0))
-	#inner_motor_side.invisible_set()
-	#front_motor_side.invisible_set()
+	  center = P(x12, y11, z7), plane_normal = P(L(mm=1), 0, 0))
 
 class ROSBot(Part):
     def __init__(self, up):
+	self.thick_l = L(mm=5)
+	self.thin_l = L(mm=3)
 	Part.__init__(self, up)
 	self.base_ = base = Base(self)
 	self.right_motor_assembly_ = Right_Motor_Assembly(self)
