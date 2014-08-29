@@ -420,8 +420,8 @@ class Encoder_Mount(Part):
 	x0 = -dx/2			# West mount edge
 	x1 = -tongue_dx/2		# West tongue edge
 	x2 = -pcb_dx/2 + L(mm=2.5)
-	x3 = -pcb_dx/2 + L(mm=10)
-	x4 =  pcb_dx/2 - L(mm=10)
+	x3 = -pcb_dx/2 + L(mm=8.5)
+	x4 =  pcb_dx/2 - L(mm=8.5)
 	x5 =  pcb_dx/2 - L(mm=2.5)
 	x6 =  tongue_dx/2		# East tongue edge
 	x7 =  dx/2			# East mount edge
@@ -430,8 +430,8 @@ class Encoder_Mount(Part):
 	y0 = y_center - dy/2
 	y1 = y_center - dy/2 + L(mm=3)
 	y2 = pcb_y_center - pcb_dy/2 + L(mm=2.5)
-	y3 = pcb_y_center - pcb_dy/2 + L(mm=10)
-	y4 = pcb_y_center + pcb_dy/2 - L(mm=10)
+	y3 = pcb_y_center - pcb_dy/2 + L(mm=8.5)
+	y4 = pcb_y_center + pcb_dy/2 - L(mm=8.5)
 	y5 = pcb_y_center + pcb_dy/2 - L(mm=2.5)
 	y6 = y_center + dy/2 - L(mm=3)
 	y7 = y_center + dy/2
@@ -465,22 +465,23 @@ class Encoder_Mount(Part):
 
 	# Compute the PCB cut out inner contour:
 	pcb_cutout = Contour()
+	curve_radius = L(mm=0.5)
 	# Corner (x2, y2):
-	pcb_cutout.bend_append(P(x3, y2, z0), zero)
-	pcb_cutout.bend_append(P(x3, y3, z0), zero)
-	pcb_cutout.bend_append(P(x2, y3, z0), zero)
+	pcb_cutout.bend_append(P(x3, y2, z0), curve_radius)
+	pcb_cutout.bend_append(P(x3, y3, z0), curve_radius)
+	pcb_cutout.bend_append(P(x2, y3, z0), curve_radius)
 	# Corner (x2, y3):
-	pcb_cutout.bend_append(P(x2, y4, z0), zero)
-	pcb_cutout.bend_append(P(x3, y4, z0), zero)
-	pcb_cutout.bend_append(P(x3, y5, z0), zero)
+	pcb_cutout.bend_append(P(x2, y4, z0), curve_radius)
+	pcb_cutout.bend_append(P(x3, y4, z0), curve_radius)
+	pcb_cutout.bend_append(P(x3, y5, z0), curve_radius)
 	# Corner (x3, y3):
-	pcb_cutout.bend_append(P(x4, y5, z0), zero)
-	pcb_cutout.bend_append(P(x4, y4, z0), zero)
-	pcb_cutout.bend_append(P(x5, y4, z0), zero)
+	pcb_cutout.bend_append(P(x4, y5, z0), curve_radius)
+	pcb_cutout.bend_append(P(x4, y4, z0), curve_radius)
+	pcb_cutout.bend_append(P(x5, y4, z0), curve_radius)
 	# Corner (x3, y2):
-	pcb_cutout.bend_append(P(x5, y3, z0), zero)
-	pcb_cutout.bend_append(P(x4, y3, z0), zero)
-	pcb_cutout.bend_append(P(x4, y2, z0), zero)
+	pcb_cutout.bend_append(P(x5, y3, z0), curve_radius)
+	pcb_cutout.bend_append(P(x4, y3, z0), curve_radius)
+	pcb_cutout.bend_append(P(x4, y2, z0), curve_radius)
 
 	# Do the extrusion:
 	self.extrude(comment = "PCB Mount Block",
@@ -531,6 +532,8 @@ class GM3_Motor(Part):
 	self.front_tip_dx_l =  front_tip_dx =  back_dx + dx
 	self.front_hole_dx_l = front_hole_dx = front_dx + L(mm=2.62)
 	self.pin_dx_l =        pin_dx =        front_dx - L(mm=22.23)
+	self.strap_hole_dx_l = strap_hole_dx =  -L(mm=30.00)
+	self.strap_pocket_dx_l = strap_pocket_dx = L(mm=4.00)
 
 	# Y dimensions:
 	self.wheel_shaft_dy_l =   wheel_shaft_dy =   L(mm=9.20)
@@ -542,6 +545,7 @@ class GM3_Motor(Part):
 	# Z dimensions:
 	self.dz_l =                  dz =                  L(mm=22.23)
 	self.back_holes_pitch_dz_l = back_holes_pitch_dz = L(mm=17.44)
+	self.strap_pocket_dz_l = strap_pocket_dz =         L(mm=8.00)
 
 	# Various Y position is ascending values:
 	y0 = y_center - dy/2 - wheel_shaft_dy	# Wheel shaft edge
@@ -932,9 +936,14 @@ class Inner_Outer_Motor_Side(Part):
 	  flags = "t")
 
 	# Do the motor mount holes:
+	pin_diameter = gm3_motor.pin_diameter_l
+	pin_dx = gm3_motor.pin_dx_l
 	back_holes_diameter = gm3_motor.back_holes_diameter_l + L(mm=1)
 	back_holes_dx = gm3_motor.back_holes_dx_l
 	back_holes_pitch_dz = gm3_motor.back_holes_pitch_dz_l
+	strap_pocket_dx = gm3_motor.strap_pocket_dx_l
+	strap_pocket_dz = gm3_motor.strap_pocket_dz_l
+	strap_hole_dx = gm3_motor.strap_hole_dx_l
 	self.hole(comment = "Mount Hole 1",
 	  diameter = back_holes_diameter,
 	  start = P(back_holes_dx, y1,  back_holes_pitch_dz/2),
@@ -945,6 +954,22 @@ class Inner_Outer_Motor_Side(Part):
 	  start = P(back_holes_dx, y1, -back_holes_pitch_dz/2),
 	  end =   P(back_holes_dx, y0, -back_holes_pitch_dz/2),
 	  flags = "t")
+	self.hole(comment = "Alignment Pin",
+          diameter = pin_diameter,
+	  start = P(pin_dx, y1, 0),
+	  end =   P(pin_dx, y0, 0),
+	  flags = "t")
+	self.simple_pocket(comment = "Strap Hole Pocket",
+	  bottom_corner =
+	  P(strap_hole_dx - strap_pocket_dx/2, y0, -strap_pocket_dz/2),
+	  top_corner =
+	  P(strap_hole_dx + strap_pocket_dx/2, y1, strap_pocket_dx/2),
+	  pocket_top = "w")
+	#self.hole(comment = "Strap Hole",
+	#  diameter = strap_hole_diameter,
+	#  start = P(strap_hole_dx, y1, 0),
+	#  end = P(strap_hole_dx, y0, 0),
+	#  flags = "t")
 
 class Right_Motor_Assembly(Part):
     def __init__(self, up):
@@ -1256,7 +1281,7 @@ class Right_Motor_Assembly(Part):
 	# Deal with visibility here:
 	#gm3_wheel.invisible_set()
 	#encoder_mount.invisible_set()
-	outer_motor_side.invisible_set()
+	#outer_motor_side.invisible_set()
 	#inner_motor_side.invisible_set()
 	#back_motor_side.invisible_set()
 	front_motor_side.invisible_set()

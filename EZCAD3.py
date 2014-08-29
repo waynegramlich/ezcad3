@@ -6234,8 +6234,8 @@ class Fastener(Part):
 	    # Grab some values from *self*:
 	    start = self.start_p
 	    end = self.end_p
-	    nut_height = self.nut_height_l
-	    hex_nut_edge_width = self.hex_nut_edge_width_l
+	    nut_height = self.nut_height_l - L(mm=0.38)
+	    hex_nut_edge_width = self.hex_nut_edge_width_l - L(mm=0.28)
 	    hex_nut_tip_width = self.hex_nut_tip_width_l
 	    close_fit = self.close_fit_l
 	    major_diameter = self.major_diameter_l
