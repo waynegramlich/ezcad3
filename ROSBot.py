@@ -435,8 +435,8 @@ class Encoder_Mount(Part):
 	y5 = pcb_y_center + pcb_dy/2 - L(mm=2.5)
 	y6 = y_center + dy/2 - L(mm=3)
 	y7 = y_center + dy/2
-	print("Encoder_Mount:construct: y0={0} y_center={1} y7={2} dy={3}".
-	  format(y0, y_center, y7, dy))
+	#print("Encoder_Mount:construct: y0={0} y_center={1} y7={2} dy={3}".
+	#  format(y0, y_center, y7, dy))
 
 	# Compute some Z locations in ascending order:
 	z0 = z_center - dz/2		# Bottom surface
@@ -858,8 +858,8 @@ class Inner_Outer_Motor_Side(Part):
 
 	y0 = y_center - dy / 2
 	y1 = y_center + dy / 2
-	print("IOMS:y0={0} y_center={1} y1={2} dy={3}".
-	  format(y0, y_center, y1, dy))
+	#print("IOMS:y0={0} y_center={1} y1={2} dy={3}".
+	#  format(y0, y_center, y1, dy))
 
 	encoder_mount_z_center = encoder_mount.z_center_l
 	encoder_mount_dz = encoder_mount.dz_l
@@ -1043,7 +1043,7 @@ class Right_Motor_Assembly(Part):
 
 	# Compute interesting X locations in ascending order:
 	zero = L()
-	dx = L(mm=130)
+	dx = L(inch=5) + thick		# 5 inches between centers plus 
 	x0 = -dx/2			# West edge of motor assembly
 	x1 = x0 + L(mm=3)		# West edge of back motor side
 	x2 = x1 + thick/2		# Center of back motor side
@@ -1083,11 +1083,11 @@ class Right_Motor_Assembly(Part):
 	y14 = y15 - thin/2				# South outer side
 	y13 = y16 - L(mm=10)				# End mount screws
 
-	print("TLA:y0={0} y1={1} y2={2} y3={3} y4={4} y5={5} y6={6} y7={7}".
-	  format(y0, y1, y2, y3, y4, y5, y6, y7))
-	print("TLA:y8={0} y9={1} y10={2} y11={3} y12={4} y13={5} y14={6}".
-	  format(y8, y9, y10, y11, y12, y13, y14))
-	print("TLA:y15={0} y16={1}".format(y15, y16))
+	#print("TLA:y0={0} y1={1} y2={2} y3={3} y4={4} y5={5} y6={6} y7={7}".
+	#  format(y0, y1, y2, y3, y4, y5, y6, y7))
+	#print("TLA:y8={0} y9={1} y10={2} y11={3} y12={4} y13={5} y14={6}".
+	#  format(y8, y9, y10, y11, y12, y13, y14))
+	#print("TLA:y15={0} y16={1}".format(y15, y16))
 	
 	# Compute interesting Z locations in acending order:
 	slot_dz = slot_interrupter1.dz_l.absolute()
@@ -1288,10 +1288,10 @@ class Right_Motor_Assembly(Part):
 	# Deal with visibility here:
 	#gm3_wheel.invisible_set()
 	#encoder_mount.invisible_set()
-	#outer_motor_side.invisible_set()
+	outer_motor_side.invisible_set()
 	#inner_motor_side.invisible_set()
 	#back_motor_side.invisible_set()
-	front_motor_side.invisible_set()
+	#front_motor_side.invisible_set()
 
 	# Deal .dxf files here:
 	encoder_mount.dxf_write(center = P(0, y11, z7))
