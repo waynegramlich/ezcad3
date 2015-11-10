@@ -7,9 +7,25 @@
 import glob
 import hashlib
 import math
+import numpy
 import os
 import os.path
+import re
 import subprocess
+import xml.etree.ElementTree as ET
+
+def int_compare(left, right):
+    """ *int*: Return -1, 0, or 1 depending upon whether *left* sorts before,
+	at, or after *right*.
+    """
+
+    assert isinstance(left, int)
+    assert isinstance(right, int)
+    if left < right:
+	return -1
+    elif left == right:
+	return 0
+    return 1
 
 #  The L, P, and Angle classes are listed first because Python does not
 # have a good mechanism for dealing with forward references to class names.
@@ -224,7 +240,7 @@ class L:
 	if len(format) == 0:
 	    result = "{0}".format(value)
 	else:
-	    result = ("{0:" + format + "}").format(value)
+	    result = ("{0:" + format + "f}").format(value)
 	return result
 
     ## @brief Ruturn *self* &times; *number*.
@@ -473,7 +489,7 @@ class P:
     def __neg__(self):
 	""" P: Return the negative of {self}. """
 
-	return P(self.part, -self.x, -self.y, -self.z)
+	return P(-self.x, -self.y, -self.z)
 
     def __str__(self):
 	""" P: Return {self} as a formatted string. """
@@ -489,27 +505,37 @@ class P:
     def angle_between(self, point):
 	""" P dimensions: Return the angle between {self} and {point}. """
 
-	# a . b = ||a|| ||b|| cos( <AB )		(1)
-	# (a . b) / (||a|| ||b||) = cos( <AB )		(2)
-	# acos( (a . b) / (||a|| ||b||) ] = <AB	(3)
-
+	# Verify argument types:
 	assert isinstance(point, P)
 
+	# The math:
+	#
+	# a . b = ||a|| ||b|| cos( <AB )		(1)
+	# (a . b) / (||a|| ||b||) = cos( <AB )		(2)
+	# acos( (a . b) / (||a|| ||b||) ] = <AB		(3)
+	# <AB = acos( (a . b) / (||a|| ||b||) ]		(4)
+
+	# Grab the X/Y/Z coordinates in millimeters:
 	x1 = self.x._mm
 	y1 = self.y._mm
 	z1 = self.z._mm
 	x2 = point.x._mm
 	y2 = point.y._mm
 	z2 = point.z._mm
+
+	# Compute the dot product, lengths and numerator:
 	dot_product = x1 * x2 + y1 * y2 + z1 * z2
 	length1 = math.sqrt(x1 * x1 + y1 * y1 + z1 * z1)
 	length2 = math.sqrt(x2 * x2 + y2 * y2 + z2 * z2)
 	numerator = length1 * length2
+
         result = Angle()
-	xxx = dot_product / numerator
 	#print("dot={0} num={1} xxx={2}".format(dot_product, numerator, xxx))
 	if numerator > 0.0:
 	    result = Angle(rad = math.acos(dot_product / numerator))
+	else:
+	    #assert False, "What happened here?"
+	    pass
 	return result
 
     def cross_product(self, point):
@@ -597,19 +623,19 @@ class P:
 	if dx == zero:
 	    x_list = (x)
 	else:
-            half_dx = dx.half()
+            half_dx = dx / 2
 	    x_list = (x - half_dx, x + half_dx)
 
 	if dy == zero:
 	    y_list = (y)
 	else:
-            half_dy = dy.half()
+            half_dy = dy / 2
 	    y_list = (y - half_dy, y + half_dy)
 
 	if dz == zero:
 	    z_list = (z)
 	else:
-            half_dz = dz.half()
+            half_dz = dz / 2
 	    z_list = (z - half_dz, z + half_dz)
 
 	# Now iterate over {x_list}, {y_list}, and {z_list}
@@ -778,7 +804,7 @@ class Angle:
 	if len(format) == 0:
 	    result = "{0}".format(value)
 	else:
-	    result = ("{0:" + format + "}").format_text.format(value)
+	    result = ("{0:" + format + "f}").format(value)
 	#print("Angle.__format__()=>'{0}'".format(result))
 	return result
 
@@ -903,6 +929,15 @@ class Angle:
 	assert isinstance(angle, Angle)
 	return Angle(rad = self.radians - angle.radians)
 
+    def absolute(self):
+	""" *Angle*: Return absolution value of *Angle* object(i.e. *self*).
+	"""
+
+	result = self
+	if self.radians < 0.0:
+	    result = -self
+	return result
+
     ## @brief Returns the cosine of *self*.
     #  @param self is the *Angle* to compute the cosine of
     #  @returns the cosine of *self*.
@@ -1015,16 +1050,19 @@ class Angle:
 
 class Bend:
 
-    def __init__(self, point, radius, name = ""):
+    def __init__(self, point, radius, plane = None, name = ""):
 	assert isinstance(point, P)
 	assert isinstance(radius, L)
 
+	if not isinstance(plane, L):
+	    plane = L()
 	self.point = point
 	self.point_tmp = point
 	self.radius = radius
 	self._px = 0.0
 	self._py = 0.0
 	self._name = name
+	self._plane = plane
 
     def __format__(self, format):
 	return "Bend(point={0}, radius={1} name='{2}'". \
@@ -1054,7 +1092,7 @@ class Bend:
 	# *Bend* point (i.e. *self*.*point*).  *D* and *E* are the
 	# adjecent *Bend* objects and their associated *point* objects.
 	# The ultimate goal here is to compute to compute C, which is the
-	# center of a cirle of radius R (i.e. *self*.*radius*) that
+	# center of a circle of radius R (i.e. *self*.*radius*) that
 	# touches to line segments BD and BE tangentially.
 	#
 	#           C
@@ -1234,48 +1272,547 @@ class Bend:
 
 class Material:
     def __init__(self, generic = "plastic", specific = "ABS"):
-	""" *Material*: Initialize *self* to contain *generic* and
-	    *specific*. """
+	""" *Material*: Initialize *Material* object (i.e. *self*)
+	    to contain *generic* and *specific*.
+	"""
 
-	self._generic = generic
-	self._specific = specific
+	# Verify argument types:
+	assert isinstance(generic, str)
+	assert isinstance(specific, str)
+
+	# Load up *self*
+	self._generic = generic.lower()
+	self._specific = specific.lower()
 
     def __format__(self, format):
-	""" *Material*: Return *self* formatted as a string. """
+	""" *Material*: Return *Maerial* object (i.e. *self*) formatted
+	    as a string.
+	"""
 
 	return "[{0}, {1}]".format(self._generic, self._specific)
 
+    def _find(self, material_name):
+	""" *Material*: Return True if *material_name* matches *self*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(material_name, str)
+	return self._generic == material_name
+
+    def generic(self):
+	""" *Material*: Return generic name for *Material* object (i.e. *self*).
+	"""
+
+	return self._generic
+
 class Bounding_Box:
 
-    def __init__(self, ex, wx, ny, sy, tz, bz):
+    def __init__(self, *points):
 	""" *Bounding_Box*: Initialize *self* with *ex*, *wx*, *ny*, *sy*,
-	    *tz*, and *bz*. """
+	    *tz*, and *bz*.
+	"""
 
-	#FIXME: We should check bounding box values only after we have
-	# finished all the diminsion updating:
+	# Verify argument types:
+	assert isinstance(points, list)
+	for point in points:
+	    assert isinstance(point, P)
 
-	# Check argument types:
-	assert isinstance(ex, L)
-	assert isinstance(wx, L)
-	#assert wx < ex
-	assert isinstance(ny, L)
-	assert isinstance(sy, L)
-	#assert sy < ny
-	assert isinstance(tz, L)
-	assert isinstance(bz, L)
-	#assert bz < tz
+	# Intialize
+	tne = None
+	bsw = None
 
-	# Load up *self*
-	self.ex = ex
-	self.wx = wx
-	self.ny = ny
-	self.sy = sy
-	self.tz = tz
-	self.bz = bz
+	# Expand bounding box by each *point* in *points*:
+	for point in points:
+	    self.expand(point)
 
-    def __format__(self, format):
-	return "[wx={0}:ex={1} sy={2}:ny={3} bz={4}:tz={5}". \
-	  format(self.wx, self.ex, self.sy, self.ny, self.bz, self.tz)
+    def __format__(self, format_text):
+	""" *Bounding_Box*: Return the values of the *Bounding_Box* object
+	    (i.e. *self*) as a string.
+	"""
+
+	# Verify argument types:
+	assert isinstance(format_text, str)
+
+	# Return the bounding box string:
+	return "[tne={0} bsw={1}".format(self._tne, self._bsw)
+
+    def expand(self, point):
+	""" *Bounding_Box*: Expand the *Bounding_Box* object (i.e. *self*)
+	    to enclose *point*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(point, P)
+
+	# Grap *tne* and *bsw*:
+	tne = self._tne
+	bsw = self._bsw
+
+	# Deal with an empty bounding box first:
+	if tne == None:
+	    # Empty *Bounding_Box*:
+	    self._tne = point
+	    self._bsw = point
+	else:
+	    # Non-empty *Bounding_Box*:
+
+	    # Update the minimum and maximum *x*:
+	    x = point.x
+	    new_e = tne.x.maximum(x)
+	    new_w = bsw.x.minimum(x)
+
+	    # Update the minimum and maximum *y*:
+	    y = point.y
+	    new_n = tne.y.maximum(y)
+	    new_s = bsw.y.minimum(y)
+
+	    # Update the minimum and maximum *z*:
+	    z = point.z
+	    new_t = tne.z.maximum(z)
+	    new_b = bsw.z.minimum(z)
+
+	    # Update *tne* and *bsw* if anything has changed:
+	    if new_e > x or new_n > y or new_t > z:
+		self._tne = P(new_e, new_n, new_t)
+	    if new_w < x or new_s < y or new_b < z:
+		self._bsw = P(new_w, new_s, new_b)
+
+    def matrix_apply(self, matrix):
+	""" *Bounding_Box*: Return a new *Bounding_Box* object that bounds
+	    the current *Bounding_Box* object (i.e. self) after each corner
+	    is relocated using *matrix*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(matrix, Matrix)
+
+	# Grap *tne* and *bsw*:
+	tne = self._tne
+	bsw = self._bsw
+
+	# Extract each of the X/Y/Z coordinate values:
+	t = tne.z
+	n = tne.y
+	e = tne.x
+	b = bsw.z
+	s = bsw.y
+	w = bsw.x
+
+	# Contstruct the other 6 points that make up the bounding box:
+	tnw = P(w, n, t)
+	tse = P(e, s, t)
+	tsw = P(w, s, t)
+	bne = P(e, n, b)
+	bnw = P(w, n, b)
+	bse = P(e, s, b)
+
+	# Now construct the new *result* bounding box by applying *matrix*
+	# to all 8 corners of the original bounding box and return it:
+	result = Bounding_Box(
+	  matrix.point_multiply(tne),
+	  matrix.point_multiply(tnw),
+	  matrix.point_multiply(tse),
+	  matrix.point_multiply(tsw),
+	  matrix.point_multiply(bne),
+	  matrix.point_multiply(bnw),
+	  matrix.point_multiply(bse),
+	  matrix.point_multiply(bsw))
+	return result
+
+# *Code* class:
+
+class Code:
+
+    def __init__(self):			# RS-232 generator
+	zero = L()
+
+	self.blocks = []		#  [*Code_Block*]  Output ready blocks
+	self.text = ""			# Text for current block
+	self.dxf = ""			# Text for dxf file
+	self.dxf_x_offset = zero	# DXF X offset
+	self.dxf_y_offset = zero	# DXF Y offset
+	self.vice_x = zero
+	self.vice_y = zero
+	self.z_rapid = zero		# Z above which Z rapids are allowed
+	self.z_safe = zero		# Z above XY rapids are safe
+
+	# The stuff below is RS-274 mode variables:
+	self.begin = False		# At begining of block
+	self.f = Speed()		# Feedrate
+	self.g1 = 0			# (G0-3, 33, 38.x, 73, 76, 80-89)
+	self.g2 = 0			# (G17-19)
+	self.g3 = 0			# (G7-8)
+	self.g4 = 0			# (G90-91)
+	self.g5 = 0			# (G93-94)
+	self.g6 = 0			# (G20-21)
+	self.g7 = 0			# (G40-42)
+	self.g8 = 0			# (G43, 49)
+	self.g9 = 0			# (G98-99)
+	self.g10 = 0			# (G54-59)
+	self.g11 = 0			# (G4)
+	self.h = zero			# H tool offset index
+	self.i = zero			# I coordinate
+	self.j = zero			# J coordinate
+	self.m1 = 0			# (M0-2, 30, 60)
+	self.m2 = 0			# (M6)
+	self.m3 = 0			# (M3-5)
+	self.m4 = 0			# (M7-9)
+	self.m5 = 0			# (M48-49)
+	self.p = Code_Time()		# G4
+	self.q = zero			# Peck depth
+	self.r0 = zero			# Radius cycle R
+	self.r1 = zero			# Drill cycle R
+	self.s = Code_Hertz()		# Spindle revolutions
+	self.x = zero			# X coordinate
+	self.y = zero			# Y coordinate
+	self.z = zero			# Z coordinate
+	self.z1 = zero 			# Z coordinate
+	self.z_safe_f = Speed()	# Feed to perform z safe operation at
+	self.z_safe_pending = False	# {true}=>need to do z safe move
+	self.z_safe_s = Code_Hertz()	# Speed to perform z safe operation at
+
+    def flush(self, program_number):
+	""" *Code*: Generate CNC code starting at *program_number* for
+	    the first CNC file name.
+	"""
+
+	# Verify argument types:
+	assert isinstance(program_number, int)
+
+	# Use *code* instead of *self*:
+	code = self
+
+	#call d@(form@("=>flush@Code(*, %d%)\n\") / f@(program_number))
+	#original_program_number :@= program_number
+
+	# Output all of the *blocks*:
+	blocks = code.blocks
+	size = len(blocks)
+	print("size=", size)
+	if size != 0:
+	    block0 = blocks[0]
+	    part = block0.part
+	    assert isinstance(part, Part)
+
+	    remainder = program_number % 10
+	    if remainder != 0:
+		program_number += 10 - remainder
+	    file_name = "{0}.ngc".format(program_number)
+
+	    # Assign program numbers:
+	    for index in range(size):
+		block = blocks[index]
+		#call d@(form@("Block[%d%] #%d% %d% %v%\n\") % f@(index) %
+		#  f@(block.uid) % f@(block.priority) / f@(block.tool.name))
+		block.program_number = program_number
+		program_number += 1
+
+	    # Open *file_name* for writing:
+	    code_stream = open(file_name, "wa")
+	    assert isinstance(code_stream, file), \
+	      "Could not open '{0}' for writing".format(file_name)
+
+	    # Output the tool table:
+	    code_stream.write("({0}: {0})\n".format(part.name, block0.comment))
+	    code_stream.write("(Tooling table:)\n")
+            for block in blocks:
+		# Fetch {tool}:
+		tool = block.tool
+
+		# Make sure we have assigned a number to the tool:
+		assert tool.number != 0, \
+		    "Tool {0} does not have a number\n".format(tool.name)
+
+		# Output the line in the tool table:
+		code_stream.write("(T{0} {1})\n".format(tool.number, tool.name))
+
+		# Perform the code block:
+		code_stream.write("O{0} call\n".format(block.program_number))
+
+	    # Wrap it up:
+	    code_stream.write("G53 Y0.0 (Move the work to the front)\n")
+	    code_stream.write("M2\n")
+	    code_stream.close()
+
+	    # Now output the blocks:
+	    for block in blocks:
+		# Fetch {block}, {tool} and {name}.
+		tool = block.tool
+		tool_number = tool.number
+
+		if tool.is_laser():
+		    # We have a laser; generate a .dxf file:
+		    dxf_file_name = "{0}.dxf".format(program_number)
+		    dxf_stream = open(dxf_file_name, "wa")
+		    assert isinstance(dxf_stream, file), \
+		      "Unable to open file '{0}'".format(file_name)
+
+		    #dxf_stream.write("0\n\SECTION\n\2\n\HEADER\n")
+		    #dxf_stream.write("9\n\$DIMAUNITS\n\70\n\1\n")
+		    #dxf_stream.write("9\n\$INSUNITS\n\70\n\1\n")
+		    #dxf_stream.write("9\n\$LUNITS\n\70\n\0\n")
+		    #dxf_stream.write("9\n\$MEASUREMENT\n\70\n\0\n")
+		    #dxf_stream.write("0\n\ENDSEC\n")
+
+		    dxf_stream.write("0\n\SECTION\n\2\n\ENTITIES\n")
+
+		    # Output *dxf* to *dxf_stream*:
+		    dxf = code.dxf
+		    dxf_stream.write(dxf)
+
+		    # See if we are aggregating *dxf* into a named DXF file:
+		    dxf_base_name = part.dxf_base_name
+		    if dxf_base_name != "":
+			# Yes, we need to aggregate:
+			shop = part._shop
+			dxf_table = shop.dxf_table
+			dxf_contents = lookup[dxf_base_name]
+			assert isinstance(dxf_contents, str)
+			dxf_contents[dxf_base] = dxf_contents + dxf
+
+		    # Clear *dxf* for the next part:
+		    code.dxf = ""
+
+		    # Wrap up {dxf_stream}:
+		    dxf_stream.write("0\n\ENDSEC\n\0\n\EOF\n")
+		    dxf_stream.close()
+		else:
+		    # We have a mill; generate a .ngc file:
+		    program_number = block.program_number
+		    ngc_file_name = "{0}.ngc".format(program_number)
+		    code_stream = open(ngc_file_name, "wa")
+		    assert isintance(code_stream, file), \
+		      "Unable to open '{0}' for output\n".format(ngc_file_name)
+
+		    # Put a visual break into {code_stream}:
+		    code_stream.write("({0})\n".format(block.part.name))
+		    code_stream.write("O{0} sub\n".format(program_number))
+		    code_stream.write("G90 G90.1 G20\n")
+
+		    # Output the tool change, get the coolant on,
+		    # and spindle spun up:
+		    code_stream.write("M6 T{0} (Insert {1})\n". 
+           	      format(tool_number, tool.name))
+		    spindle = block.spindle
+		    if spindle > Speed():
+			if part.material.named_materail == "plastic":
+			    code_stream.write("M9 (Coolant off)\n")
+			else:
+			    code_stream.write("M8 (Coolant on)\n")
+			code_stream.write("S{0} M3 (Spindle on)\n".
+			  format(spindle))
+
+		    # Get moving to tool change location:
+		    plunge_x = part.plunge_x
+		    plunge_y = part.plunge_y
+		    vice_x = block.vice_x
+		    vice_y = block.vice_y
+		    code.vice_x = vice_x
+		    code.vice_y = vice_y
+
+		    #print("part:{0} code.vice_x={1} code.vice_y={2}\n".
+		    #  format(part.name, code.vice_x, code.vice_y))
+
+		    code_stream.write("G54 G0 X{0} Y{1} (Apply work offset)\n".
+		      format(plunge_x - vice_x, plunge_y - vice_y))
+		    code_stream.write("(Part_Origin_X={0} Part_Origin_Y={1})\n".
+		      format(-vice_x, -vice_y))
+
+		    # Enable tool offset:
+		    z_safe = part.z_safe
+		    code_stream.write("G43 H{0} (Enable tool_offset)\n".
+		      format(tool_number))
+		    code_stream.write(
+		      "G0 Z%i% (Go to Z-safe for current tool)\n".
+		      format(z_safe))
+		    code.g8 = 43
+		    code.g1 = 0
+		    code.h = tool_number
+		    code.z = z_safe
+
+		    # Generate the code for {block}:
+		    cod_stream.write(block.text)
+
+		    # Put the tool back into a reasonable position:
+		    code_stream.write("M5 (Spindle off)\n")
+		    code_stream.write("M9 (Coolant off)\n")
+		    code_stream.write(
+		      "G0 X{0} Y{1} (Put spindle to left of vice)\n".
+		      format(0.0, -1.0))
+		    code.x = vice_x - L(inch= 1.0)
+		    code.y = vice_y
+		    code_stream.write("G49 (Disable tool offset)\n")
+		    # G53 is not modal, thus we are still in G54 work offset:
+		    code_stream.write(
+		      "G53 G0 Z{0} (Return to machine Z zero)\n".format(1.0))
+		    code.z = L()
+		    code_stream.write("O{0} endsub\n".format(program_number))
+		    code_stream.write("O{0} call\n".format(program_number))
+		    code_stream.write("M2\n")
+		    code_stream.write("%\n")
+		    code_stream.close()
+
+	    # Output the shut-down code:
+	    #call put@("(*************************************)\n", code_stream)
+
+	    # Output the subroutine calls:
+	    #index := 0
+	    #while index < size
+	    #    #call put@(form@("O%d% call\n\") /
+	    #    #  f@((index + 1) * 100), code_stream)
+	    #    index := index + 1
+
+	    #call put@(form@("O<%s%> sub\n\") / f@(base_name), code_stream)
+	    #call put@("O[#1 * 100] call\n\", code_stream)
+	    #call put@(form@("O<%s%> endsub\n\") / f@(base_name), code_stream)
+
+	    #call put@("G53 Y0.0 (Move the work to the front)\n", code_stream)
+
+	    #call put@("M2\n\", code_stream)
+    
+	    # Zero {blocks} for the next time:
+	    del blocks[:]
+
+	    #call close@(code_stream)
+
+	#call d@(form@("<=flush@Code(*, %d%) => %d%\n\") %
+	#  f@(original_program_number) / f@(program_number))
+	return program_number
+
+class Code_Hertz:
+
+    def __init__(self, hertz = 0.0):
+	""" *Code_Hertz*: Initialize a *Code_Hertz* object"""
+	self.hertz = hertz
+
+    def hertz(self):
+	""" *Code_Hertz*: Return the frequency in Hertz.
+	"""
+
+	return self.hertz
+
+# *Speed* class:
+
+class Speed:
+    """ *Speed* is a class that represents a speed.
+    """
+
+    def __init__(self, mm_per_sec = 0.0, in_per_sec = 0.0, cm_per_sec = 0.0,
+      ft_per_min = 0.0, m_per_sec = 0.0):
+	""" *Speed*: Initialize a *Speed* object using zero, one or more
+	    of *mm_per_sec*, *in_per_sec*, o *cm_per_sec*, *ft_per_sec*,
+	    or *m_per_sec*.
+	"""
+
+	self._mm_per_sec = \
+	  mm_per_sec + \
+	  in_per_sec * 25.4 + \
+	  cm_per_sec * 10.0 + \
+	  ft_per_min * 60.0 * 12.0 * 25.4 + \
+	  m_per_sec * 60.0 / 1000.0
+
+    def __format__(self, format_text):
+	""" *Speed*: Return the *Speed* object (i.e. *self*) as a string.
+	"""
+
+	# Figure out what *scale* to use:
+	scale = 1.0
+	if format_text.endswith('F'):
+	    # Feet per minute:
+	    scale = 60.0 * 25.4 * 12.0
+	    format_text = format_text[:-1]
+	elif format_text.endswith('M'):
+	    # Meters per minute:
+	    scale = 60.0 / 1000.0
+	    format_text = format_text[:-1]
+	elif format_text.endswith('c'):
+	    # Centimeters per second:
+	    scale = 10.0
+	    format_text = format_text[:-1]
+	elif format_text.endswith('i'):
+	    # Inches per second:
+	    scale =  25.4
+	    format_text = format_text[:-1]
+	elif format_text.endswith('m'):
+	    # Millimeters per second:
+	    scale = 1.0
+	    format_text = format_text[:-1]
+	
+	# Format the value as a string and return it:
+	value = self._mm_per_sec / scale
+	speed_format_text = "{0:" + format_text + "f}"
+	#print("base={0} format_text={1} scaled={0} text='{1}'".
+	#  format(self._mm_per_sec, format_text, value, speed_format_text))
+	return speed_format_text.format(value)
+
+    def millimeters_per_second(self):
+	""" *Speed*: Return the speed a *float* in millimeters per second.
+	"""
+
+	return self._mm_per_sec
+
+    def centimeters_per_second(self):
+	""" *Speed*: Return the speed as a *float* in centimeters per second.
+	"""
+
+	return self._mm_per_sec / 10.0
+
+    def inches_per_second(self):
+	""" *Speed*: Return the speed as a *float* in inches per second.
+	"""
+
+	return self._mm_per_sec / 25.4
+
+    def feet_per_minute(self):
+	""" *Speed*: Return the speed as a *float* in feet per minute.
+	"""
+
+	return self._mm_per_sec * 25.4 * 12.0 * 60.0
+
+    def meters_per_minute(self):
+	""" *Speed*: Return the speed as a *float* in feet per minute.
+	"""
+
+	return self._mm_per_sec / 1000.0 * 60.0
+
+class Speed_Range:
+    """ *Speed_Range* is a class that represents a range of speeds.
+    """
+
+    def __init__(self, low, high):
+	""" *Speed_Range*: Initialize a *Speed_Range* object (i.e. *self*)
+	    to contain *low* and *high*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(low, Speed)
+	assert isinstance(high, Speed)
+	assert low.millimeters_per_second() < high.millimeters_per_second()
+
+	# Load up *self*:
+	self._low = low
+	self._high = high
+
+    def __format__(self, format_text):
+	""" *Speed_Range*: Format a *Speed_Range* object (i.e. *self*) into
+	    a text string and return it.
+	"""
+
+	# Verify argument types:
+	assert isinstance(format_text, str)
+
+	# Return a string of the form "low-high":
+	range_format_text = "{0:" + format_text + "}-{1:" + format_text + "}"
+	#print("Speed_Range.__format__(*, '{0}'): '{1}'".
+	#  format(format_text, range_format_text))
+	return range_format_text.format(self._low, self._high)
+
+class Code_Time:
+
+    def __init__(self, seconds = 0.0):
+	""" *Code_Time*: Initialize a *Code_Time* object. """
+
+	self.seconds = seconds	# Everything is converted to secconds.
 
 class Color:
     COLORS = {
@@ -1569,11 +2106,14 @@ class Indexed_Points:
 
 class Contour:
 
-    def __init__(self):
+    def __init__(self, name = None):
 	""" *Contour*: Initialize *self* with *bends* and *extrude_axis*. """
 
 	# Load *self*
 	self._bends = []
+	self._name = "No Name"
+	if isinstance(name, str):
+	    self._name = name
 
     def __format__(self, format):
 	""" *Contour*: """
@@ -1620,7 +2160,7 @@ class Contour:
 
 	self.project(axis = extrude_axis)
 
-	adjusted_contour = Contour()
+	adjusted_contour = Contour("Adjusted {0}".format(self._name))
 	bends = self._bends
 	bends_size = len(bends)
 	for bends_index in range(bends_size):
@@ -1779,14 +2319,20 @@ class Contour:
 		new_radius = maximum_radius._mm
 
 	    zero = L()
-	    adjusted_contour.bend_append(
-	      P(L(mm = ix), L(mm = iy), zero), L(mm = new_radius))
+	    adjusted_bend = adjusted_contour.bend_append(
+	      P(L(mm = ix), L(mm = iy), zero), L(mm = new_radius),
+	      plane = bend2._plane)
+	    #print("Adjusted_Bend[px={0},py={1} ix={2} iy={3}]".
+	    #  format(adjusted_bend._px, adjusted_bend._py, ix, iy))
+
+	# Reproject the contour into a compatible plane:
+	adjusted_contour.unproject(axis = extrude_axis)
 
 	if trace:
 	    print("<=Contour.adjust():len(bends)={0}".format(len(self._bends)))
 	return adjusted_contour
 
-    def bend_append(self, point = P(), radius = L(), name = ""):
+    def bend_append(self, point = P(), radius = L(), plane = None, name = ""):
 	""" *Contour*: """
 
 	# Check argument types:
@@ -1795,8 +2341,9 @@ class Contour:
 	assert isinstance(name, str)
 
 	# Create and append the bend:
-	bend = Bend(point, radius, name = name)
+	bend = Bend(point, radius, name = name, plane = plane)
 	self._bends.append(bend)
+	return bend
 
     def bends_compute(self, axis = None, trace = -1000000):
 	""" *Contour*: """
@@ -2010,7 +2557,7 @@ class Contour:
 	# For now, constrain *axis* to be in X, Y, or Z direction:
 	if not (use_x_axis or use_y_axis or use_z_axis):
 	    print("Contour.project: axis must align with X, Y, or Z axis: {0}".
-	    format(axis))
+	      format(axis))
 	    use_z_axis = True
 	    assert EZCAD3.ezcad._update_count != 4
 
@@ -2022,6 +2569,8 @@ class Contour:
 	    px = point.x._mm
 	    py = point.y._mm
 	    pz = point.z._mm
+	    #print("Contour.project[{0}]: px/py/pz = {1}/{2}/{3}".
+	    #  format(self._name, px, py, pz))
 
 	    if use_x_axis:
 		# Axis is aligned with X:
@@ -2035,7 +2584,8 @@ class Contour:
 		    plane = px
 		else:
 		    assert plane == px, \
-		      "All points must be in same X plane"
+		      "All points must be in same X plane (plane={0} px={1})". \
+		      format(plane, px)
 	    elif use_y_axis:
 		# Axis is aligned with Y:
 		bend._px = px
@@ -2056,9 +2606,75 @@ class Contour:
 		      "All points must be in same Y plane"
             else:
 		assert False, "FIXME: Allow arbitray axis direction"
+            bend._plane = plane
 
 	# Keep track of *plane*
 	self.plane = plane
+
+	#print("<=Contour.project(axis={0}".format(axis))
+
+    def unproject(self, axis = None):
+	""" *Contour*: """
+
+	#print("=>Contour.project(axis={0}".format(axis))
+
+	# Check argument types:
+	assert isinstance(axis, P)
+	
+	# Extract X/Y/Z values from *axis*:
+	axis_x = axis.x._mm
+	axis_y = axis.y._mm
+	axis_z = axis.z._mm
+
+	# Figure out which axis to use:
+	axis_x_is_zero = axis_x == 0.0
+	axis_y_is_zero = axis_y == 0.0
+	axis_z_is_zero = axis_z == 0.0
+
+	# Figure out which axis to use:
+	use_x_axis = not axis_x_is_zero and axis_y_is_zero and axis_z_is_zero
+	use_y_axis = axis_x_is_zero and not axis_y_is_zero and axis_z_is_zero
+	use_z_axis = axis_x_is_zero and axis_y_is_zero and not axis_z_is_zero
+
+	# Remember these values:
+	self.use_x_axis = use_x_axis
+	self.use_y_axis = use_y_axis
+	self.use_z_axis = use_z_axis
+
+	# For now, constrain *axis* to be in X, Y, or Z direction:
+	if not (use_x_axis or use_y_axis or use_z_axis):
+	    print("Contour.project: axis must align with X, Y, or Z axis: {0}".
+	    format(axis))
+	    use_z_axis = True
+	    #assert EZCAD3.ezcad._update_count != 4
+
+	# For each *bend* in bends, perform the project from 2D back up 3D:
+	for bend in self._bends:
+	    # Grab the X/Y/Z coordinates for *point*:
+            point = bend.point
+	    point_x = point.x
+	    point_y = point.y
+	    plane = bend._plane
+
+	    #print("Contour.unproject[{0}]: point_x/point_y = {1}/{2}".
+	    #  format(self._name, point_x, point_y))
+
+	    if use_x_axis:
+		# Axis is aligned with X:
+		# This is not obvious.  We put the Z coordinates in the
+		# X axis in order to ensure that when we rotate around
+		# the Y axis by 90 degrees the Z cordinates are up and
+		# down in Z:
+		point = P(plane, point_y, point_x)
+	    elif use_y_axis:
+		# Axis is aligned with Y:
+		point = P(point_x, plane, point_y)
+	    elif use_z_axis:
+		# Axis is aligned with Y:
+		point = P(point_x, point_y, plane)
+            else:
+		assert False, "FIXME: Allow arbitray axis direction"
+	    bend.point = point
 
 	#print("<=Contour.project(axis={0}".format(axis))
 
@@ -2066,13 +2682,16 @@ class EZCAD3:
     """ EZCAD3 is the top level engine that executes the design. """
 
     DIMENSIONS_MODE = 0
-    MANUFACTURE_MODE = 1
+    CNC_MODE = 1
     STL_MODE = 2
     VISUALIZATION_MODE = 3
 
     def __init__(self, minor = None, adjust = L()):
-	""" {EZCAD}: Initialize the contents of {self} to contain
-	    {major} and {minor} version numbers. """
+	""" *EZCAD*: Initialize the contents of {self} to contain
+	    *major* and *minor* version numbers. """
+
+	# FIXME: *adjust* should be moved over to the *Part* library!!!
+	# It is used for increasing the size of things in STL mode.
 
 	#print "EZCAD.__init__() called"
 
@@ -2087,6 +2706,7 @@ class EZCAD3:
 	self._major = 3
 	self._minor = minor
 	self._parts_stack = []
+	self._shop = Shop("Wayne's Shop")
 	self._update_count = 0
 	self._xml_indent = 0
 	self._xml_stream = None
@@ -2095,8 +2715,1611 @@ class EZCAD3:
 	EZCAD3.ezcad = self
 
     def process(self, part):
+	""" *EZCAD3*: Perform all of the processing starting at *part*.
+	"""
+
 	assert isinstance(part, Part)
 	part.process(self)
+
+class Operation:
+    """ *Operation* is a class that represents a manufacturing operation.
+    """
+
+    # These constants are used to sort the order of operations between
+    # operations:
+    ORDER_DOWEL_PIN = 0
+    ORDER_END_MILL_EXTERIOR = 1
+    ORDER_MILL_DRILL_EXTERIOR = 2
+    ORDER_MILL_DRILL_CHAMFER = 3
+    ORDER_MILL_DRILL_COUNTERSINK = 4
+    ORDER_MILL_DRILL = 5
+    ORDER_END_MILL_DRILL = 6
+    ORDER_END_MILL_ROUND_POCKET = 7
+    ORDER_MILL_DRILL_POCKET_CHAMFER = 8
+    ORDER_MILL_DOVE_TAIL_CHAMFER = 9
+    ORDER_DOUBLE_ANGLE_V_GROOVE = 10
+    ORDER_DOUBLE_ANGLE_CHAMFER = 11
+    ORDER_VERTICAL_LATHE = 12
+
+    # These constants identify what order to do operations in:
+    KIND_CONTOUR = 0
+    KIND_DOWEL_PIN = 1
+    KIND_DRILL = 2
+    KIND_ROUND_POCKET = 3
+    KIND_SIMPLE_EXTERIOR = 4
+    KIND_SIMPLE_POCKET = 5
+    KIND_VERTICAL_LATHE = 6
+
+    POCKET_KIND_FLAT = 0
+    POCKET_KIND_THROUGH = 1
+
+    def __init__(self,
+      name, kind, part, comment, sub_priority, tool, order, follows):
+	""" *Operation*: Initialize an *Operation* object to contain
+	    *name*, *kind*, *part*, *comment*, *sub_priority*, *tool*,
+	    *order*, *follows*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(name, str)
+	assert isinstance(kind, int)
+	assert isinstance(part, Part)
+	assert isinstance(comment, str)
+	assert isinstance(sub_priority, int)
+	assert isinstance(tool, Tool)
+	assert isinstance(order, int)
+	assert isinstance(follows, Operation)
+
+	# Load up *self*:
+	self.name = name
+	self.part = part
+	self.comment = comment
+	self.follows = follows
+	self.index = -1
+	self.order = order
+	self.position = part.position_count
+	self.priority = part.priority
+	self.sub_priority = sub_priority
+	self.tool = tool
+	self.vice_x = part.vice_x
+	self.vice_y = part.vice_y
+
+    def compare(self, operation2):
+	""" *Operation*: Return -1, 0, or 1 depending upon whether *operation1*
+	    (i.e. *self*) should sort before, at, or after *operation2*.
+	"""
+
+	# Verify argument types:
+	assert isintance(operation2, Operation)
+
+	# Use *operation1* instead of *self*:
+	operation1 = self
+
+	# Sort by *priority* first:
+	result = int_compare(operation1.priority, operation2.priority)
+	if result != 0:
+	    return result
+
+	# Sort by *sub_priority* second:
+	result = int_compare(operation1.sub_priority, operation2.sub_priority)
+	if result != 0:
+	    return result
+
+	# Sort by *tool* third:
+	result = operation1.tool.compare(operation2.tool)
+	if result != 0:
+	    return result
+
+	# Sort by *order* fourth:
+	result = int_compare(operation1.order, operation2.order)
+	if result != 0:
+	    return result
+
+	# Sort by {kind} fifth:
+	result = int_compare(opertaion1.kind, operation2.kind)
+	if result != 0:
+	    return result
+
+	# Sort by {vice_x} sixth:
+	result = in_compare(operation1.vice_x,	operation2.vice_x)
+	if result != 0:
+	    return result
+
+	# Sort by {vice_y} seventh:
+	result = in_compare(operation1.vice_y,	operation2.vice_y)
+	if result != 0:
+	    return result
+
+	# If we reach this point, we need to compare at the sub-class
+	# level.  Since this routine is called from the sub-class
+	# *compare* method, the desired comparison occurs next.
+	assert type(operation1) == type(operation2)
+
+	return result
+
+class Operation_Contour(Operation):
+    """ *Operation_Contour* is a class that represents a contour operation.
+    """
+
+    # An {Operation_Contour} corresponds to a shape to be milled out.
+    # Specifically a contour is an N-sided polygon in the X/Y plane
+    # that is repesented by N points P1, ..., Pn.  (The polygon has
+    # no intenral holes.) Associated with each point is a radius, Ri,
+    # that specifies the rounding radius for each corner.  Ri is set
+    # to 0 for no rounding.
+    #
+    # When we perform an exterior mill on a contour, it traces out a
+    # path with rounded corners.  A good way of thinking about it is
+    # to think of rolling a circle or radius r that has the same radius
+    # as the mill bit and track the center point of the circle.  As it
+    # is going along the straight parts of the contour, the circle center
+    # rolls in a straight line as well; this line is offset from the
+    # contours by r.  When the circle rolls around a corner with a radius
+    # of zero, the circle center traces out an arc of radius r.  When
+    # the circle rolls around a corner with a radius of Ri, the circle
+    # center traces out an arc of radisu Ri + r.  Thus, the circle center
+    # traces an arc at every corner, where each corner has an radius of
+    # Ri + r.  (Corners with no rounding have Ri = 0.)
+    #
+    # Now to make things more complicated, we can adjust the mill path
+    # both inward and outward.  There is a variable called {contour_offset},
+    # which we will call o, and another variable called {finish_offset}
+    # which we will call f.  The contour offset can be positive or negative
+    # and specifies an amount to grow or shrink the contour outline.
+    # A positive contour offset (o > 0) causes the contour to expand
+    # out by an amount o.  And the negative contour offset (o < 0) and
+    # causes the contour to reduce by an amount o.  The finish offset
+    # is like the contour offset, but it is always positive (f >=0.)
+    # When f > 0, the contour is milled first using climb milling
+    # at path that is an additional distince f from the final outline.  The
+    # final pass is done with no distance additional f distance using climb
+    # milling.  Since f and o behave similarly, there is no real need to
+    # treat them differently; they can simply be added together to figure out
+    # the desired exterior contour path.
+    #
+    # When we expand the contour out by o+f (o+f > 0), all of the straight
+    # line paths are offset to the outside by o+f and all of the arcs have
+    # a radius of Ri+o+f.  That is easy.  When o+f < 0, we have to be more
+    # careful.  The straight line offset to the inside by o+f, but arc radius
+    # never goes less than Ri.  Technically, the arc radius at each corner
+    # is max(Ri, Ri+o+f).  Since max(Ri, Ri+o+f) works for all values of o+f,
+    # that is what we use.  When we roll the circle with a radius of r around
+    # the expanded for the expanded/contracted contour, the radius traced by
+    # the circle center is max(r+Ri, r+Ri+f+o).
+    #
+    # Now comes the details of figuring all of this stuff out.  The two
+    # line segements attached to a point Pi are Pi-1:Pi and Pi:Pi+1 and
+    # have an angle a.  (Modular arithemetic by N is used for the indicies.)
+    # Now we need to create a line that bisects this angle.  All arc centers
+    # live on this line.  Let's start with the simple case where f+o=0.
+    # If Ri=0, the center of the path arc, Ci, is the same as Pi and the
+    # arc radius r.  Now if Ri>0, the center, Ci, is moved in such that
+    # Ci has a perpendicular distance from both line segments that is Ri.
+    # The law of sines can be used on the right triangle which as the
+    # three angles a/2, 90-a/2, and 90.  Thus,
+    # 
+    #        r      |Pi:Ci|
+    #     ------- = ------- = |Pi:Ci| = distance between Pi and Ci.
+    #     sin a/2   sin 90
+    #
+    # We know r and a, so we can easily compute |Pi:Ci|.  Using basic
+    # vector arithemetic, the X and Y coordinates of Ci = (Cx,Cy) can
+    # be computed.
+    #
+    # Now we the contour offset and finish offset and replace r above
+    # with max(Ri, Ri+f+o) and we can easily compute Ci for the cases
+    # where f+o != 0.
+
+    def __init__(self, part, comment, sub_priority, tool, order, follows,
+      z_start, z_stop, corners, offset, effective_tool_radius, passes):
+	""" *Operation_Contour*:
+	"""
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(comment, str)
+	assert isinstance(sub_priority, int)
+	assert isinstance(tool, Tool)
+	assert isinstance(order, int)
+	assert isinstance(follows, Operation)
+	assert isinstance(z_start, L)
+	assert isinstance(z_stop, L)
+	assert isinstance(corners, list)
+	assert isinstance(offset, L)
+	assert isinstance(effective_tool_radius, L)
+	assert isinstance(passes, int)
+	for corner in corners:
+	    assert isinstance(corner, Corner)
+
+	# Initialize super class:
+	Operation.__init__(self, "Contour", KIND_CONTOUR,
+	  part, comment, sub_priority, tool, order, follows)
+
+	# Load up the rest of *self*:
+	self.z_start = z_start
+	self.z_stop = z_stop
+	self.corners = corners
+	self.offset = offset
+	self.effective_tool_radius = effective_tool_radius
+	self.passes = passes
+
+    def cnc_generate(self):
+	""" *Operation_Contour*: Ggenerate the CNC code for *self*.
+	"""
+
+	# Use *contour* instead of *self*:
+	contour = self
+
+	# Grab some values from *contour*:
+	part = contour.part
+	shop = part._shop
+	code = shop.code
+	tool = operation.tool
+
+	# Record *comment* into *code*:
+	comment = operation.comment
+	code.line_comment(comment)
+
+	# Grab some values from *tool*:
+	s = tool.spindle
+	f = tool.feed
+	tool_diameter = tool.diameter
+	z_feed = f / 2
+
+	# Grap some more values from *contour*:
+	z_start = contour.z_start
+	z_stop = contour.z_stop
+	z_depth = z_start - z_stop
+	passes = contour.passes
+	corners = contour.corners
+	offset = contour.offset
+	radius = contour.effective_tool_radius
+	depth_per_pass = z_depth / float(passes)
+
+	# Now generate the G-Code.  We visit each corner once, and the
+	# first corner twice.  Thus, we need to loop through
+	# {size} + 1 times:
+
+	code.z_safe_assert("contour", comment)
+
+	plunge_offset = tool_diameter
+	#call d@("plunge_offset temporary set to zero\n")
+	zero = L()
+	plunge_offset = zero
+
+	for index in range(passes):
+	    code.line_comment("Pass {0} of {1}".format(index + 1, passes))
+
+	    # Get cutter down to the correct depth:
+	    z = z_start - depth_per_pass * float(index + 1)
+
+	    #call d@(form@("tool=%v% plunge_offset=%i%\n\") %
+	    #  f@(tool.name) / f@(plunge_offset))
+
+	    code.contour(corners, plunge_offset, offset, radius, True, z, f, s)
+
+	code.z_safe_retract(z_feed, s)
+
+    def compare(self, contour2):
+	""" *Operation_Contour* will return -1, 0, 1 depending upon whether
+	    *self* should sort before, at, or after *contour2*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(contour2, Operation_Contour)
+
+	# Use *contour1* instead of *self*:
+	contour1 = self
+
+	# Make sure that we do the super class compare first:
+	result = XML.compare(contour1, contour2)
+	if result != 0:
+	    return result
+
+	# Compare on *z_start* second:
+	result = -contour1.z_start.compare(contour2.z_start)
+	if result != 0:
+	    return result
+
+	# Compare on *z_stop* third:
+	result = -contour1.z_stop.compare(contour2.z_stop)
+	if result != 0:
+	    return result
+
+	# Compare length of *corners* fourth:
+	corners1 = contour1.corners
+	corners2 = contour2.corners
+	corners_size = corners1.size
+	result = int_compare(corners_size, corners2.size)
+	if result != 0:
+	    return result
+
+	# Compare each *corner* in order fifth:
+	for index in range(corners_size):
+	    corner1 = corners1[index]
+	    corner2 = corners2[index]
+	    result = corner1.compare(corner2)
+	    if result != 0:
+		break
+
+	return result
+
+class Operation_Dowel_Pin(Operation):
+    """ *Operation_Dowel_Pin* is a class that implements a dowel pin operation.
+    """
+
+    def __init_(self, part, comment, sub_priority, tool, order, follows,
+      name, kind, diameter, edge_x, edge_y, original_x, original_y, original_z,
+      plunge_x, plunge_y, tip_depth, z_stop):
+	""" *Operation_Dowel_Pin*: Initialize an *Operation_Dowel_Pin*
+	    object to contain *part*, *comment*, *sub_priority*, *tool*,
+	    *order*, *follows*, *diameter*, *edge_x*, *edge_y*,
+	    *original_y*, *original_z*, *plunge_x*, *plunge_y*,
+	    *tip_depth*, and *z_stop*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(comment, str)
+	assert isinstance(sub_priority, int)
+	assert isinstance(tool, Tool)
+	assert isinstance(order, int)
+	assert isinstance(follows, Operation)
+	assert isinstance(diameter, L)
+	assert isinstance(edge_x, L)
+	assert isinstance(edge_y, L)
+	assert isinstance(original_x, L)
+	assert isinstance(original_y, L)
+	assert isinstance(original_z, L)
+	assert isinstance(plunge_x, L)
+	assert isinstance(plunge_y, L)
+	assert isinstance(tip_depth, L)
+	assert isinstance(z_stop, L)
+
+	# Initialize super class:
+	Operation.__init(self, "Dowel_Pin", KIND_DOWEL_PIN,
+	  part, comment, sub_priority, tool, order, follows)
+
+	# Load up the rest of *self*:
+	self.diameter = diameter
+	self.edge_x = edge_x
+	self.edge_y = edge_y
+	self.original_x = original_x
+	self.original_y = original_y
+	self.original_z = original_z
+	self.plunge_x = plunge_x
+	self.plunge_y = plunge_y
+	self.tip_depth = tip_depth
+	self.z_stop = z_stop
+
+    def cnc_generate(self):
+	""" *Operation_Dowel_Pin*: Generate the CNC G-code for a an
+	    *Operation_Dowel_Pin* object (i.e. *self*.)
+	"""
+
+	# Use *dowel_pin* instead of *self*.
+	dowel_pin = self
+
+	part = dowel_pin.part
+	shop = part._shop
+	code = shop.code
+	vice = shop.vice
+	jaw_width = vice.jaw_width
+	half_jaw_width = jaw_width / 2
+
+	code.line_comment(operation.comment)
+	    
+	diameter = dowel_pin.diameter
+	edge_x = dowel_pin.edge_x
+	edge_y = dowel_pin.edge_y
+	plunge_x = dowel_pin.plunge_x
+	plunge_y = dowel_pin.plunge_y
+	radius = diameter / 2
+	z_stop = dowel_pin.z_stop
+	tip_depth = dowel_pin.tip_depth
+
+	ipm10 = 10
+	rpm0 = 0
+
+	code.line_comment(
+	  "{0} Initial Dimensions: {1} x {2} x {3}".format(part.name,
+	  part.dx_original, part.dy_original, part.dz_original))
+
+	#call d@(form@("part:%v% cnc_gen@Op_Dowel_Pin:%i% %i%\n\") %
+	#  f@(part.name) % f@(plunge_x) / f@(plunge_y))
+
+	code.xy_rapid(lunge_x, plunge_y)
+
+	# Now pause to let operator see if Z-safe is at the right height:
+	code.begin()
+	code.unsigned("M", 6)
+	code.unsigned("T", 9)
+	code.comment("Operator may check that Z-safe is correct")
+	code.end()
+
+	code.line_comment(
+	  "z_stop={0} tip_depth={1}".format(z_stop, tip_depth))
+
+	code.z_feed(ipm10, rpm0, z_stop, "dowel_pin")
+
+	#call d@(form@(
+	#  "cnc_gen@Op_Dowel(%v% %v%):ex=%i% ey=%i% rad=%i% e-r=%c% vx=%c%\n\")%
+	#  f@(part.name) % f@(operation.comment) %
+	#  f@(edge_x) % f@(edge_y) % f@(radius) %
+	#  f@(code_length@(edge_x - radius)) / f@(code.vice_x))
+
+	code.line_comment(
+	  "dowel: edge_x={0} edge_y={1} radius={2} dx/2={3} odx/2={4}".
+	  format(edge_x, edge_y, radius, part.dx/2, part.dx_original/2))
+	code.xy_feed(ipm10, rpm0, edge_x, edge_y)
+
+	# Now pause again, to let the operator move piece up against the
+	# the dowel pin:
+	code.begin()
+	code.unsigned("M", 6)
+	code.unsigned("T", 2)
+	code.comment("Operator should place part against dowel pin")
+	code.end()
+
+	# Retract away from the part edge back to *plunge_x* and get
+	# back up to Z safe:
+	code.xy_feed(ipm10, rpm0, plunge_x, plunge_y)
+	code.z_safe_retract(ipm10, rpm0)
+
+    def compare(self, dowel_pin2):
+	""" *Operation_Dowel_Pin*: Return -1, 0, or 1 depending upon whether
+	    *dowel_pin2* (i.e. *self*) should sort before, at, or after
+	    *dowel_pin2*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(dowel_pin, Operation)
+
+	# Use *dowel_pin1* instead of *self*:
+	dowel_pin1 = self
+
+	# Perform superclass comparisson first:
+	result = Operation.compare(dowel_pin1, dowel_pin2)
+	if result != 0:
+	    return result
+	
+	# It is unlikely we will get here:
+	#FIXME: Need to finish writing this code!!!
+	assert False, "Fix Operation_Dowel_Pin.compare()"
+
+	return result
+
+class Operation_Drill(Operation):
+    """ *Operation_Drill* is a class that corresponds to a drill operation.
+    """
+
+    # Orginally copied from:
+    #
+    #     http://www.precisiontwistdrill.com/techhelp/article08281995.asp
+    #
+    # It is long gone...
+    #
+    # As manufacturing facilities move from conventional drilling methods to
+    # CNC and "high performance", we shouldn't forget drilling basics.  They
+    # still apply in the high tech drilling environment. This is a review of
+    # some drilling basics:
+    #
+    #   * Use the shortest drill possible for the specific application.
+    #     Longer drills are (1) more costly, (2) break easier and (3)
+    #     drill bellmouthed holes.
+    #   * Avoid the tendency to over speed and under feed.  Excessive
+    #     speed causes (1) premature outer corner drill wear, (2) material
+    #     work hardening, (3) long, stringy chips, (4) reduced drill
+    #     life and (5) increased cost per hole.
+    #   * Emphasizing feed rate: (1) helps break up chips (2) reduces
+    #     premature outer corner drill wear, (3) reduces material work
+    #     hardening, (4) extends drill life and (5) reduces cost per hole.
+    #   * Use split point drills for drilling alloy materials; benefits
+    #     include: (1) start at the point of contact (self-centering),
+    #     (2) drill with less torque and thrust and (3) break up chips.
+    #   * A hole of three drill diameters or deeper should be considered
+    #     a deep hole. Therefore, you should peck drill just enough to
+    #     prevent chips from packing in the flutes, because chip clogging
+    #     is the major cause of drill breakage. You should decrease speeds
+    #     and feeds as follows:
+    #
+    #    +----------------------------------------------------------+
+    #    |     Speed and feed Reduction (Based upon hole depth)     |
+    #    +-----------------------+-----------------+----------------+
+    #    |     Hole Depth        |                 |                |
+    #    |   to Diameter Ratio   |                 |                |
+    #    |(times drill diameter) | Speed Reduction | Feed Reduction |
+    #    +-----------------------+-----------------+----------------+
+    #    |           3           |      10%        |      10%       |
+    #    |           4           |      20%        |      10%       |
+    #    |           5           |      30%        |      20%       |
+    #    |           6           |     35-40%      |      20%       |
+    #    +-----------------------+-----------------+----------------+
+    #
+    #   * Parabolic drills should be reduced as follows:
+    #
+    #    +-------------------------------------------------------------+
+    #    | Speed Reduction -- Parabolic Drills (Based upon hole depth) |
+    #    +------------------------------+------------------------------+
+    #    | Hole Depth to Diameter Ratio |   Speed                      |
+    #    | (times drill diameter)       | Reduction                    |
+    #    +------------------------------+------------------------------+
+    #    |            3                 |      0                       |
+    #    |            4                 |      0                       |
+    #    |            5                 |      5%                      |
+    #    |         6 to 8               |      10%                     |
+    #    |         8 to 11              |      20%                     |
+    #    |        11 to 14              |      30%                     |
+    #    |        14 to 17              |      50%                     |
+    #    |        17 to 20              |      50%                     |
+    #    +------------------------------+------------------------------+
+    #
+    #   * When drilling harder materials (i.e. above R/c 35); (1) reduce
+    #     speeds and feeds to prevent points from burning and drilling
+    #     breakage and (2) use cobalt drills as their higher hardness
+    #     and heavy-duty construction are designed from drilling
+    #     harder-materials
+    #   * Use drills with a black oxide surface treatment when drilling
+    #     ferrous materials.  The black oxide treatment holds the coolants
+    #     and lubricants to the surface of the drill retarding material
+    #     build-up. This treatment also improves toughness.
+
+    def __init__(self, comment, sub_priority, tool, order, follows,
+      diameter, hole_kind, x, y, z_start, z_stop, is_countersink):
+	""" *Operation_Drill*: Initialize *Operation_Drill* to contain
+	    *diameter*, *hole_kind*, *x*, *y*, *z_start*, *z_stop*, and
+	    *counter_sink*.
+	"""
+
+	# Initialize super class:
+	assert isinstance(part, Part)
+	assert isinstance(comment, str)
+	assert isinstance(sub_priority, int)
+	assert isinstance(tool, Tool)
+	assert isinstance(order, int)
+	assert isinstance(follows, Operation)
+	assert isinstance(diameter, L)
+	assert isinstance(hole_kind, Hole_Kind)
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+	assert isinstance(z_start, L)
+	assert isinstance(z_stop, L)
+	assert isinstance(is_countersink, bool)
+
+	# Initialize the super class:
+	Operation.__init__(self, "Drill", KIND_DRILL,
+	  part, comment, sub_priority, tool, order, follows)
+
+	# Load up *self*:
+	self.diameter = diameter
+	self.hole_kind = hole_kind
+	self.x = x
+	self.y = y
+	self.z_start = z_start
+	self.z_stop = z_stop
+	self.is_countersink = is_countersink
+
+    def cnc_generate(self, is_last):
+	""" *Operation_Drill*: Generate the CNC G-code for an
+	    *Operation_Drill* object (i.e. *self*).
+	"""
+	# Verify argument types:
+	assert isinstance(is_last, bool)
+
+	# Use *drill* instead of *self*:
+	drill = self
+
+	part = drill.part
+	shop = part._shop
+	code = shop.code
+	comment = operation.comment
+	tool = operation.tool
+	f = tool.feed
+	s = tool.spindle
+
+	diameter = drill.diameter
+	x = drill.x
+	y = drill.y
+	z_start = drill.z_start
+	z_stop = drill.z_stop
+	radius = diameter / 2
+	half_radius = radius / 2
+
+	is_laser = tool.is_laser()
+
+	#call d@(form@("Part=%v% Drill %i% hole at (%i%, %i%) is_laser=%l%\n\")%
+	#  f@(part.name) % f@(diameter) % f@(x) % f@(y) / f@(is_laser))
+
+	if is_laser:
+	    code.dxf_circle(x, y, diameter)
+	else:
+	    hole_kind = drill_hole_kind
+	    if hole_kind == HOLE_KIND_THROUGH:
+		took_kind = tool.kind
+		assert tool_kind == TOOL_KIND_DRILL
+		tool_drill = tool.drill
+		point_angle = tool_drill.point_angle
+		tip_depth = tool.tip_depth(point_angle)
+		#call line_comment@(code,
+		#  form@("z_stop=%i% diameter=%i% tip_depth=%i%") %
+		#  f@(z_stop) % f@(diameter) / f@(tip_depth))
+		z_stop = z_stop - tip_depth - L(inch=0.040)
+	    elif hole_kind == HOLE_KIND_TIP:
+		pass
+	    elif hole_kind == HOLE_KIND_FLAT:
+		assert False, "Flat holes can't be done with point drills"
+	    else:
+		assert False, "Unknown hole kind"
+
+	    code.z_safe_assert("drill", comment)
+
+	    diameter_divisor = 3.0
+	    material = part.material
+	    #switch material.named_material
+	    #  case plastic
+	    #	# Plastic can really clog up the drill flutes, try to short the
+	    #	# the drill spirals:
+	    #	diameter_divisor := 0.5    
+
+	    depth = z_start - z_stop
+	    trip_depth = diameter / diameter_divisor
+	    if depth > trip_depth:
+		# "Deep" hole:
+
+		# Output G73 G98 F# Q# R# S# X# Y# Z# (comment):
+		# Output G83 G98 F# Q# R# S# X# Y# Z# (comment):
+		# Output O900 [x] [y] [z_safe] [z_start] [z_stop] [z_step]
+		#    [z_back] [feed] [speed] (comment):
+		# Output O910 [x] [y] [z_safe] [z_start] [z_stop] [z_step]
+		#    [z_back] [feed] [speed] (comment):
+
+		z_rapid = part.z_rapid
+		depth = z_rapid - z_stop
+		pecks = int(depth / trip_depth) + 1
+		# Add just a little to make sure {pecks} * {q} > {depth};
+		# The drill will *never* go below the Z value:
+		q = (depth / float(pecks)) + L(inch=.005)
+
+		subroutine_code = 900
+		if diameter <= L(inch="3/32"):
+		    # Use full retract pecking:
+		    subroutine_code = 910
+
+		code.begin()
+		code.subroutine_call(subroutine_code)
+		code.length("[]", x - code.vice_x)
+		code.length("[]", y - code.vice_y)
+		code.length("[]", part.z_safe)
+		code.length("[]", z_start)
+		code.length("[]", z_stop)
+		code.length("[]", radius)
+		code.length("[]", half_radius)
+		code.speed("[]", f)
+		code.hertz("[]", s)
+		code.comment(comment)
+		code.end()
+
+		#call begin@(code)
+		#call mode_motion@(code, 73)
+		#call mode_motion@(code, 83)
+		#call mode_canned_cycle_return@(code, 98)
+		#call speed@(code, "F", f)
+		#call length@(code, "Q", code_length@(q))
+		#call length@(code, "R1", z_rapid)
+		#call hertz@(code, "S", s)
+		#call length@(code, "X", code_length@(x))
+		#call length@(code, "Y", code_length@(y))
+		#call length@(code, "Z1", code_length@(z_stop))
+		#call comment@(code, comment)
+		#call end@(code)
+	    else:	
+		# Regular hole:
+
+		# Output G81 G98 F# R# S# X# Y# Z# (comment):
+
+		code.begin()
+		code.mode_motion(81)
+		code.mode_canned_cycle_return(98)
+		code.speed("F", f)
+		code.length("R1", part.z_rapid)
+		code.hertz("S", s)
+		code.length("X", x)
+		code.length("Y", y)
+		code.length("Z1", z_stop)
+		code.comment(comment)
+		code.end()
+
+	    if is_last:
+		# Output a G80 to exit canned cycle mode:
+		code.begin()
+		code.mode_motion(80)
+		code.comment("End canned cycle")
+		code.end()
+
+		# Forget the G98 or G99 code:
+		code.g2 = -1
+
+	    # Do any dwell:
+	    cnc_drill_count = part.cnc_drill_count + 1
+	    part.cnc_drill_count = cnc_drill_count
+	    if not drill.is_countersink and \
+	      cnc_drill_count % part.cnc_drill_pause == 0:
+		# Perform a Spindle Stop, Pause, Spindle_Start, Pause:
+		code.begin()
+		code.unsigned("M", 5)
+		code.end()
+
+		code.begin()
+		code.unsigned("G11", 4)
+		code.time("P", Code_Time(seconds=3.0))
+		code.end()
+
+		code.begin()
+		code.unsigned("M", 3)
+		code.hertz("S", s)
+		code.end()
+
+		code.begin()
+		code.unsigned("G11", 4)
+		code.time("P", Code_Time(seconds=8.0))
+		code.end()
+
+    def compare(self, drill2):
+	""" *Operation_Drill*: Return -1, 0, 1 if *drill1* (i.e. *self*)
+	    should sort before, at, or after *drill2*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(drill2, Operation)
+
+	# Use *drill1* instead of *self*:
+	drill1 = self
+
+	# Perform superclass comparison first:
+	result = Operation.compare(drill1, drill2)
+	if result != 0:
+	    return result
+
+	# Perform *diameter* comparison second:
+	result = drill1.diameter.compare(drill2.diameter)
+	if result != 0:
+	    return result
+
+	# The remaining comparisons are for disambiguation only:
+	result = drill1.x.compare(drill2.x)
+	if result != 0:
+	    return result
+	result = drill1.y.compare(drill2.y)
+	if result != 0:
+	    return result
+	result = -drill1.z_start.compare(drill2.z_start)
+	if result != 0:
+	    return result
+	result = -drill1.z_stop.compare(drill2.z_stop)
+	if result != 0:
+	    return result
+
+	return result
+
+class Operation_Round_Pocket(Operation):
+    """ *Operation_Round_Pocket* is a class that implements a round pocket
+	manufacturing operation.
+    """
+
+    def __init_(self, part, comment, sub_priority, tool, order, follows,
+      diameter, hole_kind, x, y, z_start, z_stop):
+	""" *Operation_Round_Pocket* will intitialize an
+	    *Operation_Round_Pocket* object (i.e. *self*) to contain
+	    *part*, *comment*, *sub_priority*, *tool*, *order*, *follows*,
+	    *diameter*, *hole_kind*, *x*, *y*, *z_start*, and *z_stop*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(comment, str)
+	assert isinstance(sub_priority, int)
+	assert isinstance(tool, Tool)
+	assert isinstance(order, int)
+	assert isinstance(follows, Operation)
+	assert isinstance(diameter, L)
+	assert isinstance(hole_kind, Hole_Kind)
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+	assert isinstance(z_start, L)
+	assert isinstance(z_stop, L)
+
+	# Initialize superclass:
+	Operation.__init__(self, "Round_Pocket", KIND_ROUND_POCKET,
+	  part, comment, sub_priority, tool, order, follows)
+
+	# Load up *self*:
+	self.diameter = diameter
+	self.hole_kind = hole_kind
+	self.x = x
+	self.y = y
+	self.z_start = z_start
+	self.z_stop = z_stop
+
+    def cnc_generate(self):
+	""" *Operation_Round_Pocket*: Generate the CNC G-code for an
+	    *Operation_Round_Pocket* (i.e. *self*).
+	"""
+
+	# Extract some values from {round_pocket}:
+	diameter = round_pocket.diameter
+	x = round_pocket.x
+	y = round_pocket.y
+	z_start = round_pocket.z_start
+	z_stop = round_pocket.z_stop
+	assert z_start >= z_stop
+
+	# Compute some values based on {diameter}:
+	maximum_depth = diameter / 3.0
+	radius = diameter / 2
+
+	# Extract some values from {part} and {operation}.
+	shop = part._shop
+	code = shop.code
+	tool = operation.tool
+
+	# Extract some values from {tool}:
+	tool_diameter = tool.diameter
+	comment = operation.comment
+	f = tool.feed
+	s = tool.spindle
+	hole_kind = round_pocket.hole_kind
+
+	# Figure out if {tool} is a laser:
+	is_laser = is_laser(tool)
+
+	# Compute some values based on {tool_diameter}:
+	tool_radius = tool_diameter / 2 
+	half_tool_radius = tool_radius / 2
+
+	#call d@(form@("cnc_gen_round_pocket_pock: part=%v% laser=%l%\n\") %
+	#  f@(part.name) / f@(is_laser))
+	if is_laser:
+	    # We just cut a simple circle:
+	    code.dxf_circle(x, y, radius - tool_radius)
+	else:
+	    # We do all the work to mill out the round_pocket pocket;
+
+	    # Deal with through holes:
+	    is_through = False
+	    if hole_kind == HOLE_KIND_THROUGH:
+		is_through = True
+		z_stop = z_stop - L(inch=0.025)
+
+	    code.line_comment(
+	      "z_start={0} z_stop={1}".format(z_start, z_stop))
+	    
+	    z_depth = z_start - z_stop
+	    passes = int(z_depth / maximum_depth) + 1
+	    depth_per_pass = z_depth / float(passes)
+	    assert passes < 100
+
+	    #call line_comment@(code,
+	    #  form@("z_depth=%i% passes=%i% depth_per_pass=%i%") %
+	    #  f@(z_depth) % f@(passes) / f@(depth_per_pass))
+
+	    # Move to position:
+	    code.line_comment(comment)
+	    code.z_safe_assert("round_pocket_pocket", comment)
+	    code.xy_rapid(x, y)
+
+	    z_feed = f / 4.0
+	    shave = L(inch=0.005)
+	    for depth_pass in range(passes):
+		code.line_comment(
+		  "{0} round_pocket pocket [pass {1} of {2}]".
+		  format(comment, depth_pass + 1, passes))
+		
+		# Get to proper depth:
+		#call line_comment@(code,
+		#  read_only_copy@(form@("x=%i% y=%i% x_value=%i% y_value=%i%")%
+		#    f@(x) % f@(y) % f@(x_value@(code)) / f@(y_value@(code))))
+		code.xy_feed(f, s, x, y)
+		z = z_start - depth_per_pass * float(depth_pass + 1)
+		code.z_feed(z_feed, s, z, "round_pocket_pocket")
+
+		radius_remove = radius - shave - tool_radius
+		if is_through:
+		    code.ccw_circle(radius_remove, f, s, x, y)
+		else:
+		    # We have to mow out all the invening space:
+		    radius_passes = int(radius_remove /  half_tool_radius) + 1
+		    pass_remove = radius_remove / float(radius_passes)
+
+		    for radius_index in range(radius_passes):
+			code.ccw_circle(
+			  pass_remove * float(radius_index + 1), f, s, x, y)
+
+	    # Do a "spring pass" to make everybody happy:
+	    code.line_comment(code,
+	      "{0} round_pocket pocket 'spring' pass".foramt(comment))
+	    path_radius = radius - tool_radius
+	    half_path_radius = path_radius / 2
+	    code.xy_feed(f, s, x, y)
+	    code.xy_ccw_feed(f, half_path_radius, s,
+	      x + half_path_radius, y + half_path_radius)
+	    code.xy_ccw_feed(f, half_path_radius, s, x, y + path_radius)
+	    code.ccw_circle(radius - tool_radius, f, s, x, y)
+	    code.xy_ccw_feed(f, half_path_radius, s,
+	      x - half_path_radius, y + half_path_radius)
+	    code.xy_ccw_feed(f, half_path_radius, s, x, y)
+	    code.z_safe_retract(z_feed, s)
+
+    def compare(self, pocket2):
+	""" *Operation_Pocket*: Return -1, 0, 1 if *pocket1* (i.e. *self*)
+	    should sort before, at, or after *pocket2*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(pocket2, Operation)
+
+	# Use *pocket1* instead of *self*:
+	pocket1 = self
+
+	# Perform superclass comparison first:
+	result = Operation.compare(pocket1, pocket2)
+	if result != 0:
+	    return result
+
+	# We want deeper starts to show up later in sort:
+	result = -hole1.z_start.compare(hole2.z_start)
+	if result != 0:
+	    return result
+
+	# We want deeper stops to show up later is sort:
+	result = -hole1.z_stop.compare(hole2.z_stop)
+	if result != 0:
+	    return result
+
+	# The remaining tests are for disambiguation only:
+	result = hole1.diameter.compare(hole2.diameter)
+	if result != 0:
+	    return result
+	result = hole1.x.compare(hole2.x)
+	if result != 0:
+	    return result
+	result = hole1.y.compare(hole2.y)
+	if result != 0:
+	    return result
+
+	return result
+
+class Operation_Simple_Exterior(Operation):
+    """ *Operation_Simple_Exterior* is a class that implements a simple
+	exterior contour manufacturing step.
+    """
+
+    def __init_(self, part, comment, sub_priority, tool, order, follows,
+      x1, y1, x2, y2, z_start, z_stop, passes, corner_radius, tool_radius):
+	""" *Operation_Simple_Exterior* will initialize an
+	    *Operation_Simple_Exterior* object (i.e. *self*) with *part*,
+	    *comment*, *sub_priority*, *tool*, *order*, *follows*, *x1*, *y1*,
+	    *x2*, *y2*, *z_start*, *z_stop*, *passes*, *corner_radius*,
+	    and *tool_radius*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(comment, str)
+	assert isinstance(sub_priority, int)
+	assert isinstance(tool, Tool)
+	assert isinstance(order, int)
+	assert isinstance(follows, Operation)
+	assert isinstance(x1, L)
+	assert isinstance(y1, L)
+	assert isinstance(x2, L)
+	assert isinstance(y2, L)
+	assert isinstance(z_start, L)
+	assert isinstance(z_stop, L)
+	assert isinstance(passes, int)
+	assert isinstance(corner_radius, L)
+	assert isinstance(tool_radius, L)
+
+	# Initialize superclass:
+	Operation.__init__(self, "Round_Pocket", KIND_ROUND_POCKET,
+	  part, comment, sub_priority, tool, order, follows)
+
+	# Load up rest of *self:
+	self.x1 = x1
+	self.y1 = y1
+	self.x2 = x2
+	self.y2 = y2
+	self.z_start = z_start
+	self.z_stop = z_stop
+	self.passes = passes
+	self.corner_radius = corner_radius
+	self.tool_radius = tool_radius
+
+    def cnc_generate(self):
+	""" *Operation_Simple_Exterior*: Generate the CNC G-code for an
+	    *Operation_Simple_Exterior* object (i.e. self).
+	"""
+
+	shop = part._shop
+	code = shop.code
+	comment = operation.comment
+	tool = operation.tool
+	f = tool.feed
+	s = tool.spindle
+    
+	corner_radius = exterior.corner_radius
+	passes = exterior.passes
+	tool_radius = exterior.tool_radius
+	x1 = exterior.x1
+	y1 = exterior.y1
+	x2 = exterior.x2
+	y2 = exterior.y2
+	z_start = exterior.z_start
+	z_stop = exterior.z_stop
+	#call d@(form@("comment=%v% tool=%v% z_start=%i% z_stop=%i%\n\") %
+	#  f@(comment) % f@(tool.name) % f@(z_start) / f@(z_stop))
+
+	# Compute some more coordinates:
+	x1mtr = x1 - tool_radius
+	x1pcr = x1 + corner_radius
+	x2mcr = x2 - corner_radius
+	x2ptr = x2 + tool_radius
+	y1mtr = y1 - tool_radius
+	y1pcr = y1 + corner_radius
+	y2mcr = y2 - corner_radius
+	y2ptr = y2 + tool_radius
+
+	r = tool_radius + corner_radius		# Total arc radius
+
+	code.z_safe_assert("simple_exterior", comment)
+	code.xy_rapid(x1mtr, y2ptr)		# Top Left corner
+
+	# Output {comment}:
+	z_delta = (z_start - z_stop) / float(passes)
+	z_feed = f / 4.0
+	index = 0
+	while index < passes:
+	    # Put put a reasonable comment:
+	    trim_comment = \
+	      "%s%: Trim to size [pass %d% of %d%]". \
+	      format(comment, index + 1, passes)
+	    code.line_comment(trim_comment)
+
+	    # Bring tool down into material:
+	    z = z_start - z_delta * float(index + 1)
+	    code.z_feed(z_feed, s, z, "simple_exterior")
+
+	    # Now trace out one contour path:
+	    code.xy_feed(    f,    s, x2mcr, y2ptr)	# Top Right
+	    code.xy_cw_feed( f, r, s, x2ptr, y2mcr)	# Right Top
+	    code.xy_feed(    f,    s, x2ptr, y1pcr)	# Right Bottom
+	    code.xy_cw_feed( f, r, s, x2mcr, y1mtr)	# Bottom Right
+	    code.xy_feed(    f,    s, x1pcr, y1mtr)	# Bottom Left
+	    code.xy_cw_feed( f, r, s, x1mtr, y1pcr)	# Left Bottom
+	    code.xy_feed(    f,    s, x1mtr, y2mcr)	# Left Top
+	    code.xy_cw_feed( f, r, s, x1pcr, y2ptr)	# Top Left
+	    code.xy_feed(    f,    s, x1mtr, y2ptr)	# Top Left corner
+
+	    index = index + 1
+
+	# Get us back to Z safe:
+	code.z_safe_retract(z_feed, s)
+
+    def compare(self, exterior2):
+	""" *Operation_Exterior*: Return -1, 0, 1 if *exterior1* (i.e. *self*)
+	    should sort before, at, or after *exterior2*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(exterior2, Operation)
+
+	# Use *exterior1* instead of *self*:
+	exterior1 = self
+
+	# Perform superclass comparison first:
+	result = Operation.compare(exterior1, exterior2)
+	if result != 0:
+	    return result
+
+	# Compare *z_start* second:
+	result = -exterior1.z_start.compare(exterior2.z_start)
+	if result != 0:
+	    return result
+
+	# Compare *z_stop* third:
+	result = -exterior1.z_stop.compare(exterior2.z_stop)
+	if result != 0:
+	    return result
+
+	# The remaining comparisons are for disambiguation only:
+	result = exterior1.x1.compare(exterior2.x1)
+	if result != 0:
+	    return result
+	result = exterior1.y1.compare(exterior2.y1)
+	if result != 0:
+	    return result
+	result = exterior1.x2.compare(exterior2.x2)
+	if result != 0:
+	    return result
+	result = exterior1.y2.compare(exterior2.y2)
+	if result != 0:
+	    return result
+	result = exterior1.corner_radius.compare(exterior2.corner_radius)
+	if result != 0:
+	    return result
+	result = exterior1.tool_radius.compare(exterior2.tool_radius)
+
+	return result
+
+class Operation_Simple_Pocket(Operation):
+    """ *Operation_Simple_Pocket* is a class the performs a simple pocket
+	manufacturing operation.
+    """
+
+    def __init_(self, part, comment, sub_priority, tool, order, follows,
+      x1, y1, x2, y2, z_start, z_stop, corner_radius, tool_radius, pocket_kind):
+	""" *Operation_Simple_Pocket*: Initialize an *Operation_Simple_Pocket*
+	    object (i.e. *self*) to contain *part*, *comment*, *sub_priority*,
+	    *tool*, *order*, *follows*, *x1*, *y1*, *x2*, *y2*, *z_start*,
+	    *z_stop*, *corner_radius*, *tool_radius*, and *pocket_kind*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(comment, str)
+	assert isinstance(sub_priority, int)
+	assert isinstance(tool, Tool)
+	assert isinstance(order, int)
+	assert isinstance(follows, Operation)
+	assert isinstance(x1, L)
+	assert isinstance(y1, L)
+	assert isinstance(x2, L)
+	assert isinstance(y2, L)
+	assert isinstance(z_start, L)
+	assert isinstance(z_stop, L)
+	assert isinstance(corner_radius, L)
+	assert isinstance(tool_radius, L)
+	assert isinstance(pocket_kind, int)
+
+	# Initialize superclass:
+	Operation.__init__(self, "Simple_Pocket", KIND_SIMPLE_POCKET,
+	  part, comment, sub_priority, tool, order, follows)
+
+	# Load up the rest of *self*:
+	self.x1 = x1
+	self.y1 = y1
+	self.x2 = x2
+	self.y2 = y2
+	self.z_start = z_start
+	self.z_stop = z_stop
+	self.corner_radius = corner_radius
+	self.tool_radius = tool_radius
+	self.pocket_kind = pocket_kind
+
+    def cnc_generate(self):
+	""" *Operation_Simple_Pocket*: Generate the CNC G-code for a
+	    *Operation_Simple_Pocket* object (i.e. *self*).
+	"""
+
+	pocket = self
+
+
+	# Grap some values from {pocket}:
+	x1 = pocket.x1
+	y1 = pocket.y1
+	x2 = pocket.x2
+	y2 = pocket.y2
+	z_start = pocket.z_start
+	z_stop = pocket.z_stop
+	tool_radius = pocket.tool_radius
+	corner_radius = pocket.corner_radius
+	pocket_kind = pocket.pocket_kind
+
+	# Extract some values from {part} and {operation}
+	shop = part._shop
+	code = shop.code
+	comment = operation.comment
+	tool = operation.tool
+	f = tool.feed
+
+	# Start with {comment}:
+	code.line_comment(comment)
+
+	# Output the pocket operations:
+	code.line_comment(
+	  "[{0},{1}]:[{2},{3}] zstart={4} z_stop={5} tool_rad={6} corn_rad={7}".
+	  format(x1, y1, x2, y2, z_start, z_stop, tool_radius, corner_radius))
+
+	# Define some constants:
+	zero = L()
+	z_extra = zero
+
+	# Figure out the minimum pocket span:
+	dx = x2 - x1
+	dy = y2 - y1
+	minimum_span = zero
+	if dx > dy:
+	    minimum_span = dy
+	else:
+	    minimum_span = dx
+	half_minimum = minimum_span / 2
+
+	# Emit the preparatory G-Code:
+
+	is_laser = tool.is_laser()
+
+	# Compute the number of depth passes required:
+	maximum_operation_depth = tool_radius / 2
+	if is_laser:
+	    maximum_operation_depth = tool.maximum_z_depth
+
+	total_cut = z_start - z_stop + z_extra
+	passes = int(total_cut / maximum_operation_depth)
+	while maximum_operation_depth* float(passes) < total_cut:
+	    passes = passes + 1
+	assert passes > 0
+	assert maximum_operation_depth * float(passes) >= total_cut
+	z_step = total_cut / float(passes)
+
+	# {tool_radius} is the radius of the selected end-mill,
+	# which we will henceforth, call R. We need to be careful on
+	# our inner passes because the end-mill can only cut R/sqrt(2)
+	# along the diagnoal.  If each pass is separated by exactly
+	# 2R, there will be little triangular islands left behind.
+	#
+	# We now define T=R/sqrt(2).  To avoid the little island
+	# problems, each inner pass must overlap the next pass out
+	# by at least (R-T).  Diagramatically:
+	#
+	# Pass 3 |-------|-------|
+	#           R        R
+	#                        |  T  |   R   |
+	# Pass 2               |-------|-------|
+	#                          R       R
+	#                                      |  T  |   R   |
+	# Pass 1                             |-------|-------|
+	#                                        R       R
+	#
+	# where the over lap between two passes is R-T.  In the example
+	# above the offset from the center for pass 1 is R, pass 2 is
+	# R+T+R, and for pass 3 is R+T+R+T+R.  Of course, the center to
+	# edge distance may not be 2R+N*(R+T), for some value of N.
+	# The better way to organize this is to offset the end-mill
+	# from the edge by R on the pass N, R+T+R on the pass N-1,
+	# and R+T+R+T+R on pass N-2, etc.
+
+	r = tool_radius
+	# 0.65 < 0.707 = 1/sqrt(2)
+	#t :@= smul@(r, 0.65)
+	t = r / 2
+
+	code.z_safe_assert("simple_pocket", comment)
+
+	# Compute the total number of rectangular paths needed:
+	#call d@(form@("comment=%v% r=%i% t=%i%\n\") %
+	#   f@(comment) % f@(r) / f@(t))
+	paths = 0
+	remaining = half_minimum
+	while remaining > zero:
+	    #call d@(form@("comment=%v% paths=%d% remaining=%i%\n\") %
+	    #  f@(comment) % f@(paths) / f@(remaining))
+
+	    if paths == 0:
+		# {r + r} does not work if pocket width equals tool width,
+		# so we just use {r + t} every time now:
+		#remaining := remaining - (r + r)
+		remaining = remaining - (r + t)
+	    else:
+		remaining = remaining - (r + t)
+	    paths += 1
+	#call d@(form@("comment=%v% paths=%d% remaining=%i% (final)\n\") %
+	#  f@(comment) % f@(paths) / f@(remaining))
+
+	# Generate {passes} deep depth passes over the pocket:
+	for depth_pass in range(passes):
+	    # Output "(Depth Pass # of #)" comment:
+	    code.line_comment("Depth Pass %d% of %d%".
+	      format(depth_pass + 1, passes))
+
+	    # Compute the plunge depth for each pass:
+	    z_plunge = z_start - z_step * float(depth_pass + 1)
+
+	    if pocket_kind == POCKET_KIND_THROUGH:
+		# We only need to do the exterior path to a depth of {z_plunge}:
+		code.simple_pocket_helper(block, pocket,
+		  r, f, z_plunge, depth_pass != 0)
+
+	    elif pocket_kind == POCKET_KIND_FLAT:
+		# Generate {paths} rectangular passes over the pocket:
+		for path in range(paths):
+		    # Provide a context comment:
+		    code.line_comment(
+		      "Rectangular Path {0} of {1}".
+		      format(path + 1, paths))
+
+		    # Compute the {offset} for this path:
+		    offset = r + (r + t) * float((paths - 1) - path)
+
+		    # If {offset} exceeds {half_minimum} it will cause
+		    # {px1} > {px2} or {py1} > {py2}, which is bad.
+		    # We solve the problem by not  letting {offset}
+		    # exceed {half_minimum}:
+		    if offset > half_minimum:
+			offset = half_minimum
+
+		    # We need to get the tool to the starting point safely:
+		    linear_move = False
+		    if path == 0:
+			# This is the first cut at a new depth:
+			if depth_pass == 0:
+			    # We are at {z_safe}, so we can move rapidly to the
+			    # plunge point:
+			    linear_move = True
+			else:
+			    # We are sitting at the outer edge at the old depth,
+			    # and there is no material between where are now
+			    # and ({start_x}, {start_y}); a rapid could be too
+			    # fast, so we do a linear move:
+			    linear_move = False
+		    else:
+			# We are at the previous internal path at this depth
+			# and need to move out and cut material as we go:
+			linear_move = True
+
+		    code.simple_pocket_helper(block, pocket,
+		      offset, f, z_plunge, linear_move)
+
+	# Return the tool to a safe location above the material:
+	code.z_safe_retract(f, block.spindle)
+
+	code.line_comment("Simple Pocket Done")
+
+    def compare(self, simple_pocket2):
+	""" *Operation_Simple_Pocket* returns -1, 0, or 1 if *simple_pocket1*
+	    (i.e. *self*) should sort before, at or after *simple_pocket*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(simple_pocket2, Operation)
+
+	# Use *simple_pocket1* instead of *self*:
+	simple_pocket1 = self
+
+	# Perform operation level compare first:
+	result = Operation.compare(simple_pocket1, simple_pocket2)
+	if result != 0:
+	    return result
+
+	# Compare *z_start* first:
+	result = -pocket1.z_start.compare(pocket2.z_start)
+	if result != 0:
+	    return result
+
+	# Compare *z_stop* second:
+	result = -pocket1.z_stop.compare(pocket2.z_stop)
+	if result != 0:
+	    return result
+
+	# The remainin comparisons are really only for disambiguation:
+	result = pocket1.x1.compare(pocket2.x1)
+	if result != 0:
+	    return result
+	result = pocket1.y1.compare(pocket2.y1)
+	if result != 0:
+	    return result
+	result = pocket1.x2.compare(pocket2.x2)
+	if result != 0:
+	    return result
+	result = pocket1.y2.compare(pocket2.y2)
+	if result != 0:
+	    return result
+	result = pocket1.corner_radius.compare(pocket2.corner_radius)
+	if result != 0:
+	    return result
+	result = pocket1.tool_radius.compare(pocket2.tool_radius)
+	if result != 0:
+	    return result
+
+	return result
+
+class Operation_Vertical_Lathe(Operation):
+    """ *Operation_Vertical_Lathe* is a class that represents a vertical
+	lathe manufacturing operation.
+    """
+
+    def __init__(self, part, comment, sub_priority, tool, order, follows,
+      x, y, inside_diameter, outside_diameter, z_start, z_stop):
+	""" *Operation_Veritcal_Lathe*: Initialize an *Operation_Vertical_Lathe*
+	    object (i.e. *self*) to contain *part*, *comment*, *sub_priority*,
+	    *tool*, *order*, *follows*, *x*, *y*, *inside_diameter*,
+	    *outside_diameter*, *z_start*, and *z_stop*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(comment, str)
+	assert isinstance(sub_priority, int)
+	assert isinstance(tool, Tool)
+	assert isinstance(order, int)
+	assert isinstance(follows, Operation)
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+	assert isinstance(inside_diameter, L)
+	assert isinstance(outside_diameter, L)
+	assert isinstance(z_start, L)
+	assert isinstance(z_stop, L)
+
+	# Initialize superclass:
+	Operation.__init__(self, "Vertical_Lathe", KIND_VERTICAL_LATHE,
+	  part, comment, sub_priority, tool, order, follows)
+
+	# Load up the rest of *self*:
+	self.x = x
+	self.y = y
+	self.inside_diameter = inside_diameter
+	self.outside_diameter = outside_diameter
+	self.z_start = z_start
+	self.z_stop = z_stop
+
+    def cnc_generate(self):
+	""" *Operation_Vertical_Lathe*:
+	"""
+
+	shop = part._shop
+	code = shop.code
+	zero = L()
+
+	# Grap some values from {lathe}:
+	x = lathe.x
+	y = lathe.y
+	inside_diameter = lathe.inside_diameter
+	outside_diameter = lathe.outside_diameter
+	z_start = lathe.z_start
+	z_stop = lathe.z_stop
+	z_extra = zero
+
+	# Grab some values from {operation}:
+	comment = operation.comment
+	tool = operation.tool
+	f = tool.feed
+	s = tool.spindle
+
+	# Grab some values from {tool}:
+	tool_diameter = tool.diameter
+	tool_radius = tool_diameter / 2
+
+	# Deal with {outside_diameter} < {inside_diameter}:
+	if outside_diameter < inside_diameter + tool_diameter * 2:
+	    outside_diameter = inside_diameter + tool_diameter * 2
+	#call d@(form@("outside_diameter=%i% inside_diameter=%i%\n\") %
+	#  f@(outside_diameter) / f@(inside_diameter))
+	inside_radius = inside_diameter / 2
+	outside_radius = outside_diameter / 2
+
+	#call d@(form@("outside_diameter=%i% inside_diameter=%i%\n\") %
+	#  f@(outside_diameter) / f@(inside_diameter))
+	#call d@(form@("outside_radius=%i% inside_radius=%i%\n\") %
+	#  f@(outside_radius) / f@(inside_radius))
+
+	# {epsilon} is small enough to make nudge {gap_passes} down when
+	# {outside_diameter} = {inside_diameter} + {twice@(tool_diameter)}
+	epsilon = L(inch=0.000000001)
+
+	# Compute {gap_step} from {inside_radius}, {outside_radius},
+	# and {tool_diameter}:
+	gap_total = outside_radius - inside_radius
+	gap_passes = int((gap_total - epsilon) / tool_diameter) + 1
+	gap_step = zero
+	if gap_passes > 1:
+	    gap_step = (gap_total - tool_diameter) / float(gap_passes - 1)
+	assert gap_passes < 10000
+
+	#call d@(form@("vertical_lathe: x=%i% y=%i% odiam=%i% idiam=%i%\n\") %
+	#  f@(x) % f@(y) % f@(outside_diameter) / f@(inside_diameter))
+	#call d@(form@(
+	#  "vertical_lathe:gap_tot=%i% gap_pass=%d% gap_step=%i%\n\")%
+	#  f@(gap_total) % f@(gap_passes) / f@(gap_step))
+
+	# Compute {depth_step} from {z_start}, {z_stop} and {tool_diameter}:
+	depth_total = z_start - z_stop
+	depth_passes = int(depth_total / (tool_diameter / 4.0)) + 1
+	depth_step = depth_total / float(depth_passes)
+	assert depth_passes < 10000
+
+	# Start code generation with {comment}:
+	code.line_comment(comment)
+
+	# Get the tool placed at the right place to {plunge}:
+	plunge_x = x
+	plunge_y = y + outside_radius - tool_radius
+	code.z_safe_assert("vertical_lathe", comment)
+	code.xy_rapid(plunge_x, plunge_y)
+
+	#call d@(form@("vertical_lathe: plunge_x=%i% plunge_y=%i%\n\") %
+	#  f@(plunge_x) / f@(plunge_y))
+	#call d@(form@(
+	#  "vertical_lathe: gapall=%i% gappasses=%d% gapstep=%i%\n\") %
+	#  f@(gap_total) % f@(gap_passes) / f@(gap_step))
+
+	#call d@(form@("tool_diameter=%i% tool_radius=%i%\n\") %
+	#  f@(tool_diameter) / f@(tool_radius))
+
+	# Now iterate down to the desired depth:
+	depth_index = 0
+	while depth_index < depth_passes:
+	    # Compute {z_depth} from {depth_step} and {depth_index}:
+	    z_depth = z_start - depth_step * float(depth_index + 1)
+
+	    # Make sure we are in the right place to start:
+	    code.xy_feed(f, s, plunge_x, plunge_y)
+
+	    # Get to proper {z_depth}:
+	    code.line_comment("{0}: Depth Pass {1} of {2}".
+	      format(comment, depth_index + 1, depth_passes))
+	    code.z_feed(f/ 4.0, s, z_depth, "vertical lathe")
+
+	    # Iterate across the gap:
+	    gap_index = 0
+	    while gap_index < gap_passes:
+		# Compute radius of this pass:
+		gap_radius = \
+		  outside_radius - tool_radius - gap_step * float(gap_index)
+
+		# Peform the circle operation:
+		code.line_comment("{0}: Gap pass {1} of {2}".
+		  format(comment, gap_index + 1,gap_passes))
+		code.ccw_circle(gap_radius, f, s, x, y)
+
+		#call d@(form@("vertical_lathe[%d%,%d%]: gap_radius=%i%\n\") %
+		#  f@(depth_index) % f@(gap_index) / f@(gap_radius))
+
+		gap_index += 1
+	    depth_index += 1
+    
+	# Return the tool to a safe location above the material:
+	code.z_safe_retract(f, s)
+
+	code.line_comment("Vertical Lathe Done")
+
+    def compare(self, lathe2):
+	""" *Operation_Vertical_Lathe* will return -1, 0, or 1 depending
+	    upon whether *lathe1* (i.e. *self*) should sort
+	    before, at, or after *lathe2*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(vertical_lathe2, Operation)
+
+	# Use *lathe1* instead of *self*:
+	lathe1 = self
+
+	# Do *Operation* level compare first:
+	result = Operation.compare(lathe1, lathe2)
+	if result != 0:
+	    return result
+
+	# Compare against *z_start* second:
+	result = lathe1.z_start.compare(lathe2.z_start)
+	if result != 0:
+	    return result
+
+	# Compare against *z_stop* third:
+	result = lathe1.z_stop.compare(lathe2.z_stop)
+	if result != 0:
+	    return result
+
+	# The remaining comparisons are for disambiguation only:
+	result = lathe1.x.compare(lathe2.x)
+	if result != 0:
+	    return result
+	result = lathe1.y.compare(lathe2.y)
+	if result != 0:
+	    return result
+	result = lathe1.inside_diameter.compare(lathe2.inside_diameter)
+	if result != 0:
+	    return result
+	result = lathe1.outside_diameter.compare(lathe2.outside_diameter)
+
+	return result
 
 class Part:
     """ A {Part} specifies either an assembly of parts or a single
@@ -2106,14 +4329,9 @@ class Part:
     def __init__(self, up, name = None):
 	""" *Part*: Initialize *self* to have a parent of *up*. """
 
-	#print("=>Part.__init__(*, '{0}', *, place={1})".format(name, place))
-
         # Check argument types:
-	none_type = type(None)
-	up_type = type(up)
-	name_type = type(name)
-	assert up_type == none_type or isinstance(up, Part)
-	assert name_type == none_type or isinstance(name, str)
+	#assert name == None or isinstance(name, str)
+	#assert up == None or isinstance(up, Part)
 
 	# Some useful abbreviations:
 	zero = L()
@@ -2127,24 +4345,39 @@ class Part:
 	#	#print("{0}['{1}'] = {2}". \
 	#	#  format(name, attribute_name, attribute._name))
 
+	ezcad = EZCAD3.ezcad
+
 	# Load up *self*:
-	if name_type == none_type:
+	if name == None:
 	    name = self.__class__.__name__
 	self._axis = None
 	self._center = None
 	self._color = None
 	self._dxf_scad_lines = []
-	self._ezcad = EZCAD3.ezcad
+	self._ezcad = ezcad
 	self._is_part = False	
 	self._material = None
 	self._name = name
+	self._operations = []
+	self._position = Matrix()
+	self._position_count = 0
+	self._priority = 0
 	#self._places = {}
+	self._reposition = Matrix()
 	self._rotate = None
+	self._shop = ezcad._shop
 	self._scad_difference_lines = []
 	self._scad_union_lines = []
 	self._signature_hash = None
+	self._top_surface_set = False
+	self._tool_preferred = ""
 	self._translate = None
 	self._visible = True
+	self._vice_x = L()
+	self._vice_y = L()
+	self._z_floor = L(inch=0.5)
+	self._z_rapid = Speed(in_per_sec=0.1)
+	self._z_safe = L(inch=0.5)
 	self.up = up
 
 	# Initialize the bounding box information:
@@ -2166,83 +4399,6 @@ class Part:
 	#    #print("Part.__init__: place = {0:m}".format(place))
 
 	#print("<=Part.__init__(*, '{0}', *, place={1})".format(name, place))
-
-    ## @brief Formats *self* into a string and returns it.
-    #  @param format is the format control string (currently ignored).
-    #  @returns a string representation of *self*.
-    #
-    # *<I>__format__</I>() will return a *self* (a *Box*) object as
-    # formatted string.  Currently *format* is ignored, but maybe some
-    # time in the future it will contol formaating of the returned string.
-
-    def __format__(self, format):
-	""" *Part*: Return formated version of *self*. """
-
-	assert isinstance(format, str)
-	if format != "":
-	    format = ":" + format
-	format_string = "{0}[{1" + format + "}:{2" + format + "},{3" + \
-	  format + "}:{4" + format + "}:{5" + format + "}:{6" + format + "}]"
-	#print("format_string='{0}'".format(format_string))
-
-	print("[{0}:{1},{2}:{3},{4}:{5}]".format(
-	  self.wx._mm, self.ex._mm,
-	  self.sy._mm, self.ny._mm,
-	  self.bz._mm, self.tz._mm))
-
-	return format_string.format(self._name,
-	  self.wx, self.ex,
-	  self.sy, self.ny,
-	  self.bz, self.tz)
-
-    def __getattr__(self, name):
-	""" *Part*: ..."""
-
-	ezcad = self._ezcad
-	update_count = ezcad._update_count
-	first_update = update_count == 0
-	if not name.startswith("_") and name.endswith("_"):
-	    if first_update:
-		pass
-	elif name.endswith("_a"):
-	    if first_update:
-		return Angle()
-	elif name.endswith("_b"):
-	    if first_update:
-		return False
-	elif name.endswith("_c"):
-            if first_update:
-		return Color()
-	elif name.endswith("_f"):
-	    if first_update:
-		return 0.0
-	elif name.endswith("_i"):
-	    if first_update:
-		return 0
-	elif name.endswith("_l"):
-	    if first_update:
-		return L()
-	elif name.endswith("_m"):
-	    if first_update:
-		return Material()
-        elif name.endswith("_o"):
-	    if first_update:
-		return None
-	elif name.endswith("_s"):
-	    if first_update:
-		return ""
-	elif name.endswith("_p"):
-	    if first_update:
-		return P()
-	elif name.endswith("_pl"):
-	    if first_update:
-		return Place()
-	else:
-	    raise AttributeError(
-	      "Part instance has no attribute '{0}' count={1}".
-	      format(name, update_count))
-	raise AttributeError("Part instance has no attribute named '{0}'". \
-	  format(name))
 
     def _bounding_box_check(self, indent):
 	box_points_list = self._box_points_list
@@ -2557,6 +4713,7 @@ class Part:
 	if trace:
 	    print("<=Part._box_recompute({0}, {1})".format(self._name, label))
 
+
     def _color_material_update(self, color, material):
 	""" *Part*: Update *color* and *material* for *self*. """
 
@@ -2578,6 +4735,155 @@ class Part:
 
 	#print("<=Part._color_material_update({0}, {1}): c={2} m={3}".
 	#  format(color, material, self._color, self._material))
+
+    def _cylinder(self, lines = None, indent = 0, is_solid = True,
+      comment = None, material = None, color = None, adjust = None,
+      diameter = None, start = None, end = None, sides = None,
+      sides_angle = None, trace = -1000000, start_diameter = None,
+      end_diameter = None):
+	""" *Part*: Deal with commonality between holes (i.e. material
+	    removal) and cylinders made out of a *material*. """
+
+	# Check argument types:
+	none_type = type(None)
+	assert isinstance(comment, str)
+	assert type(lines) == none_type or isinstance(lines, list)
+	assert isinstance(indent, int)
+	assert isinstance(is_solid, bool)
+	assert type(material) == none_type or isinstance(material, Material)
+	assert type(color) == none_type or isinstance(color, Color)
+	assert type(diameter) == none_type or isinstance(diameter, L)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+	assert isinstance(sides, int)
+	assert isinstance(adjust, L)
+	assert isinstance(sides_angle, Angle)
+	assert type(start_diameter) == none_type or \
+	  isinstance(start_diameter, L)
+	assert type(end_diameter) == none_type or isinstance(end_diameter, L)
+	assert isinstance(diameter, L) or \
+	  (isinstance(start_diameter, L) and isinstance(end_diameter, L))
+
+	#if trace <= 0 and \
+	#   type(start_diameter) != none_type and \
+	#  type(end_diameter) != none_type and \
+	#  start_diameter != end_diameter:
+	#    trace = 0
+
+	if trace >= 0:
+	    print(("{0}=>Part._cylinder(comment='{1}', is_solid={2}," + 
+	     " diameter={3}, start_diam={4}, end_diam={5}, start={6}, end={7}").
+	     format(trace * ' ', comment, is_solid, diameter, start_diameter,
+	     end_diameter, start, end))
+
+	# Update the *color* and *material* of this part:
+	self._color_material_update(color, material)
+	color = self._color
+	material = self._material
+
+	# Compute center axis of the *cylinder*, its *length* and its *center*:
+	axis = end - start
+	length = axis.length()
+	half_length = length / 2
+	center = (start + end) / 2
+
+	# If appropriate, we rotate the hole before translation:
+	rotate_angle = None
+	orthogonal_axis = None
+	zero = L()
+	if axis.x != zero or axis.y != zero:
+	    # We have to tilt the cylinder.print("axis={0}".format(axis))
+	    z_axis = P(zero, zero, L(mm=1.0))
+	    rotate_angle = z_axis.angle_between(axis)
+	    orthogonal_axis = z_axis.cross_product(axis)
+	    #print("rotate_angle={0:d}".format(rotate_angle))
+	    #print("orthogonal_axis={0:m}".format(orthogonal_axis))
+	elif axis.x == zero and axis.y == zero and axis.z < zero:
+	    orthogonal_axis = P(L(mm=1.0), zero, zero)
+	    rotate_angle = Angle(deg=180.0)
+
+	# Update bounding box:
+	if is_solid:
+	    #print("comment={0} radius={1} half_length={2}". \
+	    #  format(comment, radius, half_length))
+	    
+	    maximum_diameter = zero
+	    if isinstance(diameter, L):
+		maximum_diameter = diameter
+	    if isinstance(start_diameter, L):
+		maximum_diameter = maximum_diameter.maximum(start_diameter)
+	    if isinstance(end_diameter, L):
+		maximum_diameter = maximum_diameter.maximum(end_diameter)
+            radius = maximum_diameter / 2
+
+	    bounding_box = Bounding_Box(radius, -radius,
+	      radius, -radius, half_length, -half_length)
+	    if trace >= 0:
+		print("{0}  bounding_box={1}".format(trace * ' ', bounding_box))
+		print("{0}  center={1}".format(trace * ' ', center))
+	    place = Place(part = None, name = comment,
+	      center = None, axis = orthogonal_axis, rotate = rotate_angle,
+	      translate = center, trace = trace + 1)
+	    self._bounding_box_update(bounding_box,
+	      comment, place, trace = trace + 1)
+
+	# Extract some values from {ezcad}:
+	if self._ezcad._mode == EZCAD3.CNC_MODE:
+	    # Make sure *lines* is a list:
+	    assert isinstance(lines, list)
+	    assert length > zero, "Cylinder '{0}' has no height".format(comment)
+
+	    # Make sure we have a reasonable number of *sides*:
+	    if sides < 0:
+		sides = 16
+
+	    # Output a comment to see what is going on:
+	    spaces = " " * indent
+	    lines.append("{0}// '{1}'".format(spaces, comment))
+
+	    # Ouput the color if appropriate:
+	    if is_solid:
+		self._scad_color(lines, color, indent = indent)
+	    self._scad_transform(lines, indent = indent,
+	      center = None, axis = orthogonal_axis, rotate = rotate_angle,
+	      translate = center)
+
+	    if sides_angle != Angle():
+		lines.append("{0}rotate(a={1}, v=[0, 0, 1])".
+		  format(spaces, sides_angle))
+
+	    if type(start_diameter) == none_type:
+		start_diameter = diameter
+	    if type(end_diameter) == none_type:
+		end_diameter = diameter
+            r1 = end_diameter / 2
+	    if r1 > zero:
+		r1 += adjust
+	    r2 = start_diameter / 2
+	    if r2 > zero:
+		r2 += adjust
+	    assert r1 + r2 > zero, \
+	      "sd={0} ed={1} a={2} r1={3} r2={4}".format(start_diameter,
+	      end_diameter, adjust, r1, r2)
+	    if r1 == r2:
+		command = \
+		  "{0}  cylinder(r={1:m}, h={2:m}, center = true, $fn={3});". \
+		  format(spaces, r1, length, sides)
+	    else:
+		command = ("{0}  cylinder(r1={1:m}, r2={2:m}, h={3:m}," +
+		  " center = true, $fn={4});").format(spaces,
+		  r1, r2, length, sides)
+	    if trace >= 0:
+		print("{0}Part._cylinder: r1={1} r2={2} command='{3}'".
+		  format(trace * ' ', r1, r2, command))
+
+	    # Output the cylinder in a vertical orientation centered on the
+	    # origin.  It is processed before either rotation or translation:
+            lines.append(command)
+            lines.append("")
+	
+	if trace >= 0:
+	    print("{0}<=Part._cylinder()".format(trace * ' '))
 
     def _dimensions_update(self, ezcad, trace):
 
@@ -2705,28 +5011,360 @@ class Part:
 
 	return changed
 
+    def _flush(self, program_number):
+	""" *Part*: Flush out the CNC code for a *Part* object (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(program_number, int)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	#call d@(form@("=>flush@Part(%v%, %d%)\n\") %
+	#  f@(part.name) / f@(program_number))
+	original_program_number = program_number
+
+	#call show@(part, "before flush")
+	shop = part._shop
+	vice = shop.vice
+	jaw_width = vice.jaw_width
+
+	# Compute ({plunge_x}, {plunge_y}) which is the vertical axis over
+	# which is to the left of the the part or the vice.
+	# ever is furthist out:
+	edge_x = part._edge_x
+	edge_y = part._edge_y
+	vice_x = part._vice_x
+	vice_y = part._vice_y
+	plunge_x = vice_x
+	if plunge_x > edge_x:
+	    plunge_x = edge_x
+	if plunge_x > jaw_width:
+	    plunge_x = plunge_x - L(inch=0.7)
+	part.plunge_x = plunge_x
+	part.plunge_y = edge_y
+    
+	code = part._shop.code
+	code.z_safe = part._z_safe
+	code.z_rapid = part._z_rapid
+	operations = part._operations
+	size = len(operations)
+
+	#call show@(part, "before sort", 1t)
+
+	# Sort {operations} to group similar operations together:
+	operations.sort(cmp=Operation.compare)
+
+	#call show@(part, "after sort", 1t)
+
+	regroups = part._operations_regroup()
+
+	#if regroups != 0
+	#	call show@(part, "after_regroup", 0f)
+
+	# Now sweep through {operations} and process similar operations
+	# at the same time:
+	if size != 0:
+	    first_index = 0
+	    operation = operations[0]
+	    position = operation.position
+	    for index in range(1, size):
+		previous = operation
+		operation = operations[index]
+		if previous.tool != operation.tool:
+		    part._flush_helper(first_index, index - 1)
+		    first_index = index
+		if operation.position != position:
+		    if index - 1 >= first_index:
+			part.flush_helper(first_index, index - 1)
+			first_index = index
+		    position = operation.position
+		    program_number = code.flush(program_number)
+	    part._flush_helper(first_index, size - 1)
+
+	# Flush out any residuals:
+	program_number = code.flush(program_number)
+
+	# Empty out *opertations* :
+	del operations[:]
+
+	#call show@(part, "after operation flushes")
+
+	#call d@(form@("<=flush@Part(%v%, %d%) => %d%\n\") %
+	#  f@(part.name) % f@(original_program_number) / f@(program_number))
+
+	return program_number
+
+    def _flush_helper(self, first_index, last_index):
+	""" *Part*: This routine generates the CNC G-code for the
+	    *first_index*'th through *last_index*'th operartions
+	    in the operations table for a *Part* object (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(first_index, int)
+	assert isinstance(last_index, int)
+
+	# Use *part* instead of *self*:
+	part = self
+	part_name = part.name
+
+	# Set *debut* to True to trace this routine:
+	#debug = True
+	debug = False
+	if debug:
+	    print("=>flush_helper@Shop('{0}', {1}, {2}\n".
+	      format(part_name, first_index, last_index))
+
+	zero = L()
+
+	shop = part._shop
+	code = shop.code
+	code.z = part.z_safe
+	code.dxf_x_offset = part.dxf_x_offset
+	code.dxf_y_offset = part.dxf_y_offset
+	operations = part.operations
+	operation = operations[first_index]
+	tool = operation.tool
+	f = tool.feed
+	s = tool.spindle
+	vice_x = operation.vice_x
+	vice_y = operation.vice_y
+
+	assert tool != None
+
+	# FIXME: The code below should be methodized!!!
+	block = Code_Block(part, tool, vice_x, vice_y)
+	block.reset()
+	block.spindle = s
+	block.comment = operation.comment
+
+	# FIXME: Directly writing into the *Code* object is a bad idea!!!
+	code.text = block.text
+	code.vice_x = vice_x
+	code.vice_y = vice_y
+	code.z_rapid = part.z_rapid
+	code.z_safe = part.z_safe
+
+	# Each block is set to these two values beforehand:
+	code.z = part.z_safe
+	code.s = s
+	code.g1 = 0
+	code.blocks.append(block)
+
+	# Figure out if these are all drill operations:
+	all_operations_are_drills = True
+	for index in range(first_index, last_index):
+	    if not isintance(operations[index], Operation_Drill):
+		all_operations_are_drills = False
+		break
+
+	# FIXME: Move this code to *Operaton_Drill* class!!!
+	# Reorder the drill operations to minimize traverses:
+	if all_operations_are_drills:
+	    for index in range(first_index, last_index + 1):
+		current_operation = operations[index]
+		assert isinstance(current_operation, Operation_Drill)
+		current_drill = current_operation
+
+		current_x = current_drill.x
+		current_y = current_drill.y	
+
+		minimum_distance = L(mm=123456789.0)
+		match_index = -1
+		for search_index in range(index + 1, last_index + 1):
+		    search_drill = operations[search_index]
+		    assert isinstance(search_drill, Operation_Drill)
+		    search_x = search_drill.x
+		    search_y = search_drill.y
+		    search_distance = \
+		      (search_x - current_x).diagonal_2d(search_y - current_y)
+                    if search_distance < minimum_distance:
+			minimum_distance = search_distance
+			match_index = search_index
+
+		# Move the matching operation to be next after {operation}
+		# in operations:
+		if match_index >= 0:
+		    if debug:
+			print("minimum_distance[{0}]={1}\n".
+			  format(index, minimum_distance))
+
+			# Swap the two drill operations:
+			match_operation = operations[match_index]
+			operations[match_index] = operations[index + 1]
+			operations[index + 1] = match_operation
+
+	# Now do cnc generate for selected operations:
+	for index in range(first_index, last_index + 1):
+	    operation = operations[index]
+	    code.vice_x = operation.vice_x
+	    code.vice_y = operation.vice_y
+	    comment = operation.comment
+	    code.z_safe_assert("flush_helper1", comment)
+	    operation.cnc_generate(index == last_index)
+
+	code.z_safe_retract_actual()
+	if debug:
+	    print("<=flush_helper@Shop('{0}', {1}, {2}): Block=#{3}\n".
+	      format(part.name, first_index, last_index, block.uid))
+
+	code.dxf_x_offset = zero
+	code.dxf_y_offset = zero
+
+    ## @brief Formats *self* into a string and returns it.
+    #  @param format is the format control string (currently ignored).
+    #  @returns a string representation of *self*.
+    #
+    # *<I>__format__</I>() will return a *self* (a *Box*) object as
+    # formatted string.  Currently *format* is ignored, but maybe some
+    # time in the future it will contol formaating of the returned string.
+
+    def __format__(self, format):
+	""" *Part*: Return formated version of *self*. """
+
+	assert isinstance(format, str)
+	if format != "":
+	    format = ":" + format
+	format_string = "{0}[{1" + format + "}:{2" + format + "},{3" + \
+	  format + "}:{4" + format + "}:{5" + format + "}:{6" + format + "}]"
+	#print("format_string='{0}'".format(format_string))
+
+	print("[{0}:{1},{2}:{3},{4}:{5}]".format(
+	  self.wx._mm, self.ex._mm,
+	  self.sy._mm, self.ny._mm,
+	  self.bz._mm, self.tz._mm))
+
+	return format_string.format(self._name,
+	  self.wx, self.ex,
+	  self.sy, self.ny,
+	  self.bz, self.tz)
+
+    def __getattr__(self, name):
+	""" *Part*: ..."""
+
+	ezcad = self._ezcad
+	update_count = ezcad._update_count
+	first_update = update_count == 0
+	if not name.startswith("_") and name.endswith("_"):
+	    if first_update:
+		pass
+	elif name.endswith("_a"):
+	    if first_update:
+		return Angle()
+	elif name.endswith("_b"):
+	    if first_update:
+		return False
+	elif name.endswith("_c"):
+            if first_update:
+		return Color()
+	elif name.endswith("_f"):
+	    if first_update:
+		return 0.0
+	elif name.endswith("_i"):
+	    if first_update:
+		return 0
+	elif name.endswith("_l"):
+	    if first_update:
+		return L()
+	elif name.endswith("_m"):
+	    if first_update:
+		return Material()
+        elif name.endswith("_o"):
+	    if first_update:
+		return None
+	elif name.endswith("_s"):
+	    if first_update:
+		return ""
+	elif name.endswith("_p"):
+	    if first_update:
+		return P()
+	elif name.endswith("_pl"):
+	    if first_update:
+		return Place()
+	else:
+	    raise AttributeError(
+	      "Part instance has no attribute '{0}' count={1}".
+	      format(name, update_count))
+	raise AttributeError("Part instance has no attribute named '{0}'". \
+	  format(name))
+
     def _manufacture(self, ezcad):
-	""" Part: Output the XML for *self* to *xml_stream*
-	    indented by *indent*. """
+	""" *Part*: Visit a *Part* object (i.e. *self*) and all is
+	    sub-*Part*'s and perform any manufacturing steps.
+	"""
+
+	# Verify argument types:
+	assert isinstance(ezcad, EZCAD3)
 
 	#print("=>Part._manufacture:{0}".format(self._name))
 
-	# Check argument types:
-	assert isinstance(ezcad, EZCAD3)
-	self._ezcad = ezcad
+	# Use *part* instead of *self*:
+	part = self
 
-	# First manufacture any child nodes:
-	for attribute_name in dir(self):
+	# Make sure *part* is connected ot *ezcad*:
+	part._ezcad = ezcad
+
+	# Figure out the mode name:
+	mode = ezcad._mode
+	mode_name = "?mode?"
+	if mode == EZCAD3.VISUALIZATION_MODE:
+	    mode_name = "Visual"
+	elif mode == EZCAD3.STL_MODE:
+	    mode_name = "STL"
+	elif mode == EZCAD3.CNC_MODE:
+	    mode_name = "CNC"
+
+	# Set *debug* to *True* for debugging:
+	debug = False
+	#debug = True
+	if debug:
+	    print("=>Part._manufacture('{0}'):{1}".
+	      format(part._name, mode_name))
+
+	# First manufacture any child *Part*'s:
+	for attribute_name in dir(part):
 	    if not attribute_name.startswith("_") and \
 	      attribute_name.endswith("_"):
-		sub_part = getattr(self, attribute_name)
-		assert isinstance(sub_part, Part), \
-		  "{0}.{1} is not a Part".format(self.name, attribute_name)
-		sub_part._manufacture(ezcad)
+		child_part = getattr(part, attribute_name)
+		assert isinstance(child_part, Part), \
+		  "{0}.{1} is not a Part".format(part.name, attribute_name)
+		child_part._manufacture(ezcad)
 
-	# Now run construct this node:
-	self.construct()
+	# Now run construct this *part*
+	part.construct()
 
+	# Do the visualization steps:
+	if mode == EZCAD3.VISUALIZATION_MODE:
+	    wrl_file_name = "{0}.wrl".format(part._name)
+	    wrl_file = open(wrl_file_name, "w")
+	    part.wrl_write(wrl_file, file_name = wrl_file_name)
+	    wrl_file.close()
+
+	# Now generate any CNC files:
+	if mode == EZCAD3.CNC_MODE:
+	    # Flush out all of the pending CNC operations:
+
+	    # Set *cnc_debug* to *True* to trace CNC:
+	    cnc_debug = False
+	    cnc_debug = True
+	    if cnc_debug:
+		print("=>Part._manfacture('{0}'):CNC".format(part._name))
+
+	    shop = ezcad._shop
+	    program_base = shop.program_base
+	    program_number = part._flush(program_base)
+
+	    # We want the program base number to start with a mulitple of 10.
+	    remainder = program_number % 10
+	    if remainder != 0:
+		program_number += 10 - remainder
+	    shop.program_base = program_number
+	    if cnc_debug:
+		print("<=Part._manfacture('{0}'):CNC".format(part._name))
+
+	# Now generate any .stl files:
 	if ezcad._mode == EZCAD3.STL_MODE:
 	    # Now manufacture this node:
 	    #scad_difference_lines = []
@@ -2891,73 +5529,375 @@ class Part:
 		    ignore_file = open("/dev/null", "w")
 		    subprocess.call(command, stderr=ignore_file)
 		    ignore_file.close()
-
-	if False:
-	    # For now, write out an offset file:
-	    stl_file = open("{0}.stl".format(name), "r")
-	    stl_lines = stl_file.readlines()
-	    stl_file.close()
-
-	    triangles = []
-	    offsets = []
-	    vertices = {}
-	    size = len(stl_lines)
-	    assert stl_lines[0][:5] == "solid"
-	    index = 1
-	    while index + 4 < size:
-		#normal_list = stl_lines[index].split()
-		xlist = stl_lines[index + 2].split()
-		vertex1 = (float(xlist[1]), float(xlist[2]), float(xlist[3]))
-		xlist = stl_lines[index + 3].split()
-		vertex2 = (float(xlist[1]), float(xlist[2]), float(xlist[3]))
-		xlist = stl_lines[index + 4].split()
-		vertex3 = (float(xlist[1]), float(xlist[2]), float(xlist[3]))
-
-		if vertex1 in vertices:
-		    offset1 = vertices[vertex1]
-		else:
-		    offset1 = len(offsets)
-                    offsets.append(vertex1)
-		    vertices[vertex1] = offset1
-
-		if vertex2 in vertices:
-		    offset2 = vertices[vertex2]
-		else:
-		    offset2 = len(offsets)
-                    offsets.append(vertex2)
-		    vertices[vertex2] = offset2
-
-		if vertex3 in vertices:
-		    offset3 = vertices[vertex3]
-		else:
-		    offset3 = len(offsets)
-                    offsets.append(vertex3)
-		    vertices[vertex3] = offset3
-
-		triangles.append( (offset1, offset2, offset3,) )
-		index += 7
-
-	    offset_file = open("{0}.off".format(name), "w")
-	    offset_file.write("OFF\n\n")
-	    offset_file.write(
-	      "{0} {1} 0\n".format(len(offsets), len(triangles)))
-	    for offset in offsets:
-		offset_file.write(
-		  "{0} {1} {2}\n".format(offset[0], offset[1], offset[2]))
-	    offset_file.write("\n")
-	    for triangle in triangles:
-		offset_file.write("3 {0} {1} {2}\n". \
-		  format(triangle[0], triangle[1], triangle[2]))
-	    offset_file.close()
-
     
-	if ezcad._mode == EZCAD3.VISUALIZATION_MODE:
-	    wrl_file_name = "{0}.wrl".format(self._name)
-	    wrl_file = open(wrl_file_name, "w")
-	    self.wrl_write(wrl_file, file_name = wrl_file_name)
-	    wrl_file.close()
+	if debug:
+	    print("<=Part._manufacture('{0}'):{1}".
+	      format(part._name, mode_name))
 
-	#print("<=Part._manufacture:{0}".format(self._name))
+    def _operation_regroup_check(self,
+      first_index1, last_index1, first_index2, last_index2):
+	""" *Part*:
+	"""
+
+	# Verify argument types:
+	isinstance(first_index1, int)
+	isinstance(last_index1, int)
+	isinstance(first_index2, int)
+	isinstance(last_index2, int)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	operations = part.operations
+	index = first_index2
+	while index <= last_index2:
+	    operation = operations[index]
+	    follows = operation.follows
+	    if follows != None:
+		follows_index = follows.index
+		if first_index1 <= follows_index and \
+		  follows_index <= last_index1:
+		    return False
+	    index += 1
+	return True
+
+    def _operations_index(self):
+	""" *Part*: Sweep through each operation in the *Part* object
+	    (i.e. *self*) and make sure the index field matches the index.
+	"""
+
+	part = self
+	operations = part._operations
+	size = len(operations)
+	for index in range(size):
+	    operations[index].index = index
+
+    def _operations_regroup(self):
+	""" *Part*: Regroup the *Operation*'s in the *Part* object (i.e. *self*)
+	    to try to minimize tool changes.  No *Operation* will moved in
+	    front of its *follows* field if the {follows} field is non-null.
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	elimination_count = 0
+	part._operations_index()
+	operations = part._operations
+	size = len(operations)
+
+	# Find a group of operations with the same *priority* field value:
+	first_index = 0
+	while first_index < size:
+	    operation = operations[first_index]
+	    priority = operation.priority
+
+	    # Now find the last operation in *operations* with the same
+	    # *priority*:
+	    last_index = first_index
+	    while last_index + 1 < size and \
+	      operations[last_index + 1].priority == priority:
+		last_index = last_index + 1
+
+	    # Now pass these values down to the next level of helper routine:
+	    elimination_count = elimination_count + \
+	      part._operations_regroup_helper1(first_index, last_index)
+
+	    first_index = last_index + 1
+	return elimination_count
+
+    def _operations_regroup_helper1(self):
+	""" *Part*: Regroup the *first_index*'th through *last_indxex*'th
+	    *Operation*'s of the *Part* object (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(first_index, int)
+	assert isinstance(last_index, int)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Find a group of operations that use the same {Tool}:
+	elimination_count = 0
+	operations = part.operations
+	tool1_first_index = first_index
+	while tool1_first_index <= last_index:
+	    operation = operations[tool1_first_index]
+	    tool = operation.tool
+
+	    # Find the last operation in this sequence with the same {tool}:
+	    tool1_last_index = tool1_first_index
+	    while tool1_last_index + 1 <= last_index and \
+	      operations[tool1_last_index + 1].tool == tool:
+		tool1_last_index += 1
+
+	    # Pass these values down to the next level of helper routine:
+	    elimination_count += part._operations_regroup_helper2(
+	      tool1_first_index, tool1_last_index, last_index)
+
+	    tool1_first_index += 1
+
+	# Return the number of tool changes removed.
+	return elimination_count
+
+    def _operations_regroup_helper2(self,
+      tool1_first_index, tool1_last_index, last_index):
+	""" *Part*:
+	"""
+
+	# Verify argument types:
+ 	assert isinstance(tool1_first_index, int)
+	assert isinstance(tool1_last_index, int)
+	assert isinstance(last_index, int)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	elimination_count = 0
+	operations = part.operations
+	tool = operations[tool1_first_index].tool
+
+	# Find the next sequence of operations that match {tool}:
+	for index in range(tool1_last_index + 1, last_index + 1):
+	    operation = operations[index]
+	    if operation.tool == tool:
+		# We have another instance of {tool}:
+		tool2_first_index = index
+
+		# Find the last operation in the sequence that matches {tool}:
+		tool2_last_index = tool2_first_index
+		while tool2_last_index + 1 <= last_index and \
+		  operations[tool2_last_index + 1].tool == tool:
+		    tool2_last_index += 1
+
+		# We now have two tool sequences that use the same tool:
+		#call d@(form@("*****Tool:%v% [%d% - %d%] and [%d% - %d%]\n\") %
+		#  f@(tool.name) % f@(tool1_first_index) %
+		# f@(tool1_last_index) %
+		#  f@(tool2_first_index) / f@(tool2_last_index))
+
+		if part._operation_regroup_check(part,
+		  tool1_last_index + 1, tool2_first_index - 1,
+		  tool2_first_index, tool2_last_index):
+		    #call d@("**************reorder possible\n\")
+		    part._operation_regroup_helper3(tool1_last_index + 1,
+		      tool2_first_index, tool2_last_index)
+		    elimination_count += 1
+
+		# We can continue looking for another group of operations with
+		# the same {tool} to move:
+		index = tool2_last_index
+	return elimination_count
+
+    def _operation_regroup_helper3(self,
+      to_index, from_first_index, from_last_index):
+	""" *Part*:
+	"""
+
+	# Verify argument types:
+	assert isinstance(to_index, int)
+	assert isinstance(from_first_index, int)
+	assert isinstance(from_last_index, int)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# FIXME: There is probably a more Pythony wayd of doing this!!!
+	operations = part.operations
+	for index in range(from_first_index, from_last_index + 1):
+	    operation = operations[index]
+	    del operations[index]
+	    operations.insert(to_index, operation)
+	    to_index = to_index + 1
+	part._operations_index()
+
+    def _tools_dowel_pin_search(self):
+	""" *Part*: Find and return a *Tool_Dowel_Pin* object.
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	zero = L()
+	dowel_pin = part._tools_search(Tool_Dowel_Pin.match,
+	  zero, zero, "dowel_pin")
+	assert isinstance(dowel_pin, Tool_Dowel_Pin)
+	return dowel_pin
+
+    def _position_reset(self):
+	""" *Part*: Reset the position and reposition matrix for the
+	    *Part* object (i.e. *self*).
+	"""
+
+	# Make sure that all previous CNC operations are done before
+	# proceeding to future CNC operations:
+	self.cnc_fence()
+
+	# Grap *position* and *reposition* *Matrix* objects from *self*:
+	position = self._position
+	reposition = self._reposition
+
+	# Reset *position* and *reposition* to identity matrix:
+	position.identity_store()
+	position.identity_store()
+
+    def _tools_search(self, match_routine, parameter1, parameter2, from_text):
+	""" *Part*: Search for the best *Tool* object using *match_routine*,
+	    *parameter1*, and *parameter2*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(parameter1, L)
+	assert isinstance(parameter2, L)
+	assert isinstance(from_text, str)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Set *debug* to *True* if debugging is required:
+	debug = False
+	debug = True
+	if debug:
+	    print("=>Part._tools_search('{0}', {4}, {1}, {2}, '{3}')\n".
+	      format(part._name, parameter1, parameter2, from_text,
+	      match_routine))
+
+	# For now grab the material of the first part and assume the
+	# rest are compatible.  In reality, what we want is to grab
+	# all the materials and only accept tools that work with all
+	# materials.  That is too much work for now:
+	shop = part._shop
+	material = part._material
+	named_material = material.generic()
+
+	best_tool = None
+	best_priority = -1.0
+
+	# For now, hardwire the mill speeds.  We need to actually get the
+	# speeds from the *Mill* object:
+	maximum_spindle = Code_Hertz(5000.0)
+	minimum_spindle = Code_Hertz(150.0)
+
+	# Now search through {tools}:
+	zero = L()
+	delta = L(inch=.000001)
+	tools = shop.tools
+	if debug:
+	    print("  {0} available tools".format(len(tools)))
+	for tool in tools:
+	    # Keep track of search results for this tool:
+	    del tool.search_results[:]
+
+	    # Lookup the *speed_range* for *material* and *tool*:
+	    speed_range = shop.surface_speeds_lookup(material, tool.material)
+	    speed_range_ok = isinstance(speed_range, Speed_Range)
+
+	    # Always log *surface_speeds_ok*:
+	    tool.search_results_append(speed_range_ok,
+	      "Surface speeds are acceptable for material ({0})".
+	      format(named_material))
+
+	    if debug:
+		print("  Tool:'{0} {1}'".format(tool.name, speed_range_ok))
+
+	    if speed_range_ok:
+		# See whether *tool* has a chance of being a match:
+		#if debug:
+		#    print("    speed_range={0:.0F}\n".format(speed_range))
+		priority = \
+		  match_routine(tool, parameter1, parameter2, from_text)
+		print("priority={0}".format(priority))
+		if priority >= 0.0:
+		    # Tool is an acceptable match:
+		    if debug:
+			print("Tool: '{0}' priority:{1}\n".
+			  format(tool.name, tool.diameter))
+
+		    tool_preferred = part._tool_preferred
+		    if tool_preferred != "":
+			#print("tool={0} preferred={1}\n".
+			#  format(tool.name, tool_preferred))
+			if tool.name == tool_preferred:
+			    priority = priority + 100.0
+
+		    # Select the {Surface_Speed} for {tool_material}:
+		    tool.priority = priority
+		    tool.spindle = Code_Hertz()
+		    tool.feed = Speed()
+		    tool_material = tool.material
+		    surface_speed = None
+		    if tool.flutes_count > 0:
+			assert surface_speed != None
+			# We have {surface_speed}, compute {low_speed} and
+			# {high_speed}:
+			low_speed = speed_range.low_speed
+			high_speed = speed_range.high_speed
+
+			#print("Tool diameter={0}\n".format(tool.diameter))
+
+			pi = 3.14159265358979323846
+			desired_spindle = \
+			  low_speed.speed_by_length(tool.diameter * pi)
+
+			#print("low_speed={0} diam={1}\n".
+			#  format(low_speed, tool.diameter))
+			#print("desired_spindle={0}\n".
+			#  format(desired_spindle))
+
+			# Deal with spindle speed limits:
+			if desired_spindle > maximum_spindle:
+			    # Speed is to fast, clamp it to maxium:
+			    desired_spindle = maximum_spindle
+			if desired_spindle < minimum_spindle:
+			    # Speed is to slow, fail:
+			    assert False
+
+			# Record everything we figured out back in {tool}:
+			tool.spindle = desired_spindle
+			chip_load = L(inch=0.001)
+			flutes_count = tool.flutes_count
+			tool.feed = Speed(mm_sec=
+			  ((chip_load * float(flutes_count)).millimeters() *
+			   desired_spindle.hertz()))
+			tool.priority = priority
+
+		    # Record {tool} as a match in {tools_matach}:
+		    if priority > best_priority:
+			best_priority = priority
+			best_tool = tool
+
+	if best_tool == None:
+	    closest_tool = None
+	    largest_success_count = 0
+	    for tool in tools:
+		# Check {tool} to see if it is exceptable:
+		success_count = 0
+		search_results = tool.search_results
+		search_results_size = len(search_results)
+
+		for search_result in search_results:
+		    if search_result[0] == '1':
+			success_count += 1
+
+		if success_count > largest_success_count:
+		    largest_success_count = success_count
+		    closest_tool = tool
+
+	    if closest_tool != None:
+		closest_tool.search_results_show()
+
+	if debug:
+	    best_tool_name = "?"
+	    if best_tool != None:
+		best_tool_name = best_tool.name
+	    print("<=Part._tools_search({0}, *, {1}, {2}, {3}) => {4}\n\n".
+	      format(part._name, parameter1, parameter2, from_text,
+	      best_tool_name))
+
+	return best_tool
+
+    # Public methods come here:
 
     def block(self, comment = "no comment", material = None, color = None,
       corner1 = None, corner2 = None, welds = "", trace = False,
@@ -3052,7 +5992,7 @@ class Part:
 	self._is_part = True
 	#print("Part.block:{0}._is_part = True".format(self._name))
         
-	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	if ezcad._mode == EZCAD3.CNC_MODE:
 	    union_lines = self._scad_union_lines
 
 	    #FIXME: Should only check after the dimensions update:
@@ -3068,7 +6008,8 @@ class Part:
 
 
 	    # Now make the block a little bigger for "welding":
-	    weld_extra = L(mm = 0.01)
+	    adjust = ezcad._adjust * 2
+	    weld_extra = adjust.absolute() + L(mm=.01)
 	    if welds.find("t") >= 0:
 		z2 += weld_extra
 	    if welds.find("b") >= 0:
@@ -3079,13 +6020,16 @@ class Part:
 		y1 -= weld_extra
 	    if welds.find("e") >= 0:
 		x2 += weld_extra	
+		#print("weld e:{0}".format(x2))
 	    if welds.find("w") >= 0:
 		x1 -= weld_extra
+		#print("weld w:{0}".format(x1))
 
 	    # Deal with *adjust*:
 	    zero = L()
 	    adjust = ezcad._adjust
 	    if top == "t" or top == "b":
+		#print("block adjust={0}".format(adjust))
 		x1 -= adjust
 		x2 += adjust
 		y1 -= adjust
@@ -3123,14 +6067,178 @@ class Part:
 	    union_lines.append(
 	      "        cube([{0:m}, {1:m}, {2:m}]);".format(
 	      x2 - x1, y2 - y1, z2 - z1))
+	    #print("cube: x2(={0}) - x1(={1}) = {2}".format(x2, x1, x2 - x1))
 
 	if trace:
 	    print("<=Part.block(comment={0}".format(comment))
 
+    def cnc_fence(self):
+	""" *Part*: Erect a virtual fence that prevents any CNC operations
+	    that already exist from moving forward across the fence and
+	    and future CNC operations from moving backward across the fence.
+	"""
+
+	# This routine will conceptually erect a fence that prevents the
+	# CNC planner from moving any operations across the fence.  Any
+	# operations requested before the call to this routine will happen
+	# before all requested operations after this routine call.
+
+	# Each CNC operation is taged with the value of *part._priority*
+	# when it is created.  By incrementing this field, all operations
+	# get grouped by priority first, and other characteristics second.
+	self._priority += 1
 
     def construct(self):
 	assert False, \
 	  "No construct() method defined for part '{0}'".format(self._name)
+
+    def cylinder(self, comment = "NO_COMMENT",
+      material = Material(), color = Color(),
+      diameter = L(mm = 1.0), start = P(), end = P(z = L(mm = 1.0)),
+      start_diameter = None, end_diameter = None,
+      sides = -1, sides_angle = Angle(), welds = "", flags = "", adjust = L(),
+      trace = -1000000):
+	""" *Part*: Place a *diameter* wide cylinder from *start* to *end*. """
+
+	if trace >= 0:
+	    print("{0}=>Part.cylinder(diam={1} start={2} end={3})".
+	      format(trace * ' ', diameter, start, end))
+
+	# Check argument types:
+	none_type = type(None)
+	assert isinstance(comment, str)
+	assert type(material) == none_type or isinstance(material, Material)
+	assert type(color) == none_type or isinstance(color, Color)
+	assert isinstance(diameter, L)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+	assert isinstance(sides, int)
+	assert isinstance(sides_angle, Angle)
+	assert isinstance(welds, str)
+	assert isinstance(flags, str)
+	assert type(start_diameter) == none_type or \
+	  isinstance(start_diameter, L)
+	assert type(end_diameter) == none_type or \
+	  isinstance(end_diameter, L)
+
+	ezcad = self._ezcad
+	adjust = ezcad._adjust
+
+	union_lines = self._scad_union_lines
+	self._cylinder(lines = union_lines, indent = 6, is_solid = True,
+	  comment = comment, material = material, color = color,
+	  diameter = diameter, start = start, end = end, sides = sides,
+	  adjust = adjust, sides_angle = sides_angle, trace = trace + 1,
+	  start_diameter = start_diameter, end_diameter = end_diameter)
+
+	if trace >= 0:
+	    print("{0}<=Part.cylinder()".format(trace * ' '))
+
+    def dowel_pin(self, comment):
+	""" *Part*:
+	"""
+
+	# This routine will request that a dowel pin be used to align {part}
+	# in the vice with a comment of {comment}.
+
+	# Verify argument types
+	assert isinstance(comment, str)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	shop = part._shop
+	assert isinstance(shop, Shop)
+	if shop.cnc_generate:
+	    dowel_pin = part._tools_dowel_pin_search()
+
+	    debug = False
+	    debug = True
+	    if debug:
+		print("=>Part.dowel_pin('{0}', {1})\n".
+		  format(part._name, comment))
+	    diameter = dowel_pin.diameter
+
+	    # Figure out the new bounding box orientation:
+	    new_bounding_box = part._bounding_box.matrix_apply(part._position)
+
+	    # Compute the Z minimum of the bounding box (negative number):
+	    bounding_box_z_minimum = new_bounding_box.bz
+
+	    # Now compute {z_depth}, the desired maximum tool descent
+	    # as a positive number:
+	    tip_depth = dowel_pin.tip_depth
+	    z_depth = tip_depth - bounding_box_z_minimum
+	    if debug:
+		print("dowel_pin: part={0} bb={1} tip_depth={2}\n".
+		  format(part.name, new_bounding_box, tip_depth))
+		print("dowel_pin: before z_depth={0}\n".format(z_depth))
+
+	    # Figure out how deep the dowel pin actually can go:
+	    maximum_z_depth = tool_dowel_pin.maximum_z_depth
+	    if z_depth > maximum_z_depth:
+		z_depth = maximum_z_depth
+	    if debug:
+		print("after z_depth=%i%\n".format(z_depth))
+
+	    if comment == "":
+		comment = "Mount {0} x {1} x {2} piece of {3} in vice". \
+		  format(part._dx_original, part._dy_original,
+		  part._dz_original, _part.material)
+
+	    if debug:
+		print("dowel_pin@({0}): ex={1} ey={2} vx={3} vy={4}\n".
+		  format(part.name, part.edge_x, part.edge_y,
+		  part.vice_x, part.vice_y))
+
+	    vice = shop.vice
+	    jaw_width = vice.jaw_width
+	    half_jaw_width = jaw_width / 2
+	    radius = diameter / 2
+	    edge_x = part.edge_x - radius
+	    edge_y = part.edge_y
+	    plunge_x = edge_x
+
+	    if debug:
+		print("dowel_pin: {0} jaw_width={1}%\n".
+		  format(part.name, jaw_width))
+
+	    # Make sure we always plunge outside of the vise jaws:
+	    if plunge_x > -half_jaw_width:
+		plunge_x = -half_jaw_width
+
+	    # If we are close the jaw edge, move out a little more:
+	    if plunge_x > -jaw_width:
+		plunge_x = plunge_x - L(inch=0.70)
+	    plunge_y = edge_y
+
+	    if debug:
+		print("dowel_pin: {0}: plunge_x={1}\n".
+		  format(part.name, plunge_x))
+	    part.operation_dowel_pin_append(comment, tool_dowel_pin,
+	      None, diameter, edge_x, edge_y, part._dx_original,
+	      part._dy_original, part._dz_original,
+	      plunge_x, plunge_y, tip_depth, -z_depth)
+	    if debug:
+		print("dowel_pin({0} edgex={1}% edgey={2}\n".
+		  format(part.name, edge_x, edge_y))
+	    if debug:
+		print("<=dowel_pin@Part('{0}', '{1}')\n".
+		  format(part.name,comment))
+
+    def dowel_position_set(self, edge_x, edge_y):
+	""" *Part*:
+	"""
+
+	# This routine will sets the dowel position for {part} to
+	# ({edge_x},{edge_y}).
+
+	# Verify argument types:
+	assert isinstance(edge_x, L)
+	assert isinstance(edge_y, L)
+
+	self._edge_x = edge_x
+	self._edge_y = edge_y
 
     def dxf_write(self, comment = "no_comment", center = None,
       plane_normal = P(0, 0, L(mm=1)), rotate = Angle()):
@@ -3199,6 +6307,22 @@ class Part:
 	assert isinstance(end, P)
 	assert isinstance(trace, int)
 
+	# Do contour adjustments:
+	zero = L()
+	ezcad = self._ezcad
+	adjust = ezcad._adjust
+
+	#print("Part.extrude: adjust = {0}".format(adjust))
+	if adjust != zero:
+	    outer_contour = outer_contour.adjust(
+	      delta = -adjust, start = start, end = end)
+	    for index in range(len(inner_contours)):
+		inner_contour = inner_contours[index]
+		assert isinstance(inner_contour, Contour)
+		inner_contour = inner_contour.adjust(
+		  delta = -adjust, start = start, end = end)
+		inner_contours[index] = inner_contour
+
 	# Record the *color* and *material*:
 	self._material = material
 	self._color = color
@@ -3235,7 +6359,7 @@ class Part:
 	ezcad = self._ezcad
 	assert isinstance(ezcad, EZCAD3)
 
-	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	if ezcad._mode == EZCAD3.CNC_MODE:
 	    if trace >= 0:
 		print("{0}Part.extrude:manufacture".format(trace * ' '))
 	    # Set up the transform and extrude:
@@ -3281,48 +6405,6 @@ class Part:
 	if trace >= 0:
 	    print("{0}<=Part.extrude()".format(trace * ' '))
 	    
-    def cylinder(self, comment = "NO_COMMENT",
-      material = Material(), color = Color(),
-      diameter = L(mm = 1.0), start = P(), end = P(z = L(mm = 1.0)),
-      start_diameter = None, end_diameter = None,
-      sides = -1, sides_angle = Angle(), welds = "", flags = "", adjust = L(),
-      trace = -1000000):
-	""" *Part*: Place a *diameter* wide cylinder from *start* to *end*. """
-
-	if trace >= 0:
-	    print("{0}=>Part.cylinder(diam={1} start={2} end={3})".
-	      format(trace * ' ', diameter, start, end))
-
-	# Check argument types:
-	none_type = type(None)
-	assert isinstance(comment, str)
-	assert type(material) == none_type or isinstance(material, Material)
-	assert type(color) == none_type or isinstance(color, Color)
-	assert isinstance(diameter, L)
-	assert isinstance(start, P)
-	assert isinstance(end, P)
-	assert isinstance(sides, int)
-	assert isinstance(sides_angle, Angle)
-	assert isinstance(welds, str)
-	assert isinstance(flags, str)
-	assert type(start_diameter) == none_type or \
-	  isinstance(start_diameter, L)
-	assert type(end_diameter) == none_type or \
-	  isinstance(end_diameter, L)
-
-	ezcad = self._ezcad
-	adjust = ezcad._adjust
-
-	union_lines = self._scad_union_lines
-	self._cylinder(lines = union_lines, indent = 6, is_solid = True,
-	  comment = comment, material = material, color = color,
-	  diameter = diameter, start = start, end = end, sides = sides,
-	  adjust = adjust, sides_angle = sides_angle, trace = trace + 1,
-	  start_diameter = start_diameter, end_diameter = end_diameter)
-
-	if trace >= 0:
-	    print("{0}<=Part.cylinder()".format(trace * ' '))
-
     def hole(self, comment = "NO_COMMENT", diameter = None,
       start = None, end = None, sides = -1, sides_angle = Angle(),
       top = "t", flags = "", start_diameter = None, end_diameter = None,
@@ -3369,7 +6451,7 @@ class Part:
 	through_hole = not flat_hole
 	show = flags.find("s") >= 0
 
-	if self._ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	if self._ezcad._mode == EZCAD3.CNC_MODE:
             axis  = start - end
             normalized = axis.normalize()
 	    start = start + normalized
@@ -3394,155 +6476,6 @@ class Part:
 	       start_diameter, end_diameter))
 
 
-    def _cylinder(self, lines = None, indent = 0, is_solid = True,
-      comment = None, material = None, color = None, adjust = None,
-      diameter = None, start = None, end = None, sides = None,
-      sides_angle = None, trace = -1000000, start_diameter = None,
-      end_diameter = None):
-	""" *Part*: Deal with commonality between holes (i.e. material
-	    removal) and cylinders made out of a *material*. """
-
-	# Check argument types:
-	none_type = type(None)
-	assert isinstance(comment, str)
-	assert type(lines) == none_type or isinstance(lines, list)
-	assert isinstance(indent, int)
-	assert isinstance(is_solid, bool)
-	assert type(material) == none_type or isinstance(material, Material)
-	assert type(color) == none_type or isinstance(color, Color)
-	assert type(diameter) == none_type or isinstance(diameter, L)
-	assert isinstance(start, P)
-	assert isinstance(end, P)
-	assert isinstance(sides, int)
-	assert isinstance(adjust, L)
-	assert isinstance(sides_angle, Angle)
-	assert type(start_diameter) == none_type or \
-	  isinstance(start_diameter, L)
-	assert type(end_diameter) == none_type or isinstance(end_diameter, L)
-	assert isinstance(diameter, L) or \
-	  (isinstance(start_diameter, L) and isinstance(end_diameter, L))
-
-	#if trace <= 0 and \
-	#   type(start_diameter) != none_type and \
-	#  type(end_diameter) != none_type and \
-	#  start_diameter != end_diameter:
-	#    trace = 0
-
-	if trace >= 0:
-	    print(("{0}=>Part._cylinder(comment='{1}', is_solid={2}," + 
-	     " diameter={3}, start_diam={4}, end_diam={5}, start={6}, end={7}").
-	     format(trace * ' ', comment, is_solid, diameter, start_diameter,
-	     end_diameter, start, end))
-
-	# Update the *color* and *material* of this part:
-	self._color_material_update(color, material)
-	color = self._color
-	material = self._material
-
-	# Compute center axis of the *cylinder*, its *length* and its *center*:
-	axis = end - start
-	length = axis.length()
-	half_length = length / 2
-	center = (start + end) / 2
-
-	# If appropriate, we rotate the hole before translation:
-	rotate_angle = None
-	orthogonal_axis = None
-	zero = L()
-	if axis.x != zero or axis.y != zero:
-	    # We have to tilt the cylinder.print("axis={0}".format(axis))
-	    z_axis = P(zero, zero, L(mm=1.0))
-	    rotate_angle = z_axis.angle_between(axis)
-	    orthogonal_axis = z_axis.cross_product(axis)
-	    #print("rotate_angle={0:d}".format(rotate_angle))
-	    #print("orthogonal_axis={0:m}".format(orthogonal_axis))
-	elif axis.x == zero and axis.y == zero and axis.z < zero:
-	    orthogonal_axis = P(L(mm=1.0), zero, zero)
-	    rotate_angle = Angle(deg=180.0)
-
-	# Update bounding box:
-	if is_solid:
-	    #print("comment={0} radius={1} half_length={2}". \
-	    #  format(comment, radius, half_length))
-	    
-	    maximum_diameter = zero
-	    if isinstance(diameter, L):
-		maximum_diameter = diameter
-	    if isinstance(start_diameter, L):
-		maximum_diameter = maximum_diameter.maximum(start_diameter)
-	    if isinstance(end_diameter, L):
-		maximum_diameter = maximum_diameter.maximum(end_diameter)
-            radius = maximum_diameter / 2
-
-	    bounding_box = Bounding_Box(radius, -radius,
-	      radius, -radius, half_length, -half_length)
-	    if trace >= 0:
-		print("{0}  bounding_box={1}".format(trace * ' ', bounding_box))
-		print("{0}  center={1}".format(trace * ' ', center))
-	    place = Place(part = None, name = comment,
-	      center = None, axis = orthogonal_axis, rotate = rotate_angle,
-	      translate = center, trace = trace + 1)
-	    self._bounding_box_update(bounding_box,
-	      comment, place, trace = trace + 1)
-
-	# Extract some values from {ezcad}:
-	if self._ezcad._mode == EZCAD3.MANUFACTURE_MODE:
-	    # Make sure *lines* is a list:
-	    assert isinstance(lines, list)
-	    assert length > zero, "Cylinder '{0}' has no height".format(comment)
-
-	    # Make sure we have a reasonable number of *sides*:
-	    if sides < 0:
-		sides = 16
-
-	    # Output a comment to see what is going on:
-	    spaces = " " * indent
-	    lines.append("{0}// '{1}'".format(spaces, comment))
-
-	    # Ouput the color if appropriate:
-	    if is_solid:
-		self._scad_color(lines, color, indent = indent)
-	    self._scad_transform(lines, indent = indent,
-	      center = None, axis = orthogonal_axis, rotate = rotate_angle,
-	      translate = center)
-
-	    if sides_angle != Angle():
-		lines.append("{0}rotate(a={1}, v=[0, 0, 1])".
-		  format(spaces, sides_angle))
-
-	    if type(start_diameter) == none_type:
-		start_diameter = diameter
-	    if type(end_diameter) == none_type:
-		end_diameter = diameter
-            r1 = end_diameter / 2
-	    if r1 > zero:
-		r1 += adjust
-	    r2 = start_diameter / 2
-	    if r2 > zero:
-		r2 += adjust
-	    assert r1 + r2 > zero, \
-	      "sd={0} ed={1} a={2} r1={3} r2={4}".format(start_diameter,
-	      end_diameter, adjust, r1, r2)
-	    if r1 == r2:
-		command = \
-		  "{0}  cylinder(r={1:m}, h={2:m}, center = true, $fn={3});". \
-		  format(spaces, r1, length, sides)
-	    else:
-		command = ("{0}  cylinder(r1={1:m}, r2={2:m}, h={3:m}," +
-		  " center = true, $fn={4});").format(spaces,
-		  r1, r2, length, sides)
-	    if trace >= 0:
-		print("{0}Part._cylinder: r1={1} r2={2} command='{3}'".
-		  format(trace * ' ', r1, r2, command))
-
-	    # Output the cylinder in a vertical orientation centered on the
-	    # origin.  It is processed before either rotation or translation:
-            lines.append(command)
-            lines.append("")
-	
-	if trace >= 0:
-	    print("{0}<=Part._cylinder()".format(trace * ' '))
-
     def invisible_set(self, invisible = True):
 	""" {Part}: Make part visible/invisible. """
 
@@ -3550,9 +6483,21 @@ class Part:
 	self._visible = not invisible
 
     def process(self, ezcad):
-	""" {Part}: Generate the XML control file for *self*. """
+	""" *Part*: Perform all the manufacturing processing for a *Part*
+	    object (i.e. *self*) and all its sub-*Part*'s.
+	"""
 
+	# Verify argument types:
 	assert isinstance(ezcad, EZCAD3)
+
+	# Use *part* instead of *self*:
+	part = self
+
+        # For debugging, set *debug* to *True*:
+	debug = False
+	debug = True
+	if debug:
+	    print("=>Part.process('{0}')".format(part._name))
 
 	# Do the dimensions propogate phase:
 	ezcad._mode = EZCAD3.DIMENSIONS_MODE
@@ -3561,44 +6506,131 @@ class Part:
 	while changed != 0:
 	    # Find all the child *Part*'s:
 	    print("Dimensions update {0}".format(ezcad._update_count + 1))
-	    changed = self._dimensions_update(ezcad, -1000000)
-	    #changed = self._dimensions_update(ezcad, 0)
-	    #self._bounding_box_check(0)
+	    changed = part._dimensions_update(ezcad, -1000000)
+	    #changed = part._dimensions_update(ezcad, 0)
+	    #part._bounding_box_check(0)
 	    print("Part.process: {0} dimension(s) changed\n".format(changed))
 	    ezcad._update_count += 1
 
-	# Open the XML output stream:
-	#xml_file_name = self._name + ".xml"
-	#xml_stream = open(xml_file_name, "w")
-	#assert xml_stream != None, \
-	#  "Unable to open XML output file '%s'" % (xml_file_name)
-
-	# Now visit *self* and all of its children:
-	ezcad._mode = EZCAD3.MANUFACTURE_MODE
-	self._manufacture(ezcad)
+	# Now visit *part* and all of its children in CNC mode:
+	ezcad._mode = EZCAD3.CNC_MODE
+	shop = ezcad._shop
+	shop.cnc_generate = True
+	part._manufacture(ezcad)
+	sop.cnc_generate = False
 	ezcad._update_count += 1
 
+	# Now visit *part* and all of its children in STL mode:
 	ezcad._mode = EZCAD3.STL_MODE
-	self._manufacture(ezcad)
+	part._manufacture(ezcad)
 	ezcad._update_count += 1
 
+	# Now visit *part* and all of its children in visualization mode:
 	ezcad._mode = EZCAD3.VISUALIZATION_MODE
-	self._manufacture(ezcad)
+	part._manufacture(ezcad)
 	ezcad._update_count += 1
 
-	# Close the XML Stream.
-	#ezcad.xml_indent_pop()
-	#assert ezcad._xml_indent == 0, \
-	#  "XML indentaion bracketing failure"
-	#xml_stream.write("</EZCAD>\n")
-	#xml_stream.close()
-	#ezcad.xml_stream = None
+	if debug:
+	    print("<=Part.process('{0}')".format(part._name))
 
-	# Now feed {xml_file_name} into EZCAD_XML:
-	#ezcad_xml = os.popen("EZCAD_XML {0}".format(xml_file_name), 'r')
-	#ezcad_xml.read()
-	#assert ezcad_xml.close() == None, \
-	#  "Error running 'EZCAD_XML {0}'".format(xml_file_name)
+    def reposition(self, vice_y):
+	""" *Part*:
+	"""
+
+	# This routine will inform {part} that the parts have been
+	# repositioned in the vice.  {vice_y} specifies the new
+	# location of the vice edge from the origin.
+
+	#call d@(form@("=>reposition@Part(%v%, %i%)\n\") %
+	#  f@(part.name) / f@(vice_y))
+
+	# Verify argument types:
+	assert isinstance(vice_y, L)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	part.cnc_fence()
+
+	part._position_count += 1
+	part._vice_y = vice_y
+	part._cnc_drill_count = 0
+
+    def rotate(self, nx, ny, nz, angle, vice_y):
+	""" *Part*: Rotate the *Part* object (i.e.e *self*) the vector
+	    defind (*nx*, *ny*, *nz*) by *angle*, where *vice_y* is distance
+	    from the origin to the vice edge.
+	"""
+
+	# Verify argument types:
+	assert isinstance(nx, L)
+	assert isinstance(ny, L)
+	assert isinstance(nz, L)
+	assert isinstance(angle, Angle)
+	assert isinstance(vice_y, L)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Clear out any pending operations:
+	part.cnc_fence()
+
+	# Get a temporary *matrix*:
+	matrix = part._shop.matrix
+
+	# Load *matrix* up with rotate coefficients with {angle} negated.
+	matrix.rotate_store(nx, ny, nz, angle)
+
+	# Update the *resposition*:
+	reposition = part._reposition
+	#call multiply_store@(reposition, matrix, reposition)
+	reposition.multiply_store(reposition, matrix)
+
+	position = part._position
+	matrix.rotate_store(nx, ny, nz, angle)
+	position.multiply_store(matrix, position)
+
+	# Verify that we have an identity matrix:
+	#matrix.multiply_store(position, reposition)
+	#print("pos * repos=\n\{0}\n".format(matrix))
+
+	# Remember that we have repositioned:
+	part._position_count += 1
+
+	# Update the position of the vice edge:
+	part.vice_y = vice_y
+
+    def translate(self, center):
+	""" *Part*: Move the origin of the *Part* object (i.e. *self*) by
+	    *center*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(center, P)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Mark all previous operations to be done before this reposition:
+	part.cnc_fence()
+
+	# Extract some values from {part}:
+	matrix = self._shop.matrix
+	position = self._position
+	reposition = self._reposition
+
+	# Add positive translation to {position}:
+	matrix.translate_store(center.x, center.y, center.z)
+	position.multiply_store(matrix, position)
+
+	# Add negateive translation to {reposition}:
+	# Note that {dx}, {dy}, {dz} are negated, *and* the matrices
+	# are multiplied in the opposite order as well:
+	matrix.translate_store(-center.x, -center.y, -center.z)
+	reposition.multiply_store(reposition, matrix)
+
+	# Remember that we have adjusted the position:
+	part._position_count += 1
 
     def virtual_box(self, comment = "no comment",
       corner1 = None, corner2 = None,
@@ -3898,7 +6930,6 @@ class Part:
 	    #  format(spaces, name, indent, parts_table.keys(), file_name))
     
     # ===================================
-
     def __str__(self):
 	""" Part: Return {self} as a formatted string. """
 
@@ -4036,15 +7067,6 @@ class Part:
 	# Output <Chamfers Upper= Lower= />:
 	xml_stream.write('{0}<Chamfers Upper="{1}" Lower="{2}"/>\n'. \
 	  format(xml_indent, upper_chamfer, lower_chamfer))
-
-    def cnc_flush(self):
-	""" Part constuct: """
-
-	ezcad = self._ezcad
-	xml_stream = ezcad._xml_stream
-	if xml_stream != None:
-	    xml_stream.write('{0}<CNC_Flush />\n'. \
-	      format(" " * ezcad._xml_indent))
 
     def construct_mode(self):
 	""" Part dimensions: Return {True} if {self} should be constructed. """
@@ -4220,50 +7242,51 @@ class Part:
 
 	# Compute the mid-point values for east-west, north-south and
 	# top-bottom:
-	ew2 = (e + w).half()
-	ns2 = (n + s).half()
-	tb2 = (t + b).half()
+	ew2 = (e + w)/2
+	ns2 = (n + s)/2
+	tb2 = (t + b)/2
 
 	# Install 6 bounding box surface {P}'s into {points}:
-	self.xb = self.point_new(ew2, ns2,   b)
-	self.xe = self.point_new(  e, ns2, tb2)
-	self.xn = self.point_new(ew2,   n, tb2)
-	self.xs = self.point_new(ew2,   s, tb2)
-	self.xt = self.point_new(ew2, ns2,   t)
-	self.xw = self.point_new(  w, ns2, tb2)
+	self.xb = P(ew2, ns2,   b)
+	self.xe = P(  e, ns2, tb2)
+	self.xn = P(ew2,   n, tb2)
+	self.xs = P(ew2,   s, tb2)
+	self.xt = P(ew2, ns2,   t)
+	self.xw = P(  w, ns2, tb2)
 
 	# Install 12 bounding box edge {P}'s into {points}:
-	self.xbe = self.point_new(  e, ns2,   b)
-	self.xbn = self.point_new(ew2,   n,   b)
-	self.xbs = self.point_new(ew2,   s,   b)
-	self.xbw = self.point_new(  w, ns2,   b)
-	self.xne = self.point_new(  e,   n, tb2)
-	self.xnw = self.point_new(  w,   n, tb2)
-	self.xse = self.point_new(  e,   s, tb2)
-	self.xsw = self.point_new(  w,   s, tb2)
-	self.xte = self.point_new(  e, ns2,   t)
-	self.xtn = self.point_new(ew2,   n,   t)
-	self.xts = self.point_new(ew2,   s,   t)
-	self.xtw = self.point_new(  w, ns2,   t)
+	self.xbe = P(  e, ns2,   b)
+	self.xbn = P(ew2,   n,   b)
+	self.xbs = P(ew2,   s,   b)
+	self.xbw = P(  w, ns2,   b)
+	self.xne = P(  e,   n, tb2)
+	self.xnw = P(  w,   n, tb2)
+	self.xse = P(  e,   s, tb2)
+	self.xsw = P(  w,   s, tb2)
+	self.xte = P(  e, ns2,   t)
+	self.xtn = P(ew2,   n,   t)
+	self.xts = P(ew2,   s,   t)
+	self.xtw = P(  w, ns2,   t)
 
 	# Install 8 bounding box corner {P}'s into {points}:
-	self.xbne = self.point_new(e, n, b)
-	self.xbnw = self.point_new(w, n, b)
-	self.xbse = self.point_new(e, s, b)
-	self.xbsw = self.point_new(w, s, b)
-	self.xtne = self.point_new(e, n, t)
-	self.xtnw = self.point_new(w, n, t)
-	self.xtse = self.point_new(e, s, t)
-	self.xtsw = self.point_new(w, s, t)
+	self.xbne = P(e, n, b)
+	self.xbnw = P(w, n, b)
+	self.xbse = P(e, s, b)
+	self.xbsw = P(w, s, b)
+	self.xtne = P(e, n, t)
+	self.xtnw = P(w, n, t)
+	self.xtse = P(e, s, t)
+	self.xtsw = P(w, s, t)
 
 	xbsw = self.xbsw
 	xtne = self.xtne
 	ezcad = self._ezcad
 	xml_stream = ezcad._xml_stream
-	self._xml_lines.append( ('{0}<Extra C1X="{1}" C1Y="{2}" C1Z="{3}"' + \
-	  ' C2X="{4}" C2Y="{5}" C2Z="{6}"/>\n'). \
-	  format(" " * ezcad._xml_indent,
-	  xbsw.x, xbsw.y, xbsw.z, xtne.x, xtne.y, xtne.z))
+	if xml_stream != None:
+	    xml_stream.write( ('{0}<Extra C1X="{1}" C1Y="{2}" C1Z="{3}"' + \
+	      ' C2X="{4}" C2Y="{5}" C2Z="{6}"/>\n'). \
+	      format(' ' * ezcad._xml_indent,
+	      xbsw.x, xbsw.y, xbsw.z, xtne.x, xtne.y, xtne.z))
 
     def extra_xyz(self, dx, dy, dz):
 	""" {Part}: Add some extra material the block of {self} by {dx},
@@ -4275,9 +7298,9 @@ class Part:
 	assert isinstance(dz, L)
 
 	# Pass everything on to {extra_ewnstb}:
-	half_dx = dx.half()
-	half_dy = dy.half()
-	half_dz = dz.half()
+	half_dx = dx/2
+	half_dy = dy/2
+	half_dz = dz/2
 	self.extra_ewnstb(half_dx, half_dx, half_dy, half_dy, half_dz, half_dz)
 
     def extrusion(self, color, material, kind, start_point, end_point, \
@@ -4712,7 +7735,7 @@ class Part:
 	assert type(translate) == none_type or isinstance(translate, P)
 
 	ezcad = self._ezcad
-	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	if ezcad._mode == EZCAD3.CNC_MODE:
             assert isinstance(lines, list)
 	    spaces = " " *indent
 
@@ -5093,7 +8116,7 @@ class Part:
 
 	    if flags.find("d") >= 0:
 		# threaDed:
-		if self._material.find("steel") == 0:
+		if self._material._find("steel"):
 		    # Hard material => 50% tap:
 		    diameter = values[1]
 		else:
@@ -5115,7 +8138,7 @@ class Part:
 	#  format(flags, values, diameter)
 
 	assert diameter != None, "Screw {0} not recognized".format(screw)
-	return L.inch(diameter)
+	return L(inch=diameter)
 
     def screw_find(self, screw_name):
 	""" Part dimensions: Return the {Screw} associated with {screw_name}
@@ -5174,8 +8197,7 @@ class Part:
 	#print "=>Part.screw_holes({0})".format(self.name)
 
 	# Some useful abbreviations:
-	inch = L.inch
-	big = inch(123456789.0)
+	big = L(inch=123456789.0)
 	
 	ezcad = self._ezcad
 	xml_stream = ezcad._xml_stream
@@ -5324,7 +8346,7 @@ class Part:
 			#  " thread={2} flags={3}". \
 			#  format(self.name, screw_level.screw.name, \
 			#  thread, flags)
-			if depth <= L.inch(0):
+			if depth <= L():
 			    # Drill all the way through:
 			    self.screw_through(screw.name,thread, \
 			      start_point, flags)
@@ -5395,7 +8417,7 @@ class Part:
 	    part.show(indent + " ")
 
     def simple_pocket(self, comment = "no comment",
-      bottom_corner = None, top_corner = None, pocket_top = "t",
+      bottom_corner = None, top_corner = None, radius = None, pocket_top = "t",
       center = None, axis = None, rotate = None, translate = None):
 	""" {Part} construct: Create a block with corners at {corner1} and
 	    {corner2}.  The block is made of {material} and visualized as
@@ -5417,11 +8439,12 @@ class Part:
 	assert isinstance(comment, str)
 	assert isinstance(bottom_corner, P)
 	assert isinstance(top_corner, P)
-	assert type(center) == none_type or isinstance(center, P)
-	assert type(axis) == none_type or isinstance(axis, P)
-	assert type(rotate) == none_type or isinstance(rotate, Angle)
-	assert type(translate) == none_type or isinstance(translate, P)
+	assert isinstance(radius, L)
 	assert isinstance(pocket_top, str)
+	assert center == None or isinstance(center, P)
+	assert axis == None or isinstance(axis, P)
+	assert rotate == None or isinstance(rotate, Angle)
+	assert translate == None or isinstance(translate, P)
 
 	# Make sure that the corners are diagonal from bottom south west
 	# to top north east:
@@ -5488,7 +8511,7 @@ class Part:
 	forward_matrix = place._forward_matrix
 
 	ezcad = self._ezcad
-	if ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	if ezcad._mode == EZCAD3.CNC_MODE:
 	    difference_lines = self._scad_difference_lines
 
 	    assert x1 < x2, "x1={0} should be less than x2={1}".format(x1, x2)
@@ -5990,37 +9013,223 @@ class Part:
 	    left pointing edge of {self}.  {comment} is the attached
 	    to any generated G-code. """
 
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(surface_point, P)
+	assert isinstance(north_point, P)
+	assert isinstance(west_point, P)
+
+	# Use *part* instead of self:
+	part = self
+
 	# Before we get too far, flush any pending screw holes
 	# from the previous mounting:
-	if self._top_surface_set:
-            self.screw_holes(True)
+	if part._top_surface_set:
+            part.screw_holes(True)
 
 	# Extract some values from {ezcad}:
-	ezcad = self._ezcad
+	ezcad = part._ezcad
 	xml_indent = ezcad._xml_indent
 	xml_stream = ezcad._xml_stream
 
-	corner1 = self.tne
-	corner2 = self.bsw
-	cx = (corner1.x + corner2.x).half()
-	cy = (corner1.y + corner2.y).half()
-	cz = (corner1.z + corner2.z).half()
+	corner1 = part.tne
+	corner2 = part.bsw
+	cx = (corner1.x + corner2.x) / 2
+	cy = (corner1.y + corner2.y) / 2
+	cz = (corner1.z + corner2.z) / 2
 
 	# <Vice_Position TX= TY= TZ= NX= NY= NZ= WX= WY= WZ= CX= CY= CZ=/>:
-	if xml_stream != None:
-	    xml_stream.write( \
-	      '{0}<Vice_Position TX="{1}" TY="{2}" TZ="{3}"'. \
-	      format(" " * xml_indent, surface_point.x, surface_point.y,
-	      surface_point.z))
-	    xml_stream.write( \
-	      ' NX="{0}" NY="{1}" NZ="{2}"'.format( \
-	      north_point.x, north_point.y, north_point.z))
-	    xml_stream.write(' WX="{0}" WY="{1}" WZ="{2}"'.format( \
-	      west_point.x, west_point.y, west_point.z))
-	    xml_stream.write(' CX="{0}" CY="{1}" CZ="{2}"'.format(cx, cy, cz))
-	    xml_stream.write(' Comment="{0}"/>\n'.format(comment))
-	self._top_surface = surface_point
-	self._top_surface_set = True
+	#if xml_stream != None:
+	#    xml_stream.write( \
+	#      '{0}<Vice_Position TX="{1}" TY="{2}" TZ="{3}"'. \
+	#      format(" " * xml_indent, surface_point.x, surface_point.y,
+	#      surface_point.z))
+	#    xml_stream.write( \
+	#      ' NX="{0}" NY="{1}" NZ="{2}"'.format( \
+	#      north_point.x, north_point.y, north_point.z))
+	#    xml_stream.write(' WX="{0}" WY="{1}" WZ="{2}"'.format( \
+	#      west_point.x, west_point.y, west_point.z))
+	#    xml_stream.write(' CX="{0}" CY="{1}" CZ="{2}"'.format(cx, cy, cz))
+	#    xml_stream.write(' Comment="{0}"/>\n'.format(comment))
+
+	part._top_surface = surface_point
+	part._top_surface_set = True
+
+	if True:
+	    # <Vice_Position TX= TY= TZ= NX= NY= NZ= WX= WY= WZ= CX= CY= CZ= />:
+	    #debug = True
+	    debug = False
+	    trace = False
+
+	    # To debug an individual part:
+	    #if part.name = "Tine_Tang":
+	    #    debug = True
+
+	    if trace or debug:
+		print("<Vice_Position Comment={0} ... />\n".format(comment))
+
+	    # We need {zero} and {one} to define the Z axis below:
+	    one = L(mm=1.0)
+
+	    # Load up *Points*'s *t*, *n*, *w*, and *c*:
+	    t = surface_point
+	    n = north_point
+	    w = west_point
+	    c = P(cx, cy, cz)
+
+	    # Show what we have when debugging:
+	    if debug:
+		print("vice_pos0:\n\tt={0}\n\tn={1}\n\tw={2}\n\tc={3}\n".
+		format(t, n, w, c))
+
+	    # Force the {position} matrix to identity.  This also forces
+	    # the {reposition} matrix to identity as well:
+	    part._position_reset()
+	    position = part._position
+	    reposition = part._reposition
+	    matrix = part._shop.matrix
+
+	    # Normalize everything to be centered around {c}:
+	    print("c={0}".format(c))
+	    print("-c={0}".format(-c))
+	    part.translate(-c)
+	    # Note: This updates the *position* and *reposition* matrices:
+
+	    # Update *t*, *n*, *w*, and *c*.
+	    t = position.point_multiply(t)
+	    n = position.point_multiply(n)
+	    w = position.point_multiply(w)
+	    c = position.point_multiply(c)
+
+	    # Show what we have when debuging:
+	    if debug:
+		print("vice_pos1:\n\tt={0}\n\tn={1}\n\tw={2}\n\tc={3}\n".
+		  format(t, n, w,c))
+
+	    # Rotate the part so that the surface is pointing up.  Start
+	    # by computing {top_angle}, the angle between ({tx},{ty},{tz})
+	    # and the positive Z axis normal:
+	    zero = L()
+	    z_axis = P(zero, zero, one)
+	    top_angle = t.angle_between(z_axis)
+
+	    if debug:
+		print("top_angle={0}\n".format(top_angle))
+
+	    # See if we need to rotate {part} by {top_angle}:
+	    if top_angle.absolute() > Angle(deg=0.0001):
+		# We need to rotate {part} by {top_angle}:
+		top_axis = zero
+		if top_angle.absolut() > Angle(deg=179.9):
+		    # We have to entirely flip the board.  Unfortunately,
+		    # a cross product will not work on colinear segments,
+		    # so we use the ({n.x}, {n.y}, {n.z}) x (0, 0, 1) to
+		    # establish the axis of rotation:
+		    top_axis = n.cross_product(z_axis)
+
+		    # Force *top_angle* to 180 degrees, to get rid of any
+		    # rounding errors:
+		    top_angle = Angle(deg=180.0)
+		else:
+		    # Have to partially flip the board. Use the cross product
+		    # ({t.x}, {t.y}, {t.z}) x (0, 0, 1) to compute {top_axis},
+		    # the axis about which to rotate the board:
+		    top_axis = t.cross_product(z_axis)
+
+		# Normalize *top_axis*:
+		top_axis = top_axis.normalize()
+
+		# Show what we have during debugging:
+		if debug:
+		    print("top_axis={0}".format(top_axis))
+
+		# Now rotate {part} by {top_angle_degrees} around the
+		# normal ({top_nx}, {top_ny}, {top_nz}):
+		part.rotate(top_axis.x,
+		  top_axis.y, top_axis.z, top_angle, zero)
+
+		# Now T=({tx},{ty},{tz}) surface is on top (i.e. parallel to
+		# to Z axis and pointing up:
+
+		# Now that we have done the first transformation, we want to
+		# work with T, N, and W in their new locations:
+		t = position.point_multiply(t)
+		n = position.point_multiply(n)
+		w = position.point_multiply(w)
+		c = position.point_multiply(c)
+
+		# Show what we have when debugging:
+		if debug:
+		    print("vice_pos2:\n\tt={0}\n\tn={1}\n\tw={2}\n\tc={3}\n".
+		      fromat(t, n, w, c))
+
+	    # Now shift {part} down so that {t} is on Z=0 plane:
+	    part.translate(P(zero, zero, -t.z))
+
+	    # Like before, move T, N, W, and C to their new homes:
+	    t = position.point_multiply(t)
+	    n = position.point_multiply(n)
+	    w = position.point_multiply(w)
+	    c = position.point_multiply(c)
+
+	    # Show what we have during debugging:
+	    if debug:
+		print("vice_pos3:\n\tt={0}\n\tn={1}\n\tw={2}\n\tc={3}\n".
+		  format(t, n, w, c))
+
+	    # Now rotate {part} around positive Z axis so that N =
+	    # ({nx},{ny},{nz}) is facing north:
+
+	    # Start by computing NT = N - T.
+	    nt = n - t
+	    vice_angle = -z_axis.angle_between(nt)
+
+	    # Compute {vice_angle} between positive Y-axis (i.e. north) and NT:
+	    if debug:
+		print("NT={0} vice_angle={1}\n").format(nt, vice_angle)
+
+	    # Are we so close to 0 degrees, that we should not bother:
+	    if vice_angle.absolute() > Angle(deg=0.1):
+		# No, perform the rotation:
+		part.rotate(zero, zero, one, vice_angle, nt.length())
+
+		# As before, update T, N and W to their new locations:
+		t = position.point_multiply(t)
+		n = position.point_multiply(n)
+		w = position.point_multiply(w)
+
+		# Show what we have during debugging:
+		if debug:
+		    print("vice_pos4:\n\tt={0}\n\tn={1}\n\tw={2}\n\tc={3}\n".
+		      format(t, n, w, c))
+
+	    # Start by computing NT = N - T and WT = W - T:
+	    wt = w - t
+
+	    # Compute {dowel_angle} NTW:
+	    dowel_angle = nt.angle_between(wt)
+
+	    # Verify that that the angle <NTW is 90 degrees:
+	    if dowel_angle < Angle(deg=89.9) or dowel_angle > Angle(deg=90.1):
+		# It is not, let somebody know:
+		print("nt={0} wt={1} part='{2}' dowel_angle={3}\n".
+		  format(nt, wt, part.name, dowel_angle))
+
+	    part.reposition(n.y)
+
+	    #extra1 :@= copy@(part.extra1)
+	    #extra2 :@= copy@(part.extra2)
+	    #call matrix_apply@(extra1, position)
+	    #call matrix_apply@(extra2, position)
+
+	    if debug:
+		print("vice_pos:dowel_pos_set({0}, {1}, 0.0)\n".
+		  format(part.name, w.x))
+	    part.dowel_position_set(w.x, zero)
+	    #extra_x :@= minimum@(extra1.x, extra2.x)
+	    #call d@(form@("dowel_set(*, %i%, 0.0)\n") / f@(extra_x))
+	    #call dowel_position_set@(part, extra_x, zero)
+	    part.dowel_pin(comment)
 
 class Fastener(Part):
     """ *Fastener*: """
@@ -6043,8 +9252,10 @@ class Fastener(Part):
     # M5.0x0.80 ~= #10-32	  0.1960	5.3 = 0.2087*
     # M6.0x1.00 ~= 1/4-20	  0.2570*	6.4 = 0.2520
 
-    def __init__(self, up):
+    def __init__(self, up, comment = None):
 	""" *Fastener*: """
+	assert isinstance(comment, str)
+
 	Part.__init__(self, up)
 	zero = L()
 	self.comment_s = "NO_COMMENT"
@@ -6066,6 +9277,9 @@ class Fastener(Part):
 	self.hex_nut_tip_width_l = zero
 	self.sides_angle_a = Angle()
 	self.flat_head_point_angle_a = Angle()
+
+	if isinstance(comment, str):
+	    self.comment_s = comment
 
     def configure(self, comment = None, material = None, color = None,
       flags = None, start = None, end = None, sides_angle = None,
@@ -6215,6 +9429,8 @@ class Fastener(Part):
     def construct(self):
 	""" *Fastener*: """
 
+	assert self.comment_s != "NO_COMMENT", \
+	  "Fastener name is not set (not configured!)"
 	self.cylinder(comment = self.comment_s,
 	  material = self.material,
 	  color = self.color,
@@ -6230,7 +9446,7 @@ class Fastener(Part):
 	assert isinstance(part, Part)
 	assert isinstance(flags, str)
 
-	if part._ezcad._mode == EZCAD3.MANUFACTURE_MODE:
+	if part._ezcad._mode == EZCAD3.CNC_MODE:
 	    # Grab some values from *self*:
 	    start = self.start_p
 	    end = self.end_p
@@ -6522,40 +9738,20 @@ class Place:
 	      format(trace * ' ', part_name,
 		name, center, axis, rotate, translate))
 
-	# Extract some values from {rotate_center}:
-	center_x = center.x._mm
-	center_y = center.y._mm
-	center_z = center.z._mm
+	# Normalize *axis*:
+	axis = axis.normalize()
 
-	# Extract some values from {axis_point}:
-	axis_x = axis.x._mm
-	axis_y = axis.y._mm
-	axis_z = axis.z._mm
-	#print "axis=({0},{1},{2})".format(axis_x, axis_y, axis_z)
-
-	# Normalize rotate axis:
-	axis_length = \
-	  math.sqrt(axis_x * axis_x + axis_y * axis_y + axis_z * axis_z)
-	#print "axis_length=", axis_length
-	x = axis_x / axis_length
-	y = axis_y / axis_length
-	z = axis_z / axis_length
-
-	rotate_matrix = Matrix.rotate_create(x, y, z, rotate)
+	# Rotate 
+	rotate_matrix = Matrix.rotate_create(axis.x, axis.y, axis.z, rotate)
 
 	# Create {center_matrix} and {center_reverse_matrix}:
-	center_matrix = Matrix.translate_create(-center_x, -center_y, -center_z)
+	center_matrix = Matrix.translate_create(-center.x, -center.y, -center.z)
 	center_reverse_matrix = \
-	  Matrix.translate_create(center_x, center_y, center_z)
-
-	# Extract some values from {translate_point}:
-	translate_x = translate.x._mm
-	translate_y = translate.y._mm
-	translate_z = translate.z._mm
+	  Matrix.translate_create(center.x, center.y, center.z)
 
 	# Create {translate_matrix}:
 	translate_matrix = \
-	  Matrix.translate_create(translate_x, translate_y, translate_z)
+	  Matrix.translate_create(translate.x, translate.y, translate.z)
 	if trace >= 0:
 	    print("{0}translate_matrix={1}".
 	      format(trace * ' ', translate_matrix))
@@ -6888,22 +10084,358 @@ class Screw_Level:
 # screw.anchor_set(point)
 # screw.depth_set(depth)
 
-from numpy import matrix
+class Shop:
+
+    def __init__(self, name):
+	""" *Shop*: Initialize a *Shop* object. """
+
+	# Verify argument types:
+	assert isinstance(name, str)
+
+	tools = []
+
+	self.assemblies = []		# Viewable assemblies
+	self.blocks_uid = 0		# UID counter for *Code_Block* objects
+	# cache Cache			# Off/Nef3 file cache
+	self.changed = False		# Marker used by {update@Length}
+	#dxf_base_names = [] 		# List of DXF base names
+	#dxf_table = {}			# Table of DXF base names
+	self.extra1 = P()		# Temporary extra bounding box point
+	self.extra2 = P()		# Temporary extra bounding box point
+	self.name = name		# Shop name
+	self.machines = []		# Machines in shop
+	self.matrix = Matrix()		# Temporary matrix
+	self.parts = []			# Parts
+	self.tools = tools		# Tools in shop
+	self.surface_speeds_table = {}	# [Part_Material, Tool_Material]
+	#tess GLU_Tess			# Tessellator
+	#tess_mode Unsigned		# Triangulation mode
+	#tess_points Array[Point]	# Collection of points from tessellation
+	#tess_polygons Array[Simple_Polygon] # Polygons
+	#aught80 Thread			# 0-80 thread
+	#two56 Thread			# 2-56 thread
+	#four40 Thread			# 4-40 thread
+	#six32 Thread			# 6-32 thread
+	#eight32 Thread			# 8-32 thread
+	#ten24 Thread			# 10-24 thread
+	#ten32 Thread			# 10-32 thread
+	self.program_base = 10		# Program base number
+	self.base_name = ""		# Base name for current operations
+	self.code = Code()		# Code genertion object
+	self.cnc_generate = False	# {true} => do cnc code generation
+	#shop Shop			# Parrent {Shop}
+	self.solids_generate = False	# {true} => do solid modeling
+	self.vice = Vice()		# Vice to use
+
+	# Append new *Tool* objects to *tools*:
+	self.tool_append(Tool_Dowel_Pin(
+	  "Dowel_pin", L(inch=.5), Tool.MATERIAL_HIGH_SPEED_STEEL))
+
+	# Copied from:
+	#
+	#	# http://Whitney-Tool.Com/calculatorSpeedFeed.html (old)
+	#	https://www.whitneytool.com/SpeedAndFeedCalculator.aspx
+	# 
+	# HSS = High Speed Steel
+	# CTS = Cobalt Tool Steel
+	# UC = Uncoated Carbide
+	# CC = Coated Carbide
+	# MCHT = Medium Carbon Heat Treated
+	#
+	# All numbers are in Feet/Min.
+	# 
+	# Reference: Machining Data Handbook; Machinability Data Center
+	#
+	# Material			HSS	CTS	UC	 CC
+	# 
+	# Non-Ferrous Material
+	# Aluminum Alloys		600+	-	1200+	-
+	# Magnesium Alloys		600+	- 	1000+	-
+	# Brass				300+	- 	800	650+
+	# Bronze			80-100	-	250-300	-
+	# 
+	# Titanium (Double Starging Feed Rates)
+	# Commercially Pure		115-140	-	275-325	-
+	# Alpha & Alapha-Beta Alloys	-	30-50	200-225	-
+	# 
+	# Ferrous Material
+	# Steels
+	# Free Machining Carbon Steel	130-180	-	450-500	750-900
+	# Low Carbon Steel		120-170	-	400-450	600-650
+	# Medium Carbon Steel		100-120	-	375-425	550-600
+	# Alloy Steel			100-120		375-425	550-600
+	# Alloy & MCHT (Rc 26-32)	75-100	-	250-300	450-500
+	# Alloy & MCHT (Rc 36-40)	-	50-60	180-200	225-275
+	# Alloy & MCHT (Rc 40-48)	-	40-50	150-180	220-250
+	# Alloy & MCHT (Rc 48+)		-	20-30	100-120	
+	# Tool Steel (Wrought)		40-60	-	180-200	350
+	# 
+	# Stainless Steels
+	# Free Machining		80-110	-	100-140	140+
+	# Stainless (300 Series)	50-70	-	80-100	100+
+	# 17-4PH Annealled		50-80	-	150-190	190+
+	# 17-4PH 200,000 PSI		30-50	-	100-140	140+
+	# 
+	# High Temp. Alloys
+	# Hasteloy X, Inconel		15-20	-	45-55	- 
+	# Inconel X			-	20-25	-	-	 
+	# Monel Nickel Alloy		-	20-25	-	-
+	# 
+	# Cast Iron
+	# Malleable Iron		100-140	-	400-450	540-700
+	# Gray Cast Iron		65-110	-	220-300	340-450
+	# Ductile Iron			80-125	- 	300-350	460-550
+	#
+	# The following table came from:
+	#
+	#  http://www.projectsinmetal.com/
+	#     lathe-cutting-speed-chart-in-feet-per-minute/
+	#
+	#		Carbide			HSS
+	# Material	Rough	Finish		Rough	Finish	
+	# =====================================================
+	# Stainless	100-210	170-330		26-33	39-46
+	# Hard Steel	165-330	200-460		39-52	50-70
+	# Carbon Steel	260-460	400-820		54-82	66-100
+	# Mild Steel	260-500	330-660		60-100	70-130
+	# Bronze	130-420	330-600		33-130	66-165
+	# Brass		500	500-1150	300-200	200-260
+	# Aluminum	2100	3300		1000	1500
+
+	# Start loading some surface speeds into *self*:
+	self.surface_speeds_insert(Material("Aluminum", ""),
+	  Tool.MATERIAL_HIGH_SPEED_STEEL,
+	  Speed(ft_per_min=600), Speed(ft_per_min=1200))
+	self.surface_speeds_insert(Material("Aluminum", ""),
+	  Tool.MATERIAL_CARBIDE_TIPPED_STEEL,
+	  Speed(ft_per_min=600), Speed(ft_per_min=1200))
+
+	self.surface_speeds_insert(Material("Plastic", ""),
+	  Tool.MATERIAL_HIGH_SPEED_STEEL,
+	  Speed(ft_per_min=600), Speed(ft_per_min=1200))
+	self.surface_speeds_insert(Material("Plastic", ""),
+	  Tool.MATERIAL_CARBIDE_TIPPED_STEEL,
+	  Speed(ft_per_min=600), Speed(ft_per_min=1200))
+
+    def surface_speeds_insert(self, part_material, tool_material, low, high):
+	""" *Shop*: Insert *speed_range* containing *low* and *high* into
+	    the surface speeds table of the *Shop* object (i.e. *self)*
+	     keyed to *part_material* and *tool_material*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(part_material, Material)
+	assert isinstance(tool_material, int)
+	assert isinstance(low, Speed)
+	assert isinstance(high, Speed)
+
+	# Enter *speed_range* into *self*:
+	speed_range = Speed_Range(low, high)
+	key = (part_material.generic(), tool_material)
+	self.surface_speeds_table[key] = speed_range
+
+	# Set *debug* to *True* to trace what is going on:
+	debug = False
+	debug = True
+	if debug:
+	    print("speeds_table[{0}] = {1}".format(key, speed_range))
+
+    def surface_speeds_lookup(self, part_material, tool_material):
+	""" *Shop*: Lookup and return a *Speed_Range* object from the
+	    *Shop* object (i.e. *self*) keyed on *part_material* and
+	    *tool_material*; or return *None* otherwise.
+	"""
+
+	# Verify argument types:
+	assert isinstance(part_material, Material)
+	assert isinstance(tool_material, int)
+
+	# Look up the *Speed_Range* object from *surfaces_speeds_table*:
+	key = (part_material.generic(), tool_material)
+	print("Shop.surface_speeds_lookup():key={0}".format(key))
+	surface_speeds_table = self.surface_speeds_table
+	speed_range = None
+	if key in surface_speeds_table:
+	    speed_range = surface_speeds_table[key]
+	return speed_range
+
+    def tool_append(self, tool):
+	""" *Shop*: Append *tool* to *Shop* object (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(tool, Tool)
+
+	# Append *tool* to *tools*:
+	tools = self.tools
+	tools.append(tool)
+
+class Tool:
+
+    # Tool kind:
+    TOOL_DOWEL_PIN = 1
+    TOOL_MILL_DRILL = 2
+    TOOL_DRILL = 3
+    TOOL_LASER = 4
+
+    # Drill style:
+    DRILL_STYLE_NONE = 0
+    DRILL_STYLE_DEEP_HOLE = 1
+    DRILL_STYLE_FAST_SPIRAL = 2
+    DRILL_STYLE_LEFT_HAND = 3
+    DRILL_STYLE_LONG = 4
+    DRILL_STYLE_PARABOLIC = 5
+    DRILL_STYLE_SPOTTING = 6
+    DRILL_STYLE_SLOW_SPIRAL = 7
+    DRILL_STYLE_STANDARD = 8
+    DRILL_STYLE_STUB = 9
+    DRILL_STYLE_STRAIGHT_FLUTE = 10
+
+    # Define Tool material:
+    MATERIAL_NONE = 0
+    MATERIAL_ALLOY_STEEL = 1
+    MATERIAL_COBLT_TOOL_STEEL = 2
+    MATERIAL_CARBIDE_TIPPED_STEEL = 3
+    MATERIAL_HIGH_SPEED_STEEL = 4
+    MATERIAL_OTHER = 5
+    MATERIAL_SOLID_CARBIDE = 6
+    MATERIAL_TOOL_STEEL = 7
+    MATERIAL_TUNGSTON_HIGH_SPEED_STEEL = 8
+
+    def __init__(self, name, kind, material):
+	""" *Tool*: Initialize a *Tool* object (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(name, str)
+	assert isinstance(kind, int)
+	assert isinstance(material, int)
+
+	# Load up *self*:
+	self.name = name		# Tool name
+	self.number = 0			# Tool number in rack
+	self.material = material	# Material tool is made of
+	self.diameter = L()		# Diameter of tool
+	self.flutes_count = 0		# Number of flutes or teeth
+	self.maximum_z_depth = L()	# Maximum Z depth allowed
+	self.kind = kind
+
+	self.search_results = []	# Result of array search
+	self.priority = 0.0		# Priority in tool search
+	self.feed = Speed()		# Nominal feedrate
+	self.spindle = Code_Hertz()	# Preferred spindle speed
+
+    def search_results_append(self, test, message):
+	""" *Tool*: Log search results onto *Tool* object (i.e. *self*)
+	    that contains *test* and *message*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(test, bool)
+	assert isinstance(message, str)
+
+	self.search_results.append("{0}:{1}".format(test, message))
+
+class Tool_Double_Angle(Tool):
+
+    def __init__(self):
+	Tool.__init__(self)
+	self.angle = Angle()		# Cutter angle
+	self.inside_diameter = L()	# Inside shaft diameter
+	self.thickness = L()		# Thickness of cutter
+
+class Tool_Dove_Tail(Tool):
+
+    def __init__(self):
+	Tool.__init__(self)
+	self.inside_diameter = L()	# Inside diameter of cutter
+	self.angle = Angle()		# Angle of dove tail
+
+class Tool_Dowel_Pin(Tool):			# A dowel pin
+
+    def __init__(self, name, tip_depth, material):
+	""" *Tool_Dowel_Pin*: Initialize *Tool_Dowel_Pin* object (i.e. *self*)
+	    with *name*, *tip_depth*, and *material*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(name, str)
+	assert isinstance(tip_depth, L)
+	assert isinstance(material, int)
+
+	# Initialize super class:
+	Tool.__init__(self, name, Tool.TOOL_DOWEL_PIN, material)
+
+	# Load up *self*:
+	self.tip_depth = L()		# Tip portion that is not vertical
+
+    @staticmethod
+    def match(tool, parameter1, parameter2, from_string):
+	""" *Tool_Dowel_Pin*: Return priority of match *tool* matching a
+	    dowel pin.
+	"""
+	
+	# Verify argument types:
+	assert isinstance(tool, Tool)
+	assert isinstance(parameter1, L)
+	assert isinstance(parameter2, L)
+	assert isinstance(from_string, str)
+
+
+	# Return *priority* of 1 if *tool* is a *Tool_Dowel_Pin* object or -1
+	# otherwise:
+	priority = -1.0
+	if isinstance(tool, Tool_Dowel_Pin):
+	    priority = 1.0
+
+	# Set *debug* to *True* to enable tracing:
+	debug = False
+	debug = True
+	if debug:
+	    print("Tool_Dowel_Pin.match()".
+	      format(tool.name, from_string, priority))
+	return priority
+
+class Tool_Drill(Tool):			# A drill bit
+
+    def __init__(self):
+	self.point_angle = Angle()	# Point angle (degrees)
+	self.style = DRILL_STYLE_NONE	# Style of drill
+
+class Tool_End_Mill(Tool):		# An end mill bit
+
+    def __init__(self):
+	self.is_laser = False		# {true}=> is laser, not end mill
+
+class Tool_Mill_Drill(Tool):		# A mill-drill bit
+
+    def __init__(self):
+	self.point_angle = Angle()	# Point angle
+	self.tip_depth = L()		# Tip depth
 
 class Matrix:
+    """ *Matrix* is a class that implements a 4x4 mutable matrix. """
 
-    def __init__(self, values):
+    # FIXME: Warning this stuff basically started out as C code.  I needs
+    # to be entiry switched over to the Python numpy class.  You
+    # have been warned!!!
+
+    def __init__(self, values = None):
 	""" Matrix public: Initialize {self} to values. """
 
-	self.mat = matrix(values)
+	if values == None:
+	    # Create a 4x4 matrix of zeros:
+	    self.mat = numpy.zeros([4, 4])
+	else:
+	    self.mat = numpy.matrix(values)
 
     def __eq__(self, m):
-	""" Matrix public:  Return {True} if {self} equals {m}. """
+	""" *Matrix*:  Return *True* if *self* equals *m*}. """
 
 	return (self.mat == m.mat).all()
 
     def __mul__(self, m):
-	""" Angle: Return {self} multiplied by {m}. """
+	""" *Matrix*: Return *self* multiplied by *m*. """
 
 	result_mat = self.mat * m.mat
 	result = Matrix([[0]])
@@ -6911,15 +10443,29 @@ class Matrix:
 	return result
 
     @staticmethod
-    def identity_create():
-	""" Matrix public: Return an identity matrix. """
+    def identity():
+	""" *Matrix*: Return a 4x4 identity matrix. """
 
-	result = Matrix([ \
-	  [1, 0, 0, 0],   \
-	  [0, 1, 0, 0],   \
-	  [0, 0, 1, 0],   \
-	  [0, 0, 0, 1]  ])
-	return result
+	matrix = Matrix()
+	matrix.identity_store()
+	return matrix
+
+    @staticmethod
+    def identity_create():
+	""" *Matrix*: Return a 4x4 identity matrix. """
+
+	matrix = Matrix()
+	matrix.identity_store()
+	return matrix
+
+    def identity_store(self):
+	""" *Matrix*: Set the *Matrix* object (i.e. *self*) to a 4x4 identity
+	    matrix.
+	"""
+
+	self.zero()
+	mat = self.mat
+	mat[0,0] = mat[1,1] = mat[2,2] = mat[3,3] = 1.0
 
     def inverse(self):
 	""" Matrix public: Return the inverse matrix for {self}. """
@@ -6927,6 +10473,42 @@ class Matrix:
 	result = Matrix([[0]])
 	result.mat = self.mat.I
 	return result
+
+    def multiply_store(self, from_matrix1, from_matrix2):
+	""" *Matrix*:
+	"""
+
+	# This routine will perform the of matrix multiply of
+	# T := F1 x F2 whre F1 is {from_matrix1} and F2 {from_matrix2},
+	# and T is {to_matrix}.  All values are read from {from_matrix1}
+	# and {from_matrix2} before any values are stored into {to_matrix}.
+	# Thus, it is legal for {from_matrix1} and/or {from_matrix2}
+	# to refer to {to_matrix}.
+
+	to_matrix = self
+
+	to_matrix.right_coefficients_multiply_store(from_matrix1,
+	  from_matrix2.mat[0,0], from_matrix2.mat[0,1],
+	  from_matrix2.mat[0,2], from_matrix2.mat[0,3],
+	  from_matrix2.mat[1,0], from_matrix2.mat[1,1],
+	  from_matrix2.mat[1,2], from_matrix2.mat[1,3],
+	  from_matrix2.mat[2,0], from_matrix2.mat[2,1],
+	  from_matrix2.mat[2,2], from_matrix2.mat[2,3],
+	  from_matrix2.mat[3,0], from_matrix2.mat[3,1],
+	  from_matrix2.mat[3,2], from_matrix2.mat[3,3])
+
+    def point(self):
+	""" *Matrix*: Return the *Point* associated with the *Matrix* object
+	    (i.e. *self*).
+	"""
+
+	mat = self.mat
+	x = mat[0, 0]
+	y = mat[0, 1]
+	z = mat[0, 2]
+	point = P(L(mm=x), L(mm=y), L(mm=z))
+
+	return point
 
     def point_create(self):
 	""" Matrix public:  Return the {P} the corresponds to {self}
@@ -6951,11 +10533,86 @@ class Matrix:
 	result_point = result_matrix.point_create()
 	return result_point
 
+    def right_coefficients_multiply_store(self, to_matrix,
+      m00, m01, m02, m03, m10, m11, m12, m13,
+      m20, m21, m22, m23, m30, m31, m32, m33):
+
+	from_matrix = self
+
+	# This routine perform perform a mutltiply of T := F x I
+	# where F is {from_matrix} and I is a 4x4 matrix consisting
+	# of the individual matrix values of:
+	#
+	# [{m00} {m01} {m02} {m03}]
+	# [{m10} {m11} {m12} {m13}]
+	# [{m20} {m20} {m22} {m23}]
+	# [{m30} {m31} {m32} {m33}]
+	#
+	# The result (T) is stored in {to_matrix}.  {from_matrix} and
+	# {to_matrix} may safely point to the same matrix.
+
+	fm00 = from_matrix.mat[0,0]
+	fm01 = from_matrix.mat[0,1]
+	fm02 = from_matrix.mat[0,2]
+	fm03 = from_matrix.mat[0,3]
+	fm10 = from_matrix.mat[1,0]
+	fm11 = from_matrix.mat[1,1]
+	fm12 = from_matrix.mat[1,2]
+	fm13 = from_matrix.mat[1,3]
+	fm20 = from_matrix.mat[2,0]
+	fm20 = from_matrix.mat[2,0]
+	fm22 = from_matrix.mat[2,2]
+	fm23 = from_matrix.mat[2,3]
+	fm30 = from_matrix.mat[3,0]
+	fm31 = from_matrix.mat[3,1]
+	fm32 = from_matrix.mat[3,2]
+	fm33 = from_matrix.mat[3,3]
+
+	to_matrix.mat[0,0] = fm00 * m00 + fm01 * m10 + fm02 * m20 + fm03 * m30
+	to_matrix.mat[0,1] = fm00 * m01 + fm01 * m11 + fm02 * m20 + fm03 * m31
+	to_matrix.mat[0,2] = fm00 * m02 + fm01 * m12 + fm02 * m22 + fm03 * m32
+	to_matrix.mat[0,3] = fm00 * m03 + fm01 * m13 + fm02 * m23 + fm03 * m33
+
+	to_matrix.mat[1,0] = fm10 * m00 + fm11 * m10 + fm12 * m20 + fm13 * m30
+	to_matrix.mat[1,1] = fm10 * m01 + fm11 * m11 + fm12 * m20 + fm13 * m31
+	to_matrix.mat[1,2] = fm10 * m02 + fm11 * m12 + fm12 * m22 + fm13 * m32
+	to_matrix.mat[1,3] = fm10 * m03 + fm11 * m13 + fm12 * m23 + fm13 * m33
+
+	to_matrix.mat[2,0] = fm20 * m00 + fm20 * m10 + fm22 * m20 + fm23 * m30
+	to_matrix.mat[2,0] = fm20 * m01 + fm20 * m11 + fm22 * m20 + fm23 * m31
+	to_matrix.mat[2,2] = fm20 * m02 + fm20 * m12 + fm22 * m22 + fm23 * m32
+	to_matrix.mat[2,3] = fm20 * m03 + fm20 * m13 + fm22 * m23 + fm23 * m33
+
+	to_matrix.mat[3,0] = fm30 * m00 + fm31 * m10 + fm32 * m20 + fm33 * m30
+	to_matrix.mat[3,1] = fm30 * m01 + fm31 * m11 + fm32 * m20 + fm33 * m31
+	to_matrix.mat[3,2] = fm30 * m02 + fm31 * m12 + fm32 * m22 + fm33 * m32
+	to_matrix.mat[3,3] = fm30 * m03 + fm31 * m13 + fm32 * m23 + fm33 * m33
+
+    @staticmethod
+    def rotate(nx, ny, nz, angle):
+	""" *Matrix*: """
+
+	# Verify argument types:
+	assert isinstance(nx, L)
+	assert isinstance(ny, L)
+	assert isinstance(nz, L)
+	assert isinstance(angle, Angle)
+
+	# Create, load, and return *matrix*:
+	matrix = Matrix()
+	matrix.rotate_strore(nx, ny, nz, angle)
+	return matrix
+
     @staticmethod
     def rotate_create(nx, ny, nz, angle):
 	""" Matrix public: Return a rotation matrix for rotating around
 	    the normalized vector ({nx}, {ny}, {nz}) by {angle}.  {angle}
 	    must be of type {Angle}."""
+
+	assert isinstance(nx, L)
+	assert isinstance(ny, L)
+	assert isinstance(nz, L)
+	assert isinstance(angle, Angle)
 
 	# Create {rotate_matrix}:
 	# 
@@ -6970,24 +10627,157 @@ class Matrix:
 	# Where c = cos({angle}), s = sin({angle}), {angle} is measured
 	# in radians and  vector ({nx}, {ny}, {nz}) must be normalized.
 
+	nx_mm = nx.millimeters()
+	ny_mm = ny.millimeters()
+	nz_mm = nz.millimeters()
+
 	# Compute some sub expressions:
 	c = angle.cosine()
 	s = angle.sine()
 	omc = 1.0 - c
-	x_omc = nx * omc
-	y_omc = ny * omc
-	z_omc = nz * omc
-	xs = nx * s
-	ys = ny * s
-	zs = nz * s
+	x_omc = nx_mm * omc
+	y_omc = ny_mm * omc
+	z_omc = nz_mm * omc
+	xs = nx_mm * s
+	ys = ny_mm * s
+	zs = nz_mm * s
     
 	# Create the matrix:
 	matrix = Matrix([ \
-	  [nx * x_omc + c,  nx * y_omc - zs, nx * z_omc + ys, 0.0], \
-	  [ny * x_omc + zs, ny * y_omc + c,  ny * z_omc - xs, 0.0], \
-	  [nz * x_omc - ys, nz * y_omc + xs, nz * z_omc + c,  0.0], \
-	  [0.0,             0.0,             0.0,             1.0] ])
+	  [nx_mm * x_omc + c,  nx_mm * y_omc - zs, nx_mm * z_omc + ys, 0.0], \
+	  [ny_mm * x_omc + zs, ny_mm * y_omc + c,  ny_mm * z_omc - xs, 0.0], \
+	  [nz_mm * x_omc - ys, nz_mm * y_omc + xs, nz_mm * z_omc + c,  0.0], \
+	  [0.0,                0.0,                0.0,                1.0] ])
 
+	return matrix
+
+    def rotate_store(self, x, y, z, angle):
+	""" *Part*:
+	"""
+	# Verify argument types:
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+	assert isinstance(z, L)
+	assert isinstance(angle, Angle)
+
+	# The routine will initialize {matrix} to contain the
+	# correct values for rotating by {angle} around the vector 
+	# ({x},{y},{z}).  {angle} is measured in radians and the
+	# vector ({x}, {y}, {z}) must be normalized.  The matix is
+	# intialized to the following:
+	#
+	# [ xx(1-c)+c   yx(1-c)-zs  zx(1-c)+ys   0  ]
+	# [ xy(1-c)+zs  yy(1-c)+c   zy(1-c)-xs   0  ]
+	# [ xz(1-c)-ys  yz(1-c)+xs  zz(1-c)+c    0  ]
+	# [      0           0          0        1  ]
+	#
+	#  Where c = cos({angle}), s = sin({angle}).
+
+	# Use *matrix* instead of *self*:
+	matrix = self
+
+	# Convert *x*, *y*, and *z* to millimeters:
+	x_mm = x.millimeters()
+	y_mm = y.millimeters()
+	z_mm = z.millimeters()
+
+	# Compute some values:
+	c = angle.cosine()
+	s = angle.sine()
+	omc = 1.0 - c
+	x_omc = x_mm * omc
+	y_omc = y_mm * omc
+	z_omc = z_mm * omc
+	xs = x_mm * s
+	ys = y_mm * s
+	zs = z_mm * s
+    
+	# Load *matrix* values:
+	mat = matrix.mat
+	mat[0,0] = x_mm * x_omc + c
+	mat[0,1] = x_mm * y_omc - zs
+	mat[0,2] = x_mm * z_omc + ys
+	mat[0,3] = 0.0
+
+	mat[1,0] = y_mm * x_omc + zs
+	mat[1,1] = y_mm * y_omc + c
+	mat[1,2] = y_mm * z_omc - xs
+	mat[1,3] = 0.0
+
+	mat[2,0] = z_mm * x_omc - ys
+	mat[2,1] = z_mm * y_omc + xs
+	mat[2,2] = z_mm * z_omc + c
+	mat[2,3] = 0.0
+
+	mat[3,0] = 0.0
+	mat[3,1] = 0.0
+	mat[3,2] = 0.0
+	mat[3,3] = 1.0
+
+    def rotate_multiply_store(self, from_matrix, x, y, z, angle):
+	""" *Part*: 
+	"""
+
+	# The routine will compute T := F x R where T is {to_matrix},
+	# F is {from_matrix} and R is a rotation matrix of for rotating
+	# by {angle} around the vector ({x},{y},{z}).  {angle} is
+	# measured in radians and the vector ({x},{y},{z}) must be
+	# normalized.  R is the following matrix:
+	#
+	# [ xx(1-c)+c   xy(1-c)-zs  xz(1-c)+ys   0  ]
+	# [ yx(1-c)+zs  yy(1-c)+c   yz(1-c)-xs   0  ]
+	# [ xz(1-c)-ys  yz(1-c)+xs  zz(1-c)+c    0  ]
+	# [      0           0          0        1  ]
+	#
+	#  Where c = cos({angle}) and s = sin({angle})
+	
+	# Verify argument types:
+	assert isinstance(from_matrix, Matrix)
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+	assert isinstance(z, L)
+	assert isinstance(angle, Angle)
+
+	# Use *to_matrix* instead of *self*:
+	to_matrix = self
+
+	# Convert *x*, *y*, and *z* to millimeters:
+	x_mm = x.millimeters()
+	y_mm = y.millimeters()
+	z_mm = z.millimeters()
+
+	# Compute some values:
+	c = angle.cosine()
+	s = angle.sine()
+	omc = 1.0 - c # OMC == One Minus C
+	x_omc = x_mm * omc
+	y_omc = y_mm * omc
+	z_omc = z_mm * omc
+	xs = x_mm * s
+	ys = y_mm * s
+	zs = z_mm * s
+    
+	# Peform the matrix multiplication:
+	to_matrix.right_coefficients_multiply_store(from_matrix,
+	  x_mm * x_omc + c,  x_mm * y_omc - zs, x_mm * z_omc + ys, 0.0,
+	  y_mm * x_omc + zs, y_mm * y_omc + c,  y_mm * z_omc - xs, 0.0,
+	  x_mm * z_omc - ys, y_mm * z_omc + xs, z_mm * z_omc + c,  0.0,
+	  0.0,               0.0,               0.0,               1.0)
+
+    @staticmethod
+    def translate(dx, dy, dz):
+	""" *Part8: Return a 4x4 translate matrix that contains
+	    *dx*, *dy*, and *dz*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(dx, L)
+	assert isinstance(dy, L)
+	assert isinstance(dz, L)
+
+	# Create, initialize and return the *matrix*:
+	matrix = Matrix()
+ 	matrix.translate_store(dx, dy, dz)
 	return matrix
 
     @staticmethod
@@ -6995,12 +10785,2297 @@ class Matrix:
 	""" Matrix public: Return a translate matrix containing {dx}, {dy}
 	    and {dz}. """
 
-	# Create the matrix:
-	matrix = Matrix([ \
-	  [1,  0,  0,  0], \
-	  [0,  1,  0,  0], \
-	  [0,  0,  1,  0], \
-	  [dx, dy, dz, 1] ])
+	# Verify argument types:
+	assert isinstance(dx, L)
+	assert isinstance(dy, L)
+	assert isinstance(dz, L)
 
+	# Convert from *L* to *float*:
+	dx_mm = dx.millimeters()
+	dy_mm = dy.millimeters()
+	dz_mm = dz.millimeters()
+
+	# Create, initialize and return the *matrix*:
+	matrix = Matrix([ \
+	  [1,     0,     0,     0], \
+	  [0,     1,     0,     0], \
+	  [0,     0,     1,     0], \
+	  [dx_mm, dy_mm, dz_mm, 1] ])
 	return matrix
 
+    def translate_store(self, dx, dy, dz):
+	""" *Matrix*: Store a translation matrix for (*dx*, *dy*, *dz) into
+	    the *Matrix* object (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(dx, L)
+	assert isinstance(dy, L)
+	assert isinstance(dz, L)
+
+	# Use *matrix* instead of *self*:
+	matrix = self
+
+	# This routine store a translate for the vector ({dx},{dy},{dz})
+	# into *matrix* as follows:
+	#
+	# [ 1 0 0 dx ]
+	# [ 0 1 0 dy ]
+	# [ 0 0 1 dz ]
+	# [ 0 0 0 1  ]
+
+	# First convert into an identity *matrix*:
+	matrix.identity_store()
+
+	# Now load in *dx*, *dy*, and *dz*:
+	mat = self.mat
+	mat[0,3] = dx.millimeters()
+	mat[1,3] = dy.millimeters()
+	mat[2,3] = dz.millimeters()
+
+    def translate_multiply_store(self, from_matrix, dx, dy, dz):
+	""" *Matrix*: This routine returns the {matrix} that results from moving
+ 	   # everything by ({dx}, {dy}, {dz}).
+	"""
+
+	# Verify argument types:
+	assert isinstance(from_matrix, Matrix)
+	assert isinstance(dx, L)
+	assert isinstance(dy, L)
+	assert isinstance(dz, L)
+
+	# Use *to_matrix* instead of *self*:
+	to_matrix = self
+
+	# We are computing:
+	#
+	# [ m11 m12 m13 m14 ]   [ 1 0 0 dx ]
+	# [ m21 m22 m23 m24 ]   [ 0 1 0 dy ]
+	# [ m31 m32 m33 m34 ] X [ 0 0 1 dz ]
+	# [ m41 m42 m43 m44 ]   [ 0 0 0 1  ]
+
+	# Convert *dx*, *dy*, and *dz* to millimeters:
+	dx_mm = dx.millimeters()
+	dy_mm = dy.millimeters()
+	dz_mm = dz.millimeters()
+
+	# Yank values out of *from_matrix*:
+	fm00 = from_matrix[0,0]
+	fm01 = from_matrix[0,1]
+	fm02 = from_matrix[0,2]
+	fm03 = from_matrix[0,3]
+
+	fm10 = from_matrix[1,0]
+	fm11 = from_matrix[1,1]
+	fm12 = from_matrix[1,2]
+	fm13 = from_matrix[1,3]
+
+
+	fm20 = from_matrix[2,0]
+	fm21 = from_matrix[2,1]
+	fm22 = from_matrix[2,2]
+	fm23 = from_matrix[2,3]
+
+	fm30 = from_matrix[3,0]
+	fm31 = from_matrix[3,1]
+	fm32 = from_matrix[3,2]
+	fm33 = from_matrix[3,3]
+
+	# Stuff values into *to_matrix*:
+	to_matrix[0,0] = fm00
+	to_matrix[0,1] = fm01
+	to_matrix[0,2] = fm02
+	to_matrix[0,3] = fm00*dx + fm01*dy + fm02*dz + fm03
+
+	to_matrix[1,0] = fm10
+	to_matrix[1,1] = fm11
+	to_matrix[1,2] = fm12
+	to_matrix[1,3] = fm10*dx + fm11*dy + fm12*dz + fm13
+
+	to_matrix[2,0] = fm20
+	to_matrix[2,1] = fm21
+	to_matrix[2,2] = fm11
+	to_matrix[2,3] = fm20*dx + fm21*dy + fm22*dz + fm23
+
+	to_matrix[3,0] = fm30
+	to_matrix[3,1] = fm31
+	to_matrix[3,2] = fm32
+	to_matrix[3,3] = fm30*dx + fm31*dy + fm32*dz + fm33
+
+    @staticmethod
+    def zero():
+	""" *Matrix*: Return a matrix full of zeros:
+	"""
+
+	matrix = Matrix()
+	return matrix
+	    
+    def zero_store(self):
+	""" *Matrix*: Zero out the contents of the *Matrix* object
+	    (i.e. *self*).
+	"""
+
+	# The obscure syntax below manages to zero out the contents
+	# of *mat*:
+	mat = self.mat
+	mat[:,:] = 0.0
+
+class Vice:
+
+    def __init__(self):
+	zero = L()
+	self.jaw_height = zero		# Height of jaw
+	self.jaw_width = zero		# Width of vice jaws
+	self.opening = zero		# Width of opening
+
+class XML:
+    """ *XML*: Base class. """
+
+    def __init__(self, xml_name):
+	# Verify argument types:
+	assert isinstance(xml_name, str)
+	self.xml_name = xml_name
+	self.xmls = []
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	xml_stream.write("{0}<{1}>\n".format(' ' * indent, self.xml_name))
+
+    def process(self, xml_root):
+	""" *XML*: Default process routine for an *XML* object.  This
+	    method should be over-ridden in the sub-classes.
+	"""
+
+	# Verify argument types:
+	assert isinstance(xml_root, XML_Root)
+
+	# Now fail to force the writing of a process method:
+	assert False, "No process method for type '{0}'".format(self.xml_name)
+
+class XML_Block(XML):
+    """ *XML_Block* represents a "<Block ...>" tag.
+    """
+
+    def __init__(self, corner1, corner2,
+      color, transparency, material, comment):
+	""" *XML_Block*: Initialize an *XML_Block* to contain *corner1*,
+	    *corner2*, *color*, *transparency*, *material*, and *comment*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
+	assert isinstance(color, str)
+	assert isinstance(transparency, float)
+	assert isinstance(material, str)
+	assert isinstance(comment, str)
+
+	# Initialize super class:
+	XML.__init__(self, "Block")
+
+	# Load up *self*:
+	self.corner1 = corner1
+	self.corner2 = corner2
+	self.color = color
+	self.transparency = transparency
+	self.material = material
+	self.comment = comment
+
+    @staticmethod
+    def parse(block_element):
+	""" *XML_Block*: Parse a "<Block ...>" tag and return it as
+	    an *XML_Block* tag.
+	"""
+
+	# Verify argument types:
+	assert isinstance(block_element, ET.Element)
+	assert block_element.tag == "Block"
+
+	# Parse *attributes* without error checking:
+	attributes = block_element.attrib
+	c1x = L(float(attributes["C1X"]))
+	c1y = L(float(attributes["C1Y"]))
+	c1z = L(float(attributes["C1Z"]))
+	c2x = L(float(attributes["C2X"]))
+	c2y = L(float(attributes["C2Y"]))
+	c2z = L(float(attributes["C2Z"]))
+	color = attributes["Color"]
+	transparency = float(attributes["Transparency"])
+	material = attributes["Material"]
+	comment = attributes["Comment"]
+
+	# Initilize *block*:
+	corner1 = P(c1x, c1y, c1z)
+	corner2 = P(c2x, c2y, c2z)
+	block = XML_Block(corner1, corner2,
+	  color, transparency, material, comment)
+	return block
+	
+    def process(self, xml_root):
+	""" *XML_Block*: Generate G-code for ana
+	"""
+
+	# Verify argument types:
+	assert isinstance(xml_root, XML_Root)
+
+	#	else_if equal@(tag_name, "Block")
+	#	    # <Block C1X= C1Y= C1Z= C2X= C2Y= C2Z= ...
+	#	    # ... Color= Transparency= Material= Comment= />:
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@(form@("<Block Comment=%v% ... />\n\") /
+	#		  f@(comment))
+	#
+	#	    named_material :@= aluminum@Named_Material
+	#	    if equal@(material, "plastic")
+	#		named_material := plastic@Named_Material
+	#	    part_material :@= create@Material(material, named_material)
+	#	    #call d@(form@("Part=%v% material=%v%\n\") %
+	#	    #  f@(name) / f@(string@(named_material)))
+	#
+	#	    # {plate_create} places {part} with top surface a Z=0.
+	#	    part := block_create@Part(shop, name, part_material,
+	#	      c1x, c1y, c1z, c2x, c2y, c2z)
+	#	    part.color := lookup@Color(color)
+	#	    part.bounding_box1 := create@Point(c1x, c1y, c1z)
+	#	    part.bounding_box2 := create@Point(c2x, c2y, c2z)
+	#	    part.transparency := transparency
+	#
+	#	    # Now deal with any extra material:
+	#	    extra1 :@= shop.extra1
+	#	    if extra1 !== null@Point
+	#		extra2 :@= shop.extra2
+	#		#call d@(form@("extra1=%p% extra2=%p%\n\") %
+	#		#  f@(extra1) / f@(extra2))
+	#		dx1 :@= c1x - extra1.x
+	#		dx2 :@= extra2.x - c2x
+	#		dy1 :@= c1y - extra1.y
+	#		dy2 :@= extra2.y - c2y
+	#		dz1 :@= c1z - extra1.z
+	#		dz2 :@= extra2.z - c2z
+	#		epsilon :@= in@(.000001)
+	#		if absolute@(dx1 - dx2) > epsilon
+	#		    call d@(form@("dx1=%i% dx2=%i%\n\") %
+	#		      f@(dx1) / f@(dx2))
+	#		if absolute@(dy1 - dy2) > epsilon
+	#		    call d@(form@("dy1=%i% dy2=%i%\n\") %
+	#		      f@(dy1) / f@(dy2))
+	#		if absolute@(dz1 - dz2) > epsilon
+	#		    call d@(form@("dz1=%i% dz2=%i%\n\") %
+	#		      f@(dz1) / f@(dz2))
+	#		part.dx_original := part.dx + dx1 + dx2
+	#		part.dy_original := part.dy + dy1 + dy2
+	#		part.dz_original := part.dz + dz1 + dz2
+	#		#call d@(form@(
+	#		#  "nm=%v% dx=%i% dy=%i% dz=%i% dxo=%i% dyo=%i% dzo=%i%\n") %
+	#		#  f@(part.name) % f@(part.dx) % f@(part.dy) % f@(part.dz) %
+	#		#  f@(part.dx_original) % f@(part.dy_original) /
+	#		#  f@(part.dz_original))
+	#		part.extra1 := extra1
+	#		part.extra2 := extra2
+	#		shop.extra1 := null@Point
+	#		shop.extra2 := null@Point
+
+    def xml_write(self, indent, xml_stream):
+	""" *XML_Block*: Write out an *XML_Block* object to *xml_stream*
+	    indented by *indent*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+
+	# Grab some values from *self*:
+	corner1 = self.corner1
+	corner2 = self.corner2
+	color = self.color
+	material = self.material
+	transparency = self.transparency
+	comment = self.comment
+
+	# Write out "<Block .../>" tag:
+	xml_stream.write(
+	  ('{0}<Block C1X="{1:.6m}" C1Y="{2:.6m}" C1Z="{3:.6m}" ' +
+	  'C2X="{4:.6m}" C2Y="{5:.6m}" C2Z="{6:.6m}" ' +
+	  'Color="{7}" Transparency="{8}" Material="{9}" ' +
+	  'Comment="{10}"/>\n').format(' ' * indent,
+	  corner1.x, corner1.y, corner1.z,
+	  corner2.x, corner2.y, corner2.z,
+	  color, transparency, material, comment))
+
+class XML_Chamfers(XML):
+    def __init__(self, upper, lower):
+	assert isinstance(upper, L)
+	assert isinstance(lower, L)
+
+	XML.__init__(self, "Chamfers")
+	self.upper = upper
+	self.lower = lower
+
+    @staticmethod
+    def parse(chamfers_element):
+	assert isinstance(chamfers_element, ET.Element)
+	assert chamfers_element.tag == "Chamfers"
+	attributes = chamfers_element.attrib
+	upper = L(float(attributes["Upper"]))
+	lower = L(float(attributes["Lower"]))
+	chamfers = XML_Chamfers(upper, lower)
+
+	#	else_if equal@(tag_name, "Chamfers")
+	#	    # <Chamfers Upper= Lower= />:
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@("<Chamfers ... />\n\")
+	#
+	#	    part.upper_chamfer := upper
+	#	    part.lower_chamfer := lower
+
+class XML_CNC_Flush(XML):
+    """ *XML_CNC_Flush*: Represent <CNC_Flush> tag. """
+
+    def __init__(self, name):
+	""" *XML_CNC_Flush*: Initialize """
+	assert isinstance(name, str)
+	XML.__init__(self, "CNC_Flush")
+
+    @staticmethod
+    def parse(cnc_flush_element):
+	# Verify argument types:
+	assert isinstance(cnc_flush_element, ET.Element)
+	assert cnc_flush_element.tag == "CNC_Flush"
+
+	cnc_flush = XML_CNC_Flush("cnc_flush")
+	return cnc_flush
+
+	#	else_if equal@(tag_name, "CNC_Flush")
+	#	    # <CNC_Flush/>:
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@("<CNC_Flush/>\n\")
+	#
+	#	    call cnc_fence@(part)
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	xml_stream.write("{0}<CNC_Flush />\n".format(' ' * indent))
+
+class XML_Contour(XML):
+    def __init__(self, s, e, extra, flags, comment):
+	# Verify argument types:
+	assert isinstance(s, P)
+	assert isinstance(e, P)
+	assert isinstance(extra, L)
+	assert isinstance(flags, str)
+	assert isinstance(comment, str)
+	
+	# Load up *self*:
+	XML.__init__(self, "Contour")
+	self.s = s
+	self.e = e
+	self.extra = extra
+	self.flags = flags
+	self.comment = comment
+
+    @staticmethod
+    def parse(contour_element):
+	""" *XML_Contour*: Parse <Contour SX= SY= SX= EX= EY= EZ=
+	    Extra= Flags= Comment= />:
+	"""
+
+	assert isinstance(contour_element, ET.Element)
+
+	# Parse the *attributes* without error checking:
+	attributes = contour_element.attrib
+	sx = L(float(attributes["SX"]))
+	sy = L(float(attributes["SY"]))
+	sz = L(float(attributes["SZ"]))
+	ex = L(float(attributes["EX"]))
+	ey = L(float(attributes["EY"]))
+	ez = L(float(attributes["EZ"]))
+	extra = L(float(attributes["Extra"]))
+	flags = attributes["Flags"]
+	comment = attributes["Comment"]
+
+	s = P(sx, sy, sz)
+	e = P(ex, ey, ez)
+	contour = XML_Contour(s, e, extra, flags, comment)
+
+	# one = L(1.0)
+	# position :@= part.position
+	# call matrix_apply@(s, position)
+	# call matrix_apply@(e, position)
+	#
+	# Verify that {s} above {e} and that they are aligned with
+	# positive Z axis:
+	# se_x :@= s.x - e.x
+	# se_y :@= s.y - e.y
+	# se_z :@= s.z - e.z
+	# plunge_angle :@=
+	#   angle_between@Point(se_x, se_y, se_z, zero, zero, one)
+	#
+	# if plunge_angle < -degrees@(.0001) || plunge_angle > degrees@(.0001)
+	#     call d@(form@("Position Matrix=\n\%m%") / f@(position))
+	#     call d@(form@("Start=(%i%,%i%,%i%)\n\") %
+	#       f@(sx) % f@(sy) / f@(sz))
+	#     call d@(form@("End=(%i%,%i%,%i%)\n\") % f@(ex) % f@(ey) / f@(ez))
+	#     call d@(form@("S-E=(%i%,%i%,%i%)\n\") %
+	#       f@(se_x) % f@(se_y) / f@(se_z))
+	#     call d@(form@("Contour plunge angle %d% is not vertical\n\") /
+	#	f@(plunge_angle))
+	#
+	# z_start :@= s.z
+	# z_end :@= e.z
+	# lower_chamfer :@= zero
+	# upper_chamfer :@= zero
+	# through :@= 0f
+	# flags_size :@= flags.size
+	# flags_index :@= 0
+	# while flags_index < flags_size
+	# flag :@= flags[flags_index]
+	# switch flag
+	#   case 'u'
+	#    upper_chamfer := part.upper_chamfer
+	#   case 'l'
+	#    assert 0f
+	#   case 't'
+	#    through := 1t
+	#    z_end := z_end - in@(0.020)
+	#    flags_index := flags_index + 1
+	#	    
+	# trim_to_size :@= 0f		#FIXME: Should be computed!!!
+
+	# call contour@(part, comment, z_start, z_end, through,
+	# upper_chamfer, lower_chamfer, extra, trim_to_size)
+
+	return contour
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	s = self.s
+	e = self.e
+	extra = self.extra
+	flags = self.flags
+	comment = self.comment
+	xml_stream.write(
+	  ('{0}<Contour SX="{1:.6m}" SY="{2:.6m}" SZ="{3:.6m}" ' +
+	  'EX="{4:.6m}" EY="{5:.6m}" EZ="{6:.6m}" Extra="{7:.6m}" ' +
+	  'Flags="{8}" Comment="{9}"/>\n').format(' ' * indent,
+	  s.x, s.y, s.z, e.x, e.y, e.z, extra, flags, comment))
+
+class XML_Corner(XML):
+    def __init__(self, radius, corner, comment):
+	# Verify argument types:
+	assert isinstance(radius, L)
+	assert isinstance(corner, P)
+	assert isinstance(comment, str)
+
+	# Load *self*:
+	XML.__init__(self, "Corner")
+	self.radius = radius
+	self.corner = corner
+	self.comment = comment
+
+    @staticmethod
+    def parse(corner_element):
+	# Verify argument types:
+	assert isinstance(corner_element, ET.Element)
+	assert corner_element.tag == "Corner"
+
+	# Parse *attributes* without error detection:
+	attributes = corner_element.attrib
+	radius = L(float(attributes["Radius"]))
+	cx = L(float(attributes["CX"]))
+	cy = L(float(attributes["CY"]))
+	cz = L(float(attributes["CZ"]))
+	comment = attributes["Comment"]
+
+	c = P(cx, cy, cz)
+	corner = XML_Corner(radius, c, comment)
+
+	#	else_if equal@(tag_name, "Corner")
+	#	    # <Corners Radius= CX= CY= CZ= Comment= />:
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@(form@("<Corner Comment=%v% ... />\n\") / f@(comment))
+	#
+	#	    c :@= create@Point(cx, cy, cz)
+	#	    position :@= part.position
+	#	    call matrix_apply@(c, position)
+	#	    call corner@(part, c.x, c.y, radius, comment)
+
+	return corner
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	radius = self.radius
+	corner = self.corner
+	comment = self.comment
+	xml_stream.write(
+	  ('{0}<Corner Radius="{1:.6m}" CX="{2:.6m}" CY="{3:.6m}" ' +
+	  'CZ="{4:.6m}" Comment="{5}"/>\n').format(' ' * indent,
+	  radius, corner.x, corner.y, corner.z, comment))
+
+class XML_DXF_Place(XML):
+    def __init__(self, dxf_base_name, dxf_x_offset, dxf_y_offset):
+	assert isinstance(dxf_base_name, str)
+	assert isinstance(dxf_x_offset, L)
+	assert isinstance(dxf_y_offset, L)
+	XML.__init__(self, "DXF_Place")
+	self.dxf_base_name = dxf_base_name
+	self.dxf_x_offset = dxf_x_offset
+	self.dxf_y_offset = dxf_y_offset
+
+    @staticmethod
+    def parse(dxf_place_element):
+	assert isinstance(dxf_place_element, ET.Element)
+	assert dxf_place_element.tag == "DXF_Place"
+	attributes = dxf_place_element.attrib
+	dxf_base_name = attributes["DXF_Base_Name"]
+	dxf_x_offset = L(float(attributes["DXF_X_Offset"]))
+	dxf_y_offset = L(float(attributes["DXF_y_Offset"]))
+	dxf_place = XML_DXF_Place(dxf_base_name, dxf_x_offset, dxf_y_offset)
+	return dxf_place
+
+	#	else_if equal@(tag_name, "DXF_Place")
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@("<DXF_Place ... />\n\")
+	#
+	#	    part.dxf_base_name := dxf_name
+	#	    part.dxf_x_offset := dx
+	#	    part.dxf_y_offset := dy
+	#
+	#	    dxf_table :@= shop.dxf_table
+	#	    if !is_in@(dxf_table, dxf_name)
+	#		assert !insert@(dxf_table, dxf_name, new@String())
+	#		call append@(shop.dxf_base_names, dxf_name)
+
+class XML_Extra(XML):
+    """ *XML_Extra* represents an <Extra ...> tag.
+    """
+
+    def __init__(self, corner1, corner2):
+	""" *XML_Extra*: Initialize an *XML_Extra* object to contain
+	    *corner1* and *corner*2.
+	"""
+
+	# Verify argument types:
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
+
+	# Initialzie super class:
+	XML.__init__(self, "Extra")
+
+	# Load *self*:
+	self.corner1 = corner1
+	self.corner2 = corner2
+	
+    @staticmethod
+    def parse(extra_element):
+	""" *XML_Extra*: Will parse an "<Extra ...>" tag and return it as
+	    a new *XML_Extra* object.
+	"""
+
+	# Verify argument types:
+	assert isinstance(extra_element, ET.Element)
+	assert extra_element.tag == "Extra"
+
+	# Parse *attributes* with no error detection:
+	attributes = extra_element.attrib
+	c1x = L(float(attributes["C1X"]))
+	c1y = L(float(attributes["C1Y"]))
+	c1z = L(float(attributes["C1Z"]))
+	c2x = L(float(attributes["C2X"]))
+	c2y = L(float(attributes["C2Y"]))
+	c2z = L(float(attributes["C2Z"]))
+
+	# Load up *xml_extra*:
+	corner1 = P(c1x, c1y, c1z)
+	corner2 = P(c2x, c2y, c2z)
+	xml_extra = XML_Extra(corner1, corner2)
+	return xml_extra
+
+    def process(self, xml_root):
+	""" *XML_Extra*: Generate G-code and the like for *XML_Extra*
+	    object using *xml_root*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(xml_root, XML_Root)
+
+	# Set the extra material corners in *xml_root*:
+	xml_root.extra_set(self.corner1, self.corner2)
+
+    def xml_write(self, indent, xml_stream):
+	""" *XML_Extra*: Write *self* out to *xml_stream* as an "<Extra ...>"
+	    tag indented by *indent*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+
+	# Write out "<Extra ...>" tag:
+	# The extra new-line should be removed eventually; it is only
+	# used to match the version 2 EZCAD output:
+	corner1 = self.corner1
+	corner2 = self.corner2
+	xml_stream.write(
+	  ('{0}<Extra C1X="{1:.6m}" C1Y="{2:.6m}" C1Z="{3:.6m}"' +
+	  ' C2X="{4:.6m}" C2Y="{5:.6m}" C2Z="{6:.6m}"/>\n\n').
+	  format(' ' * indent, corner1.x, corner1.y, corner1.z,
+	  corner2.x, corner2.y, corner2.z))
+
+class XML_Extrusion(XML):
+    def __init__(self, kind, s, e, a_width, a_thickness, b_width, b_thickness,
+      rotate, color, transparency, material, comment):
+	XML.__init__(self, "Extrusion")
+	assert isinstance(kind, str)
+	assert isinstance(s, P)
+	assert isinstance(e, P)
+	assert isinstance(a_width, L)
+	assert isinstance(a_thickness, L)
+	assert isinstance(b_width, L)
+	assert isinstance(b_thickness, L)
+	assert isinstance(rotate, float)
+	assert isinstance(color, str)
+	assert isinstance(transparency, float)
+	assert isinstance(material, str)
+	assert isinstance(comment, str)
+
+	self.kind = kind
+	self.s = s
+	self.e = e
+	self.a_width = a_width
+	self.a_thickness = a_thickness
+	self.b_width = b_width
+	self.b_thickness = b_thickness
+	self.rotate = rotate
+	self.color = color
+	self.transparency = transparency
+	self.comment = comment
+
+    @staticmethod
+    def parse(extrusion_element):
+	assert isinstance(extrusion_element, ET.Element)
+	assert extrusion_element.tag == "Extrusion"
+	attributes = extrusion.attrib
+	kind = attributes["Kind"]
+	sx = L(float(attributes["SX"]))
+	sy = L(float(attributes["SY"]))
+	sz = L(float(attributes["SZ"]))
+	ex = L(float(attributes["EX"]))
+	ey = L(float(attributes["EY"]))
+	ez = L(float(attributes["EZ"]))
+	a_width = L(float(attributes["A_Width"]))
+	a_thickness = L(float(attributes["A_Thickness"]))
+	b_width = L(float(attributes["B_Width"]))
+	b_thickness = L(float(attributes["B_Thickness"]))
+	rotate = L(float(attributes["Rotate"]))
+	color = attributes["Color"]
+	transparency = float(attributes["Transparency"])
+	material = attributes["Material"]
+	comment = attributes["Comment"]
+
+	s = P(sx, sy, sz)
+	e = P(ex, ey, ez)
+	extrusion = XML_Extrusion(kind, s, e, a_width, a_thickness,
+	  b_width, b_thickness, rotate, color, transparency, materail, comment)
+	return extrusion
+
+	#	else_if equal@(tag_name, "Extrusion")
+	#	    # <Extrusion Kind= SX= SY= SZ= EX= EY= EZ= A_Width= ...
+	#	    # ... A_Thickness= B_Width= B_Thickness= Rotate= ...
+	#	    # ... Color= Transparency= Material= Comment=\>:
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@("<Extrusion ... />\n\")
+	#
+	#	    # First create the part:
+	#	    part_material :@= create@Material(material, aluminum@Named_Material)
+	#	    part := preformed_new_create@Part(shop, name, part_material,
+	#	      sx, sy, sz, ex, ey, ez, kind,
+	#	      a_width, a_thickness, b_width, b_thickness, rotate)
+	#
+	#	    # Figure out bounding box:
+	#	    x_max :@= sx
+	#	    x_min :@= sx
+	#	    y_max :@= sy
+	#	    y_min :@= sy
+	#	    z_max :@= sz
+	#	    z_min :@= sz
+	#	    if ex - sx != zero
+	#		# Extruded in X direction:
+	#		x_max := maximum@(sx, ex)
+	#		x_min := minimum@(sx, ex)
+	#		y_max := half@(a_width)
+	#		y_min := -y_max
+	#		z_max := half@(b_width)
+	#		z_min := -z_max
+	#	    else_if ey - sy != zero
+	#		# Extruded in Y direction:
+	#		assert 0f
+	#	    else_if ez - sz != zero
+	#		# Extruded in Z direction:
+	#		assert 0f
+	#	    else
+	#		assert 0f
+	#	    part.bounding_box1 := create@Point(x_min, y_min, z_min)
+	#	    part.bounding_box2 := create@Point(x_max, y_max, z_max)
+	#	    part.color := lookup@Color(color)
+	#	    part.transparency := transparency
+
+class XML_EZCAD(XML):
+    """ *XML_EZCAD* is a class that represents "<EZCAD ...>". """
+
+    def __init__(self, major, minor, version):
+        """ *XML_EZCAD*: Initialize an *XML_EZCAD* objec to contain
+	    *major*, *minor*, and *version*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(major, int)
+	assert isinstance(minor, int)
+	assert isinstance(version, int)
+
+	# Initialize the super class:
+	XML.__init__(self, "EZCAD")
+
+	# Load up *self*:
+	self.major = major
+	self.minor = minor
+	self.version = version
+
+    @staticmethod
+    def parse(ezcad_element):
+	""" *XML_EZCAD*: Parse "<EZCAD ...>" and return it as an *XML_EZCAD*
+	    object.
+	"""
+
+	# Verify argument types:
+	assert isinstance(ezcad_element, ET.Element)
+	assert ezcad_element.tag == "EZCAD"
+
+	# Parse the attributes without error detection:
+	attributes = ezcad_element.attrib
+	major = int(attributes["Major"])
+	minor = int(attributes["Minor"])
+	version = int(attributes["Version"])
+
+	# Create and return *xml_ezcad*:
+	xml_ezcad = XML_EZCAD(major, minor, version)
+	return xml_ezcad
+
+    def process(self, xml_root):
+	""" *XML_EZCAD*: Process *self* using *xml_root*. """
+
+	# Verify argument types:
+	assert isinstance(xml_root, XML_Root)
+
+	# Process all of the *child_xml*'s:
+	for child_xml in self.xmls:
+	    child_xml.process(xml_root)
+
+    def xml_write(self, indent, xml_stream):
+	""" *XML_EZCAD*: Write out *self* to *xml_stream* indended
+	    by *indent*. """
+
+	# Verify argument types:
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+
+	# Write out the "<ECZAD ... >" tag:
+	xml_stream.write(
+	  '{0}<EZCAD Major="{1}" Minor="{2}" Version="{3}">\n'. \
+	  format(' ' * indent, self.major, self.minor, self.version))
+
+	# Write out the nested *xmls*:
+	for xml in self.xmls:
+	    xml.xml_write(indent + 1, xml_stream)
+
+	# Write out the closing "<EZCAD>" tag:
+	xml_stream.write(
+	  '{0}</EZCAD>\n'.format(' ' * indent))	
+
+class XML_Hole(XML):
+    def __init__(self, diameter, countersink_diameter, s, e, flags, comment):
+	# Verify argument types:
+	assert isinstance(diameter, L)
+	assert isinstance(countersink_diameter, L)
+	assert isinstance(s, P)
+	assert isinstance(e, P)
+	assert isinstance(flags, str)
+	assert isinstance(comment, str)
+
+	# Load up *self*:
+	XML.__init__(self, "Hole")
+	self.diameter = diameter
+	self.countersink_diameter = countersink_diameter
+	self.s = s
+	self.e = e
+	self.flags = flags
+	self.comment = comment
+
+    @staticmethod
+    def parse(hole_element):
+	# Verify argument types:
+	assert isinstance(hole_element, ET.Element)
+
+	# Parse the *attributes* without error checking:
+	assert hole_element.tag == "Hole"
+	attributes = hole_element.attrib
+	diameter = L(float(attributes["Diameter"]))
+	countersink_diameter = L(float(attributes["Countersink_Diameter"]))
+	sx = L(float(attributes["SX"]))
+	sy = L(float(attributes["SY"]))
+	sz = L(float(attributes["SZ"]))
+	ex = L(float(attributes["EX"]))
+	ey = L(float(attributes["EY"]))
+	ez = L(float(attributes["EZ"]))
+	flags = attributes["Flags"]
+	comment = attributes["Comment"]
+
+	#	else_if equal@(tag_name, "Hole")
+	#	    # <Hole Diameter= SX= SY= SZ= EX= EY= EZ= Flags= Comment=\>:
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#
+	#	    s :@= create@Point(sx, sy, sz)
+	#	    e :@= create@Point(ex, ey, ez)
+	#	    if trace
+	#		call d@(form@("<Hole Comment=%v% ... />\n\") / f@(comment))
+	#	    #call d@(form@("<Hole d=%i% s=%p% e=%p% flags=%v% cmt=%v%/>\n\") %
+	#	    #  f@(diameter) % f@(s) % f@(e) % f@(flags) / f@(comment))
+	#
+	#	    position :@= part.position
+	#	    call matrix_apply@(s, position)
+	#	    call matrix_apply@(e, position)
+	#	    #call d@(form@("After: s=%p% e=%p%\n\") % f@(s) / f@(e))
+	#
+	#	    hole_kind :@= flags_parse@Hole_Kind(flags)
+	#	    if countersink_diameter <= zero
+	#		countersink_diameter := diameter
+	#		if character_search@(flags, 'u')
+	#		    countersink_diameter :=
+	#		      countersink_diameter + smul@(diameter, 0.150)
+	#	    if character_search@(flags, 'x')
+	#		#call d@("Suppressing hole\n")
+	#		part.solids_generate := 0f
+	#	    call countersink_hole@(part, comment, diameter,
+	#	      countersink_diameter, s.x, s.y, s.z, e.z, hole_kind)
+	#	    part.solids_generate := 1t
+
+	s = P(sx, sy, sz)
+	e = P(ex, ey, ez)
+	hole = XML_Hole(diameter, countersink_diameter, s, e, flags, comment)
+	return hole
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	diameter = self.diameter
+	countersink_diameter = self.countersink_diameter
+	s = self.s
+	e = self.e
+	flags = self.flags
+	comment = self.comment
+	xml_stream.write(
+          ('{0}<Hole Diameter="{1:.6m}" Countersink_Diameter="{2:.6m}" ' +
+	  'SX="{3:.6m}" SY="{4:.6m}" SZ="{5:.6m}" ' + 
+	  'EX="{6:.6m}" EY="{7:.6m}" EZ="{8:.6m}" ' +
+	  'Flags="{9}" Comment="{10}"/>\n').
+	  format(' ' * indent, diameter, countersink_diameter,
+	  s.x, s.y, s.z, e.x, e.y, e.z, flags, comment))
+
+class XML_Hole_Through(XML):
+    def __init__(self, diameter, countersink_diameter, s, flags, comment):
+	# Verify argument types:
+	assert isinstance(diameter, L)
+	assert isinstance(countersink_diameter, L)
+	assert isinstance(s, P)
+	assert isinstance(flags, str)
+	assert isinstance(comment, str)
+	
+	# Stuff values into *self*:
+	XML.__init__(self, "Hole_Through")
+	self.diameter = diameter
+	self.countersink_diameter = countersink_diameter
+	self.s = s
+	self.flags = flags
+	self.comment = comment
+
+    @staticmethod
+    def parse(hole_through_element):
+	# Verify argument types:
+	assert isinstance(hole_through_element, ET.Element)
+	assert hole_through_element.tag == "Hole_Through"
+
+	# Parse *attributes* without error checking:
+	attributes = hole_through_element.attrib
+	diameter = L(float(attributes["Diameter"]))
+	countersink_diameter = L(float(attributes["Countersink_Diameter"]))
+	sx = L(float(attributes["SX"]))
+	sy = L(float(attributes["SY"]))
+	sz = L(float(attributes["SZ"]))
+	flags = attributes["Flags"]
+	comment = attributes["Comment"]
+
+	# Load up *hole_through*:
+	s = P(sx, sy, sz)
+	hole_through = \
+	  XML_Hole_Through(diameter, countersink_diameter, s, flags, comment)
+
+	#	else_if equal@(tag_name, "Hole_Through")
+	#	    # <Hole_Through Diameter= SX= SY= SZ= Flags= Comment=\>:
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@(form@("<Hole_Through Comment=%v% ... />\n\") /
+	#		  f@(comment))
+	#
+	#	    s :@= create@Point(sx, sy, sz)
+	#
+	#	    bounding_box1 :@= copy@(part.bounding_box1)
+	#	    bounding_box2 :@= copy@(part.bounding_box2)
+	#	    #call d@(form@("hole_thru: before: bb1=%p% bb2=%p% s=%p%\n\") %
+	#	    #  f@(bounding_box1) % f@(bounding_box2) / f@(s))
+	#
+	#	    position :@= part.position
+	#	    call matrix_apply@(s, position)
+	#	    call matrix_apply@(bounding_box1, position)
+	#	    call matrix_apply@(bounding_box2, position)
+	#	    #call d@(form@("hole_thru: after: bb1=%p% bb2=%p% s=%p%\n\") %
+	#	    #  f@(bounding_box1) % f@(bounding_box2) / f@(s))
+	#
+	#	    z_end :@= bounding_box1.z
+	#	    z_start :@= bounding_box2.z
+	#
+	#	    if z_end > z_start
+	#		temporary :@= z_start
+	#		z_start := z_end
+	#		z_end := temporary
+	#	    z_end := z_end - in@(0.020)
+	#	    hole_kind :@= flags_parse@Hole_Kind(flags)
+	#	    if countersink_diameter <= zero
+	#		countersink_diameter := diameter
+	#		if character_search@(flags, 'u')
+	#		    countersink_diameter :=
+	#		      countersink_diameter + smul@(diameter, 0.150)
+	#	    #call d@(form@("Hole_Through: z_start=%i% z_end=%i% kind=%k%\n\") %
+	#	    #  f@(z_start) % f@(z_end) / f@(hole_kind))
+	#	    if character_search@(flags, 'x')
+	#		call d@(form@("Suppressing hole: %v%\n\") / f@(comment))
+	#		part.solids_generate := 0f
+	#	    call countersink_hole@(part, comment, diameter,
+	#	      countersink_diameter,s.x, s.y, z_start, z_end, hole_kind)
+	#	    part.solids_generate := 1t
+
+	return hole_through
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	diameter = self.diameter
+	countersink_diameter = self.countersink_diameter
+	s = self.s
+	flags = self.flags
+	comment = self.comment
+	xml_stream.write(
+	  ('{0}<Hole_Through Diameter="{1:.6m}" ' +
+	  'Countersink_Diameter="{2:.6m}" ' +
+	  'SX="{3:.6m}" SY="{4:.6m}" SZ="{5:.6m}" ' +
+	  'Flags="{6}" Comment="{7}"/>\n').
+	  format(' ' * indent, diameter, countersink_diameter,
+	  s.x, s.y, s.z, flags, comment))
+
+class XML_Part(XML):
+    """ *XML_Part* is a class that represents "<Part ...>".
+    """
+
+    def __init__(self, name, parts, places):
+	""" *XML_Part*: Initialize an *XML_Part* to contain *name*,
+	    *parts*, and *places*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(name, str)
+	assert isinstance(parts, int)
+	assert isinstance(places, int)
+
+	# Initalize super class:
+	XML.__init__(self, "Part")
+
+	# Load up *self*:
+	self.name = name
+	self.parts = parts
+	self.places = places
+
+    @staticmethod
+    def parse(part_element):
+	""" "XML_Part*: Parse "<Part ...>" and return as *XML_Part* object.
+	"""
+
+	# Verify argument types:
+	assert isinstance(part_element, ET.Element)
+	assert part_element.tag == "Part"
+
+	# Parse <Part Name="..." Parts="..." Places="..."> line:
+	attributes = part_element.attrib
+	name = attributes["Name"]
+	parts = int(attributes["Parts"])
+	places = int(attributes["Places"])
+	
+	print("Part='{0}'".format(name))
+
+	part = XML_Part(name, parts, places)
+	return part
+
+    def process(self, xml_root):
+	""" *XML_Part*: Generate G-code and the link for the *XML_Part*
+	    object using *xml_root*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(xml_root, XML_Root)
+
+	# Process each *child_xml*:
+	for child_xml in self.xmls:
+	    child_xml.process(xml_root)
+
+    def xml_write(self, indent, xml_stream):
+	""" *XML_Part*: Write out *self* to *xml_stream* as a "<Part ...>"
+	    tag indented by *indent*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+
+	# Write out "<Part ...>" tag:
+	xml_stream.write('{0}<Part Name="{1}" Parts="{2}" Places="{3}">\n'.
+	  format(' ' * indent, self.name, self.parts, self.places))
+
+	# Write out each *child_xml*:
+	for child_xml in self.xmls:
+	    child_xml.xml_write(indent + 1, xml_stream)
+
+	# Write out closing "</Part>" tag:
+	xml_stream.write('{0}</Part>\n'.format(' ' * indent))
+
+class XML_Place(XML):
+    def __init__(self, part_path, place_name, d, c, a, angle):
+	""" *XML_Place*: Initialize an *XML_Place* object. """
+
+	# Verify argument types:
+	assert isinstance(part_path, str)
+	assert isinstance(place_name, str)
+	assert isinstance(d, P)
+	assert isinstance(c, P)
+	assert isinstance(a, P)
+	assert isinstance(angle, Angle)
+
+	# Initialize superclass:
+	XML.__init__(self, "Place")
+
+	# Load up *self*:
+	self.place_name = place_name
+	self.part_path = part_path
+	self.d = d
+	self.c = c
+	self.a = a
+	self.angle = angle
+
+    @staticmethod
+    def parse(place_element):
+	""" *XML_Place*: Parse <Place Part_Path= Place_Name= DX= DY= DZ=
+	    CX= CY= CZ= AX= AY= AZ= Angle= />.
+	"""
+
+	# Verify argument types:
+	assert isinstance(place_element, ET.Element)
+
+	# Grab the values from *attributes* without any error checking:
+	attributes = place_element.attrib
+	part_path = attributes["Part_Path"]
+	place_name = attributes["Place_Name"]
+	dx = L(float(attributes["DX"]))
+	dy = L(float(attributes["DY"]))
+	dz = L(float(attributes["DZ"]))
+	cx = L(float(attributes["CX"]))
+	cy = L(float(attributes["CY"]))
+	cz = L(float(attributes["CZ"]))
+	ax = L(float(attributes["AX"]))
+	ay = L(float(attributes["AY"]))
+	az = L(float(attributes["AZ"]))
+	angle = Angle(deg=float(attributes["Angle"]))
+
+	d = P(dx, dy, dz)
+	c = P(cx, cy, cz)
+	a = P(ax, ay, az)
+	place = XML_Place(part_path, place_name, d, c, a, angle)
+	return place
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	part_path = self.part_path
+	place_name = self.place_name
+	d = self.d
+	c = self.c
+	a = self.a
+	angle = self.angle
+	xml_stream.write(
+	  ('{0}<Place Part_Path="{1}" Place_Name="{2}" '
+	  'CX="{3:.6m}" CY="{4:.6m}" CZ="{5:.6m}" ' +
+	  'AX="{6:.6m}" AY="{7:.6m}" AZ="{8:.6m}" Angle="{9}" ' +
+	  'DX="{10:.6m}" DY="{11:.6m}" DZ="{12:.6m}"/>\n').
+	  format(' ' * indent, part_path, place_name,
+	  c.x, c.y, c.z, a.x, a.y, a.z, angle, d.x, d.y, d.z))
+
+class XML_Root:
+    """ *XML_Root* is the parent class of the XML processor.
+    """
+
+    def __init__(self):
+	""" *XML_Root*: Initialize the *XML_Root* class:
+	"""
+
+	# Initialize *parse_dispatch* table for parsing XML nodes:
+	parse_dispatch = {}
+	parse_dispatch["Block"] = XML_Block.parse
+	parse_dispatch["Chamfers"] = XML_Chamfers.parse
+	parse_dispatch["CNC_Flush"] = XML_CNC_Flush.parse
+	parse_dispatch["Contour"] = XML_Contour.parse
+	parse_dispatch["Corner"] = XML_Corner.parse
+	parse_dispatch["DXF_PLace"] = XML_DXF_Place.parse
+	parse_dispatch["Extra"] = XML_Extra.parse
+	parse_dispatch["EZCAD"] = XML_EZCAD.parse
+	parse_dispatch["Hole"] = XML_Hole.parse
+	parse_dispatch["Hole_Through"] = XML_Hole_Through.parse
+	parse_dispatch["Extrusion"] = XML_Extrusion.parse
+	parse_dispatch["Part"] = XML_Part.parse
+	parse_dispatch["Place"] = XML_Place.parse
+	parse_dispatch["Simple_Pocket"] = XML_Simple_Pocket.parse
+	parse_dispatch["Tool_Prefer"] = XML_Tool_Prefer.parse
+	parse_dispatch["Tooling_Hole"] = XML_Tooling_Hole.parse
+	parse_dispatch["Tooling_Plate"] = XML_Tooling_Plate.parse
+	parse_dispatch["Tooling_Plate_Mount"] = XML_Tooling_Plate_Mount.parse
+	parse_dispatch["Tube"] = XML_Tube.parse
+	parse_dispatch["Vertical_Lathe"] = XML_Vertical_Lathe.parse
+	parse_dispatch["Vice_Position"] = XML_Vice_Position.parse
+
+	# Load up *self*:
+	self.parse_dispatch = parse_dispatch	# Parse dispatch table
+	self.extra_corner1 = P()		# BSW corner of extra material
+	self.extra_corner2 = P()		# TNE corner of extra material
+
+    def extra_set(self, extra_corner1, extra_corner2):
+	""" XML_Root: Set the extra material corners to *extra_corner1* and
+	    *extra_corner2*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(extra_corner1, P)
+	assert isinstance(extra_corner2, P)
+
+	# Load into *self*:
+	self.extra_corner1 = extra_corner1
+	self.extra_corner2 = extra_corner2
+
+    def parse(self, element):
+	""" *XML_Root*: Parse *element* into an *XML* object and return it.
+	"""
+
+	# Verify argument types:
+	assert isinstance(element, ET.Element)
+
+	element_tag = element.tag
+	xml = None
+	parse_dispatch = self.parse_dispatch
+	if element_tag in parse_dispatch:
+            xml = parse_dispatch[element_tag](element)
+	    for child_element in element:
+		child_xml = self.parse(child_element)
+		assert isinstance(child_xml, XML), \
+		  "<{0}> on line {1} has problems". \
+		  format(child_element.tag, child_element.attrib["LN"])
+		xml.xmls.append(child_xml)
+	else:
+	    print("No parser for <{0} ...> tag".format(element_tag))
+	return xml
+
+    def process(self, xml_ezcad):
+	""" *XML_Root*: Process *xml_ezcad* to generate G-Codes, etc.
+	"""
+
+	# Verity argument types:
+	assert isinstance(xml_ezcad, XML_EZCAD)
+
+	# Process *xml_ezcad*:
+	xml_ezcad.process(self)
+
+    def xml_file_parse(self, xml_file_name):
+	""" *XML_Root*: Parse *xml_file_name* into an *XML_EZCAD* object
+	    and return it.
+	"""
+
+	xml_stream = open(xml_file_name, "ra")
+	assert isinstance(xml_stream, file), \
+	  "Unable to open XML file '{0}'\n".format(xml_file_name)
+
+	# Read *xml_stream* into *xml_lines*:
+	xml_lines = xml_stream.readlines()
+	xml_stream.close()
+
+	# For error reporting, it is nice to know the line number of where
+	# the error occurred.  Unfortunately, the ElementTree package does
+	# not store parse position information in the Element object.  To
+	# work around this situation, we sweep through each line that was
+	# read in and append a line number attribute appropriate tags.
+	# Thus, '<Module ...' becomes "<Module LN="#" ...' where # is the
+	# actual line number.  When there is an error, the appropriate
+	# line number is read out using element.attrib["LN"].  This is
+	# wrapped up in the line_number() function, just in the unlikely
+	# case a tag line number is missed.
+
+	# This pattern will match the tag at the beginning of the line:
+	pattern = re.compile("^[ \t]*<\w+")
+
+	# Scan through each line:
+	replaced_lines = []
+	for index in range(len(xml_lines)):
+	    # Fetch each line one at a time:
+	    line = xml_lines[index]
+
+	    # Do we have the tag at the beginning of the line?
+	    match = pattern.search(line)
+	    if match:
+		# Yes!  It can only match once, so grab the tag text:
+		tag_text = match.group(0)
+
+		# Append the line number attribute to the tag text:
+		tag_text += ' LN="{0}"'.format(index + 1)
+
+		# Substitute it back into the line:
+		line = pattern.sub(tag_text, line)
+		#print "{0}\t{1}".format(line_number, line)
+
+	    # Build up the replaced lines list:
+	    replaced_lines.append(line)
+	
+	# Glue *replaced_lines*  back together into a single *xml_text*:
+	xml_text = '\n'.join(replaced_lines)
+
+	# Now parse it into *root_element*:
+	root_element = None
+	try:
+	    root_element = ET.fromstring(xml_text)
+	except ET.ParseError as e:
+	    print("'{0}': {1}".format(xml_file_name, e))
+
+	# Parse *root_element* into *xml_ezcad* and return it:
+	xml_ezcad = self.parse(root_element)
+	return xml_ezcad
+
+    def xml_write(self, xml_ezcad, xml_file_name):
+	""" *XML_Part*: Write *xml_ezcad* to the file named *xml_file_name*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(xml_ezcad, XML_EZCAD)
+
+	# Open *xml_stream* to write to *xml_file_name*:
+	xml_stream = open(xml_file_name, "wa")
+	assert isinstance(xml_stream, file), \
+	  "Unable to open file '{0}'".format(xml_file_name)
+
+	# Write out *xml_ezcad* to *xml_stream* and close it:
+	xml_ezcad.xml_write(0, xml_stream)
+	xml_stream.close()
+
+class XML_Simple_Pocket(XML):
+    def __init__(self, corner1, corner2, radius, flags, comment):
+	# Verify argument types:
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
+	assert isinstance(radius, L)
+	assert isinstance(flags, str)
+	assert isinstance(comment, str)
+
+	# Load up *self*:
+	XML.__init__(self, "Simple_Pocket")
+	self.corner1 = corner1
+	self.corner2 = corner2
+	self.radius = radius
+	self.flags = flags
+	self.comment = comment
+
+    @staticmethod
+    def parse(simple_pocket_element):
+	# Verify argument types:
+	assert isinstance(simple_pocket_element, ET.Element)
+	assert simple_pocket_element.tag == "Simple_Pocket"
+
+	# Parse *attributes* without error detection:
+	attributes = simple_pocket_element.attrib
+	c1x = L(float(attributes["C1X"]))
+	c1y = L(float(attributes["C1Y"]))
+	c1z = L(float(attributes["C1Z"]))
+	c2x = L(float(attributes["C2X"]))
+	c2y = L(float(attributes["C2Y"]))
+	c2z = L(float(attributes["C2Z"]))
+	radius = L(float(attributes["Radius"]))
+	flags = attributes["Flags"]
+	comment = attributes["Comment"]
+
+	corner1 = P(c1x, c1y, c1z)
+	corner2 = P(c2x, c2y, c2z)
+	simple_pocket = \
+	  XML_Simple_Pocket(corner1, corner2, radius, flags, comment)
+
+	#	else_if equal@(tag_name, "Simple_Pocket")
+	#	    # <Simple_Pocket C1X= C1Y= C1Z= C2X= C2Y= C2Z= ...
+	#	    #  ... Radius= Flags= Comment= />:
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@(form@("<Simple_Pocket Comment=%v% ... />\n\") /
+	#		  f@(comment))
+	#
+	#	    one :@= in@(1.0)
+	#	    c1 :@= create@Point(c1x, c1y, c1z)
+	#	    c2 :@= create@Point(c2x, c2y, c2z)
+	#	    #call d@(form@("Simple_Pocket: Before: c1=%p% c2=%p%\n\") %
+	#	    #  f@(c1) / f@(c2))
+	#	    position :@= part.position
+	#	    call matrix_apply@(c1, position)
+	#	    call matrix_apply@(c2, position)
+	#	    #call d@(form@("Simple_Pocket: After: c1=%p% c2=%p%\n\") %
+	#	    #  f@(c1) / f@(c2))
+	#
+	#	    z_start :@= c1.z
+	#	    z_end :@= c2.z
+	#	    if z_start < z_end
+	#		temporary :@= z_start
+	#		z_start := z_end
+	#		z_end := temporary
+	#	    #call d@(form@("Simple_Pocket: z_start=%i% z_end=%i%\n\") %
+	#	    #  f@(z_start) / f@(z_end))
+	#
+	#	    lower_chamfer :@= zero
+	#	    upper_chamfer :@= zero
+	#	    pocket_kind :@= flat@Pocket_Kind
+	#	    flags_size :@= flags.size
+	#	    flags_index :@= 0
+	#	    while flags_index < flags_size
+	#		flag :@= flags[flags_index]
+	#		switch flag
+	#		  case 'f'
+	#		    pocket_kind := flat@Pocket_Kind
+	#		  case 'm'
+	#		    pocket_kind := flat@Pocket_Kind
+	#		  case 'u'
+	#		    assert 0f
+	#		  case 't'
+	#		    pocket_kind := through@Pocket_Kind
+	#		    z_end := z_end - in@(0.020)
+	#		  default
+	#		    assert 0f
+	#		flags_index := flags_index + 1
+	#	    
+	#	    call simple_pocket@(part, comment,
+	#	      c1.x, c1.y, c2.x, c2.y, z_start, z_end, radius, pocket_kind)
+	return simple_pocket
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	corner1 = self.corner1
+	corner2 = self.corner2
+	radius = self.radius
+	flags = self.flags
+	comment = self.comment
+	xml_stream.write(
+	  ('{0}<Simple_Pocket C1X="{1:.6m}" C1Y="{2:.6m}" C1Z="{3:.6m}" ' +
+	  'C2X="{4:.6m}" C2Y="{5:.6m}" C2Z="{6:.6m}" ' +
+	  'Radius="{7:.6m}" Flags="{8}" Comment="{9}"/>\n').
+	  format(' ' * indent, corner1.x, corner1.y, corner1.z,
+	  corner2.x, corner2.y, corner2.z, radius, flags, comment))
+
+class XML_Tool_Prefer(XML):
+    def __init__(self, tool_name):
+	# Verify argument types:
+	assert isinstance(tool_name, str)
+
+	# Load up self:
+	XML.__init__(self, "Tool_Prefer")
+	self.tool_name = tool_name
+
+    @staticmethod
+    def parse(tool_prefer_element):
+	# Verify argument types:
+	assert isinstance(tool_prefer_element, ET.Element)
+	assert tool_prefer_element.tag == "Tool_Prefer"
+
+	# Parse *attributes* without error detection:
+	attributes = tool_prefer_element.attrib
+	tool_name = attributes["Tool_Name"]
+	
+	tool_prefer = XML_Tool_Prefer(tool_name)
+	return tool_prefer
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	tool_name = self.tool_name
+	xml_stream.write('{0}<Tool_Prefer Tool_Name="{1}"/>\n'.
+	  format(' ' * indent, tool_name))
+
+class XML_Tooling_Hole(XML):
+    def __init__(self, row, column, adjust_x, adjust_y, flags):
+	assert isinstance(row, int)
+	assert isinstance(column, int)
+	assert isinstance(adjust_x, int)
+	assert isinstance(adjust_y, int)
+	assert isinstance(flags, str)
+	XML.__init__(self, "Tooling_Hole")
+	self.row = row
+	self.column = column
+	self.adjust_x = adjust_x
+	self.adjust_y = adjust_y
+	self.flags = flags
+
+    @staticmethod
+    def parse(tooling_hole_element):
+	assert isinstance(tooling_hole_element, ET.Element)
+	assert tooling_hole_element.tag == "Tooling_Hole"
+	attributes = tooling_hole_element.attrib
+	row = int(attributes["Row"])
+	column = int(attributes["Column"])
+	adjust_x = int(attributes["Adjust_X"])
+	adjust_y = int(attributes["Adjust_Y"])
+	flags = attributes["Flags"]
+	tooling_hole = XML_Tooling_Hole(row, column, adjust_x, adjust_y, flags)
+
+	return tooling_hole
+
+	#	else_if equal@(tag_name, "Tooling_Hole")
+	#	    # <Tooling_Hole Row= Columns= Adjust_X= Adjust_Y= Flags= >
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@("<Tooling_Hole ... />\n\")
+	#
+	#	    tooling_hole :@= fetch2@(tooling_plate, column, row)
+	#	    tooling_hole.adjust_x := adjust_x
+	#	    tooling_hole.adjust_y := adjust_y
+	#	    tooling_hole.deleted := equal@(flags, "x")
+	#	    tooling_hole.ignored := equal@(flags, "i")
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	row = self.row
+	column = self.column
+	adjust_x = self.adjust_x
+	adjust_y = self.adjust_y
+	flags = self.flags
+	xml_stream.write(
+	  ('{0}<Tooling_Hole Row="{1}" Column="{2}" ' +
+	  'Adjust_X="{3}" Adjust_Y="{4}" Flags="{5}"/>\n').
+	  format(' ' * indent, row, column, adjust_x, adjust_y, flags))
+
+class XML_Tooling_Plate(XML):
+    def __init__(self, rows, columns, comment, ):
+	assert isinstance(rows, int)
+	assert isinstance(columns, int)
+	assert isinstance(comment, str)
+	XML.__init__(self, "Tooling_Plate")
+	self.rows = rows
+	self.columns = columns
+	self.comment = comment
+	self.tooling_holes = []
+
+    @staticmethod
+    def parse(tooling_plate_element):
+	assert isinstance(tooling_plate_element, ET.Element)
+	assert tooling_plate_element.tag == "Tooling_Plate"
+	attributes = tooling_plate_element.attrib
+	rows = int(attributes["Rows"])
+	columns = int(attributes["Columns"])
+	comment = attributes["Comment"]
+	tooling_plate = XML_Tooling_Plate(rows, columns, comment)
+
+	for child_element in tooling_plate_element:
+	    child_tag = child_element.tag
+	    if child_tag == "Tooling_Hole":
+		tooling_hole = XML_Tooling_Hole.parse(child_element)
+		tooling_plate.tooling_holes.append(tooling_hole)
+	    else:
+		assert "'{0}' not allowed under <Tooling_Plate> ... </>".\
+		  format(child_tag)
+
+	return tooling_plate
+
+	#	else_if equal@(tag_name, "Tooling_Plate")
+	#	    # <Tooling_Plate Rows= Columns= >
+	#	    assert !xml_tag_end@(xml_stream, 0f)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@(form@("<Tooling_Plate Comment=%v% ... >/\n\") /
+	#		  f@(comment))
+	#
+	#	    tooling_plate := create@Tooling_Plate(columns, rows)
+	#	else_if equal@(tag_name, "/Tooling_Plate")
+	#	    # </Tooling_Plate>
+	#	    assert !xml_tag_end@(xml_stream, 0f)
+	#	    call line_number_increment@(ezcad)
+	#
+	#	    debug :@= 0f
+	#	    #debug := equal@(part.name, "cam")
+	#	    if trace || debug
+	#		call d@("</Tooling_Plate/>\n\")
+	#	    if debug
+	#		call d@(form@("Part=%v% Rows=%d% Columns=%d%\n\") %
+	#		  f@(part.name) % f@(tooling_plate.rows_size) /
+	#		  f@(tooling_plate.columns_size))
+	#
+	#	    # Compute the locations of the bounding box after the part
+	#	    # has been mounted in the vice:
+	#	    position :@= part.position
+	#	    bounding_box1 := copy@(part.bounding_box1)
+	#	    bounding_box2 := copy@(part.bounding_box2)
+	#	    call matrix_apply@Point(bounding_box1, position)
+	#	    call matrix_apply@Point(bounding_box2, position)
+	#	    if debug
+	#		call d@(form@("bb1=%p% bb2=%p%\n\") %
+	#		  f@(bounding_box1) / f@(bounding_box2))
+	#		call d@(form@("position matrix=\n\%m%\n\") / f@(position))
+	#
+	#	    # We only care about how big the bounding box is in X and Y:
+	#	    bounding_box_x1 :@= bounding_box1.x
+	#	    bounding_box_x2 :@= bounding_box2.x
+	#	    bounding_box_dx :@= absolute@(bounding_box_x2 - bounding_box_x1)
+	#	    bounding_box_y1 :@= bounding_box1.y
+	#	    bounding_box_y2 :@= bounding_box2.y
+	#	    bounding_box_dy :@= absolute@(bounding_box_y2 - bounding_box_y1)
+	#	    bounding_box_dz :@= absolute@(bounding_box2.z - bounding_box1.z)
+	#	    bounding_box_x_center :@= half@(bounding_box_x1 + bounding_box_x2)
+	#	    bounding_box_y_center :@= half@(bounding_box_y1 + bounding_box_y2)
+	#	    if debug
+	#		call d@(form@("bb_dx=%i% bb_dy=%i% bb_dz=%i%\n\") %
+	#		  f@(bounding_box_dx) % f@(bounding_box_dy) /
+	#		  f@(bounding_box_dz))
+	#
+	#	    #FIXME: Hardwiring in the tool plate specifications!!!
+	#	    plate_columns :@= 19
+	#	    plate_rows :@= 7
+	#	    plate_column_pitch :@= in@(0.5)
+	#	    plate_row_pitch :@= in@(0.5)
+	#	    plate_hole_diameter :@= in@(0.1065)
+	#	    plate_column_edge :@= in@(0.5)
+	#	    plate_row_edge :@= in@(0.25)
+	#
+	#	    # Figure out the initial number of needed rows and columns on the
+	#	    # tooling plate.  Offset from the edges by {plate_hole_diameter}:
+	#	    adjusted_dx :@= bounding_box_dx - twice@(plate_hole_diameter)
+	#	    adjusted_dy :@= bounding_box_dy - twice@(plate_hole_diameter)
+	#
+	#	    # If {part} is too narrow, the assertions will fail:
+	#	    if adjusted_dx <= in@(0.0) || adjusted_dy <= in@(0.0)
+	#		call d@(form@("Part %v% failed (adj_dx=%i% adj_dy=%i%\n\") %
+	#		  f@(part.name) % f@(adjusted_dx) / f@(adjusted_dy))
+	#		call d@(form@("bb_dx=%i% bb_dy=%i%\n\") %
+	#		  f@(bounding_box_dx) / f@(bounding_box_dy))
+	#		assert 0f
+	#
+	#	    # Now figure out number of number of plate rows and columns needed:
+	#	    plate_columns_needed :@=
+	#	      unsigned@(div@(adjusted_dx, plate_column_pitch)) + 1
+	#	    plate_rows_needed :@=
+	#	      unsigned@(div@(adjusted_dy,  plate_row_pitch)) + 1
+	#	    if debug
+	#		call d@(form@(
+	#		  "plate_cols_needed=%d% plate_rows_needed=%i%\n\") %
+	#		  f@(plate_columns_needed) / f@(plate_rows_needed))
+	#
+	#	    # Figure out where the requested columns land on the tooling plate:
+	#	    columns_size :@= tooling_plate.columns_size
+	#	    columns_delta :@=
+	#	      double@(plate_columns_needed - 1) / double@(columns_size - 1)
+	#	    rows_size :@= tooling_plate.rows_size
+	#	    rows_delta :@=
+	#	      double@(plate_rows_needed - 1) / double@(rows_size - 1)
+	#	    if debug
+	#		call d@(form@("columns_delta=%i% rows_delta=%i%\n\") %
+	#		  f@(columns_delta) / f@(rows_delta))
+	#
+	#	    # Now figure out where all of the {column_positions} will be:
+	#	    column_positions :@= new@Array[Unsigned]()
+	#	    columns_index :@= 0
+	#	    while columns_index < columns_size
+	#		# The 0.5 causes {column_position} to round to the closet col:
+	#		column_position :@=
+	#		  unsigned@(double@(columns_index) * columns_delta + 0.5)
+	#		call append@(column_positions, column_position)
+	#		if debug
+	#		    call d@(form@("column_position[%d%]: %d%\n\") %
+	#		      f@(columns_index) / f@(column_position))
+	#		columns_index := columns_index + 1
+	#
+	#	    # Now figure out where all of the {row_positions} will be:
+	#	    row_positions :@= new@Array[Unsigned]()
+	#	    rows_index :@= 0
+	#	    while rows_index < rows_size
+	#		# The 0.5 causes {row_position} to round to the closet row:
+	#		row_position :@= unsigned@(double@(rows_index) * rows_delta)
+	#		call append@(row_positions, row_position)
+	#		if debug
+	#		    call d@(form@("row_position[%d%]: %d%\n\") %
+	#		      f@(rows_index) / f@(row_position))
+	#		rows_index := rows_index + 1
+	#
+	#	    # Reversing {row_positions} deals with the fact that
+	#	    # {Part.tool_plate} numbers rows from 1 going down.
+	#	    # In reality, row N-1 should be the top row:
+	#	    call reverse@(row_positions)
+	#
+	#	    # Deterimine the number of rows and columns needed.  For
+	#	    # this computation, we do not consider either ignored or
+	#	    # deleted holes:
+	#	    column_maximum :@= -123456789i
+	#	    column_minimum :@= 123456789i
+	#	    row_maximum :@= -123456789i
+	#	    row_minimum :@= 123456789i
+	#	    rows_index := 0
+	#	    while rows_index < rows_size
+	#		plate_row :@= row_positions[rows_index]
+	#		columns_index := 0
+	#		while columns_index < columns_size
+	#		    # Fetch the appropropriate {tool_hole}:
+	#		    plate_column :@= column_positions[columns_index]
+	#		    tool_hole :@=
+	#		      fetch2@(tooling_plate, columns_index, rows_index)
+	#		    if debug
+	#			call d@(form@(
+	#			  "tool_hole[%d%,%d%]: ax=%d% ay=%i% d=%l% i=%l%\n\") %
+	#			  f@(columns_index) % f@(rows_index) %
+	#			  f@(tool_hole.adjust_x) % f@(tool_hole.adjust_y) %
+	#			  f@(tool_hole.deleted) / f@(tool_hole.ignored))
+	#
+	#		    # Skip over both ignored and deleted holes:
+	#		    if !tool_hole.ignored && !tool_hole.deleted
+	#			# Adjust the row and column for this hole:
+	#			adjusted_column :@=
+	#			  integer@(plate_column) + tool_hole.adjust_x
+	#			adjusted_row :@=
+	#			  integer@(plate_row) + tool_hole.adjust_y
+	#			tool_hole.adjusted_column := adjusted_column
+	#			tool_hole.adjusted_row := adjusted_row
+	#			if debug
+	#			    call d@(form@(
+	#			      "tool_hole[%d%,%d%]: ac=%d% ar=%i%\n\") %
+	#			      f@(columns_index) % f@(rows_index) %
+	#			      f@(adjusted_column) / f@(adjusted_row))
+	#
+	#			# Compute the minimum/maximum row/column:
+	#			if adjusted_column > column_maximum
+	#			    column_maximum := adjusted_column
+	#			if adjusted_column < column_minimum
+	#			    column_minimum := adjusted_column
+	#			if adjusted_row > row_maximum
+	#			    row_maximum := adjusted_row
+	#			if adjusted_row < row_minimum
+	#			    row_minimum := adjusted_row
+	#		    columns_index := columns_index + 1
+	#		rows_index := rows_index + 1
+	#	    if debug
+	#		call d@(form@(
+	#		  "min_col=%d% max_col=%d% min_row=%i% max_col=%i%\n\") %
+	#		  f@(column_minimum) % f@(column_maximum) %
+	#		  f@(row_minimum) / f@(row_maximum))
+	#
+	#	    # Compute ({x_offset},{y_offset}) which corresponds to the
+	#	    # hole at row = 0 and column = 0.  This is done by offseting
+	#	    # from ({bounding_box_x_center},{bounding_box_y_center}) by
+	#	    # an amount equal to half the needed rows and columns:
+	#	    x_offset :@=
+	#	      bounding_box_x_center - smul@(half@(plate_column_pitch),
+	#	      double@(plate_columns_needed - 1))
+	#	    y_offset :@=
+	#	      bounding_box_y_center - smul@(half@(plate_row_pitch),
+	#	      double@(plate_rows_needed - 1))
+	#	    if debug
+	#		call d@(form@("x_offset=%i% y_offset=%i%\n\") %
+	#		  f@(x_offset) / f@(y_offset))
+	#
+	#	    # Now offset ({x_offset},{y_offset}) by the amount that
+	#	    # the holes moved "in" by:
+	#	    x_offset_dx :@= smul@(half@(plate_column_pitch),
+	#	      double@(integer@(plate_columns_needed - 1) -
+	#	      (column_minimum + column_maximum)))
+	#	    y_offset_dy :@= smul@(half@(plate_row_pitch),
+	#	      double@(integer@(plate_rows_needed - 1) -
+	#	      (row_minimum + row_maximum)))
+	#	    if debug
+	#		call d@(form@("x_offset_dx=%i% y_offset_dy=%i%\n\") %
+	#		  f@(x_offset_dx) / f@(y_offset_dy))
+	#	    x_offset := x_offset + x_offset_dx
+	#	    y_offset := y_offset + y_offset_dy
+	#
+	#	    # Now recompute the total number of rows and columns needed for
+	#	    plate_columns_needed :=
+	#	      unsigned@(column_maximum - column_minimum) + 1
+	#	    plate_rows_needed := unsigned@(row_maximum - row_minimum) + 1
+	#
+	#	    # Make sure that the tooling plate can handle the holes:
+	#	    if plate_columns_needed > plate_columns
+	#		plate_columns_needed := plate_columns
+	#	    if debug
+	#		call d@(form@("plate_rows_needed=%i% plate_rows=%i%\n\") %
+	#		  f@(plate_rows_needed) / f@(plate_rows))
+	#	    if plate_rows_needed > plate_rows
+	#		plate_rows_needed := plate_rows
+	#	    if debug
+	#		call d@(form@(
+	#		  "plate_cols_needed=%d% plate_rows_needed=%i%\n\") %
+	#		  f@(plate_columns_needed) / f@(plate_rows_needed))
+	#
+	#	    # Perform all of the hole drilling:
+	#	    rows_index := 0
+	#	    while rows_index < rows_size
+	#		columns_index := 0
+	#		while columns_index < columns_size
+	#		    # Make sure only allowed holes get drilled:
+	#		    tool_hole :@=
+	#		      fetch2@(tooling_plate, columns_index, rows_index)
+	#		    if !tool_hole.deleted
+	#		        # We have a tooling plate hole to place:
+	#			hole_comment :@= read_only_copy@(form@(
+	#			  "Tooling Hole[%d%,%d%]") %
+	#			   f@(columns_index) / f@(rows_index))
+	#
+	#			# Compute ({hole_x},{hole_y}) for each hole:
+	#			hole_x :@= x_offset + smul@(plate_column_pitch,
+	#			  double@(tool_hole.adjusted_column))
+	#			hole_y :@= y_offset + smul@(plate_row_pitch,
+	#			  double@(tool_hole.adjusted_row))
+	#			if debug
+	#			    call d@(form@("Hole[%d%,%d%]=(%i%,%i%)\n\") %
+	#			      f@(columns_index) % f@(rows_index) %
+	#			      f@(hole_x) / f@(hole_y))
+	#
+	#			# Drill the hole:
+	#			call countersink_hole@(part, hole_comment,
+	#			  plate_hole_diameter,
+	#			  smul@(plate_hole_diameter, 1.150),
+	#			  hole_x, hole_y,
+	#			  in@(0.0), -bounding_box_dz, through@Hole_Kind)
+	#		    columns_index := columns_index + 1
+	#		rows_index := rows_index + 1
+	#
+	#	    part.tooling_plate_y := y_offset + plate_row_edge +
+	#	      smul@(plate_column_pitch, double@(row_maximum))
+	#
+
+	#	else_if equal@(tag_name, "Tooling_Plate")
+	#	    # <Tooling_Plate Rows= Columns= >
+	#	    assert !xml_tag_end@(xml_stream, 0f)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@(form@("<Tooling_Plate Comment=%v% ... >/\n\") /
+	#		  f@(comment))
+	#
+	#	    tooling_plate := create@Tooling_Plate(columns, rows)
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	rows = self.rows
+	columns = self.columns
+	comment = self.comment
+	xml_stream.write(
+	  '{0}<Tooling_Plate Rows="{1}" Columns="{2}" Comment="{3}">\n'.
+	  format(' ' * indent, rows, columns, comment))
+	for child_xml in self.xmls:
+	    child_xml.xml_write(indent + 1, xml_stream)
+	xml_stream.write('{0}</Tooling_Plate>\n'.format(' ' * indent))
+
+class XML_Tooling_Plate_Mount(XML):
+    def __init__(self, comment):
+	assert isinstance(comment, str)
+	XML.__init__(self, "Tooling_Plate_Mount")
+	self.comment = comment
+
+    @staticmethod
+    def parse(tooling_plate_mount_element):
+	assert isinstance(tooling_plate_mount_element, ET.Element)
+	assert tooling_plate_mount_element.tag == "Tooling_Plate_Mount"
+	attributes = tooling_plate_mount_element.attrib
+	comment = attributes["Comment"]
+	tooling_plate_mount = XML_Tooling_Plate_Mount(comment)
+	return tooling_plate_mount
+
+	#	else_if equal@(tag_name, "Tooling_Plate_Mount")
+	#	    # <Tooling_Plate Comment= />
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@(form@("<Tooling_Plate_Mount Comment=%v% ... >/\n\") /
+	#		  f@(comment))
+	#
+	#	    call reposition@(part, part.tooling_plate_y)
+	#
+	#	    position :@= part.position
+	#	    extra1 :@= copy@(part.extra1)
+	#	    extra2 :@= copy@(part.extra2)
+	#	    call matrix_apply@(extra1, position)
+	#	    call matrix_apply@(extra2, position)
+	#	    extra_x :@= minimum@(extra1.x, extra2.x)
+	#	    if trace
+	#		call d@(form@("xml_read:%v%, extra1.x=%i% extra2.x=%i%\n\") %
+	#		  f@(part.name) % f@(extra1.x) / f@(extra2.x))
+	#		call d@(form@("dowel_position_set@(%v%, %i%, 0.0)\n\") %
+	#		  f@(part.name) / f@(extra_x))
+	#	    call dowel_position_set@(part, extra_x, zero)
+	#	    call dowel_pin@(part, comment)
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	comment = self.comment
+	xml_stream.write('{0}<Tooling_Plate_Mount Comment="{1}"/>\n'.
+	  format(' ' * indent, comment))
+
+class XML_Tube(XML):
+    def __init(self, s, e, outer_diameter, wall_thickness, sides, color,
+      transparency, material, comment):
+	assert isinstance(s, P)
+	assert isinstance(e, P)
+	assert isinstance(outer_diameter, L)
+	assert isinstance(wall_thickness, L)
+	assert isinstance(sides, int)
+	assert isinstance(color, str)
+	assert isinstance(transparency, float)
+	assert isinstance(material, str)
+	assert isinstance(comment, str)
+	XML.__init__(self, "Tube")
+
+    @staticmethod
+    def parse(tube_element):
+	assert isinstance(tube_element, ET.Element)
+	assert tube_element.tag == "Tube"
+	attributes = tube_element.attrib
+	sx = L(float(attributes["SX"]))
+	sy = L(float(attributes["SY"]))
+	sz = L(float(attributes["SZ"]))
+	ex = L(float(attributes["EX"]))
+	ey = L(float(attributes["EY"]))
+	ez = L(float(attributes["EZ"]))
+	outer_diameter = L(float(attributes["Outer_Diameter"]))
+	wall_thickness = L(float(attributes["Wall_Thickness"]))
+	sides = int(attributes["Sides"])
+	color = attributes["Color"]
+	transparency = float(attributes["Transparency"])
+	material = attributes["Material"]
+	comment = attributes["Comment"]
+
+	s = P(sx, sy, sz)
+	e = P(ex, ey, ez)
+	tube = XML_Tube(s, e, outer_diameter, wall_thickness, sides, color,
+	  transparency, material, comment)
+	return tube
+
+	#	else_if equal@(tag_name, "Tube")
+	#	    # <Tube SX= SY= SZ= EX= EY= EZ= ...
+	#	    # ... Outer_Diameter= Wall_Thickness= Sides= ...
+	#	    # ... Color= Transparency= Material= Comment= />
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@(form@("<Tube Comment=%v% ... >/\n\") / f@(comment))
+	#
+	#	    part_material :@= create@Material(material, aluminum@Named_Material)
+	#	    part := oriented_tube_create@Part(shop, name, part_material,
+	#	      sx, sy, sz, ex, ey, ez, outer_diameter, wall_thickness,
+	#	      sides, in@(0.0))
+	#	    part.color := lookup@Color(color)
+	#	    part.transparency := transparency
+
+class XML_Vertical_Lathe(XML):
+    def __init__(self, s, e, inner_diameter, outer_diameter, flags, comment):
+	assert isinstance(s, P)
+	assert isinstance(e, P)
+	assert isinstance(inner_diameter, L)
+	assert isinstance(outer_diameter, L)
+	assert isinstance(flags, str)
+	assert isinstance(comment, str)
+
+	XML.__init__(self, "Vertical_Lathe")
+	self.s = s
+	self.e = e
+	self.inner_diameter = inner_diameter
+	self.outer_diameter = outer_diameter
+	self.flags = flags
+	self.comment = comment
+
+    @staticmethod
+    def parse(vertical_lathe_element):
+	assert isinstance(vertical_lathe_element, ET.Element)
+	assert vertical_lathe_element.tag == "Vertical_Lathe"
+	attributes = vertical_lathe_element.attrib
+	sx = L(float(attributes["SX"]))
+	sy = L(float(attributes["SY"]))
+	sz = L(float(attributes["SZ"]))
+	ex = L(float(attributes["EX"]))
+	ey = L(float(attributes["EY"]))
+	ez = L(float(attributes["EZ"]))
+	inner_diameter = L(float(attributes["Inner_Diameter"]))
+	outer_diameter = L(float(attributes["Outer_Diameter"]))
+	flags = attributes["Flags"]
+	comment = attributes["Comment"]
+
+	s = P(Sx, sy, sz)
+	e = P(ex, ey, ez)
+	veritcal_lathe = XML_Vertical_Lathe(s, e, inner_diameter,
+	  outer_diameter, flags, comment)
+	return vertical_lathe
+
+	#	else_if equal@(tag_name, "Vertical_Lathe")
+	#	    # <Simple_Pocket C1X= C1Y= C1Z= C2X= C2Y= C2Z= ...
+	#	    #  ... Radius= Flags= Comment= />:
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@(form@("<Vertical_Lathe Comment%v% ... />\n\") /
+	#		  f@(comment))
+	#
+	#	    one :@= in@(1.0)
+	#	    start_point :@= create@Point(sx, sy, sz)
+	#	    end_point :@= create@Point(ex, ey, ez)
+	#	    position :@= part.position
+	#	    call matrix_apply@(start_point, position)
+	#	    call matrix_apply@(end_point, position)
+	#
+	#	    upper_chamfer :@= zero
+	#	    flags_size :@= flags.size
+	#	    flags_index :@= 0
+	#	    while flags_index < flags_size
+	#		flag :@= flags[flags_index]
+	#		switch flag
+	#		  case 'u'
+	#		    assert 0f
+	#		  case 'i'
+	#		    outer_diameter := zero
+	#		  default
+	#		    assert 0f
+	#		flags_index := flags_index + 1
+	#	    
+	#	    call vertical_lathe@(part, comment, inner_diameter, outer_diameter,
+	#	      start_point.x, start_point.y, start_point.z, end_point.z,
+	#	      upper_chamfer, 1.0, 0f)
+
+
+class XML_Vice_Position(XML):
+    def __init__(self, t, n, w, c, comment):
+	assert isinstance(t, P)
+	assert isinstance(n, P)
+	assert isinstance(w, P)
+	assert isinstance(c, P)
+	assert isinstance(comment, str)
+	XML.__init__(self, "vice_position")
+	self.t = t
+	self.n = n
+	self.w = w
+	self.c = c
+	self.comment = comment
+	
+    @staticmethod
+    def parse(vice_position_element):
+	assert isinstance(vice_position_element, ET.Element)
+	assert vice_position_element.tag == "Vice_Position"
+	attributes = vice_position_element.attrib
+	tx = L(float(attributes["TX"]))
+	ty = L(float(attributes["TY"]))
+	tz = L(float(attributes["TZ"]))
+	nx = L(float(attributes["NX"]))
+	ny = L(float(attributes["NY"]))
+	nz = L(float(attributes["NZ"]))
+	wx = L(float(attributes["WX"]))
+	wy = L(float(attributes["WY"]))
+	wz = L(float(attributes["WZ"]))
+	cx = L(float(attributes["CX"]))
+	cy = L(float(attributes["CY"]))
+	cz = L(float(attributes["CZ"]))
+	comment = attributes["Comment"]
+
+	t = P(tx, ty, tz)
+	n = P(nx, ny, nz)
+	w = P(wx, wy, wz)
+	c = P(cx, cy, cz)
+	vice_position = XML_Vice_Position(t, n, w, c, comment)
+	return vice_position
+
+	#	else_if equal@(tag_name, "Tool_Prefer")
+	#	    # <Tool_Prefer Tool_Name= />
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    if trace
+	#		call d@(form@("<Tool_Prefer Tool_name=%v%>/\n\") /
+	#		  f@(tool_name))
+	#
+	#	    if tool_name.size = 0
+	#		tool_name := null@String
+	#	    call tool_prefer@(part, tool_name)
+
+	#	else_if equal@(tag_name, "Vice_Position")
+	#	    # <Vice_Position TX= TY= TZ= NX= NY= NZ= WX= WY= WZ= CX= CY= CZ= />:
+	#	    assert !xml_tag_end@(xml_stream, 1t)
+	#	    call line_number_increment@(ezcad)
+	#	    debug :@= 0t
+	#	    #debug := 1t
+	#	    #if equal@(part.name, "Tine_Tang")
+	#	    #	debug := 1t
+	#
+	#	    if trace || debug
+	#		call d@(form@("<Vice_Position Comment=%v% ... />\n\") /
+	#		  f@(comment))
+	#
+	#	    # We need {zero} and {one} to define the Z axis below:
+	#	    one :@= in@(1.0)
+	#
+	#	    # Load up {Point}'s {t}, {n}, {w}, and {c}:
+	#	    t :@= create@Point(tx, ty, tz)
+	#	    n :@= create@Point(nx, ny, nz)
+	#	    w :@= create@Point(wx, wy, wz)
+	#	    c :@= create@Point(cx, cy, cz)
+	#
+	#	    # Show what we have when debugging:
+	#	    if debug
+	#		call d@(form@(
+	#		  "vice_pos0:\n,t\t=%p%\n,t\n=%p%\n,t\w=%p%\n,t\c=%p%\n\") %
+	#		  f@(t) % f@(n) % f@(w) / f@(c))
+	#
+	#	    # Force the {position} matrix to identity.  This also forces
+	#	    # the {reposition} matrix to identity as well:
+	#	    call position_reset@(part)
+	#	    position :@= part.position
+	#	    reposition :@= part.reposition
+	#	    matrix :@= part.shop.matrix
+	#
+	#	    # Normalize everything to be centered around {c}:
+	#	    call translate@(part, -cx, -cy, -cz)
+	#	    
+	#	    # Move {t}, {n}, {w}, and {c} to their new homes:
+	#	    call xyz_set@(t, tx, ty, tz)
+	#	    call xyz_set@(n, nx, ny, nz)
+	#	    call xyz_set@(w, wx, wy, wz)
+	#	    call xyz_set@(c, cx, cy, cz)
+	#	    call matrix_apply@Point(t, position)
+	#	    call matrix_apply@Point(n, position)
+	#	    call matrix_apply@Point(w, position)
+	#	    call matrix_apply@Point(c, position)
+	#
+	#	    # Show what we have when debuging:
+	#	    if debug
+	#		call d@(form@(
+	#		  "vice_pos1:\n,t\t=%p%\n,t\n=%p%\n,t\w=%p%\n,t\c=%p%\n\") %
+	#		  f@(t) % f@(n) % f@(w) / f@(c))
+	#
+	#	    # Rotate the part so that the surface is pointing up.  Start
+	#	    # by computing {top_angle}, the angle between ({tx},{ty},{tz})
+	#	    # and the positive Z axis normal:
+	#	    top_angle :@= angle_between@Point(t.x, t.y, t.z, zero, zero, one)
+	#
+	#	    if debug
+	#		call d@(form@("top_angle=%d%\n\") / f@(top_angle))
+	#
+	#	    # See if we need to rotate {part} by {top_angle}:
+	#	    if top_angle < -degrees@(0.0001) || top_angle > degrees@(0.0001)
+	#		# We need to rotate {part} by {top_angle}:
+	#		top_axis :@= null@Point
+	#		if top_angle < degrees@(-179.9) || top_angle > degrees@(179.9)
+	#		    # We have to entirely flip the board.  Unfortunately,
+	#		    # a cross product will not work on colinear segments,
+	#		    # so we use the ({n.x}, {n.y}, {n.z}) x (0, 0, 1) to
+	#		    # establish the axis of rotation:
+	#		    top_axis :=
+	#		      cross_product@Point(n.x, n.y, n.z, zero, zero, one)
+	#
+	#		    # Force {top_angle} to 180 degrees, to get rid of any
+	#		    # rounding errors:
+	#		    top_angle := degrees@(180.0)
+	#		else
+	#		    # Have to partially flip the board. Use the cross product
+	#		    # ({t.x}, {t.y}, {t.z}) x (0, 0, 1) to compute {top_axis},
+	#		    # the axis about which to rotate the board:
+	#		    top_axis :=
+	#		      cross_product@Point(t.x, t.y, t.z, zero, zero, one)
+	#
+	#		# Show what we have during debugging:
+	#		if debug
+	#		    call d@(form@("top_axis=(%i%,%i%,%i%)\n\") %
+	#		      f@(top_axis.x) % f@(top_axis.y) / f@(top_axis.z))
+	#
+	#		# Compute the normal of {top_axis}:
+	#		call normalize@(top_axis)
+	#		top_nx :@= in@(top_axis.x)
+	#		top_ny :@= in@(top_axis.y)
+	#		top_nz :@= in@(top_axis.z)
+	#
+	#		# Now rotate {part} by {top_angle_degrees} around the
+	#		# normal ({top_nx}, {top_ny}, {top_nz}):
+	#		call rotate@(part, top_nx, top_ny, top_nz, top_angle, zero)
+	#
+	#		# Now T=({tx},{ty},{tz}) surface is on top (i.e. parallel to
+	#		# to Z axis and pointing up:
+	#
+	#		# Now that we have done the first transformation, we want to
+	#		# work with T, N, and W in their new locations:
+	#		call xyz_set@(t, tx, ty, tz)
+	#		call xyz_set@(n, nx, ny, nz)
+	#		call xyz_set@(w, wx, wy, wz)
+	#		call xyz_set@(c, cx, cy, cz)
+	#		call matrix_apply@Point(t, position)
+	#		call matrix_apply@Point(n, position)
+	#		call matrix_apply@Point(w, position)
+	#		call matrix_apply@Point(c, position)
+	#
+	#		# Show what we have when debugging:
+	#		if debug
+	#		    call d@(form@(
+	#		      "vice_pos2:\n,t\t=%p%\n,t\n=%p%\n,t\w=%p%\n,t\c=%p%\n\") %
+	#		      f@(t) % f@(n) % f@(w) / f@(c))
+	#
+	#	    # Now shift {part} down so that {t} is on Z=0 plane:
+	#	    call translate@(part, zero, zero, -t.z)
+	#
+	#	    # Like before, move T, N, W, and C to their new homes:
+	#	    call xyz_set@(t, tx, ty, tz)
+	#	    call xyz_set@(n, nx, ny, nz)
+	#	    call xyz_set@(w, wx, wy, wz)
+	#	    call xyz_set@(c, cx, cy, cz)
+	#	    call matrix_apply@Point(t, position)
+	#	    call matrix_apply@Point(n, position)
+	#	    call matrix_apply@Point(w, position)
+	#	    call matrix_apply@Point(c, position)
+	#
+	#	    # Show what we have during debugging:
+	#	    if debug
+	#		call d@(form@(
+	#		  "vice_pos3:\n,t\t=%p%\n,t\n=%p%\n,t\w=%p%\n,t\c=%p%\n\") %
+	#		  f@(t) % f@(n) % f@(w) / f@(c))
+	#
+	#	    # Now rotate {part} around positive Z axis so that N =
+	#	    # ({nx},{ny},{nz}) is facing north:
+	#
+	#	    # Start by computing NT = N - T.
+	#	    nt_x :@= n.x - t.x
+	#	    nt_y :@= n.y - t.y
+	#	    nt_z :@= n.z - t.z
+	#	    vice_angle :@=
+	#	      -angle_between@Point(zero, one, zero, nt_x, nt_y, nt_z) 
+	#
+	#	    # Compute {vice_angle} between positive Y-axis (i.e. north) and NT:
+	#	    if debug
+	#		call d@(form@("NT=(%i%,%i%,%i%)\n\") %
+	#		  f@(nt_x) % f@(nt_y) / f@(nt_z))
+	#		call d@(form@("vice_angle=%d%\n\") / f@(vice_angle))
+	#
+	#	    # Are we so close to 0 degrees, that we should not bother:
+	#	    if vice_angle < -degrees@(0.1) || vice_angle > degrees@(0.1)
+	#		# No, perform the rotation:
+	#		nt :@= create@Point(nt_x, nt_y, nt_z)
+	#		call rotate@(part, 0.0, 0.0, 1.0, vice_angle, length@(nt))
+	#
+	#		# As before, update T, N and W to their new locations:
+	#		call xyz_set@(t, tx, ty, tz)
+	#		call xyz_set@(n, nx, ny, nz)
+	#		call xyz_set@(w, wx, wy, wz)
+	#		call matrix_apply@Point(t, position)
+	#		call matrix_apply@Point(n, position)
+	#		call matrix_apply@Point(w, position)
+	#
+	#		# Show what we have during debugging:
+	#		if debug
+	#		    call d@(form@(
+	#		      "vice_pos4:\n\t=%p%\n,t\n=%p%\n,t\w=%p%\n,t\c=%p%\n\") %
+	#		      f@(t) % f@(n) % f@(w) / f@(c))
+	#
+	#	    # Start by computing NT = N - T and WT = W - T:
+	#	    nt_x := n.x - t.x
+	#	    nt_y := n.y - t.y
+	#	    nt_z := n.z - t.z
+	#	    wt_x :@= w.x - t.x
+	#	    wt_y :@= w.y - t.y
+	#	    wt_z :@= w.z - t.z
+	#
+	#	    # Compute {dowel_angle} NTW:
+	#	    dowel_angle :@=
+	#	      angle_between@Point(nt_x, nt_y, nt_z, wt_x, wt_y, wt_z)
+	#
+	#	    # Verify that that the angle <NTW is 90 degrees:
+	#	    if dowel_angle < degrees@(89.9) || dowel_angle > degrees@(90.1)
+	#		# It is not, let somebody know:
+	#		call d@(form@("nt_x=%f% nt_y=%f% nt_z=%f%\n\") %
+	#		  f@(nt_x) % f@(nt_y) / f@(nt_z))
+	#		call d@(form@("wt_x=%f% wt_y=%f% wt_z=%f%\n\") %
+	#		  f@(wt_x) % f@(wt_y) / f@(wt_z))
+	#		call d@(form@(
+	#		  "dowel_angle for part %v% is %d% (comment=%v%)\n\") %
+	#		  f@(part.name) % f@(dowel_angle) / f@(comment))
+	#
+	#	    if debug
+	#		bounding_box1 := copy@(part.bounding_box1)
+	#		bounding_box2 := copy@(part.bounding_box2)
+	#		call d@(form@("vice_pos: before: bb1=%p% bb2=%p%\n\") %
+	#		  f@(bounding_box1) / f@(bounding_box2))
+	#	        call matrix_apply@Point(bounding_box1, position)
+	#		call matrix_apply@Point(bounding_box2, position)
+	#		call d@(form@("vice_pos: after: bb1=%p% bb2=%p%\n\") %
+	#		  f@(bounding_box1) / f@(bounding_box2))
+	#
+	#	    if debug
+	#		call d@(form@("reposition(*, %i%)\n\") / f@(n.y))
+	#	    call reposition@(part, n.y)
+	#
+	#	    #extra1 :@= copy@(part.extra1)
+	#	    #extra2 :@= copy@(part.extra2)
+	#	    #call matrix_apply@(extra1, position)
+	#	    #call matrix_apply@(extra2, position)
+	#
+	#	    if debug
+	#		call d@(form@("vice_pos:dowel_pos_set(%v%, %i%, 0.0)\n\") %
+	#		  f@(part.name) / f@(w.x))
+	#	    call dowel_position_set@(part, w.x, zero)
+	#	    #extra_x :@= minimum@(extra1.x, extra2.x)
+	#	    #call d@(form@("dowel_set(*, %i%, 0.0)\n\") / f@(extra_x))
+	#	    #call dowel_position_set@(part, extra_x, zero)
+	#	    call dowel_pin@(part, comment)
+
+    def xml_write(self, indent, xml_stream):
+	assert isinstance(indent, int)
+	assert isinstance(xml_stream, file)
+	t = self.t
+	n = self.n
+	w = self.w
+	c = self.c
+	comment = self.comment
+	xml_stream.write(('{0}<Vice_Position ' +
+	  'TX="{1:.6m}" TY="{2:.6m}" TZ="{3:.6m}" ' +
+	  'NX="{4:.6m}" NY="{5:.6m}" NZ="{6:.6m}" ' +
+	  'WX="{7:.6m}" WY="{8:.6m}" WZ="{9:.6m}" ' +
+	  'CX="{10:.6m}" CY="{11:.6m}" CZ="{12:.6m}" ' +
+	  'Comment="{13}"/>\n').format(' ' * indent,
+	  t.x, t.y, t.z, n.x, n.y, n.z,
+	  w.x, w.y, w.z, c.x, c.y, c.z, comment))
