@@ -978,10 +978,10 @@ class Bevel_Gear_Table:
 class Drive_Motor_Pulley_Screws(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
-	self.screw0_ = Fastener(self)
-	self.screw1_ = Fastener(self)
-	self.screw2_ = Fastener(self)
-	self.screw3_ = Fastener(self)
+	self.screw0_ = Fastener(self, comment="screw0")
+	self.screw1_ = Fastener(self, comment="screw1")
+	self.screw2_ = Fastener(self, comment="screw2")
+	self.screw3_ = Fastener(self, comment="screw3")
 
     def construct(self):
 	# Grab some values from *wheel_assembly*:
@@ -1028,10 +1028,10 @@ class Drive_Motor_Pulley_Screws(Part):
 class Drive_Wheel_Pulley_Screws(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
-	self.screw0_ = Fastener(self)
-	self.screw1_ = Fastener(self)
-	self.screw2_ = Fastener(self)
-	self.screw3_ = Fastener(self)
+	self.screw0_ = Fastener(self, comment="screw0")
+	self.screw1_ = Fastener(self, comment="screw1")
+	self.screw2_ = Fastener(self, comment="screw2")
+	self.screw3_ = Fastener(self, comment="screw3")
 
     def construct(self):
 	# Grab some values from *wheel_assembly*:
@@ -1073,10 +1073,10 @@ class Drive_Wheel_Pulley_Screws(Part):
 class End_Screws(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
-	self.screw0_ = Fastener(self)
-	self.screw1_ = Fastener(self)
-	self.screw2_ = Fastener(self)
-	self.screw3_ = Fastener(self)
+	self.screw0_ = Fastener(self, comment="screw0")
+	self.screw1_ = Fastener(self, comment="screw1")
+	self.screw2_ = Fastener(self, comment="screw2")
+	self.screw3_ = Fastener(self, comment="screw3")
 
     def construct(self):
 	# Grab some values from *motor_assembly*:
@@ -1231,14 +1231,14 @@ class Gear_Box_Screws(Part):
 	# There are two screws on each of the for sides {East,West,North,South}.
 	# For each side there is a screw one side and one on the other.
 	# Thus, *en_screw* is on the East side with towards the North:
-	self.en_screw_ = Fastener(self)
-	self.es_screw_ = Fastener(self)
-	self.wn_screw_ = Fastener(self)
-	self.ws_screw_ = Fastener(self)
-	self.ne_screw_ = Fastener(self)
-	self.nw_screw_ = Fastener(self)
-	self.se_screw_ = Fastener(self)
-	self.sw_screw_ = Fastener(self)
+	self.en_screw_ = Fastener(self, comment="en_screw")
+	self.es_screw_ = Fastener(self, comment="es_screw")
+	self.wn_screw_ = Fastener(self, comment="wn_screw")
+	self.ws_screw_ = Fastener(self, comment="ws_screw")
+	self.ne_screw_ = Fastener(self, comment="ne_screw")
+	self.nw_screw_ = Fastener(self, comment="nw_screw")
+	self.se_screw_ = Fastener(self, comment="se_screw")
+	self.sw_screw_ = Fastener(self, comment="sw_screw")
 	self.z_l = L()
 	self._label = label
 	self._gear_box_part = None
@@ -2110,24 +2110,24 @@ class Motor_Base_Cover(Part):
 class Motor_Base_Screws(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
-	self.screw_a_ = Fastener(self)
-	self.screw_c_ = Fastener(self)
-	self.screw_d_ = Fastener(self)
-	self.screw_f_ = Fastener(self)
-	self.screw_g_ = Fastener(self)
-	self.screw_i_ = Fastener(self)
-	self.screw_j_ = Fastener(self)
-	self.screw_k_ = Fastener(self)
-	self.screw_l_ = Fastener(self)
-	self.screw_m_ = Fastener(self)
-	self.screw_n_ = Fastener(self)
-	self.screw_o_ = Fastener(self)
-	self.screw_p_ = Fastener(self)
-	self.screw_q_ = Fastener(self)
-	self.drive_screw_a_ = Fastener(self)
-	self.drive_screw_b_ = Fastener(self)
-	self.twist_screw_a_ = Fastener(self)
-	self.twist_screw_b_ = Fastener(self)
+	self.screw_a_ = Fastener(self, comment="screw_a")
+	self.screw_c_ = Fastener(self, comment="screw_c")
+	self.screw_d_ = Fastener(self, comment="screw_d")
+	self.screw_f_ = Fastener(self, comment="screw_f")
+	self.screw_g_ = Fastener(self, comment="screw_g")
+	self.screw_i_ = Fastener(self, comment="screw_i")
+	self.screw_j_ = Fastener(self, comment="screw_j")
+	self.screw_k_ = Fastener(self, comment="screw_k")
+	self.screw_l_ = Fastener(self, comment="screw_l")
+	self.screw_m_ = Fastener(self, comment="screw_m")
+	self.screw_n_ = Fastener(self, comment="screw_n")
+	self.screw_o_ = Fastener(self, comment="screw_o")
+	self.screw_p_ = Fastener(self, comment="screw_p")
+	self.screw_q_ = Fastener(self, comment="screw_q")
+	self.drive_screw_a_ = Fastener(self, comment="drive_screw_a")
+	self.drive_screw_b_ = Fastener(self, comment="drive_screw_b")
+	self.twist_screw_a_ = Fastener(self, comment="twist_screw_a")
+	self.twist_screw_b_ = Fastener(self, comment="twist_screw_b")
 
     def construct(self):
 	ma = motor_assembly = self.up
@@ -3073,10 +3073,10 @@ class Turn_Table(Part):
 class Turn_Table_Bottom_Screws(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
-	self.turn_table_bottom_screw0_ = Fastener(self)
-	self.turn_table_bottom_screw1_ = Fastener(self)
-	self.turn_table_bottom_screw2_ = Fastener(self)
-	self.turn_table_bottom_screw3_ = Fastener(self)
+	self.turn_table_bottom_screw0_ = Fastener(self, comment="screw0")
+	self.turn_table_bottom_screw1_ = Fastener(self, comment="screw1")
+	self.turn_table_bottom_screw2_ = Fastener(self, comment="screw2")
+	self.turn_table_bottom_screw3_ = Fastener(self, comment="screw3")
 
     def construct(self):
 	# Grab some values from *wheel_assembly*:
@@ -3210,10 +3210,10 @@ class Turn_Table_Sheet(Part):
 class Twist_Motor_Pulley_Screws(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
-	self.screw0_ = Fastener(self)
-	self.screw1_ = Fastener(self)
-	self.screw2_ = Fastener(self)
-	self.screw3_ = Fastener(self)
+	self.screw0_ = Fastener(self, comment="screw0")
+	self.screw1_ = Fastener(self, comment="screw1")
+	self.screw2_ = Fastener(self, comment="screw2")
+	self.screw3_ = Fastener(self, comment="screw3")
 
     def construct(self):
 	# Grab some values from *wheel_assembly*:
@@ -3260,10 +3260,10 @@ class Twist_Motor_Pulley_Screws(Part):
 class Twist_Wheel_Pulley_Screws(Part):
     def __init__(self, up):
 	Part.__init__(self, up)
-	self.screw0_ = Fastener(self)
-	self.screw1_ = Fastener(self)
-	self.screw2_ = Fastener(self)
-	self.screw3_ = Fastener(self)
+	self.screw0_ = Fastener(self, comment="screw0")
+	self.screw1_ = Fastener(self, comment="screw1")
+	self.screw2_ = Fastener(self, comment="screw2")
+	self.screw3_ = Fastener(self, comment="screw3")
 
     def construct(self):
 	# Grab some values from *wheel_assembly*:

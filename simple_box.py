@@ -4,63 +4,63 @@ from EZCAD3 import *   # The EZCAD (revision 3) classes:
 
 class Simple_Box(Part):
 
-    def __init__(self, up, dx=L(mm=100.0), dy=L(mm=50.0),
-      dz=L(25.0), wall_thickness=L(mm=5.0),
-      material=Material("plastic", "ABS")):
-	# Initialize the *Part*:
-	Part.__init__(self, up)
-
-	# Remember the initialization values:
-	self.dx_l = dx
-	self.dy_l = dy
-	self.dz_l = dz
-	self.wall_thickness_l = wall_thickness
-	self.material_m = material
-
-	# Instantiate the sub-*Part*'s:
-	self.base_ = Simple_Box_Base(self)
-	self.cover_ = Simple_Box_Cover(self)
+    def __init__(self, up):
+	assert isinstance(up, Part) or up == None
+	Part.__init__(self, self)
+	self.base_ = Simple_Box_Base()
+	self.cover_ = Simple_Box_Cover()
 
     def construct(self):
 	pass
 
 class Simple_Box_Base(Part):
 
-    def __init__(self, up, place = True):
-	Part.__init__(self, up, place)
+    def __init__(self, up):
+	assert isinstance(up, Part) or up == None
+	assert isinstance(up, Part) or up == None
+	Part.__init__(self, self)
 
     def construct(self):
 	# Grab some values from *box*:
 	box = self.up
-	dx = box.dx_l
-	dy = box.dy_l
-	dz = box.dz_l
-	wall_thickness = box.wall_thickness_l
-	material = box.material_m
-
-	# Add another member variable:
-	self.height_l = height = dz - wall_thickness
-	zero = L()
+	self.box.dx_l = dx = L(mm=100.0)
+	self.box.dy_l = dy = L(mm=100.0)
+	self.box.dz_l = dz = L(mm=25.00)
+	self.wall_thickness_l = wall_thickness = L(mm=10.0)
+	self.material_m = Material("plastic")
+	self.color_c = Color("green")
 
 	# Start with a solid block of the right dimensions:
-	height = dz - wall_thickness
+	zero = L()
+	extra = L(mm=6.0)
+	self.extra(extra, extra, zero)
 	self.block(comment = "Initial block of material",
-	  material = material,
-	  color = Color("blue"),
 	  corner1 = P(-dx/2, -dy/2, zero),
-	  corner2 = P( dx/2,  dy/2, height))
+	  corner2 = P( dx/2,  dy/2, -dz),
+	  material = material,
+	  color = color,
+	  top = "t")
+
+	# Mount up the block:
+	self.vice_position("Mount Block", self.t, self.tn, self.tw)
+	self.tooling_plate("Tooling Plate", "2r 2c")
+	self.tooling_plate_mount("Tooling Plate Mount")
+	self.cnc_flush()
 
 	# Pocket out the body of the box:
+	bottom_corner = P(-dx/2 + thickness, -dy/2 + thickness, dz+L(mm=3.0))
+	top_corner =    P( dx/2 - thickness,  dy/2 - thickness, zero)
+	
 	self.simple_pocket(comment = "Box Pocket",
-	  corner1 = self.bsw + \
-            P(wall_thickness, wall_thickness, wall_thickness),
-	  corner2 = self.tne - \
-            P(wall_thickness, wall_thickness, zero),
-          pocket_top = "t")
+	  bottom_corner1 = bottom_corner,
+	  top_corner = top_corner,
+	  radius = L(inch="1/8"),
+	  pocket_top ="t")
 
 class Simple_Box_Cover(Part):
 
-    def __init__(self, up, place = True):
+    def __init__(self, up):
+	assert isinstance(up, Part) or up == None
 	Part.__init__(self, up, place)
 
     def construct(self):

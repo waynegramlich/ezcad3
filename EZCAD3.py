@@ -363,6 +363,11 @@ class L:
 	# Return result:
 	return Angle(rad = math.atan2(self._mm, dx._mm))
 
+    def average(self, length):
+	""" *L*: Return the average of the two *L* objects (i.e. *self* and *length)
+	    as an *L* object. """
+	return L((self._mm + length._mm) / 2)
+
     def centimeters(self):
 	""" L: Return {self} as a scalar measured in centimeters. """
 
@@ -1307,23 +1312,73 @@ class Material:
 
 class Bounding_Box:
 
-    def __init__(self, *points):
-	""" *Bounding_Box*: Initialize *self* with *ex*, *wx*, *ny*, *sy*,
-	    *tz*, and *bz*.
+    def __init__(self, points = []):
+	""" *Bounding_Box*: Initialize the *Bounding_Box* object (i.e. *self*)
+	    with each point in *points*.
 	"""
 
 	# Verify argument types:
-	assert isinstance(points, list)
+	assert isinstance(points, list) or isinstance(points, tuple)
 	for point in points:
 	    assert isinstance(point, P)
 
-	# Intialize
-	tne = None
-	bsw = None
+	# Intialize the *Bounding_Box* object (i.e. *self*):
+	zero = L()
+	self._is_empty = True	# *True* if no points have been added in yet.
+	self._east = zero	# Highest X coordinate
+	self._west = zero	# Lowest X coordinate
+	self._north = zero	# Highest Y coordinate
+	self._south = zero	# Lowest Y cooridinate
+	self._top = zero	# Highest Z coordinate
+	self._bottom = zero	# Lowest Z coordinate
 
-	# Expand bounding box by each *point* in *points*:
+	# Merge each *point* in *points* into the *Bounding_Box* object (i.e. *self*):
 	for point in points:
-	    self.expand(point)
+	    self.point_expand(point)
+
+    def __eq__(self, bounding_box2):
+	""" *Bounding_Box*: Return *True* if the *Bounding_Box* object
+	    (i.e. *self*) matches *bounding_box2* and *False* otherwise.
+	"""
+	
+	# Verify argument types:
+	assert isinstance(bounding_box2, Bounding_Box)
+
+	# Use *bounding_box1* instead of *self*.
+	bounding_box1 = self
+
+	# Test for equality:
+	result = False
+	if bounding_box1._is_empty:
+	    # *bounding_box1* is empty:
+	    if bounding_box2._is_empty:
+		# Both *bounding_box1* and *bounding_box2* are empty; so we return *True*:
+		result = True
+	    else:
+		# *bounding_box1* is empty, but *bounding_box2* is non-empty; clearly not equal:
+		result = False
+	else:
+	    # *bounding_box1* is non-empty:
+	    if bounding_box2._is_empty:
+		# *bounding_box1* is non-empty, but *bounding_box2* is empty; clearly not equal:
+		result = False
+	    else:
+		# Both *bounding_box1* and *bounding_box2* are non-empty; compare all 6 pairs
+		# bounding box coordinates:
+		result = True
+		if bounding_box1._east   != bounding_box2._east:
+		    result = False
+		if bounding_box1._west   != bounding_box2._west:
+		    result = False
+		if bounding_box1._north  != bounding_box2._north:
+                    result = False
+		if bounding_box1._south  != bounding_box2._south:
+		    result = False
+		if bounding_box1._top    != bounding_box2._top:
+                    result = False
+		if bounding_box1._bottom != bounding_box2._bottom:
+		    result = False
+	return result
 
     def __format__(self, format_text):
 	""" *Bounding_Box*: Return the values of the *Bounding_Box* object
@@ -1333,49 +1388,198 @@ class Bounding_Box:
 	# Verify argument types:
 	assert isinstance(format_text, str)
 
-	# Return the bounding box string:
-	return "[tne={0} bsw={1}".format(self._tne, self._bsw)
+	if self._is_empty:
+	    result = "[None]"
+	else:
+	    result = "[bsw={0} tne={1}]".format(self.bsw_get(), self.tne_get())
+	return result
 
-    def expand(self, point):
-	""" *Bounding_Box*: Expand the *Bounding_Box* object (i.e. *self*)
-	    to enclose *point*.
+    def __ne__(self, bounding_box2):
+	""" *Bounding_Box*: Return *False* if the *Bounding_Box* object
+	    (i.e. *self*) matches *bounding_box2* and *True* otherwise.
 	"""
+	
+	# Verify argument types:
+	assert isinstance(bounding_box2, Bounding_Box)
+
+	return not self.__eq__(bounding_box2)
+
+    def bounding_box_expand(self, bounding_box):
+	""" *Bounding_Box*: Expand the *Bounding_Box_Object* (i.e. *self*)
+	    to contain *bounding_box*.
+	"""	
 
 	# Verify argument types:
-	assert isinstance(point, P)
+	assert isinstance(bounding_box, Bounding_Box)
 
-	# Grap *tne* and *bsw*:
-	tne = self._tne
-	bsw = self._bsw
+	# Since both boxes are aligned in the X/Y/Z axes, we can get
+	# by with just expanding based on the two corners:
+	if not extra_bounding_box.is_empty:
+	    self.point_expand(extra_bounding_box.tne_get())
+	    self.point_expand(extra_bounding_box.bsw_get())
 
-	# Deal with an empty bounding box first:
-	if tne == None:
-	    # Empty *Bounding_Box*:
-	    self._tne = point
-	    self._bsw = point
-	else:
-	    # Non-empty *Bounding_Box*:
+    def b_get(self):
+	""" *Bounding_Box*: Return the center of the bottom rectangle of the *Bounding_Box* object
+	    (i.e. *self*) as a point (i.e. *P*) object. """
 
-	    # Update the minimum and maximum *x*:
-	    x = point.x
-	    new_e = tne.x.maximum(x)
-	    new_w = bsw.x.minimum(x)
+	return P(self._east.average(self._west), self._north.average(self._south), self._bottom)
+	
+    def be_get(self):
+	""" *Bounding_Box*: Return the center of the bottom/east edge of the *Bounding_Box* object
+	    (i.e. *self*) as a point (i.e. *P*) object. """
 
-	    # Update the minimum and maximum *y*:
-	    y = point.y
-	    new_n = tne.y.maximum(y)
-	    new_s = bsw.y.minimum(y)
+	return P(self._east, self._north.average(self._south), self._bottom)
 
-	    # Update the minimum and maximum *z*:
-	    z = point.z
-	    new_t = tne.z.maximum(z)
-	    new_b = bsw.z.minimum(z)
+    def bn_get(self):
+	""" *Bounding_Box*: Return the center of the bottom/north edge of the *Bounding_Box* object
+	    (i.e. *self*) as a point (i.e. *P*) object. """
 
-	    # Update *tne* and *bsw* if anything has changed:
-	    if new_e > x or new_n > y or new_t > z:
-		self._tne = P(new_e, new_n, new_t)
-	    if new_w < x or new_s < y or new_b < z:
-		self._bsw = P(new_w, new_s, new_b)
+	return P(self._east.average(self._west), self._north, self._bottom)
+
+    def bne_get(self):
+	""" *Bounding_Box*: Return the center of the bottom/north/east corner of the
+	    *Bounding_Box* object (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._east, self._north, self._bottom)
+
+    def bnw_get(self):
+	""" *Bounding_Box*: Return the center of the bottom/north/west corner of the
+	    *Bounding_Box* object (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._west, self._north, self._bottom)
+
+    def bs_get(self):
+	""" *Bounding_Box*: Return the center of the bottom/south edge of the *Bounding_Box* object
+	    (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._east.average(self._west), self._south, self._bottom)
+
+    def bse_get(self):
+	""" *Bounding_Box*: Return the center of the bottom/south/eest corner of the
+	    *Bounding_Box* object (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._east, self._south, self._bottom)
+
+    def bsw_get(self):
+	""" *Bounding_Box*: Return the bottom/south/west corner corner of the
+	    *Bounding_Box* object (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._west, self._south, self._bottom)
+
+    def bw_get(self):
+	""" *Bounding_Box*: Return the center of the bottom/west edge of the *Bounding_Box* object
+	    (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._west, self._north.average(self._south), self._bottom)
+
+    def c_get(self):
+	""" *Bounding_Box*: Return the center point of the *Bounding_Box* object (i.e. *self*.) """
+
+	return P(self._east.average(self._west),
+	  self._north.average(self._south), self._bottom.average(self._top))
+
+    def e_get(self):
+	""" *Bounding_Box*: Return the center of east the *Bounding_Box* object (i.e. *self*)
+	    rectangle as a point (i.e. *P*) object. """
+
+	return P(self._east, self._north.average(self._south), self._top.average(self._bottom))
+
+    def n_get(self):
+	""" *Bounding_Box*: Return the center of north the *Bounding_Box* object (i.e. *self*)
+	    rectangle as a point (i.e. *P*) object. """
+
+	return P(self._east.average(self._west), self._north, self._top.average(self._bottom))
+
+    def ne_get(self):
+	""" *Bounding_Box*: Return the center of north/east the *Bounding_Box* (i.e. *self*)
+	    edge as a point (i.e. *P*) object. """
+
+	return P(self._east, self._north, self._top.average(self._bottom))
+
+    def nw_get(self):
+	""" *Bounding_Box*: Return the center of north/east the *Bounding_Box* (i.e. *self*)
+	    edge as a point (i.e. *P*) object. """
+
+	return P(self._west, self._north, self._top.average(self._bottom))
+
+    def s_get(self):
+	""" *Bounding_Box*: Return the center of south the *Bounding_Box* object (i.e. *self*)
+	    rectangle as a point (i.e. *P*) object. """
+
+	return P(self._east.average(self._west), self._south, self._top.average(self._bottom))
+
+    def se_get(self):
+	""" *Bounding_Box*: Return the center of south/east the *Bounding_Box* object (i.e. *self*)
+	    edge as a point (i.e. *P*) object. """
+
+	return P(self._east, self._south, self._top.average(self._bottom))
+
+    def sw_get(self):
+	""" *Bounding_Box*: Return the center of south/west the *Bounding_Box* object (i.e. *self*)
+	    edge as a point (i.e. *P*) object. """
+
+	return P(self._west, self._south, self._top.average(self._bottom))
+
+    def w_get(self):
+	""" *Bounding_Box*: Return the center of west the *Bounding_Box* object (i.e. *self*)
+	    rectangle as a point (i.e. *P*) object. """
+
+	return P(self._west, self._north.average(self._south), self._top.average(self._bottom))
+
+    def t_get(self):
+	""" *Bounding_Box*: Return the center of the top rectangle of the *Bounding_Box* object
+	    (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._east.average(self._west), self._north.average(self._south), self._top)
+	
+    def te_get(self):
+	""" *Bounding_Box*: Return the center of the top/east edge of the *Bounding_Box* object
+	    (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._east, self._north.average(self._south), self._top)
+
+    def tn_get(self):
+	""" *Bounding_Box*: Return the center of the top/north edge of the *Bounding_Box* object
+	    (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._east.average(self._west), self._north, self._top)
+
+    def tne_get(self):
+	""" *Bounding_Box*: Return the center of the top/north/east corner of the
+	    *Bounding_Box* object (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._east, self._north, self._top)
+
+    def tnw_get(self):
+	""" *Bounding_Box*: Return the center of the top/north/west corner of the
+	    *Bounding_Box* object (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._west, self._north, self._top)
+
+    def ts_get(self):
+	""" *Bounding_Box*: Return the center of the top/south edge of the *Bounding_Box* object
+	    (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._east.average(self._west), self._south, self._top)
+
+    def tse_get(self):
+	""" *Bounding_Box*: Return the center of the top/south/eest corner of the
+	    *Bounding_Box* object (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._east, self._south, self._top)
+
+    def tsw_get(self):
+	""" *Bounding_Box*: Return the top/south/west corner corner of the
+	    *Bounding_Box* object (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._west, self._south, self._top)
+
+    def tw_get(self):
+	""" *Bounding_Box*: Return the center of the top/west edge of the *Bounding_Box* object
+	    (i.e. *self*) as a point (i.e. *P*) object. """
+
+	return P(self._west, self._north.average(self._south), self._top)
+
 
     def matrix_apply(self, matrix):
 	""" *Bounding_Box*: Return a new *Bounding_Box* object that bounds
@@ -1386,53 +1590,161 @@ class Bounding_Box:
 	# Verify argument types:
 	assert isinstance(matrix, Matrix)
 
-	# Grap *tne* and *bsw*:
-	tne = self._tne
-	bsw = self._bsw
-
-	# Extract each of the X/Y/Z coordinate values:
-	t = tne.z
-	n = tne.y
-	e = tne.x
-	b = bsw.z
-	s = bsw.y
-	w = bsw.x
-
-	# Contstruct the other 6 points that make up the bounding box:
-	tnw = P(w, n, t)
-	tse = P(e, s, t)
-	tsw = P(w, s, t)
-	bne = P(e, n, b)
-	bnw = P(w, n, b)
-	bse = P(e, s, b)
+	# Contstruct the other 8 points that make up the bounding box:
+	tne = self.tne_get()
+	tnw = self.tnw_get()
+	tse = self.tse_get()
+	tsw = self.tsw_get()
+	bne = self.bne_get()
+	bnw = self.bnw_get()
+	bse = self.bse_get()
+	bsw = self.bsw_get()
 
 	# Now construct the new *result* bounding box by applying *matrix*
 	# to all 8 corners of the original bounding box and return it:
 	result = Bounding_Box(
-	  matrix.point_multiply(tne),
+	  [matrix.point_multiply(tne),
 	  matrix.point_multiply(tnw),
 	  matrix.point_multiply(tse),
 	  matrix.point_multiply(tsw),
 	  matrix.point_multiply(bne),
 	  matrix.point_multiply(bnw),
 	  matrix.point_multiply(bse),
-	  matrix.point_multiply(bsw))
+	  matrix.point_multiply(bsw)])
 	return result
+
+    def point_expand(self, point):
+	""" *Bounding_Box*: Expand the *Bounding_Box* object (i.e. *self*)
+	    to enclose *point*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(point, P)
+
+	# Extract *x*/*y*/*z* from *point*:
+	x = point.x
+	y = point.y
+	z = point.z
+
+	# Deal with an empty bounding box first:
+	if self._is_empty:
+	    # The *Bounding_Box* object (i.e. *self*) so mark it as non_empty and make
+            # exactly enclose *point*:
+	    self._east = x
+	    self._west = x
+	    self._north = y
+	    self._south = y
+	    self._top = z
+	    self._bottom = z
+	else:
+	    # Update the minimum and maximum *x*:
+	    self._east =   x.maximum(self._east)
+	    self._west =   x.minimum(self._west)
+	    self._north =  y.maximum(self._north)
+	    self._south =  y.minimum(self._south)
+	    self._top =    z.maximum(self._top)
+	    self._bottom = z.minimum(self._bottom)
+
+	# Sure that we mark everything as not empty:
+	self._is_empty = False
+
+    @staticmethod
+    def unit_test():
+	zero = L()
+	x1 = L(-1.0)
+	x2 = L( 1.0)
+	y1 = L(-2.0)
+	y2 = L( 2.0)
+	z1 = L(-3.0)
+	z2 = L( 3.0)
+	
+	point1 = P(x1, y1, z1)
+	point2 = P(x2, y2, z2)
+
+	bounding_box = Bounding_Box()
+	print("bounding_box 1: {0}".format(bounding_box))
+	bounding_box.point_expand(point1)
+	print("bounding_box 2: {0}".format(bounding_box))
+	bounding_box.point_expand(point2)
+	print("bounding_box 3: {0}".format(bounding_box))
+
+	b = bounding_box.b_get()
+	be = bounding_box.be_get()
+	bn = bounding_box.bn_get()
+	bne = bounding_box.bne_get()
+	bnw = bounding_box.bnw_get()
+	bs = bounding_box.bs_get()
+	bse = bounding_box.bse_get()
+	bsw = bounding_box.bsw_get()
+	bw = bounding_box.bw_get()
+
+	c = bounding_box.c_get()
+	e = bounding_box.e_get()
+	n = bounding_box.n_get()
+	ne = bounding_box.ne_get()
+	nw = bounding_box.nw_get()
+	s = bounding_box.s_get()
+	se = bounding_box.se_get()
+	sw = bounding_box.sw_get()
+	w = bounding_box.w_get()
+
+	t = bounding_box.t_get()
+	te = bounding_box.te_get()
+	tn = bounding_box.tn_get()
+	tne = bounding_box.tne_get()
+	tnw = bounding_box.tnw_get()
+	ts = bounding_box.ts_get()
+	tse = bounding_box.tse_get()
+	tsw = bounding_box.tsw_get()
+	tw = bounding_box.tw_get()
+
+	assert b == P(zero, zero, z1), "{0}".format(b)
+	assert be == P(x2, zero, z1), "{0}".format(be)
+	assert bn == P(zero, y2, z1), "{0}".format(bn)
+	assert bne == P(x2, y2, z1), "{0}".format(bne)
+	assert bnw == P(x1, y2, z1), "{0}".format(bnw)
+	assert bs == P(zero, y1, z1), "{0}".format(bs)
+	assert bse == P(x2, y1, z1), "{0}".format(bse)
+	assert bsw == P(x1, y1, z1), "{0}".format(bsw)
+	assert bw == P(x1, zero, z1), "{0}".format(bw)
+
+	assert c == P(zero, zero, zero), "{0}".format(c)
+	assert e == P(x2, zero, zero), "{0}".format(e)
+	assert n == P(zero, y2, zero), "{0}".format(n)
+	assert ne == P(x2, y2, zero), "{0}".format(ne)
+	assert nw == P(x1, y2, zero), "{0}".format(nw)
+	assert s == P(zero, y1, zero), "{0}".format(s)
+	assert se == P(x2, y1, zero), "{0}".format(se)
+	assert sw == P(x1, y1, zero), "{0}".format(sw)
+	assert w == P(x1, zero, zero), "{0}".format(w)
+
+	print("t={0}".format(t))
+	assert t == P(zero, zero, z2), "{0}".format(t)
+	assert te == P(x2, zero, z2), "{0}".format(te)
+	assert tn == P(zero, y2, z2), "{0}".format(tn)
+	assert tne == P(x2, y2, z2), "{0}".format(tne)
+	assert tnw == P(x1, y2, z2), "{0}".format(tnw)
+	assert ts == P(zero, y1, z2), "{0}".format(ts)
+	assert tse == P(x2, y1, z2), "{0}".format(tse)
+	assert tsw == P(x1, y1, z2), "{0}".format(tsw)
+	assert tw == P(x1, zero, z2), "{0}".format(tw)
 
 # *Code* class:
 
 class Code:
 
-    def __init__(self):			# RS-232 generator
+    def __init__(self):
+	""" *Code*:
+	"""
+
 	zero = L()
 
+	# Load up *self*:
 	self.blocks = []		#  [*Code_Block*]  Output ready blocks
-	self.text = ""			# Text for current block
 	self.dxf = ""			# Text for dxf file
 	self.dxf_x_offset = zero	# DXF X offset
 	self.dxf_y_offset = zero	# DXF Y offset
-	self.vice_x = zero
-	self.vice_y = zero
+	self.text = ""			# Text for current block
 	self.z_rapid = zero		# Z above which Z rapids are allowed
 	self.z_safe = zero		# Z above XY rapids are safe
 
@@ -1470,6 +1782,21 @@ class Code:
 	self.z_safe_f = Speed()	# Feed to perform z safe operation at
 	self.z_safe_pending = False	# {true}=>need to do z safe move
 	self.z_safe_s = Code_Hertz()	# Speed to perform z safe operation at
+
+    def configure(self, tool, vice_x, vice_y):
+	""" *Code*: Configure the *Code* object (i.e. *self*) to use
+	    *tool*, *vice_x*, and *vice_y*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(tool, Tool)
+	assert isinstance(vice_x, L)
+	assert isinstance(vice_y, L)
+
+	# Initialize *code*:
+	code.tool = tool
+	code.vice_x = vice_x
+	code.vice_y = vice_y
 
     def flush(self, program_number):
 	""" *Code*: Generate CNC code starting at *program_number* for
@@ -1678,6 +2005,38 @@ class Code:
 	#call d@(form@("<=flush@Code(*, %d%) => %d%\n\") %
 	#  f@(original_program_number) / f@(program_number))
 	return program_number
+
+#FIXME: Is this used any more?!!!
+
+class Code_Block:
+    """ *Code_Block*: 
+    """
+
+    def __init__(self, part, tool, vice_x, vice_y):
+	""" *Code_Block*: Initialize the *Code_Block* object (i.e. *self*)
+	    to contain *part*, *tool*, *vice_x*, and *vice_y*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(tool, Tool)
+	assert isinstance(vice_x, L)
+	assert isinstance(vice_y, L)
+
+	self.code = Code()		# Parent *Code* ooject:
+	self.comment = ""		# Comment for block
+	self.speed = Speed()		# Nominal feed rate for this block
+	self.operations = -[]		# Operations for block
+	self.part = part		# *Part* that owns this *Code_Block*
+	self.priority = 0		# Priority block group
+	self.program_number = 0		# Program number for block
+	self.spindle = Hertz()		# Nominal speed rate for this block
+	self.text = ""			# Final text of block
+	self.tool = Tool()		# *Tool* associated with block
+	self.uid = 0			# Uniquie id for Block (for debugging)
+	self.vice_x = L()
+	self.vice_y = L()
+
 
 class Code_Hertz:
 
@@ -2014,6 +2373,8 @@ class Color:
 
 	return "[r={0:.2f}, g={1:.2f}, b={2:.2f}, a={3:.2f}]".format(
 	  self.red, self.green, self.blue, self.alpha)
+
+# These classes are unused???
 
 class Indexed_Point:
     def __init__(self, x, y, label, index):
@@ -2712,6 +3073,37 @@ class EZCAD3:
 	self._xml_stream = None
 	self._bases_table = {}
 
+	self._bounding_box_dispatch = {
+	  "b":   Bounding_Box.b_get,
+	  "be":  Bounding_Box.be_get,
+	  "bn":  Bounding_Box.bn_get,
+	  "bne": Bounding_Box.bne_get,
+	  "bnw": Bounding_Box.bnw_get,
+	  "bs":  Bounding_Box.bs_get,
+	  "bse": Bounding_Box.bse_get,
+	  "bsw": Bounding_Box.bsw_get,
+	  "bw":  Bounding_Box.bw_get,
+	  "c":   Bounding_Box.c_get,
+	  "e":   Bounding_Box.e_get,
+	  "n":   Bounding_Box.n_get,
+	  "ne":  Bounding_Box.ne_get,
+	  "nw":  Bounding_Box.nw_get,
+	  "s":   Bounding_Box.s_get,
+	  "se":  Bounding_Box.se_get,
+	  "sw":  Bounding_Box.sw_get,
+	  "t":   Bounding_Box.t_get,
+	  "te":  Bounding_Box.te_get,
+	  "tn":  Bounding_Box.tn_get,
+	  "tne": Bounding_Box.tne_get,
+	  "tnw": Bounding_Box.tnw_get,
+	  "ts":  Bounding_Box.ts_get,
+	  "tse": Bounding_Box.tse_get,
+	  "tsw": Bounding_Box.tsw_get,
+	  "tw":  Bounding_Box.tw_get,
+	  "w":   Bounding_Box.w_get,
+	}
+
+
 	EZCAD3.ezcad = self
 
     def process(self, part):
@@ -2768,7 +3160,7 @@ class Operation:
 	assert isinstance(sub_priority, int)
 	assert isinstance(tool, Tool)
 	assert isinstance(order, int)
-	assert isinstance(follows, Operation)
+	assert follows is None or isinstance(follows, Operation)
 
 	# Load up *self*:
 	self.name = name
@@ -2776,13 +3168,13 @@ class Operation:
 	self.comment = comment
 	self.follows = follows
 	self.index = -1
+	self.position = 0 # part.position_count
 	self.order = order
-	self.position = part.position_count
-	self.priority = part.priority
+	self.priority = part._priority
 	self.sub_priority = sub_priority
 	self.tool = tool
-	self.vice_x = part.vice_x
-	self.vice_y = part.vice_y
+	self.vice_x = part._vice_x
+	self.vice_y = part._vice_y
 
     def compare(self, operation2):
 	""" *Operation*: Return -1, 0, or 1 depending upon whether *operation1*
@@ -3048,8 +3440,8 @@ class Operation_Dowel_Pin(Operation):
     """ *Operation_Dowel_Pin* is a class that implements a dowel pin operation.
     """
 
-    def __init_(self, part, comment, sub_priority, tool, order, follows,
-      name, kind, diameter, edge_x, edge_y, original_x, original_y, original_z,
+    def __init__(self, part, comment, sub_priority, tool, order, follows,
+      diameter, edge_x, edge_y, original_x, original_y, original_z,
       plunge_x, plunge_y, tip_depth, z_stop):
 	""" *Operation_Dowel_Pin*: Initialize an *Operation_Dowel_Pin*
 	    object to contain *part*, *comment*, *sub_priority*, *tool*,
@@ -3064,7 +3456,7 @@ class Operation_Dowel_Pin(Operation):
 	assert isinstance(sub_priority, int)
 	assert isinstance(tool, Tool)
 	assert isinstance(order, int)
-	assert isinstance(follows, Operation)
+	assert follows is None or isinstance(follows, Operation)
 	assert isinstance(diameter, L)
 	assert isinstance(edge_x, L)
 	assert isinstance(edge_y, L)
@@ -3077,7 +3469,7 @@ class Operation_Dowel_Pin(Operation):
 	assert isinstance(z_stop, L)
 
 	# Initialize super class:
-	Operation.__init(self, "Dowel_Pin", KIND_DOWEL_PIN,
+	Operation.__init__(self, "Dowel_Pin", Operation.KIND_DOWEL_PIN,
 	  part, comment, sub_priority, tool, order, follows)
 
 	# Load up the rest of *self*:
@@ -4330,20 +4722,11 @@ class Part:
 	""" *Part*: Initialize *self* to have a parent of *up*. """
 
         # Check argument types:
-	#assert name == None or isinstance(name, str)
-	#assert up == None or isinstance(up, Part)
+	assert up == None or isinstance(up, Part)
+	assert name == None or isinstance(name, str)
 
 	# Some useful abbreviations:
 	zero = L()
-
-	# Find all the child *Part*'s:
-	#children = []
-	#for attribute_name in dir(self):
-	#    attribute = getattr(self, attribute_name)
-        #    if isinstance(attribute, Part):
-	#	children.append(attribute)
-	#	#print("{0}['{1}'] = {2}". \
-	#	#  format(name, attribute_name, attribute._name))
 
 	ezcad = EZCAD3.ezcad
 
@@ -4351,8 +4734,14 @@ class Part:
 	if name == None:
 	    name = self.__class__.__name__
 	self._axis = None
+	self._bounding_box = Bounding_Box()
 	self._center = None
 	self._color = None
+	self._dx_original = zero
+	self._dxf_x_offset = zero
+	self._dxf_y_offset = zero
+	self._dy_original = zero
+	self._dz_original = zero
 	self._dxf_scad_lines = []
 	self._ezcad = ezcad
 	self._is_part = False	
@@ -4380,27 +4769,9 @@ class Part:
 	self._z_safe = L(inch=0.5)
 	self.up = up
 
-	# Initialize the bounding box information:
-	big = L(mm=987654321.0)
-	self._box_changed_count = 0
-	self._box_points_list = []
-	self.ex = -big
-	self.wx = big
-	self.ny = -big
-	self.sy = big
-	self.tz = -big
-	self.bz = big
-	self._box_recompute("Part.__init__")
-	#print("initialize {0}".format(name))
-
-	#if up_type != none_type:
-	#    #print("Part.__init__: perform place")
-	#    place = up.place(self, name = name)
-	#    #print("Part.__init__: place = {0:m}".format(place))
-
 	#print("<=Part.__init__(*, '{0}', *, place={1})".format(name, place))
 
-    def _bounding_box_check(self, indent):
+    def ___bounding_box_check(self, indent):
 	box_points_list = self._box_points_list
 	box_points_list_size = len(box_points_list)
 	assert box_points_list_size > 0
@@ -4418,7 +4789,94 @@ class Part:
 		assert isinstance(sub_part, Part)
 		sub_part._bounding_box_check(indent + 1)
 
-    def _bounding_box_update(self, bounding_box, comment, place,
+    def xxxxxx_bounding_box_set(self, bounding_box):
+	""" *Part*: For the *Part* object (i.e. *self*), set the bounding
+	    box to *bounding_box*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(bounding_box, Bounding_Box)
+	assert not bounding_box.is_empty()
+
+	# Grab *tne* and *bsw* from *bounding_box*:
+	tne = bounding_box._tne
+	bsw = bounding_box._bsw
+
+	# Grab the 6 X/Y/Z coordinates:
+	self.tz = tz = tne.z
+	self.ny = ny = tne.y
+	self.ex = ex = tne.x
+	self.bz = bz = bsw.z
+	self.sy = sy = bsw.y
+	self.wx = wx = bsw.x
+
+	# Compute the center coordinates:
+	self.cx = cx = (ex + wx) / 2
+	self.cy = cy = (ny + sy) / 2
+	self.cz = cz = (tz + bz) / 2
+
+	# Fill in the slices:
+	#      tnw--tn---tne     nw----n----ne     bnw--bn---bne
+	#      |     |     |     |     |     |     |     |     |
+	#      tw----t----te     w-----c-----e     bw----b----be
+	#      |     |     |     |     |     |     |     |     |
+	#      tsw--ts---tse     sw----s----se     bsw--bs---bse
+	#       (Top Slice)      (Center Slice)    (Bottom Slice)
+
+	# Top Slice:
+	#      tnw--tn---tne
+	#      |     |     |
+	#      tw----t----te
+	#      |     |     |
+	#      tsw--ts---tse
+	self.tnw = P(wx, ny, tz)
+	self.tn =  P(cx, ny, tz)
+	self.tne = P(ex, ny, tz)
+	self.tw =  P(wx, cy, tz)
+	self.t  =  P(cx, cy, tz)
+	self.te  = P(ex, cy, tz)
+	self.tsw = P(wx, sy, tz)
+	self.ts =  P(cx, sy, tz)
+	self.tse = P(ex, sy, tz)
+
+	# Center slice:
+	#      nw----n----ne
+	#      |     |     |
+	#      w-----c-----e
+	#      |     |     |
+	#      sw----s----se
+	#      (Center Slice)
+	self.nw = P(wx, ny, cz)
+	self.n =  P(cx, ny, cz)
+	self.ne = P(ex, ny, cz)
+	self.w =  P(wx, cy, cz)
+	self.c  = P(cx, cy, cz)
+	self.e  = P(ex, cy, cz)
+	self.sw = P(wx, sy, cz)
+	self.s =  P(cx, sy, cz)
+	self.se = P(ex, sy, cz)
+
+	# Bottom slice:
+	#      bnw--bn---bne
+	#      |     |     |
+	#      bw----b----be
+	#      |     |     |
+	#      bsw--bs---bse
+	#      (Bottom Slice)
+	self.bnw = P(wx, ny, bz)
+	self.bn =  P(cx, ny, bz)
+	self.bne = P(ex, ny, bz)
+	self.bw =  P(wx, cy, bz)
+	self.b  =  P(cx, cy, bz)
+	self.be  = P(ex, cy, bz)
+	self.bsw = P(wx, sy, bz)
+	self.bs =  P(cx, sy, bz)
+	self.bse = P(ex, sy, bz)
+
+	# Save the *boundig_box*:
+	self._bounding_box = bounding_box
+
+    def xxxxxxx___bounding_box_update(self, bounding_box, comment, place,
       trace = -1000000):
 	""" *Part*: Updated *self* with *bounding_box*, *place* and
 	    *comment*. """
@@ -4484,7 +4942,7 @@ class Part:
     # (a *Part* object) to be *point*.  If the value of *point* has changed
     # from the last time it was updated, the bounding box for *self* is
     # recomputed.
-    def _box_point_update(self, name, point, trace = -1000000):
+    def __box_point_update(self, name, point, trace = -1000000):
 	""" *Part*: Insert/update the point named *name* to *point*. """
 
 	# Check argument types:
@@ -4562,7 +5020,7 @@ class Part:
     #
     # <I>_recompute</I>() will recompute the bounding box for *self* (a bounding
     # *Box*) and enclosing parent bounding *Box*'s.
-    def _box_recompute(self, label):
+    def __box_recompute(self, label):
 	""" *Part*: (Internal use only) Recompute the bounding box corners. """
 
 	ezcad = self._ezcad
@@ -4886,6 +5344,9 @@ class Part:
 	    print("{0}<=Part._cylinder()".format(trace * ' '))
 
     def _dimensions_update(self, ezcad, trace):
+	""" *Part*: Update the dimensions of the *Part* object (i.e. *self*)
+	    and all of its children *Part*'s.
+	"""
 
 	assert isinstance(ezcad, EZCAD3)
 	self._ezcad = ezcad
@@ -4939,10 +5400,13 @@ class Part:
 		assert isinstance(attribute, int), \
 		  "{0}.{1} is not an int".format(name, attribute_name)
 		before_values[attribute_name] = attribute
-	    #else ignore *attribute_name*:
+	    else:
+		# ignore *attribute_name*:
+		pass
 
-	# Remember ...
-	before_box_changed_count = self._box_changed_count
+	# Reset the bounding box for *self*:
+	before_bounding_box = self._bounding_box
+	self._bounding_box = Bounding_Box()
 
 	# Peform dimension updating for *self*:
 	self.construct()
@@ -4965,45 +5429,55 @@ class Part:
 		      format(' ' * trace, name, attribute_name,
 		      before_value, after_value))
 
-	# Update bounding box with placed *Part* bounding boxes:
-	#for place in self._places.values():
+	# Now update the *bounding_box* for *self*:
+	after_bounding_box = self._bounding_box
 	for sub_part in sub_parts:
-	    # Grab some values from *place* and *part*:
-	    #place_part = place._part
-	    #place_name = place._name
-	    place = Place(center = self._center, axis = self._axis,
-	      rotate = self._rotate, translate = self._translate)
-	    forward_matrix = place._forward_matrix
+	    after_bounding_box.bounding_box_expand(sub_part._bounding_box)
+	if before_bounding_box != after_bounding_box:
+	    changed += 1
+	    self._bounding_box = after_bounding_box
 
-	    if trace >= 0:
-		print("{0}Part._dimensions_update:place={1}". \
-		  format(' ' * trace, place))
-		#print("{0}Part._dimensions_update:Merge {1:m} into {2:m}". \
-		#  format(' ' * trace, place_box, box))
+	    #self._bounding_box_set(after_bounding_box)
 
-	    self._box_point_update("[TNE]",
-	      forward_matrix.point_multiply(sub_part.tne))
-	    self._box_point_update("[TNW]",
-	      forward_matrix.point_multiply(sub_part.tnw))
-	    self._box_point_update("[TSE]",
-	      forward_matrix.point_multiply(sub_part.tse))
-	    self._box_point_update("[TSW]",
-	      forward_matrix.point_multiply(sub_part.tsw))
-	    self._box_point_update("BNE]",
-	      forward_matrix.point_multiply(sub_part.bne))
-	    self._box_point_update("[BNW]",
-	      forward_matrix.point_multiply(sub_part.bnw))
-	    self._box_point_update("[BSE]",
-	      forward_matrix.point_multiply(sub_part.bse))
-	    self._box_point_update("[BSW]",
-	      forward_matrix.point_multiply(sub_part.bsw))
+	# Update bounding box with placed *Part* bounding boxes:
+	# for place in self._places.values():
+	#for sub_part in sub_parts:
+	#    # Grab some values from *place* and *part*:
+	#    #place_part = place._part
+	#    #place_name = place._name
+	#    place = Place(center = self._center, axis = self._axis,
+	#      rotate = self._rotate, translate = self._translate)
+	#    forward_matrix = place._forward_matrix
+	#
+	#    if trace >= 0:
+	#	print("{0}Part._dimensions_update:place={1}". \
+	#	  format(' ' * trace, place))
+	#	#print("{0}Part._dimensions_update:Merge {1:m} into {2:m}". \
+	#	#  format(' ' * trace, place_box, box))
+	#
+	#    self._box_point_update("[TNE]",
+	#      forward_matrix.point_multiply(sub_part.tne))
+	#    self._box_point_update("[TNW]",
+	#      forward_matrix.point_multiply(sub_part.tnw))
+	#    self._box_point_update("[TSE]",
+	#      forward_matrix.point_multiply(sub_part.tse))
+	#    self._box_point_update("[TSW]",
+	#      forward_matrix.point_multiply(sub_part.tsw))
+	#    self._box_point_update("BNE]",
+	#      forward_matrix.point_multiply(sub_part.bne))
+	#    self._box_point_update("[BNW]",
+	#      forward_matrix.point_multiply(sub_part.bnw))
+	#    self._box_point_update("[BSE]",
+	#      forward_matrix.point_multiply(sub_part.bse))
+	#    self._box_point_update("[BSW]",
+	#      forward_matrix.point_multiply(sub_part.bsw))
 
 	# Determine whether *box* has changed:
-	after_box_changed_count = self._box_changed_count
-	if before_box_changed_count != after_box_changed_count:
-	    if ezcad._update_count > 10:
-		print("{0} bounding box changed".format(name))
-	    changed += 1
+	#after_box_changed_count = self._box_changed_count
+	#if before_box_changed_count != after_box_changed_count:
+	#    if ezcad._update_count > 10:
+	#	print("{0} bounding box changed".format(name))
+	#    changed += 1
 
 	if trace >= 0:
 	    print("{0}<=Part._dimensions_update('{1}')=>{2}". \
@@ -5017,6 +5491,7 @@ class Part:
 
 	# Verify argument types:
 	assert isinstance(program_number, int)
+	assert isinstance(self, Part)
 
 	# Use *part* instead of *self*:
 	part = self
@@ -5046,6 +5521,8 @@ class Part:
 	part.plunge_y = edge_y
     
 	code = part._shop.code
+	assert isinstance(part._shop, Shop)
+	assert isinstance(code, Code)
 	code.z_safe = part._z_safe
 	code.z_rapid = part._z_rapid
 	operations = part._operations
@@ -5108,7 +5585,7 @@ class Part:
 
 	# Use *part* instead of *self*:
 	part = self
-	part_name = part.name
+	part_name = part._name
 
 	# Set *debut* to True to trace this routine:
 	#debug = True
@@ -5121,10 +5598,10 @@ class Part:
 
 	shop = part._shop
 	code = shop.code
-	code.z = part.z_safe
-	code.dxf_x_offset = part.dxf_x_offset
-	code.dxf_y_offset = part.dxf_y_offset
-	operations = part.operations
+	code.z = part._z_safe
+	code.dxf_x_offset = part._dxf_x_offset
+	code.dxf_y_offset = part._dxf_y_offset
+	operations = part._operations
 	operation = operations[first_index]
 	tool = operation.tool
 	f = tool.feed
@@ -5135,20 +5612,19 @@ class Part:
 	assert tool != None
 
 	# FIXME: The code below should be methodized!!!
-	block = Code_Block(part, tool, vice_x, vice_y)
+	block = Block()
 	block.reset()
 	block.spindle = s
 	block.comment = operation.comment
 
 	# FIXME: Directly writing into the *Code* object is a bad idea!!!
+	code = Code(part, tool, vice_x, vice_y)
 	code.text = block.text
-	code.vice_x = vice_x
-	code.vice_y = vice_y
-	code.z_rapid = part.z_rapid
-	code.z_safe = part.z_safe
+	code.z_rapid = part._z_rapid
+	code.z_safe = part._z_safe
 
 	# Each block is set to these two values beforehand:
-	code.z = part.z_safe
+	code.z = part._z_safe
 	code.s = s
 	code.g1 = 0
 	code.blocks.append(block)
@@ -5224,7 +5700,11 @@ class Part:
     def __format__(self, format):
 	""" *Part*: Return formated version of *self*. """
 
+	# Verify argument types:
 	assert isinstance(format, str)
+
+	return "[name={0} bb={1}]".format(self._name, self._bounding_box)
+
 	if format != "":
 	    format = ":" + format
 	format_string = "{0}[{1" + format + "}:{2" + format + "},{3" + \
@@ -5245,46 +5725,53 @@ class Part:
 	""" *Part*: ..."""
 
 	ezcad = self._ezcad
+	bounding_box_dispatch = ezcad._bounding_box_dispatch
+
 	update_count = ezcad._update_count
 	first_update = update_count == 0
+
 	if not name.startswith("_") and name.endswith("_"):
 	    if first_update:
 		pass
-	elif name.endswith("_a"):
-	    if first_update:
-		return Angle()
-	elif name.endswith("_b"):
-	    if first_update:
-		return False
-	elif name.endswith("_c"):
-            if first_update:
-		return Color()
-	elif name.endswith("_f"):
-	    if first_update:
-		return 0.0
-	elif name.endswith("_i"):
-	    if first_update:
-		return 0
-	elif name.endswith("_l"):
-	    if first_update:
-		return L()
-	elif name.endswith("_m"):
-	    if first_update:
-		return Material()
-        elif name.endswith("_o"):
-	    if first_update:
-		return None
-	elif name.endswith("_s"):
-	    if first_update:
-		return ""
-	elif name.endswith("_p"):
-	    if first_update:
-		return P()
+	elif name in bounding_box_dispatch:
+	    accessor = bounding_box_dispatch[name]
+            return accessor(self._bounding_box)
+	elif len(name) >= 2 and name[-2] == '_':
+	    if name.endswith("_a"):
+		if first_update:
+		    return Angle()
+	    elif name.endswith("_b"):
+		if first_update:
+		    return False
+	    elif name.endswith("_c"):
+		if first_update:
+		    return Color()
+	    elif name.endswith("_f"):
+		if first_update:
+		    return 0.0
+	    elif name.endswith("_i"):
+		if first_update:
+		    return 0
+	    elif name.endswith("_l"):
+		if first_update:
+		    return L()
+	    elif name.endswith("_m"):
+		if first_update:
+		    return Material()
+	    elif name.endswith("_o"):
+		if first_update:
+		    return None
+	    elif name.endswith("_s"):
+		if first_update:
+		    return ""
+	    elif name.endswith("_p"):
+		if first_update:
+		    return P()
 	elif name.endswith("_pl"):
 	    if first_update:
 		return Place()
 	else:
-	    raise AttributeError(
+	    raise AttributeError(		
 	      "Part instance has no attribute '{0}' count={1}".
 	      format(name, update_count))
 	raise AttributeError("Part instance has no attribute named '{0}'". \
@@ -5606,7 +6093,7 @@ class Part:
 	    first_index = last_index + 1
 	return elimination_count
 
-    def _operations_regroup_helper1(self):
+    def _operations_regroup_helper1(self, first_index, last_index):
 	""" *Part*: Regroup the *first_index*'th through *last_indxex*'th
 	    *Operation*'s of the *Part* object (i.e. *self*).
 	"""
@@ -5620,7 +6107,7 @@ class Part:
 
 	# Find a group of operations that use the same {Tool}:
 	elimination_count = 0
-	operations = part.operations
+	operations = part._operations
 	tool1_first_index = first_index
 	while tool1_first_index <= last_index:
 	    operation = operations[tool1_first_index]
@@ -5655,7 +6142,7 @@ class Part:
 	part = self
 
 	elimination_count = 0
-	operations = part.operations
+	operations = part._operations
 	tool = operations[tool1_first_index].tool
 
 	# Find the next sequence of operations that match {tool}:
@@ -5704,7 +6191,7 @@ class Part:
 	part = self
 
 	# FIXME: There is probably a more Pythony wayd of doing this!!!
-	operations = part.operations
+	operations = part._operations
 	for index in range(from_first_index, from_last_index + 1):
 	    operation = operations[index]
 	    del operations[index]
@@ -5954,36 +6441,54 @@ class Part:
 	#print("Part.box:{0:m}:{1:m},{2:m}:{3:m},{4:m}:{5:m}". \
 	#  format(x1, x2, y1, y2, z1, z2))
 
-	place = Place(part = None, name = comment, center = center,
-	  axis = axis, rotate = rotate, translate = translate)
-	forward_matrix = place._forward_matrix
+	bounding_box = self._bounding_box
+	bounding_box.point_expand(P(x1, y1, z1))
+	bounding_box.point_expand(P(x2, y2, z2))
 
-	tne = P(x2, y2, z2)
-	bsw = P(x1, y1, z1)
-	tsw = P(x1, y1, z2)
-	bnw = P(x1, y2, z1)
-	tnw = P(x1, y2, z2)
-	bse = P(x2, y1, z1)
-	tse = P(x2, y1, z2)
-	bne = P(x2, y2, z1)
+	#self._dx_origin = x2 - x1
+	#self._dy_origin = y2 - y1
+	#self._dz_origin = z2 - z1
+
+	#place = Place(part = None, name = comment, center = center,
+	#  axis = axis, rotate = rotate, translate = translate)
+	#forward_matrix = place._forward_matrix
+
+	#tne = P(x2, y2, z2)
+	#bsw = P(x1, y1, z1)
+	#tsw = P(x1, y1, z2)
+	#bnw = P(x1, y2, z1)
+	#tnw = P(x1, y2, z2)
+	#bse = P(x2, y1, z1)
+	#tse = P(x2, y1, z2)
+	#bne = P(x2, y2, z1)
+
+	#bounding_box = self._bounding_box
+	#bounding_box.point_expand(tne)
+	#bounding_box.point_expand(tnw)
+	#bounding_box.point_expand(tse)
+	#bounding_box.point_expand(tsw)
+	#bounding_box.point_expand(bne)
+	#bounding_box.point_expand(bnw)
+	#bounding_box.point_expand(bse)
+	#bounding_box.point_expand(bsw)
 
 	#print("before box={0:m}".format(box))
-	self._box_point_update(comment + "[TNE]",
-	  forward_matrix.point_multiply(tne))
-	self._box_point_update(comment + "[TNW]",
-	  forward_matrix.point_multiply(tnw))
-	self._box_point_update(comment + "[TSE]",
-	  forward_matrix.point_multiply(tse))
-	self._box_point_update(comment + "[TSW]",
-	  forward_matrix.point_multiply(tsw))
-	self._box_point_update(comment + "[BNE]",
-	  forward_matrix.point_multiply(bne))
-	self._box_point_update(comment + "[BNW]",
-	  forward_matrix.point_multiply(bnw))
-	self._box_point_update(comment + "[BSE]",
-	  forward_matrix.point_multiply(bse))
-	self._box_point_update(comment + "[BSW]",
-	  forward_matrix.point_multiply(bsw))
+	#self._box_point_update(comment + "[TNE]",
+	#  forward_matrix.point_multiply(tne))
+	#self._box_point_update(comment + "[TNW]",
+	#  forward_matrix.point_multiply(tnw))
+	#self._box_point_update(comment + "[TSE]",
+	#  forward_matrix.point_multiply(tse))
+	#self._box_point_update(comment + "[TSW]",
+	#  forward_matrix.point_multiply(tsw))
+	#self._box_point_update(comment + "[BNE]",
+	#  forward_matrix.point_multiply(bne))
+	#self._box_point_update(comment + "[BNW]",
+	#  forward_matrix.point_multiply(bnw))
+	#self._box_point_update(comment + "[BSE]",
+	#  forward_matrix.point_multiply(bse))
+	#self._box_point_update(comment + "[BSW]",
+	#  forward_matrix.point_multiply(bsw))
 	#print("after box={0:m}".format(box))
 
 
@@ -6150,36 +6655,36 @@ class Part:
 	shop = part._shop
 	assert isinstance(shop, Shop)
 	if shop.cnc_generate:
-	    dowel_pin = part._tools_dowel_pin_search()
+	    tool_dowel_pin = part._tools_dowel_pin_search()
 
 	    debug = False
 	    debug = True
 	    if debug:
-		print("=>Part.dowel_pin('{0}', {1})\n".
+		print("=>Part.dowel_pin('{0}', {1})".
 		  format(part._name, comment))
-	    diameter = dowel_pin.diameter
+	    diameter = tool_dowel_pin.diameter
 
 	    # Figure out the new bounding box orientation:
 	    new_bounding_box = part._bounding_box.matrix_apply(part._position)
 
 	    # Compute the Z minimum of the bounding box (negative number):
-	    bounding_box_z_minimum = new_bounding_box.bz
+	    bounding_box_z_minimum = new_bounding_box.bsw_get().z
 
 	    # Now compute {z_depth}, the desired maximum tool descent
 	    # as a positive number:
-	    tip_depth = dowel_pin.tip_depth
+	    tip_depth = tool_dowel_pin.tip_depth
 	    z_depth = tip_depth - bounding_box_z_minimum
 	    if debug:
-		print("dowel_pin: part={0} bb={1} tip_depth={2}\n".
-		  format(part.name, new_bounding_box, tip_depth))
-		print("dowel_pin: before z_depth={0}\n".format(z_depth))
+		print("dowel_pin: part={0} bb={1} tip_depth={2}".
+		  format(part._name, new_bounding_box, tip_depth))
+		print("dowel_pin: before z_depth={0}".format(z_depth))
 
 	    # Figure out how deep the dowel pin actually can go:
 	    maximum_z_depth = tool_dowel_pin.maximum_z_depth
 	    if z_depth > maximum_z_depth:
 		z_depth = maximum_z_depth
 	    if debug:
-		print("after z_depth=%i%\n".format(z_depth))
+		print("after z_depth={0}".format(z_depth))
 
 	    if comment == "":
 		comment = "Mount {0} x {1} x {2} piece of {3} in vice". \
@@ -6187,21 +6692,21 @@ class Part:
 		  part._dz_original, _part.material)
 
 	    if debug:
-		print("dowel_pin@({0}): ex={1} ey={2} vx={3} vy={4}\n".
-		  format(part.name, part.edge_x, part.edge_y,
-		  part.vice_x, part.vice_y))
+		print("dowel_pin@({0}): ex={1} ey={2} vx={3} vy={4}".
+		  format(part._name, part._edge_x, part._edge_y,
+		  part._vice_x, part._vice_y))
 
 	    vice = shop.vice
 	    jaw_width = vice.jaw_width
 	    half_jaw_width = jaw_width / 2
 	    radius = diameter / 2
-	    edge_x = part.edge_x - radius
-	    edge_y = part.edge_y
+	    edge_x = part._edge_x - radius
+	    edge_y = part._edge_y
 	    plunge_x = edge_x
 
 	    if debug:
-		print("dowel_pin: {0} jaw_width={1}%\n".
-		  format(part.name, jaw_width))
+		print("dowel_pin: {0} jaw_width={1}".
+		  format(part._name, jaw_width))
 
 	    # Make sure we always plunge outside of the vise jaws:
 	    if plunge_x > -half_jaw_width:
@@ -6213,18 +6718,19 @@ class Part:
 	    plunge_y = edge_y
 
 	    if debug:
-		print("dowel_pin: {0}: plunge_x={1}\n".
-		  format(part.name, plunge_x))
-	    part.operation_dowel_pin_append(comment, tool_dowel_pin,
-	      None, diameter, edge_x, edge_y, part._dx_original,
-	      part._dy_original, part._dz_original,
+		print("dowel_pin: {0}: plunge_x={1}".
+		  format(part._name, plunge_x))
+	    operation = Operation_Dowel_Pin(self, comment, 0, tool_dowel_pin,
+	      Operation.ORDER_DOWEL_PIN, None, diameter, edge_x, edge_y,
+	      part._dx_original, part._dy_original, part._dz_original,
 	      plunge_x, plunge_y, tip_depth, -z_depth)
+	    self._operations.append(operation)
 	    if debug:
-		print("dowel_pin({0} edgex={1}% edgey={2}\n".
-		  format(part.name, edge_x, edge_y))
+		print("dowel_pin({0} edgex={1}% edgey={2}".
+		  format(part._name, edge_x, edge_y))
 	    if debug:
-		print("<=dowel_pin@Part('{0}', '{1}')\n".
-		  format(part.name,comment))
+		print("<=dowel_pin@Part('{0}', '{1}')".
+		  format(part._name, comment))
 
     def dowel_position_set(self, edge_x, edge_y):
 	""" *Part*:
@@ -6511,6 +7017,8 @@ class Part:
 	    #part._bounding_box_check(0)
 	    print("Part.process: {0} dimension(s) changed\n".format(changed))
 	    ezcad._update_count += 1
+
+	print("*************Part:{0} bounding_box={1}".format(self._name, self._bounding_box))
 
 	# Now visit *part* and all of its children in CNC mode:
 	ezcad._mode = EZCAD3.CNC_MODE
@@ -9120,7 +9628,7 @@ class Part:
 	    if top_angle.absolute() > Angle(deg=0.0001):
 		# We need to rotate {part} by {top_angle}:
 		top_axis = zero
-		if top_angle.absolut() > Angle(deg=179.9):
+		if top_angle.absolute() > Angle(deg=179.9):
 		    # We have to entirely flip the board.  Unfortunately,
 		    # a cross product will not work on colinear segments,
 		    # so we use the ({n.x}, {n.y}, {n.z}) x (0, 0, 1) to
@@ -9213,7 +9721,7 @@ class Part:
 	    if dowel_angle < Angle(deg=89.9) or dowel_angle > Angle(deg=90.1):
 		# It is not, let somebody know:
 		print("nt={0} wt={1} part='{2}' dowel_angle={3}\n".
-		  format(nt, wt, part.name, dowel_angle))
+		  format(nt, wt, part._name, dowel_angle))
 
 	    part.reposition(n.y)
 
@@ -10095,10 +10603,13 @@ class Shop:
 	tools = []
 
 	self.assemblies = []		# Viewable assemblies
+	self.base_name = ""		# Base name for current operations
+	#dxf_base_names = [] 		# List of DXF base names
 	self.blocks_uid = 0		# UID counter for *Code_Block* objects
 	# cache Cache			# Off/Nef3 file cache
 	self.changed = False		# Marker used by {update@Length}
-	#dxf_base_names = [] 		# List of DXF base names
+	self.code = Code()		# Code genertion object
+	self.cnc_generate = False	# {true} => do cnc code generation
 	#dxf_table = {}			# Table of DXF base names
 	self.extra1 = P()		# Temporary extra bounding box point
 	self.extra2 = P()		# Temporary extra bounding box point
@@ -10106,8 +10617,11 @@ class Shop:
 	self.machines = []		# Machines in shop
 	self.matrix = Matrix()		# Temporary matrix
 	self.parts = []			# Parts
-	self.tools = tools		# Tools in shop
+	self.program_base = 10		# Program base number
+	self.solids_generate = False	# {true} => do solid modeling
 	self.surface_speeds_table = {}	# [Part_Material, Tool_Material]
+	self.tools = tools		# Tools in shop
+	self.vice = Vice()		# Vice to use
 	#tess GLU_Tess			# Tessellator
 	#tess_mode Unsigned		# Triangulation mode
 	#tess_points Array[Point]	# Collection of points from tessellation
@@ -10119,13 +10633,6 @@ class Shop:
 	#eight32 Thread			# 8-32 thread
 	#ten24 Thread			# 10-24 thread
 	#ten32 Thread			# 10-32 thread
-	self.program_base = 10		# Program base number
-	self.base_name = ""		# Base name for current operations
-	self.code = Code()		# Code genertion object
-	self.cnc_generate = False	# {true} => do cnc code generation
-	#shop Shop			# Parrent {Shop}
-	self.solids_generate = False	# {true} => do solid modeling
-	self.vice = Vice()		# Vice to use
 
 	# Append new *Tool* objects to *tools*:
 	self.tool_append(Tool_Dowel_Pin(
