@@ -6,6 +6,7 @@
 *.scad
 *.stl
 *.tmp
+*.ngc
 *.wrl
 *.x3g
 pcb_holes.txt

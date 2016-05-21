@@ -1275,6 +1275,191 @@ class Bend:
 	result._py = self._py
 	return result
 
+class XBlock:
+
+    def __init__(self, part, tool, vice_x, vice_y):
+	""" *Block*: Initialize the *Block* object (i.e. *self*) with *part*,
+            *tool*, *vice_x*, and *vice_y*. """
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(tool, Tool)
+	assert isinstance(vice_x, L)
+	assert isinstance(vice_y, L)
+
+	# Generate a UID:
+	shop = part._shop_get()
+	uid = shop._blocks_uid_get()
+
+	# Initialzie the *Block* object (i.e. *self*)
+	self._feed = Speed(in_per_sec=0.0)
+	self._operations = []	# list[Code_Operation]
+	self._part = part
+	self._priority = part._priority_get()
+	self._program_number = 0
+	self._spindle = Hertz()
+	self._tool = tool
+	self._text = ""
+	self._uid = uid
+	self._vice_x = vice_x
+	self._vice_y = vice_y
+
+    def _comment_get(self):
+	""" *Block*: Get the comment field of the *Block* object (i.e. *self*) to *comment*. """
+
+	return self._comment
+
+    def _comment_set(self, comment):
+	""" *Block*: Set the comment field of the *Block* object (i.e. *self*) to *comment*. """
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	
+	# Load *comment* into the *Block* object (i.e. *self*):
+	self._comment = comment
+
+    def _program_number_get(self):
+	""" *Block*: Return the program number field of the *Block* object (i.e. *self*.) """
+
+	return self._program_number
+
+    def _part_get(self):
+	""" *Block*: Return the part field of the *Block* object (i.e. *self*.) """
+
+	return self._part
+
+    def _spindle_get(self):
+	""" *Block*: Return the spindle field of the *Block* object (i.e. *self*.) """
+
+	return self._spindle
+
+    def _spindle_set(self, spindle):
+	""" *Block*: Set the spindle speed field of the *Block* object (i.e. *self*) to *spindle*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(spindle, Hertz)
+	
+	# Load *spindle* into the *Block* object (i.e. *self*):
+	self._spindle = spindle
+
+    def _text_get(self):
+	""" *Block*: Return the text field of the *Block* object (i.e. *self*.) """
+
+	
+	# Load *text* into the *Block* object (i.e. *self*):
+	return self._text
+
+    def _text_set(self, text):
+	""" *Block*: Set the text field of the *Block* object (i.e. *self*) to *text*. """
+
+	# Verify argument types:
+	assert isinstance(text, str)
+	
+	# Load *text* into the *Block* object (i.e. *self*):
+	self._text = text
+
+    def _tool_get(self):
+	""" *Block*: Return the tool field of the *Block* object (i.e. *self*.) """
+	
+	return self._tool
+
+    def _uid_get(self):
+	""" *Block*: Return the unique identifier field of the *Block* object (i.e. *self*.) """
+	
+	return self._uid
+
+    def _vice_x_get(self):
+	""" *Block*: Return the vice X field of the *Block* object (i.e. *self*.) """
+	
+	return self._vice_x
+
+    def _vice_y_get(self):
+	""" *Block*: Return the vice Y field of the *Block* object (i.e. *self*.) """
+	
+	return self._vice_y
+
+    def drill_append(self, diameter, f, x, y, z_start, z_stop):
+	""" *Block*: ... """
+
+	# Verify argument types:
+	assert isinstance(diameter, L)
+	assert isinstance(f, L)
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+	assert isinstance(z_start, L)
+	assert isinstance(z_stop, L)
+
+	operation_drill = Code_Drill(diameter, f, x, y, z_start, z_stop)
+	block._operations.append(operation_drill)
+
+class Hertz:
+    def __init__(self, frequency=0.0, rpm=0.0, rps=0.0):
+	""" *Hertz*: Initialize the *Hertz* object (i.e. *self*) to be the sum of
+	    *frequency*, *rpm* (Rotations Per Minute) and *rps* (Rotations Per Second). """
+
+	# Verify argument types:
+	assert isinstance(frequency, float)
+	assert isinstance(rpm, float)
+	assert isinstance(rps, float)
+
+	# Load up self:
+	self._frequency = frequency + rpm / 60.0 + rps
+
+    def __format__(self, format):
+	""" *Hertz*: Return the *Hertz* object (i.e. *self*) formatted by *format* which
+	    must be either "rps" or "rpm". """
+
+	frequency = self._frequency
+	result = ""
+	if format == "" or format == "frequency" or format == "rps":
+	    result = "{0}".format(frequency)
+	if format == "rpm":
+	    result = "{0}".format(60.0 * frequency)
+	else:
+	    result = "Unknown Hertz format '{0}'".format(format)
+        return result
+
+    def __eq__(hertz1, hertz2):
+	""" *Hertz*: Return true if the *hertz1* is equal to *hertz2. """
+
+	assert isinstance(hertz2, Hertz)
+	return hertz1._frequency > hertz2._frequency
+
+    def __gt__(hertz1, hertz2):
+	""" *Hertz*: Return true if the *hertz1* is greater than *hertz2. """
+
+	assert isinstance(hertz2, Hertz)
+	return hertz1._frequency > hertz2._frequency
+
+    def __ge__(hertz1, hertz2):
+	""" *Hertz*: Return true if the *hertz1* is greater than or equal to *hertz2. """
+
+	assert isinstance(hertz2, Hertz)
+	return hertz1._frequency >= hertz2._frequency
+
+    def __lt__(hertz1, hertz2):
+	""" *Hertz*: Return true if the *hertz1* is less than *hertz2. """
+
+	assert isinstance(hertz2, Hertz)
+	return hertz1._frequency < hertz2._frequency
+
+    def __le__(hertz1, hertz2):
+	""" *Hertz*: Return true if the *hertz1* is less than or equal to *hertz2. """
+
+	assert isinstance(hertz2, Hertz)
+	return hertz1._frequency <= hertz2._frequency
+
+    def __ne__(hertz1, hertz2):
+	""" *Hertz*: Return true if the *hertz1* is not equal to *hertz2. """
+
+	assert isinstance(hertz2, Hertz)
+	return hertz1._frequency != hertz2._frequency
+
+    def frequency(self):
+	""" *Hertz*: Return the frequence of the * """
+	return self._frequency
+
 class Material:
     def __init__(self, generic = "plastic", specific = "ABS"):
 	""" *Material*: Initialize *Material* object (i.e. *self*)
@@ -1304,7 +1489,14 @@ class Material:
 	assert isinstance(material_name, str)
 	return self._generic == material_name
 
-    def generic(self):
+    def _needs_coolant(self):
+	""" *Material*: Return *True* if the *Material* object (i.e. *self*) should
+	    be machined with coolant on and *False* otherwise.
+	"""
+
+	return self._generic != "plastic"
+
+    def _generic_get(self):
 	""" *Material*: Return generic name for *Material* object (i.e. *self*).
 	"""
 
@@ -1729,326 +1921,55 @@ class Bounding_Box:
 	assert tsw == P(x1, y1, z2), "{0}".format(tsw)
 	assert tw == P(x1, zero, z2), "{0}".format(tw)
 
-# *Code* class:
+##FIXME: Is this used any more?!!!
+#
+#class Code_Block:
+#    """ *Code_Block*: 
+#    """
+#
+#    def __init__(self, part, tool, vice_x, vice_y):
+#	""" *Code_Block*: Initialize the *Code_Block* object (i.e. *self*)
+#	    to contain *part*, *tool*, *vice_x*, and *vice_y*.
+#	"""
+#
+#	# Verify argument types:
+#	assert isinstance(part, Part)
+#	assert isinstance(tool, Tool)
+#	assert isinstance(vice_x, L)
+#	assert isinstance(vice_y, L)
+#
+#	self.code = Code()		# Parent *Code* ooject:
+#	self.comment = ""		# Comment for block
+#	self.speed = Speed()		# Nominal feed rate for this block
+#	self.operations = []		# Operations for block
+#	self.part = part		# *Part* that owns this *Code_Block*
+#	self.priority = 0		# Priority block group
+#	self.program_number = 0		# Program number for block
+#	self.spindle = Hertz()		# Nominal speed rate for this block
+#	self.text = ""			# Final text of block
+#	#self.tool = Tool()		# *Tool* associated with block
+#	self.uid = 0			# Uniquie id for Block (for debugging)
+#	self.vice_x = L()
+#	self.vice_y = L()
+#
+#    def _text_get(self):
+#	""" *Code_Block*: Teturn the text field of the *Code_Block* object (i.e. *self*.)
+#	"""
+#
+#	
+#	# Load *text* into the *Block* object (i.e. *self*):
+#	return self._text
+#
+#    def _text_set(self, text):
+#	""" *Code_Block*: Set the text field of the *Code_Block* object (i.e. *self*) to *text*.
+#	"""
+#
+#	# Verify argument types:
+#	assert isinstance(text, str)
+#	
+#	# Load *text* into the *Code_Block* object (i.e. *self*):
+#	self._text = text
 
-class Code:
-
-    def __init__(self):
-	""" *Code*:
-	"""
-
-	zero = L()
-
-	# Load up *self*:
-	self.blocks = []		#  [*Code_Block*]  Output ready blocks
-	self.dxf = ""			# Text for dxf file
-	self.dxf_x_offset = zero	# DXF X offset
-	self.dxf_y_offset = zero	# DXF Y offset
-	self.text = ""			# Text for current block
-	self.z_rapid = zero		# Z above which Z rapids are allowed
-	self.z_safe = zero		# Z above XY rapids are safe
-
-	# The stuff below is RS-274 mode variables:
-	self.begin = False		# At begining of block
-	self.f = Speed()		# Feedrate
-	self.g1 = 0			# (G0-3, 33, 38.x, 73, 76, 80-89)
-	self.g2 = 0			# (G17-19)
-	self.g3 = 0			# (G7-8)
-	self.g4 = 0			# (G90-91)
-	self.g5 = 0			# (G93-94)
-	self.g6 = 0			# (G20-21)
-	self.g7 = 0			# (G40-42)
-	self.g8 = 0			# (G43, 49)
-	self.g9 = 0			# (G98-99)
-	self.g10 = 0			# (G54-59)
-	self.g11 = 0			# (G4)
-	self.h = zero			# H tool offset index
-	self.i = zero			# I coordinate
-	self.j = zero			# J coordinate
-	self.m1 = 0			# (M0-2, 30, 60)
-	self.m2 = 0			# (M6)
-	self.m3 = 0			# (M3-5)
-	self.m4 = 0			# (M7-9)
-	self.m5 = 0			# (M48-49)
-	self.p = Code_Time()		# G4
-	self.q = zero			# Peck depth
-	self.r0 = zero			# Radius cycle R
-	self.r1 = zero			# Drill cycle R
-	self.s = Code_Hertz()		# Spindle revolutions
-	self.x = zero			# X coordinate
-	self.y = zero			# Y coordinate
-	self.z = zero			# Z coordinate
-	self.z1 = zero 			# Z coordinate
-	self.z_safe_f = Speed()	# Feed to perform z safe operation at
-	self.z_safe_pending = False	# {true}=>need to do z safe move
-	self.z_safe_s = Code_Hertz()	# Speed to perform z safe operation at
-
-    def configure(self, tool, vice_x, vice_y):
-	""" *Code*: Configure the *Code* object (i.e. *self*) to use
-	    *tool*, *vice_x*, and *vice_y*.
-	"""
-
-	# Verify argument types:
-	assert isinstance(tool, Tool)
-	assert isinstance(vice_x, L)
-	assert isinstance(vice_y, L)
-
-	# Initialize *code*:
-	code.tool = tool
-	code.vice_x = vice_x
-	code.vice_y = vice_y
-
-    def flush(self, program_number):
-	""" *Code*: Generate CNC code starting at *program_number* for
-	    the first CNC file name.
-	"""
-
-	# Verify argument types:
-	assert isinstance(program_number, int)
-
-	# Use *code* instead of *self*:
-	code = self
-
-	#call d@(form@("=>flush@Code(*, %d%)\n\") / f@(program_number))
-	#original_program_number :@= program_number
-
-	# Output all of the *blocks*:
-	blocks = code.blocks
-	size = len(blocks)
-	print("size=", size)
-	if size != 0:
-	    block0 = blocks[0]
-	    part = block0.part
-	    assert isinstance(part, Part)
-
-	    remainder = program_number % 10
-	    if remainder != 0:
-		program_number += 10 - remainder
-	    file_name = "{0}.ngc".format(program_number)
-
-	    # Assign program numbers:
-	    for index in range(size):
-		block = blocks[index]
-		#call d@(form@("Block[%d%] #%d% %d% %v%\n\") % f@(index) %
-		#  f@(block.uid) % f@(block.priority) / f@(block.tool.name))
-		block.program_number = program_number
-		program_number += 1
-
-	    # Open *file_name* for writing:
-	    code_stream = open(file_name, "wa")
-	    assert isinstance(code_stream, file), \
-	      "Could not open '{0}' for writing".format(file_name)
-
-	    # Output the tool table:
-	    code_stream.write("({0}: {0})\n".format(part.name, block0.comment))
-	    code_stream.write("(Tooling table:)\n")
-            for block in blocks:
-		# Fetch {tool}:
-		tool = block.tool
-
-		# Make sure we have assigned a number to the tool:
-		assert tool.number != 0, \
-		    "Tool {0} does not have a number\n".format(tool.name)
-
-		# Output the line in the tool table:
-		code_stream.write("(T{0} {1})\n".format(tool.number, tool.name))
-
-		# Perform the code block:
-		code_stream.write("O{0} call\n".format(block.program_number))
-
-	    # Wrap it up:
-	    code_stream.write("G53 Y0.0 (Move the work to the front)\n")
-	    code_stream.write("M2\n")
-	    code_stream.close()
-
-	    # Now output the blocks:
-	    for block in blocks:
-		# Fetch {block}, {tool} and {name}.
-		tool = block.tool
-		tool_number = tool.number
-
-		if tool.is_laser():
-		    # We have a laser; generate a .dxf file:
-		    dxf_file_name = "{0}.dxf".format(program_number)
-		    dxf_stream = open(dxf_file_name, "wa")
-		    assert isinstance(dxf_stream, file), \
-		      "Unable to open file '{0}'".format(file_name)
-
-		    #dxf_stream.write("0\n\SECTION\n\2\n\HEADER\n")
-		    #dxf_stream.write("9\n\$DIMAUNITS\n\70\n\1\n")
-		    #dxf_stream.write("9\n\$INSUNITS\n\70\n\1\n")
-		    #dxf_stream.write("9\n\$LUNITS\n\70\n\0\n")
-		    #dxf_stream.write("9\n\$MEASUREMENT\n\70\n\0\n")
-		    #dxf_stream.write("0\n\ENDSEC\n")
-
-		    dxf_stream.write("0\n\SECTION\n\2\n\ENTITIES\n")
-
-		    # Output *dxf* to *dxf_stream*:
-		    dxf = code.dxf
-		    dxf_stream.write(dxf)
-
-		    # See if we are aggregating *dxf* into a named DXF file:
-		    dxf_base_name = part.dxf_base_name
-		    if dxf_base_name != "":
-			# Yes, we need to aggregate:
-			shop = part._shop
-			dxf_table = shop.dxf_table
-			dxf_contents = lookup[dxf_base_name]
-			assert isinstance(dxf_contents, str)
-			dxf_contents[dxf_base] = dxf_contents + dxf
-
-		    # Clear *dxf* for the next part:
-		    code.dxf = ""
-
-		    # Wrap up {dxf_stream}:
-		    dxf_stream.write("0\n\ENDSEC\n\0\n\EOF\n")
-		    dxf_stream.close()
-		else:
-		    # We have a mill; generate a .ngc file:
-		    program_number = block.program_number
-		    ngc_file_name = "{0}.ngc".format(program_number)
-		    code_stream = open(ngc_file_name, "wa")
-		    assert isintance(code_stream, file), \
-		      "Unable to open '{0}' for output\n".format(ngc_file_name)
-
-		    # Put a visual break into {code_stream}:
-		    code_stream.write("({0})\n".format(block.part.name))
-		    code_stream.write("O{0} sub\n".format(program_number))
-		    code_stream.write("G90 G90.1 G20\n")
-
-		    # Output the tool change, get the coolant on,
-		    # and spindle spun up:
-		    code_stream.write("M6 T{0} (Insert {1})\n". 
-           	      format(tool_number, tool.name))
-		    spindle = block.spindle
-		    if spindle > Speed():
-			if part.material.named_materail == "plastic":
-			    code_stream.write("M9 (Coolant off)\n")
-			else:
-			    code_stream.write("M8 (Coolant on)\n")
-			code_stream.write("S{0} M3 (Spindle on)\n".
-			  format(spindle))
-
-		    # Get moving to tool change location:
-		    plunge_x = part.plunge_x
-		    plunge_y = part.plunge_y
-		    vice_x = block.vice_x
-		    vice_y = block.vice_y
-		    code.vice_x = vice_x
-		    code.vice_y = vice_y
-
-		    #print("part:{0} code.vice_x={1} code.vice_y={2}\n".
-		    #  format(part.name, code.vice_x, code.vice_y))
-
-		    code_stream.write("G54 G0 X{0} Y{1} (Apply work offset)\n".
-		      format(plunge_x - vice_x, plunge_y - vice_y))
-		    code_stream.write("(Part_Origin_X={0} Part_Origin_Y={1})\n".
-		      format(-vice_x, -vice_y))
-
-		    # Enable tool offset:
-		    z_safe = part.z_safe
-		    code_stream.write("G43 H{0} (Enable tool_offset)\n".
-		      format(tool_number))
-		    code_stream.write(
-		      "G0 Z%i% (Go to Z-safe for current tool)\n".
-		      format(z_safe))
-		    code.g8 = 43
-		    code.g1 = 0
-		    code.h = tool_number
-		    code.z = z_safe
-
-		    # Generate the code for {block}:
-		    cod_stream.write(block.text)
-
-		    # Put the tool back into a reasonable position:
-		    code_stream.write("M5 (Spindle off)\n")
-		    code_stream.write("M9 (Coolant off)\n")
-		    code_stream.write(
-		      "G0 X{0} Y{1} (Put spindle to left of vice)\n".
-		      format(0.0, -1.0))
-		    code.x = vice_x - L(inch= 1.0)
-		    code.y = vice_y
-		    code_stream.write("G49 (Disable tool offset)\n")
-		    # G53 is not modal, thus we are still in G54 work offset:
-		    code_stream.write(
-		      "G53 G0 Z{0} (Return to machine Z zero)\n".format(1.0))
-		    code.z = L()
-		    code_stream.write("O{0} endsub\n".format(program_number))
-		    code_stream.write("O{0} call\n".format(program_number))
-		    code_stream.write("M2\n")
-		    code_stream.write("%\n")
-		    code_stream.close()
-
-	    # Output the shut-down code:
-	    #call put@("(*************************************)\n", code_stream)
-
-	    # Output the subroutine calls:
-	    #index := 0
-	    #while index < size
-	    #    #call put@(form@("O%d% call\n\") /
-	    #    #  f@((index + 1) * 100), code_stream)
-	    #    index := index + 1
-
-	    #call put@(form@("O<%s%> sub\n\") / f@(base_name), code_stream)
-	    #call put@("O[#1 * 100] call\n\", code_stream)
-	    #call put@(form@("O<%s%> endsub\n\") / f@(base_name), code_stream)
-
-	    #call put@("G53 Y0.0 (Move the work to the front)\n", code_stream)
-
-	    #call put@("M2\n\", code_stream)
-    
-	    # Zero {blocks} for the next time:
-	    del blocks[:]
-
-	    #call close@(code_stream)
-
-	#call d@(form@("<=flush@Code(*, %d%) => %d%\n\") %
-	#  f@(original_program_number) / f@(program_number))
-	return program_number
-
-#FIXME: Is this used any more?!!!
-
-class Code_Block:
-    """ *Code_Block*: 
-    """
-
-    def __init__(self, part, tool, vice_x, vice_y):
-	""" *Code_Block*: Initialize the *Code_Block* object (i.e. *self*)
-	    to contain *part*, *tool*, *vice_x*, and *vice_y*.
-	"""
-
-	# Verify argument types:
-	assert isinstance(part, Part)
-	assert isinstance(tool, Tool)
-	assert isinstance(vice_x, L)
-	assert isinstance(vice_y, L)
-
-	self.code = Code()		# Parent *Code* ooject:
-	self.comment = ""		# Comment for block
-	self.speed = Speed()		# Nominal feed rate for this block
-	self.operations = -[]		# Operations for block
-	self.part = part		# *Part* that owns this *Code_Block*
-	self.priority = 0		# Priority block group
-	self.program_number = 0		# Program number for block
-	self.spindle = Hertz()		# Nominal speed rate for this block
-	self.text = ""			# Final text of block
-	self.tool = Tool()		# *Tool* associated with block
-	self.uid = 0			# Uniquie id for Block (for debugging)
-	self.vice_x = L()
-	self.vice_y = L()
-
-
-class Code_Hertz:
-
-    def __init__(self, hertz = 0.0):
-	""" *Code_Hertz*: Initialize a *Code_Hertz* object"""
-	self.hertz = hertz
-
-    def hertz(self):
-	""" *Code_Hertz*: Return the frequency in Hertz.
-	"""
-
-	return self.hertz
 
 # *Speed* class:
 
@@ -2063,12 +1984,59 @@ class Speed:
 	    or *m_per_sec*.
 	"""
 
-	self._mm_per_sec = \
-	  mm_per_sec + \
-	  in_per_sec * 25.4 + \
-	  cm_per_sec * 10.0 + \
-	  ft_per_min * 60.0 * 12.0 * 25.4 + \
+	self._mm_per_sec =			\
+	  mm_per_sec +				\
+	  in_per_sec * 25.4 +			\
+	  cm_per_sec * 10.0 +			\
+	  ft_per_min * 60.0 * 12.0 * 25.4 +	\
 	  m_per_sec * 60.0 / 1000.0
+
+    def __eq__(speed1, speed2):
+	""" *Speed*: Return true if the *speed1* is equal to *speed2. """
+
+	return speed1._mm_per_sec > speed2._mm_per_sec
+
+    def __gt__(speed1, speed2):
+	""" *Speed*: Return true if the *speed1* is greater than *speed2. """
+
+	return speed1._mm_per_sec > speed2._mm_per_sec
+
+    def __ge__(speed1, speed2):
+	""" *Speed*: Return true if the *speed1* is greater than or equal to *speed2. """
+
+	return speed1._mm_per_sec >= speed2._mm_per_sec
+
+    def __lt__(speed1, speed2):
+	""" *Speed*: Return true if the *speed1* is less than *speed2. """
+
+	return speed1._mm_per_sec < speed2._mm_per_sec
+
+    def __le__(speed1, speed2):
+	""" *Speed*: Return true if the *speed1* is less than or equal to *speed2. """
+
+	return speed1._mm_per_sec <= speed2._mm_per_sec
+
+    def __ne__(speed1, speed2):
+	""" *Speed*: Return true if the *speed1* is not equal to *speed2. """
+
+	return speed1._mm_per_sec != speed2._mm_per_sec
+
+    def __div__(self, divisor):
+	""" *Speed*: Return the *Speed* object (i.e. *self) divided by the *divisor* and
+	    return a *Hertz* object.
+	"""
+
+	# Verify argument types:
+	if isinstance(divisor, L):
+	    inches_per_second = self.inches_per_second()
+	    inches = divisor.inches()
+	    rps = inches_per_second / inches
+	    hertz =  Hertz(rps=rps)
+	    return hertz
+	elif isinstance(divisor, int) or isinstance(divisor, float):
+	    return Speed(mm_per_sec=self._mm_per_sec / divisor)
+	else:
+	    assert False, "Bad Speed divsor type"
 
     def __format__(self, format_text):
 	""" *Speed*: Return the *Speed* object (i.e. *self*) as a string.
@@ -2138,19 +2106,19 @@ class Speed_Range:
     """ *Speed_Range* is a class that represents a range of speeds.
     """
 
-    def __init__(self, low, high):
+    def __init__(self, low_speed, high_speed):
 	""" *Speed_Range*: Initialize a *Speed_Range* object (i.e. *self*)
-	    to contain *low* and *high*.
+	    to contain *low_speed* and *high_speed*.
 	"""
 
 	# Verify argument types:
-	assert isinstance(low, Speed)
-	assert isinstance(high, Speed)
-	assert low.millimeters_per_second() < high.millimeters_per_second()
+	assert isinstance(low_speed, Speed)
+	assert isinstance(high_speed, Speed)
+	assert low_speed.millimeters_per_second() < high_speed.millimeters_per_second()
 
 	# Load up *self*:
-	self._low = low
-	self._high = high
+	self._low_speed = low_speed
+	self._high_speed = high_speed
 
     def __format__(self, format_text):
 	""" *Speed_Range*: Format a *Speed_Range* object (i.e. *self*) into
@@ -2164,14 +2132,24 @@ class Speed_Range:
 	range_format_text = "{0:" + format_text + "}-{1:" + format_text + "}"
 	#print("Speed_Range.__format__(*, '{0}'): '{1}'".
 	#  format(format_text, range_format_text))
-	return range_format_text.format(self._low, self._high)
+	return range_format_text.format(self._low_speed, self._high_speed)
 
-class Code_Time:
+    def _high_speed_get(self):
+	""" *Speed_Range*: Return the high speed for the *Speed_Range* object (i.e. *self*). """
 
-    def __init__(self, seconds = 0.0):
-	""" *Code_Time*: Initialize a *Code_Time* object. """
+	return self._high_speed
 
-	self.seconds = seconds	# Everything is converted to secconds.
+    def _low_speed_get(self):
+	""" *Speed_Range*: Return the low speed for the *Speed_Range* object (i.e. *self*). """
+
+	return self._low_speed
+
+#class Code_Time:
+#
+#    def __init__(self, seconds = 0.0):
+#	""" *Code_Time*: Initialize a *Code_Time* object. """
+#
+#	self.seconds = seconds	# Everything is converted to secconds.
 
 class Color:
     COLORS = {
@@ -3119,19 +3097,22 @@ class Operation:
 
     # These constants are used to sort the order of operations between
     # operations:
-    ORDER_DOWEL_PIN = 0
-    ORDER_END_MILL_EXTERIOR = 1
-    ORDER_MILL_DRILL_EXTERIOR = 2
-    ORDER_MILL_DRILL_CHAMFER = 3
-    ORDER_MILL_DRILL_COUNTERSINK = 4
-    ORDER_MILL_DRILL = 5
-    ORDER_END_MILL_DRILL = 6
-    ORDER_END_MILL_ROUND_POCKET = 7
-    ORDER_MILL_DRILL_POCKET_CHAMFER = 8
-    ORDER_MILL_DOVE_TAIL_CHAMFER = 9
-    ORDER_DOUBLE_ANGLE_V_GROOVE = 10
-    ORDER_DOUBLE_ANGLE_CHAMFER = 11
-    ORDER_VERTICAL_LATHE = 12
+    ORDER_NONE =			0
+    ORDER_DOWEL_PIN =			1
+    ORDER_END_MILL_EXTERIOR =		2
+    ORDER_MILL_DRILL_EXTERIOR =		3
+    ORDER_MILL_DRILL_CHAMFER =		4
+    ORDER_MILL_DRILL_COUNTERSINK =	5
+    ORDER_MILL_DRILL =			6
+    ORDER_END_MILL_DRILL =		7
+    ORDER_END_MILL_ROUND_POCKET =	8
+    ORDER_END_MILL_SIMPLE_POCKET =	9
+    ORDER_MILL_DRILL_POCKET_CHAMFER =	10
+    ORDER_MILL_DOVE_TAIL_CHAMFER = 	11
+    ORDER_DOUBLE_ANGLE_V_GROOVE =	12
+    ORDER_DOUBLE_ANGLE_CHAMFER =	13
+    ORDER_VERTICAL_LATHE =		14
+    ORDER_LAST =			15
 
     # These constants identify what order to do operations in:
     KIND_CONTOUR = 0
@@ -3146,7 +3127,7 @@ class Operation:
     POCKET_KIND_THROUGH = 1
 
     def __init__(self,
-      name, kind, part, comment, sub_priority, tool, order, follows):
+      name, kind, part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed):
 	""" *Operation*: Initialize an *Operation* object to contain
 	    *name*, *kind*, *part*, *comment*, *sub_priority*, *tool*,
 	    *order*, *follows*.
@@ -3159,66 +3140,70 @@ class Operation:
 	assert isinstance(comment, str)
 	assert isinstance(sub_priority, int)
 	assert isinstance(tool, Tool)
-	assert isinstance(order, int)
+	assert isinstance(order, int) and Operation.ORDER_NONE < order < Operation.ORDER_LAST
 	assert follows is None or isinstance(follows, Operation)
+	assert isinstance(feed_speed, Speed)
+	assert isinstance(spindle_speed, Hertz)
 
 	# Load up *self*:
-	self.name = name
-	self.part = part
-	self.comment = comment
-	self.follows = follows
-	self.index = -1
-	self.position = 0 # part.position_count
-	self.order = order
-	self.priority = part._priority
-	self.sub_priority = sub_priority
-	self.tool = tool
-	self.vice_x = part._vice_x
-	self.vice_y = part._vice_y
+	self._name = name
+	self._part = part
+	self._feed_speed = Speed()
+	self._spindle_speed = Hertz()
+	self._comment = comment
+	self._follows = follows
+	self._index = -1
+	self._position = 0 # part.position_count
+	self._order = order
+	self._priority = part._priority_get()
+	self._sub_priority = sub_priority
+	self._tool = tool
+	self._vice_x = part._vice_x_get()
+	self._vice_y = part._vice_y_get()
 
-    def compare(self, operation2):
+    def _compare(self, operation2):
 	""" *Operation*: Return -1, 0, or 1 depending upon whether *operation1*
 	    (i.e. *self*) should sort before, at, or after *operation2*.
 	"""
 
 	# Verify argument types:
-	assert isintance(operation2, Operation)
+	assert isinstance(operation2, Operation)
 
 	# Use *operation1* instead of *self*:
 	operation1 = self
 
 	# Sort by *priority* first:
-	result = int_compare(operation1.priority, operation2.priority)
+	result = int_compare(operation1._priority, operation2._priority)
 	if result != 0:
 	    return result
 
 	# Sort by *sub_priority* second:
-	result = int_compare(operation1.sub_priority, operation2.sub_priority)
+	result = int_compare(operation1._sub_priority, operation2.sub_priority)
 	if result != 0:
 	    return result
 
 	# Sort by *tool* third:
-	result = operation1.tool.compare(operation2.tool)
+	result = operation1._tool.compare(operation2._tool)
 	if result != 0:
 	    return result
 
 	# Sort by *order* fourth:
-	result = int_compare(operation1.order, operation2.order)
+	result = int_compare(operation1._order, operation2._order)
 	if result != 0:
 	    return result
 
 	# Sort by {kind} fifth:
-	result = int_compare(opertaion1.kind, operation2.kind)
+	result = int_compare(opertaion1._kind, operation2._kind)
 	if result != 0:
 	    return result
 
 	# Sort by {vice_x} sixth:
-	result = in_compare(operation1.vice_x,	operation2.vice_x)
+	result = in_compare(operation1._vice_x,	operation2._vice_x)
 	if result != 0:
 	    return result
 
 	# Sort by {vice_y} seventh:
-	result = in_compare(operation1.vice_y,	operation2.vice_y)
+	result = in_compare(operation1._vice_y,	operation2._vice_y)
 	if result != 0:
 	    return result
 
@@ -3228,6 +3213,56 @@ class Operation:
 	assert type(operation1) == type(operation2)
 
 	return result
+
+    def _comment_get(self):
+	""" *Operation*: Return the comment field of the *Operation* object (i.e. *self*). """
+
+	return self._comment
+
+    def _feed_speed_get(self):
+	""" *Operation*: Return the feed_speed field of the *Operation* object (i.e. *self*). """
+
+	return self._feed_speed
+
+    def _name_get(self):
+	""" *Operation*: Return the name field of the *Operation* object (i.e. *self*). """
+
+	return self._name
+
+    def _part_get(self):
+	""" *Operation*: Return the part field of the *Operation* object (i.e. *self*). """
+
+	return self._part
+
+    def _position_get(self):
+	""" *Operation*: Return the position field of the *Operation* object (i.e. *self*). """
+
+	return self._position
+
+    def _priority_get(self):
+	""" *Operation*: Return the priority field of the *Operation* object (i.e. *self*). """
+
+	return self._priority
+
+    def _spindle_speed_get(self):
+	""" *Operation*: Return the spindle_speed field of the *Operation* object (i.e. *self*). """
+
+	return self._spindle_speed
+
+    def _tool_get(self):
+	""" *Operation*: Return the tool field of the *Operation* object (i.e. *self*). """
+
+	return self._tool
+
+    def _vice_x_get(self):
+	""" *Operation*: Return vice Z coordinate for the *Operation* object (i.e. *self*). """
+
+	return self._vice_x
+
+    def _vice_y_get(self):
+	""" *Operation*: Return vice Z coordinate for the *Operation* object (i.e. *self*). """
+
+	return self._vice_y
 
 class Operation_Contour(Operation):
     """ *Operation_Contour* is a class that represents a contour operation.
@@ -3256,7 +3291,7 @@ class Operation_Contour(Operation):
     # Now to make things more complicated, we can adjust the mill path
     # both inward and outward.  There is a variable called {contour_offset},
     # which we will call o, and another variable called {finish_offset}
-    # which we will call f.  The contour offset can be positive or negative
+    # which we will call f.  The contour offset can be positive or negativej
     # and specifies an amount to grow or shrink the contour outline.
     # A positive contour offset (o > 0) causes the contour to expand
     # out by an amount o.  And the negative contour offset (o < 0) and
@@ -3335,7 +3370,7 @@ class Operation_Contour(Operation):
 	self.effective_tool_radius = effective_tool_radius
 	self.passes = passes
 
-    def cnc_generate(self):
+    def _cnc_generate(self):
 	""" *Operation_Contour*: Ggenerate the CNC code for *self*.
 	"""
 
@@ -3372,7 +3407,7 @@ class Operation_Contour(Operation):
 	# first corner twice.  Thus, we need to loop through
 	# {size} + 1 times:
 
-	code.z_safe_assert("contour", comment)
+	code._z_safe_assert("contour", comment)
 
 	plunge_offset = tool_diameter
 	#call d@("plunge_offset temporary set to zero\n")
@@ -3440,14 +3475,14 @@ class Operation_Dowel_Pin(Operation):
     """ *Operation_Dowel_Pin* is a class that implements a dowel pin operation.
     """
 
-    def __init__(self, part, comment, sub_priority, tool, order, follows,
-      diameter, edge_x, edge_y, original_x, original_y, original_z,
-      plunge_x, plunge_y, tip_depth, z_stop):
-	""" *Operation_Dowel_Pin*: Initialize an *Operation_Dowel_Pin*
-	    object to contain *part*, *comment*, *sub_priority*, *tool*,
-	    *order*, *follows*, *diameter*, *edge_x*, *edge_y*,
-	    *original_y*, *original_z*, *plunge_x*, *plunge_y*,
-	    *tip_depth*, and *z_stop*.
+    def __init__(self,
+      part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed,
+      diameter, edge_x, edge_y, original_x, original_y, original_z, plunge_x, plunge_y,
+      tip_depth, z_stop):
+	""" *Operation_Dowel_Pin*: Initialize an *Operation_Dowel_Pin* object (i.e. *self*)
+	    to contain *part*, *comment*, *sub_priority*, *tool*, *order*, *follows*,
+	    *feed_speed*, *spindle_speed*, *diameter*, *edge_x*, *edge_y*, *original_y*,
+	    *original_z*, *plunge_x*, *plunge_y*, *tip_depth*, and *z_stop*.
 	"""
 
 	# Verify argument types:
@@ -3455,8 +3490,10 @@ class Operation_Dowel_Pin(Operation):
 	assert isinstance(comment, str)
 	assert isinstance(sub_priority, int)
 	assert isinstance(tool, Tool)
-	assert isinstance(order, int)
+	assert isinstance(sub_priority, int)
 	assert follows is None or isinstance(follows, Operation)
+	assert isinstance(feed_speed, Speed)
+	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(diameter, L)
 	assert isinstance(edge_x, L)
 	assert isinstance(edge_y, L)
@@ -3470,21 +3507,21 @@ class Operation_Dowel_Pin(Operation):
 
 	# Initialize super class:
 	Operation.__init__(self, "Dowel_Pin", Operation.KIND_DOWEL_PIN,
-	  part, comment, sub_priority, tool, order, follows)
+	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
 
 	# Load up the rest of *self*:
-	self.diameter = diameter
-	self.edge_x = edge_x
-	self.edge_y = edge_y
-	self.original_x = original_x
-	self.original_y = original_y
-	self.original_z = original_z
-	self.plunge_x = plunge_x
-	self.plunge_y = plunge_y
-	self.tip_depth = tip_depth
-	self.z_stop = z_stop
+	self._diameter = diameter
+	self._edge_x = edge_x
+	self._edge_y = edge_y
+	self._original_x = original_x
+	self._original_y = original_y
+	self._original_z = original_z
+	self._plunge_x = plunge_x
+	self._plunge_y = plunge_y
+	self._tip_depth = tip_depth
+	self._z_stop = z_stop
 
-    def cnc_generate(self):
+    def _cnc_generate(self):
 	""" *Operation_Dowel_Pin*: Generate the CNC G-code for a an
 	    *Operation_Dowel_Pin* object (i.e. *self*.)
 	"""
@@ -3492,71 +3529,76 @@ class Operation_Dowel_Pin(Operation):
 	# Use *dowel_pin* instead of *self*.
 	dowel_pin = self
 
-	part = dowel_pin.part
-	shop = part._shop
-	code = shop.code
-	vice = shop.vice
-	jaw_width = vice.jaw_width
+	# Grab the *part*, *shop*, *code*, *vice*, and *jaw_width* from *dowel_pin*:
+	part = dowel_pin._part_get()
+	shop = part._shop_get()
+	code = shop._code_get()
+	vice = shop._vice_get()
+	jaw_width = vice._jaw_width_get()
+
+	    
+	# Grab some values out of *dowel_pin*:
+	comment = dowel_pin._comment
+	diameter = dowel_pin._diameter
+	edge_x = dowel_pin._edge_x
+	edge_y = dowel_pin._edge_y
+	plunge_x = dowel_pin._plunge_x
+	plunge_y = dowel_pin._plunge_y
+	z_stop = dowel_pin._z_stop
+	tip_depth = dowel_pin._tip_depth
+
+	# Compute *radius* and *half_jaw_width*:
+	radius = diameter / 2
 	half_jaw_width = jaw_width / 2
 
-	code.line_comment(operation.comment)
-	    
-	diameter = dowel_pin.diameter
-	edge_x = dowel_pin.edge_x
-	edge_y = dowel_pin.edge_y
-	plunge_x = dowel_pin.plunge_x
-	plunge_y = dowel_pin.plunge_y
-	radius = diameter / 2
-	z_stop = dowel_pin.z_stop
-	tip_depth = dowel_pin.tip_depth
+	# Define the speed and feed for these operations:
+	ipm10 = Speed(in_per_sec=10.0)
+	rpm0 = Hertz()
 
-	ipm10 = 10
-	rpm0 = 0
+	# Output the *dowel_pin* comment supplied by the user:
+	code._line_comment(comment)
 
-	code.line_comment(
-	  "{0} Initial Dimensions: {1} x {2} x {3}".format(part.name,
-	  part.dx_original, part.dy_original, part.dz_original))
+	# Output some dimenions for G-code debugging purposes:
+	code._line_comment(
+	  "{0} Initial Dimensions: {1} x {2} x {3}".format(part._name_get(),
+	  part._dx_original_get(), part._dy_original_get(), part._dz_original_get()))
 
 	#call d@(form@("part:%v% cnc_gen@Op_Dowel_Pin:%i% %i%\n\") %
 	#  f@(part.name) % f@(plunge_x) / f@(plunge_y))
 
-	code.xy_rapid(lunge_x, plunge_y)
+	# Rapid over to the plunge point:
+	code._xy_rapid(plunge_x, plunge_y)
 
 	# Now pause to let operator see if Z-safe is at the right height:
-	code.begin()
-	code.unsigned("M", 6)
-	code.unsigned("T", 9)
-	code.comment("Operator may check that Z-safe is correct")
-	code.end()
+	code._command_begin()
+	code._unsigned("M", 6)
+	code._unsigned("T", 9)
+	code._comment("Operator may check that Z-safe is correct")
+	code._command_end()
 
-	code.line_comment(
-	  "z_stop={0} tip_depth={1}".format(z_stop, tip_depth))
+	# Output some information about the *dowel_pin* for G-code debugging:
+	code._line_comment(
+	  "z_stop={0:i} tip_depth={1:i}".format(z_stop, tip_depth))
 
-	code.z_feed(ipm10, rpm0, z_stop, "dowel_pin")
+	# Move slowly down to *z_stop*:
+	code._z_feed(ipm10, rpm0, z_stop, "dowel_pin")
 
-	#call d@(form@(
-	#  "cnc_gen@Op_Dowel(%v% %v%):ex=%i% ey=%i% rad=%i% e-r=%c% vx=%c%\n\")%
-	#  f@(part.name) % f@(operation.comment) %
-	#  f@(edge_x) % f@(edge_y) % f@(radius) %
-	#  f@(code_length@(edge_x - radius)) / f@(code.vice_x))
-
-	code.line_comment(
-	  "dowel: edge_x={0} edge_y={1} radius={2} dx/2={3} odx/2={4}".
-	  format(edge_x, edge_y, radius, part.dx/2, part.dx_original/2))
-	code.xy_feed(ipm10, rpm0, edge_x, edge_y)
+	# Move slowly to (*edge_x*, *edge_y*).  This may cause the material in the
+	# vice to slide over:
+	code._xy_feed(ipm10, rpm0, edge_x, edge_y)
 
 	# Now pause again, to let the operator move piece up against the
-	# the dowel pin:
-	code.begin()
-	code.unsigned("M", 6)
-	code.unsigned("T", 2)
-	code.comment("Operator should place part against dowel pin")
-	code.end()
+	# the dowel pin (if it is not already up against there):
+	code._command_begin()
+	code._unsigned("M", 6)
+	code._unsigned("T", 2)
+	code._comment("Operator should place part against dowel pin")
+	code._command_end()
 
-	# Retract away from the part edge back to *plunge_x* and get
+	# Slowy retract away from the part edge back to *plunge_x* and get
 	# back up to Z safe:
-	code.xy_feed(ipm10, rpm0, plunge_x, plunge_y)
-	code.z_safe_retract(ipm10, rpm0)
+	code._xy_feed(ipm10, rpm0, plunge_x, plunge_y)
+	code._z_safe_retract(ipm10, rpm0)
 
     def compare(self, dowel_pin2):
 	""" *Operation_Dowel_Pin*: Return -1, 0, or 1 depending upon whether
@@ -3575,9 +3617,10 @@ class Operation_Dowel_Pin(Operation):
 	if result != 0:
 	    return result
 	
-	# It is unlikely we will get here:
-	#FIXME: Need to finish writing this code!!!
-	assert False, "Fix Operation_Dowel_Pin.compare()"
+	# It would be an error to have two dowel pin operations next to one another
+	# in the operations list.  So rather than write some code to perform the
+	# compare, we just assert *False*:
+	assert False, "Two Dowel_Pin operations detected"
 
 	return result
 
@@ -3691,7 +3734,7 @@ class Operation_Drill(Operation):
 	self.z_stop = z_stop
 	self.is_countersink = is_countersink
 
-    def cnc_generate(self, is_last):
+    def _cnc_generate(self, is_last):
 	""" *Operation_Drill*: Generate the CNC G-code for an
 	    *Operation_Drill* object (i.e. *self*).
 	"""
@@ -3743,7 +3786,7 @@ class Operation_Drill(Operation):
 	    else:
 		assert False, "Unknown hole kind"
 
-	    code.z_safe_assert("drill", comment)
+	    code._z_safe_assert("drill", comment)
 
 	    diameter_divisor = 3.0
 	    material = part.material
@@ -3932,7 +3975,7 @@ class Operation_Round_Pocket(Operation):
 	self.z_start = z_start
 	self.z_stop = z_stop
 
-    def cnc_generate(self):
+    def _cnc_generate(self):
 	""" *Operation_Round_Pocket*: Generate the CNC G-code for an
 	    *Operation_Round_Pocket* (i.e. *self*).
 	"""
@@ -3996,7 +4039,7 @@ class Operation_Round_Pocket(Operation):
 
 	    # Move to position:
 	    code.line_comment(comment)
-	    code.z_safe_assert("round_pocket_pocket", comment)
+	    code._z_safe_assert("round_pocket_pocket", comment)
 	    code.xy_rapid(x, y)
 
 	    z_feed = f / 4.0
@@ -4085,7 +4128,7 @@ class Operation_Simple_Exterior(Operation):
 	exterior contour manufacturing step.
     """
 
-    def __init_(self, part, comment, sub_priority, tool, order, follows,
+    def __init__(self, part, comment, sub_priority, tool, order, follows,
       x1, y1, x2, y2, z_start, z_stop, passes, corner_radius, tool_radius):
 	""" *Operation_Simple_Exterior* will initialize an
 	    *Operation_Simple_Exterior* object (i.e. *self*) with *part*,
@@ -4126,7 +4169,7 @@ class Operation_Simple_Exterior(Operation):
 	self.corner_radius = corner_radius
 	self.tool_radius = tool_radius
 
-    def cnc_generate(self):
+    def _cnc_generate(self):
 	""" *Operation_Simple_Exterior*: Generate the CNC G-code for an
 	    *Operation_Simple_Exterior* object (i.e. self).
 	"""
@@ -4162,7 +4205,7 @@ class Operation_Simple_Exterior(Operation):
 
 	r = tool_radius + corner_radius		# Total arc radius
 
-	code.z_safe_assert("simple_exterior", comment)
+	code._z_safe_assert("simple_exterior", comment)
 	code.xy_rapid(x1mtr, y2ptr)		# Top Left corner
 
 	# Output {comment}:
@@ -4247,12 +4290,13 @@ class Operation_Simple_Pocket(Operation):
 	manufacturing operation.
     """
 
-    def __init_(self, part, comment, sub_priority, tool, order, follows,
-      x1, y1, x2, y2, z_start, z_stop, corner_radius, tool_radius, pocket_kind):
+    def __init__(self,
+      part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed,
+      x1, y1, x2, y2, z1, z2, corner_radius, tool_radius, pocket_kind):
 	""" *Operation_Simple_Pocket*: Initialize an *Operation_Simple_Pocket*
 	    object (i.e. *self*) to contain *part*, *comment*, *sub_priority*,
-	    *tool*, *order*, *follows*, *x1*, *y1*, *x2*, *y2*, *z_start*,
-	    *z_stop*, *corner_radius*, *tool_radius*, and *pocket_kind*.
+	    *tool*, *order*, *follows*, *x1*, *y1*, *x2*, *y2*, *z1*,
+	    *z2*, *corner_radius*, *tool_radius*, and *pocket_kind*.
 	"""
 
 	# Verify argument types:
@@ -4261,65 +4305,80 @@ class Operation_Simple_Pocket(Operation):
 	assert isinstance(sub_priority, int)
 	assert isinstance(tool, Tool)
 	assert isinstance(order, int)
-	assert isinstance(follows, Operation)
+	assert isinstance(follows, Operation) or follows == None
+	assert isinstance(feed_speed, Speed)
+	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(x1, L)
 	assert isinstance(y1, L)
 	assert isinstance(x2, L)
 	assert isinstance(y2, L)
-	assert isinstance(z_start, L)
-	assert isinstance(z_stop, L)
+	assert isinstance(z2, L)
+	assert isinstance(z1, L)
 	assert isinstance(corner_radius, L)
 	assert isinstance(tool_radius, L)
 	assert isinstance(pocket_kind, int)
+	assert z1 < z2, \
+	  "z1 ({0:i}) is not less than z2 ({1:i})".format(z1, z2)
 
 	# Initialize superclass:
-	Operation.__init__(self, "Simple_Pocket", KIND_SIMPLE_POCKET,
-	  part, comment, sub_priority, tool, order, follows)
+	operation_kind = Operation.KIND_SIMPLE_POCKET
+	Operation.__init__(self, "Simple_Pocket", operation_kind,
+	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
 
 	# Load up the rest of *self*:
-	self.x1 = x1
-	self.y1 = y1
-	self.x2 = x2
-	self.y2 = y2
-	self.z_start = z_start
-	self.z_stop = z_stop
-	self.corner_radius = corner_radius
-	self.tool_radius = tool_radius
-	self.pocket_kind = pocket_kind
+	self._x1 = x1
+	self._y1 = y1
+	self._x2 = x2
+	self._y2 = y2
+	self._z_start = z2
+	self._z_stop = z1
+	self._corner_radius = corner_radius
+	self._tool_radius = tool_radius
+	self._pocket_kind = pocket_kind
 
-    def cnc_generate(self):
+    def _corner_radius_get(self):
+	""" *Operation_Simple_Pocket: Return the corner radius for the *Operation_Simple_Pocket*
+	    object (i.e. *self*).
+	"""
+
+	return self._corner_radius
+
+    def _cnc_generate(self):
 	""" *Operation_Simple_Pocket*: Generate the CNC G-code for a
 	    *Operation_Simple_Pocket* object (i.e. *self*).
 	"""
 
+	# Use *pocket* instead of *self*:
 	pocket = self
 
-
-	# Grap some values from {pocket}:
-	x1 = pocket.x1
-	y1 = pocket.y1
-	x2 = pocket.x2
-	y2 = pocket.y2
-	z_start = pocket.z_start
-	z_stop = pocket.z_stop
-	tool_radius = pocket.tool_radius
-	corner_radius = pocket.corner_radius
-	pocket_kind = pocket.pocket_kind
+	# Grap some values from *pocket*:
+	x1 = pocket._x1
+	y1 = pocket._y1
+	x2 = pocket._x2
+	y2 = pocket._y2
+	z_start = pocket._z_start
+	z_stop = pocket._z_stop
+	tool_radius = pocket._tool_radius
+	corner_radius = pocket._corner_radius
+	pocket_kind = pocket._pocket_kind
+	comment = pocket._comment
+	assert z_stop < z_start
 
 	# Extract some values from {part} and {operation}
-	shop = part._shop
-	code = shop.code
-	comment = operation.comment
-	tool = operation.tool
-	f = tool.feed
+	part = pocket._part
+	shop = part._shop_get()
+	code = shop._code_get()
+	tool = pocket._tool
+	f = tool._feed_speed_get()
+	s = tool._spindle_speed_get()
 
 	# Start with {comment}:
-	code.line_comment(comment)
+	code._line_comment(comment)
 
 	# Output the pocket operations:
-	code.line_comment(
-	  "[{0},{1}]:[{2},{3}] zstart={4} z_stop={5} tool_rad={6} corn_rad={7}".
-	  format(x1, y1, x2, y2, z_start, z_stop, tool_radius, corner_radius))
+	code._line_comment(
+	  "[{0:i},{1:i}]:[{2:i},{3:i}][{4:i}:{5:i}] tool_radius={6:i} corner_radius={7:i}".
+	  format(x1, y1, x2, y2, z_stop, z_start, tool_radius, corner_radius))
 
 	# Define some constants:
 	zero = L()
@@ -4337,7 +4396,7 @@ class Operation_Simple_Pocket(Operation):
 
 	# Emit the preparatory G-Code:
 
-	is_laser = tool.is_laser()
+	is_laser = tool._is_laser_get()
 
 	# Compute the number of depth passes required:
 	maximum_operation_depth = tool_radius / 2
@@ -4345,6 +4404,7 @@ class Operation_Simple_Pocket(Operation):
 	    maximum_operation_depth = tool.maximum_z_depth
 
 	total_cut = z_start - z_stop + z_extra
+	print("z_start={0:i} z_stop={1:i} z_extra={2:i}".format(z_start, z_stop, z_extra))
 	passes = int(total_cut / maximum_operation_depth)
 	while maximum_operation_depth* float(passes) < total_cut:
 	    passes = passes + 1
@@ -4352,7 +4412,7 @@ class Operation_Simple_Pocket(Operation):
 	assert maximum_operation_depth * float(passes) >= total_cut
 	z_step = total_cut / float(passes)
 
-	# {tool_radius} is the radius of the selected end-mill,
+	# *tool_radius* is the radius of the selected end-mill,
 	# which we will henceforth, call R. We need to be careful on
 	# our inner passes because the end-mill can only cut R/sqrt(2)
 	# along the diagnoal.  If each pass is separated by exactly
@@ -4384,7 +4444,7 @@ class Operation_Simple_Pocket(Operation):
 	#t :@= smul@(r, 0.65)
 	t = r / 2
 
-	code.z_safe_assert("simple_pocket", comment)
+	code._z_safe_assert("simple_pocket", comment)
 
 	# Compute the total number of rectangular paths needed:
 	#call d@(form@("comment=%v% r=%i% t=%i%\n\") %
@@ -4409,24 +4469,21 @@ class Operation_Simple_Pocket(Operation):
 	# Generate {passes} deep depth passes over the pocket:
 	for depth_pass in range(passes):
 	    # Output "(Depth Pass # of #)" comment:
-	    code.line_comment("Depth Pass %d% of %d%".
+	    code._line_comment("Depth Pass {0} of {1}".
 	      format(depth_pass + 1, passes))
 
 	    # Compute the plunge depth for each pass:
 	    z_plunge = z_start - z_step * float(depth_pass + 1)
 
-	    if pocket_kind == POCKET_KIND_THROUGH:
+	    if pocket_kind == Operation.POCKET_KIND_THROUGH:
 		# We only need to do the exterior path to a depth of {z_plunge}:
-		code.simple_pocket_helper(block, pocket,
-		  r, f, z_plunge, depth_pass != 0)
+		code.simple_pocket_helper(pocket, r, s, f, z_plunge, depth_pass != 0)
 
-	    elif pocket_kind == POCKET_KIND_FLAT:
+	    elif pocket_kind == Operation.POCKET_KIND_FLAT:
 		# Generate {paths} rectangular passes over the pocket:
 		for path in range(paths):
 		    # Provide a context comment:
-		    code.line_comment(
-		      "Rectangular Path {0} of {1}".
-		      format(path + 1, paths))
+		    code._line_comment("Rectangular Path {0} of {1}".format(path + 1, paths))
 
 		    # Compute the {offset} for this path:
 		    offset = r + (r + t) * float((paths - 1) - path)
@@ -4439,35 +4496,36 @@ class Operation_Simple_Pocket(Operation):
 			offset = half_minimum
 
 		    # We need to get the tool to the starting point safely:
-		    linear_move = False
+		    rapid_move = False
 		    if path == 0:
 			# This is the first cut at a new depth:
 			if depth_pass == 0:
 			    # We are at {z_safe}, so we can move rapidly to the
 			    # plunge point:
-			    linear_move = True
+			    rapid_move = True
 			else:
 			    # We are sitting at the outer edge at the old depth,
 			    # and there is no material between where are now
 			    # and ({start_x}, {start_y}); a rapid could be too
 			    # fast, so we do a linear move:
-			    linear_move = False
+			    rapid_move = False
 		    else:
 			# We are at the previous internal path at this depth
 			# and need to move out and cut material as we go:
-			linear_move = True
+			rapid_move = False
 
-		    code.simple_pocket_helper(block, pocket,
-		      offset, f, z_plunge, linear_move)
+		    code._simple_pocket_helper(pocket, offset, s, f, z_plunge, rapid_move)
+	    else:
+		assert False, "Unknown pocket kind: {0}".format(pocket_kind)
 
 	# Return the tool to a safe location above the material:
-	code.z_safe_retract(f, block.spindle)
+	code._z_safe_retract(f, s)
+	code._line_comment("Simple Pocket Done")
 
-	code.line_comment("Simple Pocket Done")
-
-    def compare(self, simple_pocket2):
+    @staticmethod
+    def _compare(simple_pocket, simple_pocket2):
 	""" *Operation_Simple_Pocket* returns -1, 0, or 1 if *simple_pocket1*
-	    (i.e. *self*) should sort before, at or after *simple_pocket*.
+	    (i.e. *simple_pocket1*) should sort before, at or after *simple_pocket*.
 	"""
 
 	# Verify argument types:
@@ -4482,36 +4540,63 @@ class Operation_Simple_Pocket(Operation):
 	    return result
 
 	# Compare *z_start* first:
-	result = -pocket1.z_start.compare(pocket2.z_start)
+	result = -pocket1._z_start.compare(pocket2._z_start)
 	if result != 0:
 	    return result
 
 	# Compare *z_stop* second:
-	result = -pocket1.z_stop.compare(pocket2.z_stop)
+	result = -pocket1._z_stop.compare(pocket2._z_stop)
 	if result != 0:
 	    return result
 
-	# The remainin comparisons are really only for disambiguation:
-	result = pocket1.x1.compare(pocket2.x1)
+	# The remaining comparisons are really only for disambiguation:
+	result = pocket1._x1.compare(pocket2._x1)
 	if result != 0:
 	    return result
-	result = pocket1.y1.compare(pocket2.y1)
+	result = pocket1._y1.compare(pocket2._y1)
 	if result != 0:
 	    return result
-	result = pocket1.x2.compare(pocket2.x2)
+	result = pocket1._x2.compare(pocket2._x2)
 	if result != 0:
 	    return result
-	result = pocket1.y2.compare(pocket2.y2)
+	result = pocket1._y2.compare(pocket2._y2)
 	if result != 0:
 	    return result
-	result = pocket1.corner_radius.compare(pocket2.corner_radius)
+	result = pocket1._corner_radius.compare(pocket2._corner_radius)
 	if result != 0:
 	    return result
-	result = pocket1.tool_radius.compare(pocket2.tool_radius)
+	result = pocket1._tool_radius.compare(pocket2._tool_radius)
+	if result != 0:
+	    return result
+	result = pocket1._pocket_kind - pocket2.__pocket_kind
 	if result != 0:
 	    return result
 
 	return result
+
+    def _x1_get(self):
+	""" *Operation_Simple_Pocket*: Return the x1 field of the *Operation_Simple_Pocket*
+	    (i.e. *self*). """
+
+	return self._x1
+
+    def _x2_get(self):
+	""" *Operation_Simple_Pocket*: Return the x2 field of the *Operation_Simple_Pocket*
+	    (i.e. *self*). """
+
+	return self._x2
+
+    def _y1_get(self):
+	""" *Operation_Simple_Pocket*: Return the y1 field of the *Operation_Simple_Pocket*
+	    (i.e. *self*). """
+
+	return self._y1
+
+    def _y2_get(self):
+	""" *Operation_Simple_Pocket*: Return the y2 field of the *Operation_Simple_Pocket*
+	    (i.e. *self*). """
+
+	return self._y2
 
 class Operation_Vertical_Lathe(Operation):
     """ *Operation_Vertical_Lathe* is a class that represents a vertical
@@ -4552,7 +4637,7 @@ class Operation_Vertical_Lathe(Operation):
 	self.z_start = z_start
 	self.z_stop = z_stop
 
-    def cnc_generate(self):
+    def _cnc_generate(self):
 	""" *Operation_Vertical_Lathe*:
 	"""
 
@@ -4623,7 +4708,7 @@ class Operation_Vertical_Lathe(Operation):
 	# Get the tool placed at the right place to {plunge}:
 	plunge_x = x
 	plunge_y = y + outside_radius - tool_radius
-	code.z_safe_assert("vertical_lathe", comment)
+	code._z_safe_assert("vertical_lathe", comment)
 	code.xy_rapid(plunge_x, plunge_y)
 
 	#call d@(form@("vertical_lathe: plunge_x=%i% plunge_y=%i%\n\") %
@@ -4729,13 +4814,7 @@ class Part:
 	zero = L()
 
 	ezcad = EZCAD3.ezcad
-
-	# Load up *self*:
-	if name == None:
-	    name = self.__class__.__name__
-	self._axis = None
 	self._bounding_box = Bounding_Box()
-	self._center = None
 	self._color = None
 	self._dx_original = zero
 	self._dxf_x_offset = zero
@@ -4745,9 +4824,11 @@ class Part:
 	self._dxf_scad_lines = []
 	self._ezcad = ezcad
 	self._is_part = False	
-	self._material = None
+	self._material = Material("aluminum", "")
 	self._name = name
 	self._operations = []
+	self._plunge_x = zero
+	self._plunge_y = zero
 	self._position = Matrix()
 	self._position_count = 0
 	self._priority = 0
@@ -4765,7 +4846,7 @@ class Part:
 	self._vice_x = L()
 	self._vice_y = L()
 	self._z_floor = L(inch=0.5)
-	self._z_rapid = Speed(in_per_sec=0.1)
+	self._z_rapid = L(inch=0.5)
 	self._z_safe = L(inch=0.5)
 	self.up = up
 
@@ -5485,8 +5566,51 @@ class Part:
 
 	return changed
 
+    def _dx_original_get(self):
+	""" *Part*: Return the DX original field of the *Part* object (i.e. *self*)
+	"""
+
+	return self._dx_original
+
+    def _dxf_x_offset_get(self):
+	""" *Part*: Return the DXF offset X field of the *Part* object (i.e. *self*)
+	"""
+
+	return self._dxf_x_offset
+
+
+    def _dxf_y_offset_get(self):
+	""" *Part*: Return the DXF offset Y field of the *Part* object (i.e. *self*)
+	"""
+
+	return self._dxf_y_offset
+
+    def _dy_original_get(self):
+	""" *Part*: Return the DY original field of the *Part* object (i.e. *self*)
+	"""
+
+	return self._dy_original
+
+    def _dz_original_get(self):
+	""" *Part*: Return the DZ original field of the *Part* object (i.e. *self*)
+	"""
+
+	return self._dz_original
+
+    def _edge_x_get(self):
+	""" *Part*: Return the edge X field of the *Part* object (i.e. *self*)
+	"""
+
+	return self._edge_x
+
+    def _edge_y_get(self):
+	""" *Part*: Return the edge Y field of the *Part* object (i.e. *self*)
+	"""
+
+	return self._edge_y
+
     def _flush(self, program_number):
-	""" *Part*: Flush out the CNC code for a *Part* object (i.e. *self*).
+	""" *Part*: Flush out the CNC code for the *Part* object (i.e. *self*).
 	"""
 
 	# Verify argument types:
@@ -5501,138 +5625,162 @@ class Part:
 	original_program_number = program_number
 
 	#call show@(part, "before flush")
-	shop = part._shop
-	vice = shop.vice
-	jaw_width = vice.jaw_width
+	shop = part._shop_get()
+	assert isinstance(shop, Shop)
+	vice = shop._vice_get()
+	jaw_width = vice._jaw_width_get()
 
-	# Compute ({plunge_x}, {plunge_y}) which is the vertical axis over
-	# which is to the left of the the part or the vice.
-	# ever is furthist out:
-	edge_x = part._edge_x
-	edge_y = part._edge_y
-	vice_x = part._vice_x
-	vice_y = part._vice_y
+	# Compute (*plunge_x*, *plunge_y*) which is the vertical axis over
+	# which is to the left of the the part or the vice:
+	edge_x = part._edge_x_get()
+	edge_y = part._edge_y_get()
+	vice_x = part._vice_x_get()
+	vice_y = part._vice_y_get()
+	assert isinstance(vice_x, L)
 	plunge_x = vice_x
 	if plunge_x > edge_x:
 	    plunge_x = edge_x
+	assert isinstance(jaw_width, L)
+	assert isinstance(plunge_x, L)
 	if plunge_x > jaw_width:
 	    plunge_x = plunge_x - L(inch=0.7)
-	part.plunge_x = plunge_x
-	part.plunge_y = edge_y
+	part._plunge_xy_set(plunge_x, edge_y)
     
-	code = part._shop.code
-	assert isinstance(part._shop, Shop)
+	code = shop._code_get()
 	assert isinstance(code, Code)
-	code.z_safe = part._z_safe
-	code.z_rapid = part._z_rapid
-	operations = part._operations
+	code._z_safe_set(part._z_safe_get())
+	code._z_rapid_set(part._z_rapid_get())
+	operations = part._operations_get()
 	size = len(operations)
 
 	#call show@(part, "before sort", 1t)
 
-	# Sort {operations} to group similar operations together:
-	operations.sort(cmp=Operation.compare)
+	# FIXME move the sort into *operations_regroup*:
+	# Sort *operations* to group similar operations together:
+	operations.sort(cmp=Operation._compare)
+
+	print("len(operations)={0}".format(len(operations)))
+	for operation in operations:
+	    print("operation name:{0}".format(operation._name_get()))
 
 	#call show@(part, "after sort", 1t)
 
-	regroups = part._operations_regroup()
+	# Do we need to user regroups instead *operations*:
+	part._operations_regroup()
 
 	#if regroups != 0
 	#	call show@(part, "after_regroup", 0f)
 
-	# Now sweep through {operations} and process similar operations
-	# at the same time:
-	if size != 0:
-	    first_index = 0
-	    operation = operations[0]
-	    position = operation.position
-	    for index in range(1, size):
-		previous = operation
-		operation = operations[index]
-		if previous.tool != operation.tool:
-		    part._flush_helper(first_index, index - 1)
-		    first_index = index
-		if operation.position != position:
-		    if index - 1 >= first_index:
-			part.flush_helper(first_index, index - 1)
-			first_index = index
-		    position = operation.position
-		    program_number = code.flush(program_number)
-	    part._flush_helper(first_index, size - 1)
+	# FIXME: The code below should replace all the index stuff:
+	current_tool = None
+	operation_group = None
+	operation_groups = []
+	for operation in operations:
+	    # Grab the *tool* from *operation*:
+	    tool = operation._tool_get()
+	    assert isinstance(tool, Tool)
 
-	# Flush out any residuals:
-	program_number = code.flush(program_number)
+	    # Start a new *operation_group* if the *tool* is different:
+	    if current_tool != tool:
+		# This code is always exectuted the first time through:
+		current_tool = tool
+		operation_group = []
+		operation_groups.append(operation_group)
 
-	# Empty out *opertations* :
+	    # Tack *operation* onto *operation_group*:
+	    assert isinstance(operation_group, list)
+	    operation_group.append(operation)
+	print("operation_groups=", operation_groups)
+
+	# Open the top-level *part_ngc_stream* file that invokes each tool operation
+	# in a separate .ngc file:
+	part_ngc_stream_file_name = "O{0}.ngc".format(program_number)
+	part_ngc_stream = open(part_ngc_stream_file_name, "w")
+	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_stream_file_name)
+
+	# Output some heading lines for *part_ngc_stream*:
+	part_ngc_stream.write("( Part: {0})".format(part._name_get()))
+	part_ngc_stream.write("( Tooling table: )\n")
+
+	# Now vist each *operation_group* in *operation_groups*:
+	for index, operation_group in enumerate(operation_groups):
+	    # Output a couple of lines *part_ngc_write*:
+	    ngc_program_number = program_number + 1 + index
+	    tool_number = tool._number_get()
+	    tool_name = tool._name_get()
+	    part_ngc_stream.write("( T{0} {1} )\n".format(tool_number, tool_name))
+	    part_ngc_stream.write("O{0} call\n".format(ngc_program_number))
+
+	    # Sweep through the *operation_group*:
+	    part._flush_helper(operation_group, ngc_program_number)
+
+	# Write out the final lines to *part_ngc_stream*:
+	part_ngc_stream.write("G53 Y0.0 ( Move the work to the front )\n")
+	part_ngc_stream.write("M2\n")
+	part_ngc_stream.close()
+
+	# Empty out *operations* :
 	del operations[:]
 
-	#call show@(part, "after operation flushes")
-
-	#call d@(form@("<=flush@Part(%v%, %d%) => %d%\n\") %
-	#  f@(part.name) % f@(original_program_number) / f@(program_number))
-
+	# Compute the next *program number* to be a the next multiple of 10 and return it:
+	program_number = program_number + len(operation_groups) + 1
+	program_number = (program_number + 9) / 10 * 10
 	return program_number
 
-    def _flush_helper(self, first_index, last_index):
-	""" *Part*: This routine generates the CNC G-code for the
-	    *first_index*'th through *last_index*'th operartions
-	    in the operations table for a *Part* object (i.e. *self*).
+    def _flush_helper(self, operations, ngc_program_number):
+	""" *Part*: Output the G-code for *operations* to a "On.ngc" file where,
+	    N is the *ngc_program_number* using the *Part* object (i.e. *self*).
 	"""
 
 	# Verify argument types:
-	assert isinstance(first_index, int)
-	assert isinstance(last_index, int)
+	assert isinstance(operations, list) and len(operations) > 0
+	for operation in operations:
+	    assert isinstance(operation, Operation)
+	assert isinstance(ngc_program_number, int)
 
 	# Use *part* instead of *self*:
 	part = self
 	part_name = part._name
 
-	# Set *debut* to True to trace this routine:
-	#debug = True
-	debug = False
+	# Set *debug* to True to trace this routine:
+	debug = True
+	#debug = False
 	if debug:
-	    print("=>flush_helper@Shop('{0}', {1}, {2}\n".
-	      format(part_name, first_index, last_index))
+	    print("=>Part._flush_helper('{0}', *, {1}, *)".
+	      format(part_name, ngc_program_number))
+	    print("operations=", operations)
 
 	zero = L()
 
-	shop = part._shop
-	code = shop.code
-	code.z = part._z_safe
-	code.dxf_x_offset = part._dxf_x_offset
-	code.dxf_y_offset = part._dxf_y_offset
-	operations = part._operations
-	operation = operations[first_index]
-	tool = operation.tool
-	f = tool.feed
-	s = tool.spindle
-	vice_x = operation.vice_x
-	vice_y = operation.vice_y
+	# Grab some values from *part*:
+	shop = part._shop_get()
+
+	# Grab the first *operation*:
+	operation = operations[0]
+	vice_x = operation._vice_x_get()
+	vice_y = operation._vice_y_get()
+	tool = operation._tool_get()
+
+	# Get the *feed_speed* and *spindle_speed*:
+	feed_speed = tool._feed_speed_get()
+	spindle_speed = tool._spindle_speed_get()
 
 	assert tool != None
 
 	# FIXME: The code below should be methodized!!!
-	block = Block()
-	block.reset()
-	block.spindle = s
-	block.comment = operation.comment
+	#block = Block(part, tool, vice_x, vice_y)
+	#block._spindle_set(s)
+	#block._comment_set(operation._comment_get())
+	#block._text_set(block._text_get())
 
-	# FIXME: Directly writing into the *Code* object is a bad idea!!!
-	code = Code(part, tool, vice_x, vice_y)
-	code.text = block.text
-	code.z_rapid = part._z_rapid
-	code.z_safe = part._z_safe
+	#commands = code._commands
+	#blocks = code._blocks
+	#print("before len(blocks)={0} len(commands)={1}".format(len(blocks), len(commands)))
 
-	# Each block is set to these two values beforehand:
-	code.z = part._z_safe
-	code.s = s
-	code.g1 = 0
-	code.blocks.append(block)
-
-	# Figure out if these are all drill operations:
+	# Figure out if *all_operations_are_drills*:
 	all_operations_are_drills = True
-	for index in range(first_index, last_index):
-	    if not isintance(operations[index], Operation_Drill):
+	for operation in operations:
+	    if not isinstance(operation, Operation_Drill):
 		all_operations_are_drills = False
 		break
 
@@ -5672,22 +5820,42 @@ class Part:
 			operations[match_index] = operations[index + 1]
 			operations[index + 1] = match_operation
 
-	# Now do cnc generate for selected operations:
-	for index in range(first_index, last_index + 1):
-	    operation = operations[index]
-	    code.vice_x = operation.vice_x
-	    code.vice_y = operation.vice_y
-	    comment = operation.comment
-	    code.z_safe_assert("flush_helper1", comment)
-	    operation.cnc_generate(index == last_index)
+	# Now do a cnc generate for each *operaton* in *operations*:
+	code = None
+	for operation in operations:
+	    if debug:
+		print("operation name:{0}".format(operation._name_get()))
+	    # Grab the *spindle_speed*:
+	    spindle_speed = operation._spindle_speed_get()
 
-	code.z_safe_retract_actual()
-	if debug:
-	    print("<=flush_helper@Shop('{0}', {1}, {2}): Block=#{3}\n".
-	      format(part.name, first_index, last_index, block.uid))
+	    # Initialize the *code* object:
+	    if code == None:
+		# Grab the *code* object and start the code generation:
+		code = shop._code_get()
+		code._start(part, tool, ngc_program_number, spindle_speed)
+		code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
+		code._z_rapid_set(part._z_rapid_get())
+		code._z_safe_set(part._z_safe_get())
+		code._z_set(part._z_safe_get())
+		code._vice_xy_set(operation._vice_x_get(), operation._vice_y_get())
+		comment = operation._comment_get()
+		code._z_safe_assert("flush_helper1", comment)
 
-	code.dxf_x_offset = zero
-	code.dxf_y_offset = zero
+		# FXIME: Do we really need to do the stuff below?
+		# Each block is set to these two values beforehand:
+		#code._z_set(part._z_safe_get())
+		#code._s_set(s)
+		#code._g1_set(0)
+		#code._block_append(block)
+
+	    # Perform the CNC generation step for *operation*:
+	    operation._cnc_generate()
+
+	if code != None:
+	    code._z_safe_retract_actual()
+	    code._dxf_xy_offset_set(zero, zero)
+	    code._finish()
+
 
     ## @brief Formats *self* into a string and returns it.
     #  @param format is the format control string (currently ignored).
@@ -5840,7 +6008,7 @@ class Part:
 		print("=>Part._manfacture('{0}'):CNC".format(part._name))
 
 	    shop = ezcad._shop
-	    program_base = shop.program_base
+	    program_base = shop._program_base_get()
 	    program_number = part._flush(program_base)
 
 	    # We want the program base number to start with a mulitple of 10.
@@ -5993,7 +6161,7 @@ class Part:
 			command = [ "openscad",
 			  "-o", stl_file_name,
 			  "{0}.scad".format(name) ]
-			print("command=", command)
+			#print("command=", command)
 			subprocess.call(command, stderr=ignore_file) 
 			ignore_file.close()
 
@@ -6021,6 +6189,25 @@ class Part:
 	    print("<=Part._manufacture('{0}'):{1}".
 	      format(part._name, mode_name))
 
+    def _material_get(self):
+	""" *Part*: Return the matrial associated with the *Part* object (i.e. *self*.)"""
+
+	return self._material
+
+    def _name_get(self):
+	""" *Part*: Return the name of the *Part* object (i.e. *self*). """
+
+	return self._name
+
+    def _operation_append(self, operation):
+	""" Part*: Append *operation* to the operations list in the *Part* object (i.e. *self*). """
+
+	# Verify argument types:
+	assert isinstance(operation, Operation)
+
+	# Append *operation* to *operations*:
+	self._operations.append(operation)
+
     def _operation_regroup_check(self,
       first_index1, last_index1, first_index2, last_index2):
 	""" *Part*:
@@ -6047,6 +6234,12 @@ class Part:
 		    return False
 	    index += 1
 	return True
+
+    def _operations_get(self):
+	""" *Part*: Return the operations list for the *Part* object (i.e. *self*).
+	"""
+        
+	return self._operations
 
     def _operations_index(self):
 	""" *Part*: Sweep through each operation in the *Part* object
@@ -6077,13 +6270,13 @@ class Part:
 	first_index = 0
 	while first_index < size:
 	    operation = operations[first_index]
-	    priority = operation.priority
+	    priority = operation._priority_get()
 
 	    # Now find the last operation in *operations* with the same
 	    # *priority*:
 	    last_index = first_index
 	    while last_index + 1 < size and \
-	      operations[last_index + 1].priority == priority:
+	      operations[last_index + 1]._priority_get() == priority:
 		last_index = last_index + 1
 
 	    # Now pass these values down to the next level of helper routine:
@@ -6111,7 +6304,7 @@ class Part:
 	tool1_first_index = first_index
 	while tool1_first_index <= last_index:
 	    operation = operations[tool1_first_index]
-	    tool = operation.tool
+	    tool = operation._tool_get()
 
 	    # Find the last operation in this sequence with the same {tool}:
 	    tool1_last_index = tool1_first_index
@@ -6143,7 +6336,7 @@ class Part:
 
 	elimination_count = 0
 	operations = part._operations
-	tool = operations[tool1_first_index].tool
+	tool = operations[tool1_first_index]._tool_get()
 
 	# Find the next sequence of operations that match {tool}:
 	for index in range(tool1_last_index + 1, last_index + 1):
@@ -6177,8 +6370,7 @@ class Part:
 		index = tool2_last_index
 	return elimination_count
 
-    def _operation_regroup_helper3(self,
-      to_index, from_first_index, from_last_index):
+    def _operation_regroup_helper3(self, to_index, from_first_index, from_last_index):
 	""" *Part*:
 	"""
 
@@ -6199,6 +6391,35 @@ class Part:
 	    to_index = to_index + 1
 	part._operations_index()
 
+    def _plunge_x_get(self):
+	""" *Part*: Return the plunge X of the *Part* (i.e. *self*). """
+
+	return self._plunge_x
+
+    def _plunge_y_get(self):
+	""" *Part*: Return the plunge Y of the *Part* (i.e. *self*). """
+
+	return self._plunge_y
+
+    def _plunge_xy_set(self, plunge_x, plunge_y):
+
+	""" *Part*: Set the plunge X/Y coordinate to (*plunge_x*, *plunge_y*) for the
+	    *Part* object (i.e. *self*)
+	"""
+
+	# Verify argument types:
+	assert isinstance(plunge_x, L)
+	assert isinstance(plunge_y, L)
+
+	# Set the plunge X/Y coordinates in the *Part* object (i.e. *self*):
+	self._plunge_x = plunge_x
+	self._plunge_y = plunge_y
+
+    def _priority_get(self):
+	""" *Part*: Return the priority of the *Part* (i.e. *self*). """
+
+	return self._priority
+
     def _tools_dowel_pin_search(self):
 	""" *Part*: Find and return a *Tool_Dowel_Pin* object.
 	"""
@@ -6207,10 +6428,26 @@ class Part:
 	part = self
 
 	zero = L()
-	dowel_pin = part._tools_search(Tool_Dowel_Pin.match,
-	  zero, zero, "dowel_pin")
+	dowel_pin = part._tools_search(Tool_Dowel_Pin._match, zero, zero, "dowel_pin")
 	assert isinstance(dowel_pin, Tool_Dowel_Pin)
 	return dowel_pin
+
+    def _tools_end_mill_search(self, maximum_diameter, maximum_z_depth, from_routine):
+	""" *Part*: Search for an end mill with a diameter that is less than or equal to
+	    *maximum_diameter* and can mill to a depth of *maximum_z_depth*.  (*from_routine*
+	    is used for debugging.
+	"""
+
+	# Verify argument types:
+	zero = L()
+	assert isinstance(maximum_diameter, L) and maximum_diameter > zero
+	assert isinstance(maximum_z_depth, L)
+	assert isinstance(from_routine, str)
+
+	result = \
+	  self._tools_search(Tool_End_Mill._match, maximum_diameter, maximum_z_depth, from_routine)
+
+	return result
 
     def _position_reset(self):
 	""" *Part*: Reset the position and reposition matrix for the
@@ -6229,77 +6466,83 @@ class Part:
 	position.identity_store()
 	position.identity_store()
 
-    def _tools_search(self, match_routine, parameter1, parameter2, from_text):
+    def _shop_get(self):
+	""" *Part*: Return the *Shop* object associated with the *Part* object (i.e. *self*.) """
+
+	shop = self._shop
+	assert isinstance(shop, Shop)
+	return shop
+
+    def _tools_search(self, match_routine, parameter1, parameter2, from_routine):
 	""" *Part*: Search for the best *Tool* object using *match_routine*,
-	    *parameter1*, and *parameter2*.
+	    *parameter1*, and *parameter2*.  *from_routine* is used for debugging*:
 	"""
 
 	# Verify argument types:
 	assert isinstance(parameter1, L)
 	assert isinstance(parameter2, L)
-	assert isinstance(from_text, str)
+	assert isinstance(from_routine, str)
 
 	# Use *part* instead of *self*:
 	part = self
 
 	# Set *debug* to *True* if debugging is required:
 	debug = False
-	debug = True
+	#debug = True
 	if debug:
 	    print("=>Part._tools_search('{0}', {4}, {1}, {2}, '{3}')\n".
-	      format(part._name, parameter1, parameter2, from_text,
+	      format(part._name, parameter1, parameter2, from_routine,
 	      match_routine))
 
 	# For now grab the material of the first part and assume the
 	# rest are compatible.  In reality, what we want is to grab
 	# all the materials and only accept tools that work with all
 	# materials.  That is too much work for now:
-	shop = part._shop
-	material = part._material
-	named_material = material.generic()
+	shop = part._shop_get()
+	part_material = part._material_get()
 
 	best_tool = None
 	best_priority = -1.0
 
 	# For now, hardwire the mill speeds.  We need to actually get the
 	# speeds from the *Mill* object:
-	maximum_spindle = Code_Hertz(5000.0)
-	minimum_spindle = Code_Hertz(150.0)
+	maximum_spindle = Hertz(rpm=5000.0)
+	minimum_spindle = Hertz(rpm=150.0)
 
+	# FIXME: This code probably belongs over in *Shop*:
 	# Now search through {tools}:
 	zero = L()
 	delta = L(inch=.000001)
-	tools = shop.tools
+	tools = shop._tools_get()
 	if debug:
 	    print("  {0} available tools".format(len(tools)))
 	for tool in tools:
 	    # Keep track of search results for this tool:
-	    del tool.search_results[:]
+	    tool._search_results_clear()
 
 	    # Lookup the *speed_range* for *material* and *tool*:
-	    speed_range = shop.surface_speeds_lookup(material, tool.material)
+	    tool_material = tool._material_get()
+	    speed_range = shop._surface_speeds_lookup(part_material, tool_material)
 	    speed_range_ok = isinstance(speed_range, Speed_Range)
 
 	    # Always log *surface_speeds_ok*:
-	    tool.search_results_append(speed_range_ok,
-	      "Surface speeds are acceptable for material ({0})".
-	      format(named_material))
+	    tool._search_results_append(speed_range_ok,
+	      "Surface speeds are acceptable for part_material '{0}' and tool material '{1}'".
+	      format(part_material, tool_material))
 
 	    if debug:
-		print("  Tool:'{0} {1}'".format(tool.name, speed_range_ok))
+		print("  Tool:'{0} {1}'".format(tool._name_get(), speed_range_ok))
 
 	    if speed_range_ok:
 		# See whether *tool* has a chance of being a match:
 		#if debug:
 		#    print("    speed_range={0:.0F}\n".format(speed_range))
-		priority = \
-		  match_routine(tool, parameter1, parameter2, from_text)
-		print("priority={0}".format(priority))
+		priority = match_routine(tool, parameter1, parameter2, from_routine)
 		if priority >= 0.0:
 		    # Tool is an acceptable match:
 		    if debug:
 			print("Tool: '{0}' priority:{1}\n".
-			  format(tool.name, tool.diameter))
+			  format(tool._name_get(), tool._diameter_get()))
 
 		    tool_preferred = part._tool_preferred
 		    if tool_preferred != "":
@@ -6310,22 +6553,20 @@ class Part:
 
 		    # Select the {Surface_Speed} for {tool_material}:
 		    tool.priority = priority
-		    tool.spindle = Code_Hertz()
+		    tool.spindle = Hertz()
 		    tool.feed = Speed()
-		    tool_material = tool.material
+		    tool_material = tool._material_get()
 		    surface_speed = None
-		    if tool.flutes_count > 0:
-			assert surface_speed != None
+		    if tool._flutes_count_get() > 0:
 			# We have {surface_speed}, compute {low_speed} and
 			# {high_speed}:
-			low_speed = speed_range.low_speed
-			high_speed = speed_range.high_speed
+			low_speed = speed_range._low_speed_get()
+			high_speed = speed_range._high_speed_get()
 
 			#print("Tool diameter={0}\n".format(tool.diameter))
 
 			pi = 3.14159265358979323846
-			desired_spindle = \
-			  low_speed.speed_by_length(tool.diameter * pi)
+			desired_spindle = low_speed / (tool._diameter_get() * pi)
 
 			#print("low_speed={0} diam={1}\n".
 			#  format(low_speed, tool.diameter))
@@ -6334,20 +6575,26 @@ class Part:
 
 			# Deal with spindle speed limits:
 			if desired_spindle > maximum_spindle:
-			    # Speed is to fast, clamp it to maxium:
+			    # Speed is to fast, clamp it to *maximum_spindle*:
 			    desired_spindle = maximum_spindle
-			if desired_spindle < minimum_spindle:
-			    # Speed is to slow, fail:
-			    assert False
+			assert desired_spindle >= minimum_spindle,				\
+			  "Disired spindle ({0:rpm}) is less than minimum spindle({1:rpm})".	\
+			  format(desired_spindle, minimum_spindle)
 
 			# Record everything we figured out back in {tool}:
-			tool.spindle = desired_spindle
+			tool._spindle_speed_set(desired_spindle)
 			chip_load = L(inch=0.001)
-			flutes_count = tool.flutes_count
-			tool.feed = Speed(mm_sec=
+			flutes_count = tool._flutes_count_get()
+
+			# Temporarily store the *feed_speed*, *spindle_speed*  and *priority*
+			# in the *tool*.  These values are only good until the end of this
+			# routine.  They will possibly get overridden during a subsequent
+			# tool search:
+			feed_speed = Speed(mm_per_sec=
 			  ((chip_load * float(flutes_count)).millimeters() *
-			   desired_spindle.hertz()))
-			tool.priority = priority
+			   desired_spindle.frequency()))
+			tool._feed_speed_set(feed_speed)
+			tool._priority_set(priority)
 
 		    # Record {tool} as a match in {tools_matach}:
 		    if priority > best_priority:
@@ -6360,7 +6607,7 @@ class Part:
 	    for tool in tools:
 		# Check {tool} to see if it is exceptable:
 		success_count = 0
-		search_results = tool.search_results
+		search_results = tool._search_results_get()
 		search_results_size = len(search_results)
 
 		for search_result in search_results:
@@ -6377,12 +6624,64 @@ class Part:
 	if debug:
 	    best_tool_name = "?"
 	    if best_tool != None:
-		best_tool_name = best_tool.name
+		best_tool_name = best_tool._name_get()
 	    print("<=Part._tools_search({0}, *, {1}, {2}, {3}) => {4}\n\n".
-	      format(part._name, parameter1, parameter2, from_text,
+	      format(part._name, parameter1, parameter2, from_routine,
 	      best_tool_name))
 
+	assert isinstance(best_tool, Tool), "Could not find a tool that worked"
+
 	return best_tool
+
+    def _vice_x_get(self):
+	""" *Part*: Return the vice X field of the *Part* object (i.e. *self*)
+	"""
+
+	return self._vice_x
+
+
+    def _vice_y_get(self):
+	""" *Part*: Return the vice Y field of the *Part* object (i.e. *self*)
+	"""
+
+	return self._vice_y
+
+
+    def _z_safe_get(self):
+	""" *Part*: Return the Z safe height for vertical air plunging for *Part* (i.e. *self*.)
+	"""
+	
+	return self._z_safe
+
+    def _z_rapid_set(self, z_safe):
+	""" *Part*: Set the Z safe height for vertical air plunging for *Part*
+	    (i.e. *self*) to *z_save*.
+	"""
+	
+	# Verify argument types:
+	assert isintance(z_safe, L)
+
+	# Load *z_rapid* into the *Part* object (i.e. *self*):
+	self._z_rapid = z_safe
+
+    def _z_rapid_get(self):
+	""" *Part*: Return the Z rapid height for horizontal movement above hold-down tooling
+	    for *Part* (i.e. *self*.)
+	"""
+	
+	assert isinstance(self._z_rapid, L)
+	return self._z_rapid
+
+    def _z_rapid_set(self, z_rapid):
+	""" *Part*: Set the Z rapid height for horizontal movement above hold-down tooling
+	    for *Part* (i.e. *self*) to *z_rapid*
+	"""
+	
+	# Verify argument types:
+	assert isintance(z_rapid, L)
+
+	# Load *z_rapid* into the *Part* object (i.e. *self*):
+	self._z_rapid = z_rapid
 
     # Public methods come here:
 
@@ -6640,11 +6939,9 @@ class Part:
 	    print("{0}<=Part.cylinder()".format(trace * ' '))
 
     def dowel_pin(self, comment):
-	""" *Part*:
+	""" *Part*: Request that a dowel pin be used to align the *Part* object (i.e. *self*)
+	    in the vice with a comment of *comment*.
 	"""
-
-	# This routine will request that a dowel pin be used to align {part}
-	# in the vice with a comment of {comment}.
 
 	# Verify argument types
 	assert isinstance(comment, str)
@@ -6654,15 +6951,22 @@ class Part:
 
 	shop = part._shop
 	assert isinstance(shop, Shop)
-	if shop.cnc_generate:
+	if shop._cnc_generate_get():
+	    # Find the *tool_dowel_pin* to use :
 	    tool_dowel_pin = part._tools_dowel_pin_search()
+	    assert isinstance(tool_dowel_pin, Tool_Dowel_Pin), "No dowel pin tool found"
+
+	    # Immediately grab the *feed_speed* and *spindle_speed* that were computed
+	    # for *tool_dowel_pin*:
+	    feed_speed = tool_dowel_pin._feed_speed_get()
+	    spindle_speed = tool_dowel_pin._spindle_speed_get()
 
 	    debug = False
 	    debug = True
 	    if debug:
 		print("=>Part.dowel_pin('{0}', {1})".
 		  format(part._name, comment))
-	    diameter = tool_dowel_pin.diameter
+	    diameter = tool_dowel_pin._diameter_get()
 
 	    # Figure out the new bounding box orientation:
 	    new_bounding_box = part._bounding_box.matrix_apply(part._position)
@@ -6672,7 +6976,7 @@ class Part:
 
 	    # Now compute {z_depth}, the desired maximum tool descent
 	    # as a positive number:
-	    tip_depth = tool_dowel_pin.tip_depth
+	    tip_depth = tool_dowel_pin._tip_depth_get()
 	    z_depth = tip_depth - bounding_box_z_minimum
 	    if debug:
 		print("dowel_pin: part={0} bb={1} tip_depth={2}".
@@ -6680,7 +6984,7 @@ class Part:
 		print("dowel_pin: before z_depth={0}".format(z_depth))
 
 	    # Figure out how deep the dowel pin actually can go:
-	    maximum_z_depth = tool_dowel_pin.maximum_z_depth
+	    maximum_z_depth = tool_dowel_pin._maximum_z_depth_get()
 	    if z_depth > maximum_z_depth:
 		z_depth = maximum_z_depth
 	    if debug:
@@ -6696,8 +7000,8 @@ class Part:
 		  format(part._name, part._edge_x, part._edge_y,
 		  part._vice_x, part._vice_y))
 
-	    vice = shop.vice
-	    jaw_width = vice.jaw_width
+	    vice = shop._vice_get()
+	    jaw_width = vice._jaw_width_get()
 	    half_jaw_width = jaw_width / 2
 	    radius = diameter / 2
 	    edge_x = part._edge_x - radius
@@ -6720,11 +7024,14 @@ class Part:
 	    if debug:
 		print("dowel_pin: {0}: plunge_x={1}".
 		  format(part._name, plunge_x))
-	    operation = Operation_Dowel_Pin(self, comment, 0, tool_dowel_pin,
-	      Operation.ORDER_DOWEL_PIN, None, diameter, edge_x, edge_y,
-	      part._dx_original, part._dy_original, part._dz_original,
+
+	    dowel_pin_order = Operation.ORDER_DOWEL_PIN
+	    operation = Operation_Dowel_Pin(self,
+	      comment, 0, tool_dowel_pin, dowel_pin_order, None, feed_speed, spindle_speed,
+	      diameter, edge_x, edge_y, part._dx_original, part._dy_original, part._dz_original,
 	      plunge_x, plunge_y, tip_depth, -z_depth)
-	    self._operations.append(operation)
+	    self._operation_append(operation)
+
 	    if debug:
 		print("dowel_pin({0} edgex={1}% edgey={2}".
 		  format(part._name, edge_x, edge_y))
@@ -7023,9 +7330,9 @@ class Part:
 	# Now visit *part* and all of its children in CNC mode:
 	ezcad._mode = EZCAD3.CNC_MODE
 	shop = ezcad._shop
-	shop.cnc_generate = True
+	shop._cnc_generate_set(True)
 	part._manufacture(ezcad)
-	sop.cnc_generate = False
+	shop._cnc_generate_set(False)
 	ezcad._update_count += 1
 
 	# Now visit *part* and all of its children in STL mode:
@@ -7084,7 +7391,7 @@ class Part:
 	part.cnc_fence()
 
 	# Get a temporary *matrix*:
-	matrix = part._shop.matrix
+	matrix = part._shop._matrix_get()
 
 	# Load *matrix* up with rotate coefficients with {angle} negated.
 	matrix.rotate_store(nx, ny, nz, angle)
@@ -7123,7 +7430,7 @@ class Part:
 	part.cnc_fence()
 
 	# Extract some values from {part}:
-	matrix = self._shop.matrix
+	matrix = self._shop._matrix_get()
 	position = self._position
 	reposition = self._reposition
 
@@ -8927,20 +9234,19 @@ class Part:
     def simple_pocket(self, comment = "no comment",
       bottom_corner = None, top_corner = None, radius = None, pocket_top = "t",
       center = None, axis = None, rotate = None, translate = None):
-	""" {Part} construct: Create a block with corners at {corner1} and
-	    {corner2}.  The block is made of {material} and visualized as
-	    {color}. """
+	""" *Part*: Create a simple rectangular pocket in the *Part* object (i.e. *self*)
+	    bounding corners of *bottom_corner* and *top_corner*, a corner radius if *radius*.
+	"""
 
-	#print "block_corners('{0}', {1}, {2}, '{3}', '{4}')".format( \
-	#  self.name, corner1, corner2, color, material)
+	print("block_corners(name='{0}', top_corner={1:i}, bottomcorner={2:i}, radius={3:i})".
+	  format(self._name, top_corner, bottom_corner, radius))
 
 	# Deal with argument defaults:
-	none_type = type(None)
-	if type(bottom_corner) == none_type:
-	    zero = L(0.0)
+	if not isinstance(bottom_corner, P):
+	    zero = L()
 	    bottom_corner = P(zero, zero, zero)
-	if type(top_corner) == none_type:
-	    one = L.mm(1.0)
+	if not isinstance(top_corner, P):
+	    one = L(cm=1.0)
 	    top_corner = P(one, one, one)
 
 	# Check argument types:
@@ -9014,6 +9320,8 @@ class Part:
 	#print("simple_pocket:A:x1/x2 y1/y2 z1/z2 = {0}/{1} {2}/{3} {4}/{5}".
 	#  format(x1, x2, y1, y2, z1, z2))
 
+	dz = z1 - z2
+
 	place = Place(part = None, name = comment, center = center,
 	  axis = axis, rotate = rotate, translate = translate)
 	forward_matrix = place._forward_matrix
@@ -9024,7 +9332,7 @@ class Part:
 
 	    assert x1 < x2, "x1={0} should be less than x2={1}".format(x1, x2)
 	    assert y1 < y2, "y1={0} should be less than y2={1}".format(y1, y2)
-	    assert z1 < z2, "xz={0} should be less than z2={1}".format(z1, z2)
+	    assert z1 < z2, "z1={0} should be less than z2={1}".format(z1, z2)
 
 	    #print "c1=({0},{1},{2}) c2=({3},{4},{5})".format( \
 	    #  x1, y1, z1, x2, y2, z2)
@@ -9042,6 +9350,23 @@ class Part:
 	    difference_lines.append(
 	      "        cube([{0:m}, {1:m}, {2:m}]);".format(
 	      x2 - x1, y2 - y1, z2 - z1))
+
+	    maximum_diameter = 2 * radius
+	    end_mill_tool = self._tools_end_mill_search(maximum_diameter, dz, "simple_pocket")
+	    print("end_mill_toll=", end_mill_tool)
+	    print("end_mill={0}".format(end_mill_tool._name_get()))
+	    end_mill_diameter = end_mill_tool._diameter_get()
+	    end_mill_radius = end_mill_diameter / 2
+	    end_mill_feed_speed = end_mill_tool._feed_speed_get()
+	    end_mill_spindle_speed = end_mill_tool._spindle_speed_get()
+
+	    print("x1={0:i} x2={1:i} y1={2:i} y2={3:i}".format(x1, x2, y1, y2))
+	    print("z1={0:i} z2={1:i}".format(z1, z2))
+	    operation_order = Operation.ORDER_END_MILL_SIMPLE_POCKET
+	    operation_simple_pocket = Operation_Simple_Pocket(self, comment, 0,
+	      end_mill_tool, operation_order, None, end_mill_feed_speed, end_mill_spindle_speed,
+	      x1, y1, x2, y2, z1, z2, radius, end_mill_radius, Operation.POCKET_KIND_FLAT)
+	    self._operation_append(operation_simple_pocket)
 
     def xxx_simple_pocket(self, comment, \
       corner1_point, corner2_point, radius, flags):
@@ -9595,7 +9920,8 @@ class Part:
 	    part._position_reset()
 	    position = part._position
 	    reposition = part._reposition
-	    matrix = part._shop.matrix
+	    shop = part._shop_get()
+	    matrix = shop._matrix_get()
 
 	    # Normalize everything to be centered around {c}:
 	    print("c={0}".format(c))
@@ -10192,6 +10518,1342 @@ class Fastener(Part):
 	      format(' ' * trace, part, select))
 
 
+# *Code* class:
+
+# Used be called called *Code* in EZCAD.
+
+class Code:
+
+    def __init__(self):
+	""" *Code*:
+	"""
+
+	zero = L()
+
+	# Load up *self*:
+	self._code_stream = None	# Code stream to write G-codes to
+	self._command_started = False	# At begining of RS274 command line
+	self._command_chunks = []	# RS274 line broken into space separated chunks
+	self._comment_chunks = []	# RS274 comment broken into space separated chunks
+	self._dxf = ""			# Text for dxf file
+	self._dxf_x_offset = zero	# DXF X offset
+	self._dxf_y_offset = zero	# DXF Y offset
+	self._vice_x = zero
+	self._vice_y = zero
+	self._z_rapid = zero		# Z above which Z rapids are allowed
+	self._z_safe = zero		# Z above XY rapids are safe
+
+	self.vrml_colors = [ 1.0, 0.0, 0.0 ]
+	self.vrml_color_indexes = []
+	self.vrml_lines = []
+	self.vrml_points = []
+
+	# Construct the *g1_table*:
+	g1_values_list = (0, 1, 2, 3, 33, 38, 73, 76, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89)
+	g1_table = {}
+	for g1_value in g1_values_list:
+	    g1_table[g1_value] = g1_value
+	self._g1_table = g1_table
+
+	# The stuff below is RS-274 mode variables:
+	self._f = Speed()		# Feedrate
+	self._g1 = 0			# (G0-3, 33, 38.x, 73, 76, 80-89)
+	self._g2 = 0			# (G17-19)
+	self._g3 = 0			# (G7-8)
+	self._g4 = 0			# (G90-91)
+	self._g5 = 0			# (G93-94)
+	self._g6 = 0			# (G20-21)
+	self._g7 = 0			# (G40-42)
+	self._g8 = 0			# (G43, 49)
+	self._g9 = 0			# (G98-99)
+	self._g10 = 0			# (G54-59)
+	self._g11 = 0			# (G4)
+	self._h = zero			# H tool offset index
+	self._i = zero			# I coordinate
+	self._j = zero			# J coordinate
+	self._m1 = 0			# (M0-2, 30, 60)
+	self._m2 = 0			# (M6)
+	self._m3 = 0			# (M3-5)
+	self._m4 = 0			# (M7-9)
+	self._m5 = 0			# (M48-49)
+	self._p = Time()		# G4
+	self._q = zero			# Peck depth
+	self._r0 = zero			# Radius cycle R
+	self._r1 = zero			# Drill cycle R
+	self._s = Hertz()		# Spindle revolutions
+	self._x = zero			# X coordinate
+	self._y = zero			# Y coordinate
+	self._z = zero			# Z coordinate
+	self._z1 = zero 		# Z coordinate
+	self._z_safe_f = Speed()	# Feed to perform z safe operation at
+	self._z_safe_pending = False	# {true}=>need to do z safe move
+	self._z_safe_s = Hertz()	# Speed to perform z safe operation at
+
+	self._vrml_reset()
+
+    def _block_append(self, block):
+	""" *Code*: Append *block* onto the blocks list inside of the *Code* object
+	    (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(block, Block)
+
+	# Append *block* onto the blocks list:
+	self._blocks.append(block)
+
+    def _command_begin(self):
+	""" *Code*: Start a new RS274 command in the *Code* object (i.e. *self*). """
+
+	assert not self._command_started, "Previous RS274 command was not ended."
+	self._command_started = True
+
+	# Remember some values for VRML line path drawing:
+	self._vrml_start_r0 = self._r0
+	self._vrml_start_x = self._x
+	self._vrml_start_y = self._y
+	self._vrml_start_z = self._z
+	self._vrml_motion = -1
+
+    def _command_end(self):
+	""" *Code*: End the current RS274 in the *Code* object (i.e. *self*). """
+
+	# Make sure we have started a command:
+	assert self._command_started, "Not currently in a RS274 command"
+
+	# Grab out both the *command_chunks* and the *comment_chunks*:
+	command_chunks = self._command_chunks
+	comment_chunks = self._comment_chunks
+
+	# If we have any *comment_chunks*, tack the onto the end of *command_chunks*:
+	if len(comment_chunks):
+	    command_chunks += ["("] + comment_chunks + [")"]
+
+	# Construct a space separated *command*:
+	command = " ".join(self._command_chunks)
+	print("command='{0}'".format(command))
+
+	# Write *comand* to *code_stream*:
+	code_stream = self._code_stream
+	code_stream.write(command)
+	code_stream.write("\n")
+
+	# Clear out *command_chunks* and *comment_chunks* for the next command:
+	del command_chunks[:]
+	del comment_chunks[:]
+
+	# Mark that we ended the current command:
+	self._command_started = False
+
+	#if self._vrml_enabled:
+	if True:
+	    start_index = \
+	      self._vrml_point(self._vrml_start_x, self._vrml_start_y, self._vrml_start_z)
+	    end_index = self._vrml_point(self._x, self._y, self._z)
+	    self._vrml_point_indices.append(start_index)
+	    self._vrml_point_indices.append(end_index)
+	    self._vrml_point_indices.append(-1)
+	    color_index = 0
+
+	    # Draw rapid moves in a different color:
+	    if self._vrml_motion == 0:
+		color_index = 1
+	    self._vrml_color_indices.append(color_index)
+
+    def _comment(self, comment):
+	""" *Code*: Output *comment* to the *Code* object (i.e. *self*). Any parentheses
+	    in *comment* are converted to square brackets.
+	"""
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+
+	# Replace open/close parenthesis in *comment* with square brackets:
+	comment = comment.replace('(', '[').replace(')', ']')
+
+	# Add it on to the comment
+	self._comment_chunks.append(comment)
+
+
+    def _configure(self, tool, vice_x, vice_y):
+	""" *Code*: Configure the *Code* object (i.e. *self*) to use
+	    *tool*, *vice_x*, and *vice_y*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(tool, Tool)
+	assert isinstance(vice_x, L)
+	assert isinstance(vice_y, L)
+
+	# Initialize *code*:
+	self._tool = tool
+	self._vice_x = vice_x
+	self._vice_y = vice_y
+
+    def _dxf_xy_offset_set(self, dxf_x_offset, dxf_y_offset):
+	""" *Code*: Set the DXF offset X field of the *RS724* object (i.e. *self*) """
+
+	# Verify argument types:
+	assert isinstance(dxf_x_offset, L)
+	assert isinstance(dxf_y_offset, L)
+	self._dxf_x_offset = dxf_x_offset
+	self._dxf_y_offset = dxf_y_offset
+
+    def _dxf_y_offset_get(self):
+	""" *Part*: Return the DXF offset Y field of the *Part* object (i.e. *self*) """
+
+	return self._dxf_y_offset
+
+
+    def _finish(self):
+	code_stream = self._code_stream
+	assert isinstance(code_stream, file)
+	code_stream.close()
+	self._code_stream = None
+
+	# Write out headers to *vrml_stream*:
+	vrml_stream = self._vrml_stream
+	vrml_stream.write("#VRML V2.0 utf8\n")
+	vrml_stream.write("Shape {\n")
+	vrml_stream.write(" geometry IndexedLineSet {\n")
+	vrml_stream.write("  colorPerVertex FALSE\n")
+
+	# Output the colors:
+	vrml_stream.write("  color Color {\n")
+	vrml_stream.write("   color [\n")
+	vrml_stream.write("     1.0 0.0 0.0 # red\n")
+	vrml_stream.write("     0.0 0.0 1.0 # blue\n")
+	vrml_stream.write("   ]\n")
+	vrml_stream.write("  }\n")
+
+	# Write out points:
+	vrml_stream.write("  coord Coordinate {\n")
+	vrml_stream.write("   point [\n")
+	for point in self._vrml_points:
+	    vrml_stream.write("    {0} {1} {2}\n".format(point[0], point[1], point[2]))
+	vrml_stream.write("   ]\n")
+	vrml_stream.write("  }\n")
+		
+	# Write out coordinate index:
+	vrml_stream.write("  coordIndex [\n")
+	vrml_point_indices = self._vrml_point_indices
+	vrml_stream.write("  ");
+	for index in vrml_point_indices:
+	    vrml_stream.write(" {0}".format(index))
+	    if index < 0:
+		vrml_stream.write("\n  ")
+	vrml_stream.write("]\n")
+
+	# Write out the color indices:
+	vrml_stream.write("  colorIndex [\n")
+	for color_index in self._vrml_color_indices:
+	    vrml_stream.write("    {0}\n".format(color_index))
+	vrml_stream.write("  ]\n")
+
+	# Close out the shape and geometry clauses:
+	vrml_stream.write(" }\n")
+	vrml_stream.write("}\n")
+
+	# Close *vrml_stream*:
+	vrml_stream.close()
+
+	# Now reset all the VRML values:
+	self._vrml_reset()
+
+    def _flush(self, program_number):
+	""" *Code*: Generate CNC code starting at *program_number* for
+	    the first CNC file name.
+	"""
+
+	# Verify argument types:
+	assert isinstance(program_number, int)
+
+	# Use *code* instead of *self*:
+	code = self
+
+	#call d@(form@("=>flush@Code(*, %d%)\n\") / f@(program_number))
+	#original_program_number :@= program_number
+
+	# Output all of the *blocks*:
+	blocks = self._blocks
+	size = len(blocks)
+	print("size=", size)
+	if size != 0:
+	    block0 = blocks[0]
+	    part = block0._part_get()
+	    assert isinstance(part, Part)
+
+	    remainder = program_number % 10
+	    if remainder != 0:
+		program_number += 10 - remainder
+	    file_name = "{0}.ngc".format(program_number)
+
+	    # Assign program numbers:
+	    for index in range(size):
+		block = blocks[index]
+		#call d@(form@("Block[%d%] #%d% %d% %v%\n\") % f@(index) %
+		#  f@(block.uid) % f@(block.priority) / f@(block.tool.name))
+		block.program_number = program_number
+		program_number += 1
+
+	    # Open *file_name* for writing:
+	    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>code_stream_open: '{0}'".format(file_name))
+	    code_stream = open(file_name, "wa")
+	    assert isinstance(code_stream, file), \
+	      "Could not open '{0}' for writing".format(file_name)
+
+	    # Output the tool table:
+	    code_stream.write("({0}: {0})\n".format(part._name_get(), block0._comment_get()))
+	    code_stream.write("(Tooling table:)\n")
+            for block in blocks:
+		# Fetch {tool}:
+		tool = block._tool_get()
+
+		# Make sure we have assigned a number to the tool:
+		tool_name = tool._name_get()
+		assert tool._number_get() != 0, \
+		  "Tool {0} does not have a number\n".format(tool_name)
+
+		# Output the line in the tool table:
+		code_stream.write("(T{0} {1})\n".format(tool._number_get(), tool_name))
+
+		# Perform the code block:
+		code_stream.write("O{0} call\n".format(block._program_number_get()))
+
+	    # Wrap it up:
+	    code_stream.write("G53 Y0.0 (Move the work to the front)\n")
+	    code_stream.write("M2\n")
+	    code_stream.close()
+	    print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<code_stream_open: '{0}'".format(file_name))
+
+	    # Now output the blocks:
+	    for block in blocks:
+		# Fetch {block}, {tool} and {name}.
+		tool = block._tool_get()
+		tool_number = tool._number_get()
+
+		if tool._is_laser_get():
+		    # We have a laser; generate a .dxf file:
+		    dxf_file_name = "{0}.dxf".format(program_number)
+		    dxf_stream = open(dxf_file_name, "wa")
+		    assert isinstance(dxf_stream, file), \
+		      "Unable to open file '{0}'".format(file_name)
+
+		    #dxf_stream.write("0\n\SECTION\n\2\n\HEADER\n")
+		    #dxf_stream.write("9\n\$DIMAUNITS\n\70\n\1\n")
+		    #dxf_stream.write("9\n\$INSUNITS\n\70\n\1\n")
+		    #dxf_stream.write("9\n\$LUNITS\n\70\n\0\n")
+		    #dxf_stream.write("9\n\$MEASUREMENT\n\70\n\0\n")
+		    #dxf_stream.write("0\n\ENDSEC\n")
+
+		    dxf_stream.write("0\n\SECTION\n\2\n\ENTITIES\n")
+
+		    # Output *dxf* to *dxf_stream*:
+		    dxf = code.dxf
+		    dxf_stream.write(dxf)
+
+		    # See if we are aggregating *dxf* into a named DXF file:
+		    dxf_base_name = part.dxf_base_name
+		    if dxf_base_name != "":
+			# Yes, we need to aggregate:
+			shop = part._shop
+			dxf_table = shop.dxf_table
+			dxf_contents = lookup[dxf_base_name]
+			assert isinstance(dxf_contents, str)
+			dxf_contents[dxf_base] = dxf_contents + dxf
+
+		    # Clear *dxf* for the next part:
+		    code.dxf = ""
+
+		    # Wrap up {dxf_stream}:
+		    dxf_stream.write("0\n\ENDSEC\n\0\n\EOF\n")
+		    dxf_stream.close()
+		else:
+		    # We have a mill; generate a .ngc file:
+		    program_number = block.program_number
+		    ngc_file_name = "{0}.ngc".format(program_number)
+		    code_stream = open(ngc_file_name, "wa")
+		    print(">>>>>>>>>>>>>>>>code_stream_open: '{0}'".format(file_name))
+		    assert isinstance(code_stream, file), \
+		      "Unable to open '{0}' for output\n".format(ngc_file_name)
+
+		    # Put a visual break into {code_stream}:
+		    part_name = block._part_get()._name_get()
+		    code_stream.write("({0})\n".format(part_name))
+		    code_stream.write("O{0} sub\n".format(program_number))
+		    code_stream.write("G90 G90.1 G20\n")
+
+		    # Output the tool change, get the coolant on,
+		    # and spindle spun up:
+		    code_stream.write("M6 T{0} (Insert {1})\n". 
+           	      format(tool_number, tool._name_get()))
+		    spindle = block._spindle_get()
+		    if spindle > Hertz():
+			material = part._material_get()
+			if material._needs_coolant():
+			    code_stream.write("M8 (Coolant on)\n")
+			else:
+			    code_stream.write("M9 (Coolant off)\n")
+			code_stream.write("S{0:rpm} M3 (Spindle on)\n".format(spindle))
+
+		    # Get moving to tool change location:
+		    plunge_x = part._plunge_x_get()
+		    plunge_y = part._plunge_y_get()
+		    vice_x = block._vice_x_get()
+		    vice_y = block._vice_y_get()
+		    code._vice_xy_set(vice_x, vice_y)
+
+		    #print("part:{0} code.vice_x={1} code.vice_y={2}\n".
+		    #  format(part.name, code.vice_x, code.vice_y))
+
+		    code_stream.write("G54 G0 X{0} Y{1} (Apply work offset)\n".
+		      format(plunge_x - vice_x, plunge_y - vice_y))
+		    code_stream.write("(Part_Origin_X={0} Part_Origin_Y={1})\n".
+		      format(-vice_x, -vice_y))
+
+		    # Enable tool offset:
+		    z_safe = part._z_safe_get()
+		    code_stream.write("G43 H{0} (Enable tool_offset)\n".
+		      format(tool_number))
+		    code_stream.write(
+		      "G0 Z{0:i} (Go to Z-safe for current tool)\n".
+		      format(z_safe))
+
+		    # These should be done using accessor functions:
+		    code._g8 = 43
+		    code._g1 = 0
+		    code._h = tool_number
+		    code._z = z_safe
+
+		    # Generate the code for {block}:
+		    code._commands_write(code_stream)
+
+		    # Put the tool back into a reasonable position:
+		    code_stream.write("M5 (Spindle off)\n")
+		    code_stream.write("M9 (Coolant off)\n")
+		    code_stream.write(
+		      "G0 X{0} Y{1} (Put spindle to left of vice)\n".
+		      format(0.0, -1.0))
+
+		    # These should be done using accessor functions:
+		    code._x = vice_x - L(inch= 1.0)
+		    code._y = vice_y
+
+		    code_stream.write("G49 (Disable tool offset)\n")
+		    # G53 is not modal, thus we are still in G54 work offset:
+		    code_stream.write(
+		      "G53 G0 Z{0} (Return to machine Z zero)\n".format(1.0))
+		    code.z = L()
+		    code_stream.write("O{0} endsub\n".format(program_number))
+		    code_stream.write("O{0} call\n".format(program_number))
+		    code_stream.write("M2\n")
+		    code_stream.write("%\n")
+		    code_stream.close()
+		    print("<<<<<<<<<<<<<<<<code_stream_open: '{0}'".format(file_name))
+
+	    # Output the shut-down code:
+	    #call put@("(*************************************)\n", code_stream)
+
+	    # Output the subroutine calls:
+	    #index := 0
+	    #while index < size
+	    #    #call put@(form@("O%d% call\n\") /
+	    #    #  f@((index + 1) * 100), code_stream)
+	    #    index := index + 1
+
+	    #call put@(form@("O<%s%> sub\n\") / f@(base_name), code_stream)
+	    #call put@("O[#1 * 100] call\n\", code_stream)
+	    #call put@(form@("O<%s%> endsub\n\") / f@(base_name), code_stream)
+
+	    #call put@("G53 Y0.0 (Move the work to the front)\n", code_stream)
+
+	    #call put@("M2\n\", code_stream)
+    
+	    # Zero {blocks} for the next time:
+	    del blocks[:]
+
+	    #call close@(code_stream)
+
+	#call d@(form@("<=flush@Code(*, %d%) => %d%\n\") %
+	#  f@(original_program_number) / f@(program_number))
+	return program_number
+
+    def _g1_set(self, g1):
+	""" *Code*: Set the G1 field of the *Code* object (i.e. *self*) to *g1*. """
+
+	# Verify argument types:
+	assert isinstance(g1, int)
+
+        # Set the G1 field of the *Code* object (i.e. *self*) to *g1*:
+	self._g1 = g1
+
+    def _hertz(self, field_name, value):
+	""" *Code*: Output *value* for *field_name* in the current command of the *Code* object 
+	    (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(field_name, str)
+	assert isinstance(value, Hertz)
+
+	square_bracket = False
+	changed = False
+	if field_name == "S":
+	    if self._s != value:
+		self._s = value
+		changed = True
+	elif field_name == "[]":
+	    changed = True
+	    square_bracket = True
+	else:
+	    assert False, "Bad field name '{0}'".format(field_name)
+
+	if changed:
+	    if square_bracket:
+		chunk = "[{0:rpm}]".format(value)
+	    else:
+		chunk = "{0}{1:rpm}".format(field_name[0], value)
+	    self._command_chunks.append(chunk)
+
+    def _length(self, field_name, value):
+	""" *Code*: Output *value* for *field_name* to the *Code* object (i.e. *self*.) """
+
+	assert isinstance(field_name, str)
+	assert isinstance(value, L)
+
+	square_brackets = False
+	offset = L()
+	changed = False
+	if field_name == "Q":
+	    if self._q != value:
+		self._q = value
+		changed = True
+	elif field_name == "I":
+            if self._i != value:
+		self._i = value
+		changed = True
+	elif field_name == "J":
+	    if self._j != value:
+		self._j = value
+		changed = True
+	elif field_name == "R0":
+	    if self._r0 != value:
+		self._r0 = value
+		changed = True
+ 	elif field_name == "R1":
+	    if self._r1 != value:
+		self._r1 = value
+		changed = True
+	elif field_name == "X":
+	    offset = self._vice_x
+	    if self._x != value - offset:
+		self._x = value - offset
+		changed = True
+	elif field_name == "Y":
+	    offset = self._vice_y
+	    if self._y != value - offset:
+		self._y = value - offset
+		changed = True
+	elif field_name == "Z":
+	    if self._z != value:
+		self._z = value
+		achanged = True
+	elif field_name == "Z1":
+	    if self._z1 != value:
+		self._z1 = value
+		changed = True
+	elif field_name == "[]":
+	    changed = True
+	    square_brackets = True
+	else:
+	    assert False, "Unrecognized field {0}".format(field_name)
+
+	if changed:
+            chunk = ""
+	    if square_brackets:
+		chunk = "[{0:i}]".format(value - offset)
+	    else:
+		chunk = "{0}{1:i}".format(field_name[0], value - offset)
+	    self._command_chunks.append(chunk)
+
+    def _line_comment(self, comment):
+	""" *Code*: Emit *comment* to the *Code* object (i.e. *self*). """
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+
+	# This routine will add a line containg *comment* to the *Code* object (i.e. *self).:
+	self._command_begin()
+	self._comment(comment)
+	self._command_end()
+
+    def _mode_motion(self, g1_value):
+	""" *Code*: This routine will issue a G*g1_value* motion command to the *Code* object
+	    (i.e. *self)*.
+	"""
+
+	# Verify arguement types:
+	assert isinstance(g1_value, int) and g1_value in self._g1_table
+
+	# Add a G1 field to the command:
+	self._unsigned("G1", g1_value)
+
+	self._vrml_motion = g1_value
+
+
+    def _reset(self):
+	""" *Code*: Reset the contents of the *Code* object (i.e. *self*) """
+
+	zero = L()
+	large = L(inch=123456789.0)
+	huge = 0x7fffffff
+	big = L(inch=123456789)
+
+	self._begin = True
+	self._f = Speed(mm_per_sec=huge)
+	self._g1 = huge
+	self._g2 = huge
+	self._g3 = huge
+	self._g4 = huge
+	self._g5 = huge
+	self._g6 = huge
+	self._g7 = huge
+	self._g8 = huge
+	self._g9 = huge
+	self._g10 = huge
+	self._g11 = huge
+	self._h = huge
+	self._i = big
+	self._j = big
+	self._m1 = huge
+	self._m2 = huge
+	self._m3 = huge
+	self._m4 = huge
+	self._m5 = huge
+	self._p = Time(sec=-1.0)
+	self._q = big
+	self._r0 = big
+	self._r1 = big
+	self._s = Hertz(rps=123456789.0)
+	self._x = big
+	self._y = big
+	self._z = big
+	self._z1 = big
+
+    def _start(self, part, tool, ngc_program_number, spindle_speed):
+	""" *Code*: Start writing out the G-code for *tool* (
+	"""
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(tool, Tool)
+	assert isinstance(ngc_program_number, int) and ngc_program_number > 0
+	assert isinstance(spindle_speed, Hertz)
+
+        # Grab some values from *part* and *tool*:
+        part_name = part._name_get()
+	tool_name = tool._name_get()
+	tool_number = tool._number_get()
+
+	# Make sure that closed off any previous *code_stream*:
+	assert self._code_stream == None
+
+	# Open new *code_stream*:
+	code_file_name = "O{0}.ngc".format(ngc_program_number)
+	code_stream = open(code_file_name, "w")
+	assert code_stream != None, "Could not open '{0}' for writing".format(code_file_name)
+	self._code_stream = code_stream
+
+	# Output a descriptive header comment:
+	code_stream.write("( Part {0}: Tool {1} Program: {2} )\n".
+	  format(part_name, tool_name, ngc_program_number))
+
+	# Declare the the subroutine number:
+	code_stream.write("O{0} sub\n".format(ngc_program_number))
+
+	# Set absolute mode for X/Y/Z (G90) and absolute mode for I/J/K (G90.1).
+	# Set units to inches (G20):
+	code_stream.write("G90 G90.1 G20\n")
+
+	# Output the tool change, get the coolant on, and spindle spun up:
+	code_stream.write("M6 T{0} (Insert {1})\n".format(tool_number, tool_name))
+	spindle_is_on = spindle_speed > Hertz()
+	if spindle_is_on:
+	    code_stream.write("( Get the spinde up to speed.)\n")
+	    code_stream.write("S{0:rpm} M3 (Spindle on)\n".format(spindle_speed))
+
+	# Use the *material* to control the coolant:
+	material = part._material_get()
+	if material._needs_coolant() and spindle_is_on:
+	    code_stream.write("M8 (Coolant on)\n")
+	else:
+	    code_stream.write("M9 (Coolant off)\n")
+
+	# Open new *vrml_stream*:
+	vrml_file_name = "O{0}.wrl".format(ngc_program_number)
+	vrml_stream = open(vrml_file_name, "w")
+	assert vrml_stream != None, "Could not open '{0}' for writing".format(vrml_file_name)
+	self._vrml_stream = vrml_stream
+
+    def _foo(self):
+	# Get moving to tool change location:
+	plunge_x = part._plunge_x_get()
+	plunge_y = part._plunge_y_get()
+	vice_x = part._vice_x_get()
+	vice_y = part._vice_y_get()
+	code._vice_xy_set(vice_x, vice_y)
+
+	#print("part:{0} code.vice_x={1} code.vice_y={2}\n".
+	#  format(part.name, code.vice_x, code.vice_y))
+
+	code_stream.write("G54 G0 X{0} Y{1} (Apply work offset)\n".
+	  format(plunge_x - vice_x, plunge_y - vice_y))
+	code_stream.write("(Part_Origin_X={0} Part_Origin_Y={1})\n".
+	  format(-vice_x, -vice_y))
+
+	# Enable tool offset:
+	z_safe = part._z_safe_get()
+	code_stream.write("G43 H{0} (Enable tool_offset)\n".
+	  format(tool_number))
+	code_stream.write(
+	  "G0 Z{0:i} (Go to Z-safe for current tool)\n".
+	  format(z_safe))
+
+	# These should be done using accessor functions:
+	code._g8 = 43
+	code._g1 = 0
+	code._h = tool_number
+	code._z = z_safe
+
+    def _s_set(self, s):
+	""" *Code*: Set the S field of the *Code* object (i.e. *self*) to *s*. """
+
+	# Verify argument types:
+	assert isinstance(s, Hertz)
+
+        # Set the S field of the *Code* object (i.e. *self*) to *s*:
+	self._s = s
+
+    def _simple_pocket_helper(self, pocket, offset, s, f, z, rapid_move):
+	""" *Code*: Perform one rectangular or rounded rectangular path of the currently
+	    mounted tool and output the commands to the *Code* object (i.e. *self*).
+	    *offset* specifies the distance inward from the nominal path specified by
+	    *pocket*.  *z* specifies the depth at which the tool should be placed before
+	    traversing the path.  *rapid_move* specifies whether or not to move to the
+	    start position with rapid tool movement (i.e. G0) or linear tool movement
+	    (i.e. G1) commands.  For linear tool movement commands *s* is the spindle
+	    speed and *f* is the feedrate to use.
+	"""
+    
+	# Verify argument types:
+	#assert isinstance(block, Block)
+	assert isinstance(pocket, Operation_Simple_Pocket)
+	assert isinstance(offset, L)
+	assert isinstance(s, Hertz)
+	assert isinstance(f, Speed)
+	assert isinstance(z, L)
+	assert isinstance(rapid_move, bool)
+
+	# Extract the corners:
+	x1 = pocket._x1_get()
+	y1 = pocket._y1_get()
+	x2 = pocket._x2_get()
+	y2 = pocket._y2_get()
+	corner_radius = pocket._corner_radius_get()
+	self._line_comment(
+	  "x1={0:i} y1={1:i} x2={2:i} y2={3:i} cr={4:i}".format(x1, y1, x2, y2, corner_radius))
+    
+	# Make sure that {x1} < {x2} and {y1} < {y2}:
+	assert x1 < x2
+	assert y1 < y2
+    
+	# Compute the corner center coordinates:
+	rx1 = x1 + corner_radius
+	rx2 = x2 - corner_radius
+	ry1 = y1 + corner_radius
+	ry2 = y2 - corner_radius
+	self._line_comment("rx1={0:i} ry1={1:i} rx2={2:i} ry2={3:i}".format(rx1, ry1, rx2, ry2))
+    
+	# Compute the rectangle path coordinates:
+	px1 = x1 + offset
+	px2 = x2 - offset
+	py1 = y1 + offset
+	py2 = y2 - offset
+	self._line_comment(
+	  "offset={0:i} px1={1:i} py1={2:i} px2={3:i} py2={4:i}".format(offset, px1, py1, px2,py2))
+    
+	# Determine the starting location for this path:	
+	start_x = px1
+	start_y = py1
+	if offset < corner_radius:
+	    # We have rounded corner path:
+	    start_x = rx1
+    
+	# Move to (*start_x*, *start_y*) as specified by *linear_move* argument:
+	if rapid_move:
+	    self._xy_rapid(start_x, start_y)
+	else:
+	    self._xy_feed(f, s, start_x, start_y)
+    
+	# Make sure we are at the depth *z*:
+	self._z_feed(f/2, s, z, "simple_pocket_helper")
+    
+	# Mill out either a square or rounded corners
+	if offset < corner_radius:
+	    # Mill out a rectangle with rounded corners in a
+	    # counter clockwise direction to force a climb cut:
+    
+	    r = corner_radius - offset
+    
+	    # Bottom horizontal line from (rx1,py1) to (rx2,py1):
+	    self._xy_feed(f, s, rx2, py1)
+    
+	    # Lower right arc (rx2,py1) to (px2,ry1):
+	    self._xy_ccw_feed(f, r, s, px2, ry1)
+    
+	    # Right vertical line (px2,ry1) to (px2,ry2):
+	    self._xy_feed(f, s, px2, ry2)
+    
+	    # Upper right arc (px2,ry2) to (rx2, py2):
+	    self._xy_ccw_feed(f, r, s, rx2, py2)
+    
+	    # Top horizontal line (rx2, py2) to (rx1, py2):
+	    self._xy_feed(f, s, rx1, py2)
+    
+	    # Upper left arc (rx1, py2) to (px1, ry2):
+	    self._xy_ccw_feed(f, r, s, px1, ry2)
+    
+	    # Left vertical line (px1, ry2) to (px1, ry1):
+	    self._xy_feed(f, s, px1, ry1)
+    
+	    # Lower left arc (px1, ry1) to (rx1, py1):
+	    self._xy_ccw_feed(f, r, s, rx1, py1)
+	else:
+	    # Mill out a rectangle with "square" corners in a counter
+	    # clockwise direction to force a climb cut:
+    
+	    # Bottom horizontal line from (px1, py1) to (px2, py1):
+	    self._xy_feed(f, s, px2, py1)
+    
+	    # Right vertical line from (px2, py1) to (px2, py2):
+	    self._xy_feed(f, s, px2, py2)
+    
+	    # Top horizontal line from (px2, py2) to (px1, py2):
+	    self._xy_feed(f, s, px1, py2)
+    
+	    # Left vertical line from (px1, py2) to (px1, py1):
+	    self._xy_feed(f, s, px1, py1)
+
+    def _speed(self, field_name, value):
+	""" *Code*: Set the speed for *field_name* to *value in the the current command of the
+	    *Code* object (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(field_name, str)
+	assert isinstance(value, Speed)
+
+	square_bracket = False
+	changed = False
+	if field_name == "F":
+	    if self._f != value:
+		self._f = value
+		changed = True
+	elif field_name == "[]":
+	    square_bracket = True
+	    changed = True
+	else:
+	    assert False, "field_name={0}".format(field_name)
+
+	if changed:
+	    if square_bracket:
+		chunk = "[{0:i}]".format(value)
+	    else:
+		chunk = "{0}{1:i}".format(field_name[0], value)
+	    self._command_chunks.append(chunk)
+
+    def _old_code(self):
+
+	self._reset()
+
+	# Use *part* instead of *self*:
+	part = self
+
+	#call d@(form@("=>flush@Part(%v%, %d%)\n\") %
+	#  f@(part.name) / f@(program_number))
+	#original_program_number = program_number
+
+	#call show@(part, "before flush")
+	shop = part._shop_get()
+	assert isinstance(shop, Shop)
+	vice = shop._vice_get()
+	jaw_width = vice._jaw_width_get()
+
+	# Compute (*plunge_x*, *plunge_y*) which is the vertical axis over
+	# which is to the left of the the part or the vice:
+	edge_x = part._edge_x_get()
+	edge_y = part._edge_y_get()
+	vice_x = part._vice_x_get()
+	vice_y = part._vice_y_get()
+	assert isinstance(vice_x, L)
+	plunge_x = vice_x
+	if plunge_x > edge_x:
+	    plunge_x = edge_x
+	assert isinstance(jaw_width, L)
+	assert isinstance(plunge_x, L)
+	if plunge_x > jaw_width:
+	    plunge_x = plunge_x - L(inch=0.7)
+	part._plunge_xy_set(plunge_x, edge_y)
+    
+	code = shop._code_get()
+	assert isinstance(code, Code)
+	code._z_safe_set(part._z_safe_get())
+	code._z_rapid_set(part._z_rapid_get())
+	operations = part._operations_get()
+	size = len(operations)
+
+	#call show@(part, "before sort", 1t)
+
+	# FIXME move the sort into *operations_regroup*:
+	# Sort *operations* to group similar operations together:
+	operations.sort(cmp=Operation._compare)
+
+	#call show@(part, "after sort", 1t)
+
+	# Do we need to user regroups instead *operations*:
+	part._operations_regroup()
+
+	#if regroups != 0
+	#	call show@(part, "after_regroup", 0f)
+
+	# FIXME: The code below should replace all the index stuff:
+	current_tool = None
+	operation_group = None
+	operation_groups = []
+	for operation in operations:
+	    # Grab the *tool* from *operation*:
+	    tool = operation._tool_get()
+	    assert isinstance(tool, Tool)
+
+	    # Start a new *operation_group* if the *tool* is different:
+	    if current_tool != tool:
+		# This code is always exectuted the first time through:
+		current_tool = tool
+		operation_group = []
+		operation_groups.append(operation_group)
+
+	    # Tack *operation* onto *operation_group*:
+	    assert isinstance(operation_group, list)
+	    operation_group.append(operation)
+
+	# Open the top-level *part_ngc_stream* file that invokes each tool operation
+	# in a separate .ngc file:
+	part_ngc_stream_file_name = "o{0}.ngc".format(program_number)
+	part_ngc_stream = open(part_ngc_stream_file_name, "w")
+	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_stream_file_name)
+
+    def _unsigned(self, field_name, value):
+	""" *Code*: This routine will format {value} for {field_name} to {code}.
+	"""
+
+	#FIXME: This should probably be done using a Python dictionary:
+
+	# Verify argument types:
+	assert isinstance(field_name, str)
+	assert isinstance(value, int) and value >= 0
+
+	previous_value = 0xffffffff
+	matched = False
+	size = len(field_name)
+	if size == 1:
+	    matched = True
+	    letter = field_name[0]
+	    if letter == 'H':
+		previous_value = self._h
+		if previous_value != value:
+		    self._h = value
+	    elif letter == 'M':
+		pass
+	    elif letter == 'O':
+		pass
+	    elif letter == 'T':
+		pass
+	    else:
+		matched = False
+	elif size == 2:
+	    if field_name[0] == 'G':
+		# Assume we will match (flip back in default clause below):
+		matched = True
+		g_digit = field_name[1]
+		if g_digit == '1':
+		    previous_value = self._g1
+		    if previous_value != value:
+			self._g1 = value
+		elif g_digit == '2':
+		    previous_value = self._g2
+		    if previous_value != value:
+			self._g2 = value
+		elif g_digit == '3':
+		    previous_value = self._g3
+		    if previous_value != value:
+			self._g3 = value
+		elif g_digit == '4':
+		    previous_value = self._g4
+		    if previous_value != value:
+			self._g4 = value
+		elif g_digit == '5':
+		    previous_value = self._g5
+		    if previous_value != value:
+			self._g5 = value
+		elif g_digit == '6':
+		    previous_value = self._g6
+		    if previous_value != value:
+			self._g6 = value
+		elif g_digit == '7':
+		    previous_value = self._g7
+		    if previous_value != value:
+			self._g7 = value
+		elif g_digit == '8':
+		    previous_value = self._g8
+		    if previous_value != value:
+			self._g8 = value
+		elif g_digit == '9':
+		    previous_value = self._g9
+		    if previous_value != value:
+			self._g9 = value
+		else:
+		    # We did not match:
+		    matched = False
+	elif size == 2:
+	    if field_name == "G10":
+		matched = True
+		previous_value = self.g10
+		if previous_value != value:
+		    self._g10 = value
+	    elif field_name == "G11":
+		# Always output G4 when requested:
+
+		matched = True
+		previous_value = 0x12345
+
+	assert matched, "Unrecognized field name {0}".format(field_name)
+	if previous_value != value:
+	    self._command_chunks.append("{0}{1}".format(field_name[0], value))
+
+    def _vice_xy_set(self, vice_x, vice_y):
+	""" *Code*: Set the vice X/Y fields of the *Code* object (i.e. *self*)
+	    to *vice_x* and *vice_y*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(vice_x, L)
+	assert isinstance(vice_y, L)
+
+        # Set the vice X/Y fields of the *Code* object (i.e. *self*) to *vice_x* and *vice_y*:
+	self._vice_x = vice_x
+	self._vice_y = vice_y
+
+    def _vrml_point(self, x, y, z):
+	""" *Code*: Return the VRML point index for point (*x*, *y*, *z*) using the
+	    *Code* object (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+	assert isinstance(z, L)
+
+	point = (x.millimeters(), y.millimeters(), z.millimeters())
+	vrml_points_table = self._vrml_points_table
+	if point in vrml_points_table:
+	    index = vrml_points_table[index]
+	else:
+	    vrml_points = self._vrml_points
+	    index = len(vrml_points)
+	    vrml_points.append(point)
+	return index
+
+    def _vrml_reset(self):
+	""" *Code*: Reset the VRML sub-system of the *Code* object (i.e. *self*). """
+
+	self._vrml_color_indices = []
+	self._vrml_file = None
+	self._vrml_motion = -1
+	self._vrml_point_indices = []
+	self._vrml_points = []
+	self._vrml_points_table = []
+	self._vrml_start_r0 = self._r0
+	self._vrml_start_x = self._x
+	self._vrml_start_y = self._y
+	self._vrml_start_z = self._z
+
+    def _x_value(self):
+	""" *Code*: Return the current value of X offset by the vice X for the *Code* object
+	    (i.e. *self*).
+	"""
+
+	return self._x + self._vice_x
+
+    def _xy_cw_feed(self, f, r, s, x, y):
+	""" *Code*: Feed to location (*x*, *y*) as a radius *r* clockwise  circle with a
+	    feedrate of *f* and spindle speed of *s* using the *Code* object (i.e. *self*):
+	"""
+    
+	# Verify routine arguments:
+	assert isinstance(f, Speed)
+	assert isinstance(r, L)
+	assert isinstance(s, Hertz)
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+    
+	x_value = self._x_value()
+	y_value = self._y_value()
+	if x_value != x or y_value != y:
+	    # Do the laser code first:
+	    if self._is_laser():
+		self._dxf_arc_append(True, x, y, r)
+
+	    # Now do the RS274 self and get F, R0, S, X, and Y updated:
+	    self._z_safe_retract_actual()
+	    self._r0 = L(inch=-100.0)	# Forget R
+	    self._command_begin()
+	    self._mode_motion(2)
+	    self._speed("F", f)
+	    self._length("R0", r)
+	    self._hertz("S", s)
+	    self._length("X", x)
+	    self._length("Y", y)
+	    self._command_end()
+    
+    def _xy_ccw_feed(self, f, r, s, x, y):
+	""" *Code*: Feed to location (*x*, *y*) as a radius *r* counter clockwise  circle with a
+	    feedrate of *f* and spindle speed of *s* using the *Code* object (i.e. *self*):
+	"""
+    
+	# Verify routine arguments:
+	assert isinstance(f, Speed)
+	assert isinstance(r, L)
+	assert isinstance(s, Hertz)
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+    
+	x_value = self._x_value()
+	y_value = self._y_value()
+	if x_value != x or y_value != y:
+	    # Do the laser code first:
+	    #if self._is_laser():
+	    #	self._dxf_arc_append(True, x, y, r)
+    
+	    # Now do the RS274 self and get F, R0, S, X, and Y updated:
+	    self._z_safe_retract_actual()
+	    self._r0 = L(inch=-100.00)	# Forget R
+	    self._command_begin()
+	    self._mode_motion(3)
+	    self._speed("F", f)
+	    self._length("R0", r)
+	    self._hertz("S", s)
+	    self._length("X", x)
+	    self._length("Y", y)
+	    self._command_end()
+
+    def _xy_feed(self, f, s, x, y):
+	""" *Code*: Feed to location (*x*, *y*) with a feedrate of *f*
+	    and spindle speed of *s* using the *Code* object (i.e. *self*).
+	"""
+    
+	# Verify argment types:
+	assert isinstance(f, Speed)
+	assert isinstance(s, Hertz)
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+
+	x_before = self._x_value()
+	y_before = self._y_value()
+	if x_before != x or y_before != y:
+	    # Do any laser code first:
+	    #if self._is_laser():
+	    #	self._dxf_entity_start("LINE")
+	    #	self._dxf_xy_append(0, x_before, y_before, "xy_feed before")
+	    #	self._dxf_xy_append(1, x, y, "xy_feed after")
+	    #	self._dxf_dxf_entity_stop()
+    
+	    # Now do the RS274 code and get the F, S, X, and Y values updated:
+	    self._z_safe_retract_actual()
+	    self._command_begin()
+	    self._mode_motion(1)
+	    self._speed("F", f)
+	    self._hertz("S", s)
+	    self._length("X", x)
+	    self._length("Y", y)
+	    self._command_end()
+
+    def _xy_rapid(self, x, y):
+	""" *Code*: Perform a rapid move to (X, Y) using the *Code* object (i.e. *self*). """
+
+	# Verify argument types:
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+
+	# Only perform the rapid if we are not already there:
+	if self._x_value() != x or self._y_value() != y:
+	    # Make sure we are at a safe Z height prior to performing the rapid:
+	    self._z_safe_retract_actual()
+
+	    # Output a X/Y rapid command:
+	    self._command_begin()
+	    self._mode_motion(0)
+	    self._length("X", x)
+	    self._length("Y", y)
+	    self._command_end()
+
+    def _y_value(self):
+	""" *Code*: Return the current value of Y offset by the vice Y for the *Code* object
+	    (i.e. *self*).
+	"""
+
+	return self._y + self._vice_y
+
+    def _z_feed(self, f, s, z, from_routine):
+	""" *Code*: Feed to an altitude of *z* using the *Code* object (i.e. *self*)
+	    at a feed of *f* and a speed *s*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(f, Speed)
+	assert isinstance(s, Hertz)
+	assert isinstance(z, L)
+	assert isinstance(from_routine, str)
+
+	# This routine will feed to an altitude of {z} using {code}.
+
+	# If *z_safe_pending* is set, but we are doing another Z feed before
+	# it is cleared, we must not need to do a Z safe move operation after all.
+	# Hence, we can just clear *z_safe_pending*:
+	self._z_safe_pending = False
+
+	z_safe = self._z_safe
+	z_rapid = self._z_rapid
+	z_current = self._z
+
+	# Move up if we are too low:
+	while z_current < z:
+	    # We are lower than {z} and need to move up:
+	    if z_current < z_rapid:
+		# We need to feed up:
+		z_target = z
+		if z > z_rapid:
+		    z_target = z_rapid
+
+		# We do a G1 feed to get to {z_target}:
+		self._command_begin()
+		self._mode_motion(1)
+		self._speed("F", f)
+		self._hertz("S", s)
+		self._length("Z", z_target)
+		self._command_end()
+		z_current = z_target
+	    else:
+		# We are at or above {z_rapid}, so we can G0 rapid to a higher Z:
+		self._command_begin()
+		self._mode_motion(0)
+		self._length("Z", z)
+		self._command_end()
+		z_current = z
+
+	# Move down if we are too high:
+ 	while z_current > z:
+	    # We are higher than {z} and need to move down:
+	    if z_current > z_rapid:
+		# We are above {z_rapid}, so we can G0 rapid lower:
+		z_target = z
+		if z < z_rapid:
+		    z_target = z_rapid
+	
+		# We are at
+		self._command_begin()
+		self._mode_motion(0)
+		self._length("Z", z_target)
+		self._command_end()
+		z_current = z_target
+	    else:
+		# We are are at or below {z_rapid} and need to G1 feed down:
+		self._command_begin()
+		self._mode_motion(1)
+		self._speed("F", f)
+		self._hertz("S", s)
+		self._length("Z", z)
+		self._command_end()
+		z_current = z
+
+    def _z_rapid_set(self, z_rapid):
+	""" *Code*: Set the Z rapid field of the *Code* object (i.e. *self*) to *z_rapid*. """
+
+	# Verify argument types:
+	assert isinstance(z_rapid, L)
+
+        # Set the Z field of the *Code* object (i.e. *self*) to *z*:
+	self._z_rapid = z_rapid
+    
+
+    def _z_safe_assert(self, text, comment):
+	""" *Code*: Fail if the Code object (i.e. *self*)  is not at "Z safe".
+	    If not, the failing message will contain {text}.
+	"""
+
+	# Verify argument_types:
+	assert isinstance(text, str)
+	assert isinstance(comment, str)
+
+
+	assert self._z_safe_pending or self._z == self._z_safe, \
+	  "Z safe failure: {0} ({1}) [z={2}]".format(text, comment, code._z)
+
+    def _z_safe_set(self, z_safe):
+	""" *Code*: Set the Z safe field of the *Code* object (i.e. *self*). """
+
+	# Verify argument types:
+	assert isinstance(z_safe, L)
+
+        # Set the Z safe field of the *Code* object (i.e. *self*) to *z_safe*:
+	self._z_safe = z_safe
+
+    def _z_safe_retract(self, f, s):
+	""" *Code*: Ensure that the tool is at the "Z safe" altitude for next command RS274
+	    command in the *Code* object (i.e. *self) and get there using a feedrate of *f*
+	    and a speed of *s* if needed.
+	"""
+
+	# Verify argument types:
+	assert isinstance(f, Speed)
+	assert isinstance(s, Hertz)
+
+	# Mark that a "Z safe" operation is pending if needed:
+	if self._z != self._z_safe:
+	    self._z_safe_pending = True
+	    self._z_safe_s = s
+	    self._z_safe_f = f
+
+    def _z_safe_retract_actual(self):
+	""" *Code*  Ensure that the tool is at the "Z safe" altitude in the *Code* object
+	    (i.e. *self*) and get there using the internal F and S fields.
+	"""
+
+	# If we have a pending "z_safe" scheduled, this code will make it happen:
+	if self._z_safe_pending:
+            self._z_safe_pending = False
+	    self._z_feed(self._z_safe_f, self._z_safe_s, self._z_safe, "z_safe_retract_actual")
+
+	#assert self._z == self._z_safe, "Did not get to Z safe"
+
+    def _z_set(self, z):
+	""" *Code*: Set the Z field of the *Code* object (i.e. *self*). """
+
+	# Verify argument types:
+	assert isinstance(z, L)
+
+        # Set the Z field of the *Code* object (i.e. *self*) to *z*:
+	self._z = z
+
 ## @brief *Place* specifies where another *Part* is to be placed.
 #
 # A *Place* specifies the placement of a *Part* in an assembly.
@@ -10600,28 +12262,30 @@ class Shop:
 	# Verify argument types:
 	assert isinstance(name, str)
 
+	zero = L()
+
 	tools = []
 
-	self.assemblies = []		# Viewable assemblies
-	self.base_name = ""		# Base name for current operations
+	self._assemblies = []		# Viewable assemblies
+	self._base_name = ""		# Base name for current operations
 	#dxf_base_names = [] 		# List of DXF base names
-	self.blocks_uid = 0		# UID counter for *Code_Block* objects
+	self._blocks_uid = 0		# UID counter for *Code_Block* objects
 	# cache Cache			# Off/Nef3 file cache
-	self.changed = False		# Marker used by {update@Length}
-	self.code = Code()		# Code genertion object
-	self.cnc_generate = False	# {true} => do cnc code generation
+	self._changed = False		# Marker used by {update@Length}
+	self._cnc_generate = False	# {true} => do cnc code generation
 	#dxf_table = {}			# Table of DXF base names
-	self.extra1 = P()		# Temporary extra bounding box point
-	self.extra2 = P()		# Temporary extra bounding box point
-	self.name = name		# Shop name
-	self.machines = []		# Machines in shop
-	self.matrix = Matrix()		# Temporary matrix
-	self.parts = []			# Parts
-	self.program_base = 10		# Program base number
-	self.solids_generate = False	# {true} => do solid modeling
-	self.surface_speeds_table = {}	# [Part_Material, Tool_Material]
-	self.tools = tools		# Tools in shop
-	self.vice = Vice()		# Vice to use
+	self._extra1 = P()		# Temporary extra bounding box point
+	self._extra2 = P()		# Temporary extra bounding box point
+	self._name = name		# Shop name
+	self._machines = []		# Machines in shop
+	self._matrix = Matrix()		# Temporary matrix
+	self._parts = []			# Parts
+	self._program_base = 10		# Program base number
+	self._code = Code()		# Code genertion object
+	self._solids_generate = False	# {true} => do solid modeling
+	self._surface_speeds_table = {}	# [Part_Material, Tool_Material]
+	self._tools = tools		# Tools in shop
+	self._vice = Vice(zero, zero)	# Vice to use
 	#tess GLU_Tess			# Tessellator
 	#tess_mode Unsigned		# Triangulation mode
 	#tess_points Array[Point]	# Collection of points from tessellation
@@ -10633,10 +12297,6 @@ class Shop:
 	#eight32 Thread			# 8-32 thread
 	#ten24 Thread			# 10-24 thread
 	#ten32 Thread			# 10-32 thread
-
-	# Append new *Tool* objects to *tools*:
-	self.tool_append(Tool_Dowel_Pin(
-	  "Dowel_pin", L(inch=.5), Tool.MATERIAL_HIGH_SPEED_STEEL))
 
 	# Copied from:
 	#
@@ -10710,21 +12370,287 @@ class Shop:
 	# Aluminum	2100	3300		1000	1500
 
 	# Start loading some surface speeds into *self*:
-	self.surface_speeds_insert(Material("Aluminum", ""),
-	  Tool.MATERIAL_HIGH_SPEED_STEEL,
-	  Speed(ft_per_min=600), Speed(ft_per_min=1200))
-	self.surface_speeds_insert(Material("Aluminum", ""),
-	  Tool.MATERIAL_CARBIDE_TIPPED_STEEL,
-	  Speed(ft_per_min=600), Speed(ft_per_min=1200))
+	hss = Tool.MATERIAL_HIGH_SPEED_STEEL
+	plastic = Material("Plastic", "")
+	aluminum = Material("Aluminum", "")
+	fpm600 = Speed(ft_per_min=600)
+	fpm1200 = Speed(ft_per_min=1200)
+	print("type(hss)=", type(hss))
+	self._surface_speeds_insert(aluminum, hss, fpm600, fpm1200)
+	self._surface_speeds_insert(aluminum, hss, fpm600, fpm1200)
+	self._surface_speeds_insert(plastic, hss, fpm600, fpm1200)
+	self._surface_speeds_insert(plastic, hss, fpm600, fpm1200)
 
-	self.surface_speeds_insert(Material("Plastic", ""),
-	  Tool.MATERIAL_HIGH_SPEED_STEEL,
-	  Speed(ft_per_min=600), Speed(ft_per_min=1200))
-	self.surface_speeds_insert(Material("Plastic", ""),
-	  Tool.MATERIAL_CARBIDE_TIPPED_STEEL,
-	  Speed(ft_per_min=600), Speed(ft_per_min=1200))
+	degrees45 = Angle(deg=45.0)
+	degrees90 = Angle(deg=90.0)
+	degrees118 = Angle(deg=118.0)
 
-    def surface_speeds_insert(self, part_material, tool_material, low, high):
+	# Some common inch sizes:
+	in1_16 = L(inch="1/16")
+	in3_32 = L(inch="3/32")
+	in1_8 =  L(inch="1/8")
+	in3_16 = L(inch="3/16")
+	in1_4 =  L(inch="1/4")
+	in3_8 =  L(inch="3/8")
+	in1_2 =  L(inch="1/2")
+	in5_8 =  L(inch="5/8")
+	in3_4 =  L(inch="3/4")
+
+	stub = Tool.DRILL_STYLE_STUB
+	laser = True
+
+	dowel_pin = self._dowel_pin_append("3/8 Dowel Pin",
+	  1, hss, in3_8, L(inch=.900), in3_16)
+	mill_drill_3_8 = self._mill_drill_append("3/8 Mill Drill",
+	  2, hss, in3_8, 2, L(inch=.900), in3_16, degrees90)
+	drill_36 = self._drill_append("#36 Drill",
+	  3, hss, L(inch=0.1065), 2, L(inch=1.500), degrees118, stub)
+	drill_27 = self._drill_append("#27 drill",
+	  4, hss, L(inch=0.1440), 2, L(inch=1.750), degrees118, stub)
+	end_mill_3_8 = self._end_mill_append("3/8 End Mill",
+	  5, hss, in3_8, 2, in5_8, not laser)
+	end_mill_1_4 = self._end_mill_append("1/4 End Mill",
+	  6, hss, in1_4, 2, in1_2, not laser)
+	double_angle = self._double_angle_append("3/4 Double Angle",
+	  7, hss, in3_4, 10, L(inch=0.875), degrees90, in1_4, in1_4)
+	dove_tail = self._dove_tail_append("3/8 Dove Tail",
+	  8, hss, in3_8, 6, in1_4, in3_16, degrees45)
+	end_mill_3_16 = self._end_mill_append("3/16 End Mill",
+	  10, hss, in3_16, 2, in1_2, not laser)
+	drill_25 = self._drill_append("#25 drill",
+	  11, hss, L(inch=0.1495), 2, L(inch=2.000), degrees118, stub)
+	drill_9 = self._drill_append("#9 drill",
+	  12, hss, L(inch=0.1960), 2, L(inch=2.000), degrees118, stub)
+	drill_43 = self._drill_append("#43 drill",
+	  13, hss, L(inch=.0890), 2, L(inch=1.500), degrees118, stub)
+	drill_32 = self._drill_append("#32 drill",
+	  14, hss, L(inch=0.1160), 2, L(inch=1.500), degrees118, stub)
+	drill_50 = self._drill_append("#50 drill",
+	  15, hss, L(inch=0.0700), 2, L(inch=1.500), degrees118, stub)
+	end_mill_3_8_long = self._end_mill_append("3/8 1\" End Mill",
+	  16, hss, in3_8, 2, L(inch=1.000), not laser)
+	#end_mill_3_4 = self._end_mill_append("3/4 End Mill",
+	#  13, hss, in3_4, 2, in1_3_8)
+	drill_30 = self._drill_append("#30 drill",
+	  17, hss, L(inch=0.1285), 2, L(inch=1.750), degrees118, stub)
+	drill_1_8 = self._drill_append("1/8 drill",
+	  18, hss, in1_8, 2, L(inch=1.750), degrees118, stub)
+	drill_1_16 = self._drill_append("1/16 drill",
+	  19, hss, in1_16, 2, L(inch=1.750), degrees118, stub)
+	drill_3_32 = self._drill_append("3/32 drill",
+	  20, hss, in3_32, 2, L(inch=1.750), degrees118, stub)
+	drill_42 = self._drill_append("#42 drill",
+	  21, hss, L(inch=0.0935), 2, L(inch=1.750), degrees118, stub)
+
+	# Laser "tools":
+	laser_007 = self._end_mill_append("Laser_007",
+	  100, hss, L(inch=0.007), 2, L(inch=0.750), laser)
+	laser_000 = self._end_mill_append("Laser_000",
+	  101, hss, L(), 2, L(inch=0.750), laser)
+
+    def _blocks_uid_get(self):
+	""" *Shop*: Return the next block UID (Unique IDentifier) from the *Shop* object
+	    (i.e. *self*.)
+	"""
+
+	blocks_uid = self._blocks_uid + 1
+	self._blocks_uid = blocks_uid
+	return blocks_uid
+
+    def _code_get(self):
+	""" *Shop*: Return the *Code* object associated with the *Shop* object (i.e. *self*.) """
+
+	return self._code
+
+    def _cnc_generate_get(self):
+	""" *Shop*: Return the CNC generate field associated with the *Shop* object
+	    (i.e. *self*.)
+	"""
+
+	return self._cnc_generate
+
+    def _cnc_generate_set(self, cnc_generate):
+	""" *Shop*: Set the CNC generate field associated with the *Shop* object (i.e. *self*)
+	    to *cnc_generate*.
+	"""
+
+	assert isinstance(cnc_generate, bool)
+	self._cnc_generate = cnc_generate
+
+    def _double_angle_append(self,
+      name, number, material, diameter, flutes, maximum_z_depth, angle, inside_diameter, thickness):
+	"""
+	    *Shop*: Create and return a *Tool_Double_Angle* object that contains *name*, *number*,
+	    *material*, *diameter*, *flutes*, *maximum_z_depth*, *angle*, *inside_diameter* and
+	    *thickness*.  The returned *Tool_Double_Angle* object is also appended to the
+	    *Shop* object (i.e. *self) tool list.
+	"""
+
+	# Verify argument types:
+	zero = L()
+	assert isinstance(name, str)
+	assert isinstance(number, int) and number >= 0
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L) and diameter > zero
+	assert isinstance(flutes, int) and flutes > 0
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+	assert isinstance(angle, Angle) and angle > Angle()
+	assert isinstance(inside_diameter, L) and inside_diameter > zero
+	assert isinstance(thickness, L) and thickness > zero
+
+	# Create the *tool_double_angle* and append it to the tools list in the *Shop* object
+	# (i.e. *self*):
+	tool_double_angle = Tool_Double_Angle(name,
+	  number, material, diameter, flutes, maximum_z_depth, angle, inside_diameter, thickness)
+	self._tool_append(tool_double_angle)
+	return tool_double_angle
+
+    def _dove_tail_append(self,
+      name, number, material, diameter, flutes, maximum_z_depth, inside_diameter, angle):
+	""" *Shop*: Create and return a *Tool_Dove_Tail* object that contains *name*, *number*,
+	    *material*, *diameter*, *flutes*, *maximum_z_depth*, *inside_diameter*, and *angle*.
+	    The returned *Tool_Dove_Tail* is also appended to the tool list in the *Shop* object
+	    (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	zero = L()
+	isinstance(name, str)
+	isinstance(number, int) and number > 0
+	isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	isinstance(diameter, L) and diameter > zero
+	isinstance(flutes, int) and flutes > 0
+	isinstance(maximum_z_depth, L) and diameter > zero
+	isinstance(inside_diameter, L) and inside_diameter > zero
+	isinstance(angle, Angle)
+
+	# Create the *tool_dove_tail* and append it to the tools list of the *Shop* object
+	# (i.e. *self*):
+	tool_dove_tail = Tool_Dove_Tail(name,
+	  number, material, diameter, flutes, maximum_z_depth, inside_diameter, angle)
+	self._tool_append(tool_dove_tail)
+	return tool_dove_tail
+
+    def _dowel_pin_append(self, name, number, material, diameter, maximum_z_depth, tip_depth):
+	""" *Shop*: Create and return a *Tool_Dowel_Pin* object that contains a dowel pin.
+	    The returned *Tool* object contains *name*, *number*, *material*, *diameter*,
+	    *maximum_z_depth*, and *tip_depth*.   The returned *Tool* object, is also
+	    appended to the tool list of the *Shop* (i.e. *self*.)
+	"""
+
+	# Verify argument types:
+	assert isinstance(name, str)
+	assert isinstance(number, int) and number >= 0
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L)
+	assert isinstance(maximum_z_depth, L)
+	assert isinstance(tip_depth, L)
+
+	# Create the dowel pin *tool_dowel_pin*, add it to the *Shop* object (i.e. *self) tool list,
+	# and return the *tool*:
+	tool_dowel_pin = Tool_Dowel_Pin(name,
+	  number, material, diameter, maximum_z_depth, tip_depth)
+	self._tool_append(tool_dowel_pin)
+	return tool_dowel_pin
+
+    def _drill_append(self,
+      name, number, material, diameter, flutes_count, maximum_z_depth, point_angle, drill_kind):
+	""" *Shop*: Create and return a *Tool_Dowel_Pin* object that contains a dowel pin.
+	    The returned *Tool* object contains *name*, *number*, *material*, *diameter*,
+	    *flutes_count*, *maximum_z_depth*, and *tip_depth*.   The returned *Tool* object,
+	    is also appended to the tool list of the *Shop* (i.e. *self*.)
+	"""
+
+	# Verify argument types:
+	zero = L()
+	assert isinstance(name, str)
+	assert isinstance(number, int) and number >= 0
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L) and diameter > zero
+	assert isinstance(flutes_count, int) and flutes_count > 0
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+
+	# Create the dowel pin *tool_dowel_pin*, add it to the *Shop* object (i.e. *self) tool list,
+	# and return the *tool*:
+	tool_dowel_pin = Tool_Drill(name,
+	  number, material, diameter, flutes_count, maximum_z_depth, point_angle, drill_kind)
+	self._tool_append(tool_dowel_pin)
+	return tool_dowel_pin
+
+    def _end_mill_append(self,
+      name, number, material, diameter, flutes_count, maximum_z_depth, is_laser):
+	""" *Shop*: Create and return a *Tool_Mill_Drill* object that contains
+	    *name*, *number*, *material*, *diameter*, *flutes_count*, *maximum_z_depth* and
+	    *is_laser*.  The returned *Tool_End_Mill* object is also appended to
+	    the tool list of the *Shop* object (i.e. *self*.)
+	"""
+
+	# Verify argument types:
+	zero = L()
+	assert isinstance(name, str)
+	assert isinstance(number, int) and number >= 0
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L) and diameter >= zero	# Zero is OK
+	assert isinstance(flutes_count, int) and flutes_count > 0
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+	assert isinstance(is_laser, bool)
+
+	tool_end_mill = \
+	  Tool_End_Mill(name, number, material, diameter, flutes_count, maximum_z_depth, is_laser)
+	self._tool_append(tool_end_mill)
+	return tool_end_mill
+
+    def _matrix_get(self):
+	""" *Shop*: Return the *Matrix* object associated with the *Shop* object (i.e. *self*.) """
+
+	return self._matrix
+
+    def _mill_drill_append(self,
+      name, number, material, diameter, flutes, maximum_z_depth, tip_depth, point_angle):
+	""" *Shop*: Create and return a *Tool_Mill_Drill* object that contains
+	    *name*, *number*, *material*, *diameter*, *flutes*, *maximum_z_depth* and
+	    *point_angle*.  The returned *Tool_Mill_Drill* object is also appended to
+	    the tool list of the *Shop* object (i.e. *self*.)
+	"""
+
+	# Verify argument types:
+	zero = L()
+	assert isinstance(name, str)
+	assert isinstance(number, int) and number >= 0
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L) and diameter > zero
+	assert isinstance(flutes, int) and flutes > 0
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+	assert isinstance(tip_depth, L) and tip_depth > zero
+	assert isinstance(point_angle, Angle) and point_angle > Angle()
+
+	# Create *tool_mill_drill*, append it to the *Shop* object (i.e. *self*)
+	# tools list, and return it:
+	tool_mill_drill = Tool_Mill_Drill(name,
+	  number, material, diameter, flutes, maximum_z_depth, tip_depth, point_angle)
+	self._tool_append(tool_mill_drill)
+	return tool_mill_drill
+
+    def _tools_get(self):
+	""" *Shop*: Return the tools list object associated with the *Shop* object
+	    (i.e. *self*.)
+	"""
+
+	return self._tools
+
+    def _program_base_get(self):
+	""" *Shop*: Return the program base number object associated with the *Shop* object
+	    (i.e. *self*.)
+	"""
+
+	return self._program_base
+
+    def _vice_get(self):
+	""" *Shop*: Return the *Vice* object associated with the *Shop* object (i.e. *self*.) """
+
+	return self._vice
+
+    def _surface_speeds_insert(self, part_material, tool_material, low, high):
 	""" *Shop*: Insert *speed_range* containing *low* and *high* into
 	    the surface speeds table of the *Shop* object (i.e. *self)*
 	     keyed to *part_material* and *tool_material*.
@@ -10738,8 +12664,8 @@ class Shop:
 
 	# Enter *speed_range* into *self*:
 	speed_range = Speed_Range(low, high)
-	key = (part_material.generic(), tool_material)
-	self.surface_speeds_table[key] = speed_range
+	key = (part_material._generic_get(), tool_material)
+	self._surface_speeds_table[key] = speed_range
 
 	# Set *debug* to *True* to trace what is going on:
 	debug = False
@@ -10747,7 +12673,7 @@ class Shop:
 	if debug:
 	    print("speeds_table[{0}] = {1}".format(key, speed_range))
 
-    def surface_speeds_lookup(self, part_material, tool_material):
+    def _surface_speeds_lookup(self, part_material, tool_material):
 	""" *Shop*: Lookup and return a *Speed_Range* object from the
 	    *Shop* object (i.e. *self*) keyed on *part_material* and
 	    *tool_material*; or return *None* otherwise.
@@ -10758,32 +12684,49 @@ class Shop:
 	assert isinstance(tool_material, int)
 
 	# Look up the *Speed_Range* object from *surfaces_speeds_table*:
-	key = (part_material.generic(), tool_material)
-	print("Shop.surface_speeds_lookup():key={0}".format(key))
-	surface_speeds_table = self.surface_speeds_table
+	key = (part_material._generic_get(), tool_material)
+	#print("Shop.surface_speeds_lookup():key={0}".format(key))
+	surface_speeds_table = self._surface_speeds_table
 	speed_range = None
 	if key in surface_speeds_table:
 	    speed_range = surface_speeds_table[key]
 	return speed_range
 
-    def tool_append(self, tool):
-	""" *Shop*: Append *tool* to *Shop* object (i.e. *self*).
+    def _tool_append(self, new_tool):
+	""" *Shop*: Append *new_tool* to the tools lins in the *Shop* object (i.e. *self*).
+	    Duplicate tool numbers cause an assertion failure.
 	"""
 
 	# Verify argument types:
-	assert isinstance(tool, Tool)
+	assert isinstance(new_tool, Tool)
 
-	# Append *tool* to *tools*:
-	tools = self.tools
-	tools.append(tool)
+	# Search for duplicate *new_number* in *tools*:
+	new_number = new_tool._number_get()
+	tools = self._tools
+	for tool in tools:
+	    number = tool._number_get()
+	    assert new_number != number, \
+	     "Tool number {0} is conflicts between '{1}' and '{2}'".format(
+	     number, new_tool._name_get(), tool._name_get())
+
+	# Append *new_tool* to *tools*:
+	tools.append(new_tool)
+
+class Time:
+    def __init__(self, sec=0.0, min=0.0):
+	self._seconds = sec + min * 60.0 
 
 class Tool:
-
     # Tool kind:
-    TOOL_DOWEL_PIN = 1
-    TOOL_MILL_DRILL = 2
-    TOOL_DRILL = 3
-    TOOL_LASER = 4
+    KIND_NONE = 0
+    KIND_DRILL = 1
+    KIND_DOUBLE_ANGLE = 2
+    KIND_DOVE_TAIL = 3
+    KIND_DOWEL_PIN = 4
+    KIND_END_MILL = 5
+    KIND_LASER = 6
+    KIND_MILL_DRILL = 7
+    KIND_LAST = 8
 
     # Drill style:
     DRILL_STYLE_NONE = 0
@@ -10797,6 +12740,7 @@ class Tool:
     DRILL_STYLE_STANDARD = 8
     DRILL_STYLE_STUB = 9
     DRILL_STYLE_STRAIGHT_FLUTE = 10
+    DRILL_STYLE_LAST = 11
 
     # Define Tool material:
     MATERIAL_NONE = 0
@@ -10808,31 +12752,112 @@ class Tool:
     MATERIAL_SOLID_CARBIDE = 6
     MATERIAL_TOOL_STEEL = 7
     MATERIAL_TUNGSTON_HIGH_SPEED_STEEL = 8
+    MATERIAL_LAST = 9
 
-    def __init__(self, name, kind, material):
+    def __init__(self, name, number, kind, material, diameter, flutes_count, maximum_z_depth):
 	""" *Tool*: Initialize a *Tool* object (i.e. *self*).
 	"""
 
 	# Verify argument types:
 	assert isinstance(name, str)
-	assert isinstance(kind, int)
+	assert isinstance(kind, int) and Tool.KIND_NONE < kind < Tool.KIND_LAST
 	assert isinstance(material, int)
+	assert isinstance(diameter, L)
+	assert isinstance(flutes_count, int)
+	assert isinstance(maximum_z_depth, L)
 
 	# Load up *self*:
-	self.name = name		# Tool name
-	self.number = 0			# Tool number in rack
-	self.material = material	# Material tool is made of
-	self.diameter = L()		# Diameter of tool
-	self.flutes_count = 0		# Number of flutes or teeth
-	self.maximum_z_depth = L()	# Maximum Z depth allowed
-	self.kind = kind
+	self._name = name			# Tool name
+	self._number = number			# Tool number in rack
+	self._kind = kind
+	self._material = material		# Material tool is made of
+	self._diameter = diameter		# Diameter of tool
+	self._flutes_count = flutes_count	# Number of flutes or teeth
+	self._maximum_z_depth = maximum_z_depth	# Maximum Z depth allowed
 
-	self.search_results = []	# Result of array search
-	self.priority = 0.0		# Priority in tool search
-	self.feed = Speed()		# Nominal feedrate
-	self.spindle = Code_Hertz()	# Preferred spindle speed
+	self._search_results = []		# Result of array search
+	self._priority = 0.0			# Priority in tool search
+	self._feed_speed = Speed()		# Nominal feedrate
+	self._spindle_speed = Hertz()		# Preferred spindle speed
 
-    def search_results_append(self, test, message):
+    def _diameter_get(self):
+	""" *Tool*: Return the diameter of the *Tool* object (i.e. *self*). 	"""
+
+	return self._diameter
+
+    def _feed_speed_get(self):
+	""" *Tool*: Return feed rate for the *Tool* object (i.e. *self*). """
+
+	return self._feed_speed
+
+    def _feed_speed_set(self, feed_speed):
+	""" *Tool*: Set the feed speed for the *Tool* object (i.e. *self*). """
+
+	# Verify argument types:
+	assert isinstance(feed_speed, Speed)
+
+	self._feed_speed = feed_speed
+
+    def _flutes_count_get(self):
+	""" *Tool*: Return the number of flutes for the *Tool* object (i.e. *self*). """
+
+	return self._flutes_count
+
+    def _is_laser_get(self):
+	""" *Tool*: Return *True* if the *Tool* object (i.e. *self*) is a laser tool. """
+
+	# If a tool is a laser tool, it is expected to override this method and return *True*:
+	return False
+
+    def _material_get(self):
+	""" *Tool*: Return the material that the *Tool* object (i.e. *self*) is made of. """
+
+	return self._material
+
+    def _maximum_z_depth_get(self):
+	""" *Tool*: Return the maximum amount in the Z axis that the *Tool* object
+	    (i.e. *self*) can go into a material.
+	"""
+
+	return self._maximum_z_depth
+
+    def _name_get(self):
+	""" *Tool*: Return the name of the *Tool* object (i.e. *self*). """
+
+	return self._name
+
+    def _number_get(self):
+	""" *Tool*: Return the number of the *Tool* object (i.e. *self*). """
+
+	return self._number
+
+    def _name_get(self):
+	""" *Tool*: Return the name of the *Tool* object (i.e. *self*). """
+
+	return self._name
+
+    def _number_set(self, number):
+	""" *Tool*: Set the tool *number* of the *Tool* object (i.e. *self*). """
+
+	# Verify argument types:
+	assert isinstance(number, int)
+
+	self._number = number
+
+    def _priority_get(self):
+	""" *Tool*: Return the priority of the *Tool* object (i.e. *self*). """
+
+	return self._priority
+
+    def _priority_set(self, priority):
+	""" *Tool*: Set the priority for the *Tool* object (i.e. *self*). """
+
+	# Verify argument types:
+	assert isinstance(priority, float)
+
+	self._priority = priority
+
+    def _search_results_append(self, test, message):
 	""" *Tool*: Log search results onto *Tool* object (i.e. *self*)
 	    that contains *test* and *message*.
 	"""
@@ -10841,7 +12866,30 @@ class Tool:
 	assert isinstance(test, bool)
 	assert isinstance(message, str)
 
-	self.search_results.append("{0}:{1}".format(test, message))
+	self._search_results.append("{0}:{1}".format(test, message))
+
+    def _search_results_clear(self):
+	""" *Tool*: Clear any previous search results for the *Tool* object (i.e. *self*). """
+
+	del self._search_results[:]
+
+    def _search_results_get(self):
+	""" *Tool*: Return the seach results list for the *Tool* object (i.e. *self*). """
+
+	return self._search_results
+
+    def _spindle_speed_get(self):
+	""" *Tool*: Return the spindle speed for the *Tool* object (i.e. *self*). """
+
+	return self._spindle_speed
+
+    def _spindle_speed_set(self, spindle_speed):
+	""" *Tool*: Return the spindle speed for the *Tool* object (i.e. *self*). """
+
+	# Verify argument types:
+	assert isinstance(spindle_speed, Hertz)
+
+	self._spindle_speed = spindle_speed
 
 class Tool_Double_Angle(Tool):
 
@@ -10851,33 +12899,82 @@ class Tool_Double_Angle(Tool):
 	self.inside_diameter = L()	# Inside shaft diameter
 	self.thickness = L()		# Thickness of cutter
 
+    def __init__(self,
+      name, number, material, diameter, flutes, maximum_z_depth, angle, inside_diameter, thickness):
+	"""
+	    *Tool_Double_Angle*: Initialie a *Tool_Double_Angle* object that contains *name*,
+	    *number*, *material*, *diameter*, *flutes*, *maximum_z_depth*, *angle*,
+	    *inside_diameter* and *thickness*.
+	"""
+
+	# Verify argument types:
+	zero = L()
+	assert isinstance(name, str)
+	assert isinstance(number, int) and number >= 0
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L) and diameter > zero
+	assert isinstance(flutes, int) and flutes > 0
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+	assert isinstance(angle, Angle) and angle > Angle()
+	assert isinstance(inside_diameter, L) and inside_diameter > zero
+	assert isinstance(thickness, L) and thickness > zero
+
+	# Initialize the *Tool_Double_Angle* object (i.e. *self*):
+	Tool.__init__(self,
+	  name, number, Tool.KIND_DOUBLE_ANGLE, material, diameter, flutes, maximum_z_depth)
+	self._inside_diameter = inside_diameter
+	self._thickness = thickness
+
 class Tool_Dove_Tail(Tool):
 
-    def __init__(self):
-	Tool.__init__(self)
-	self.inside_diameter = L()	# Inside diameter of cutter
-	self.angle = Angle()		# Angle of dove tail
+    def __init__(self,
+      name, number, material, diameter, flutes, maximum_z_depth, inside_diameter, angle):
+	""" *Tool_Dove_Tail*: Initialzie a *Tool_Dove_Tail* object (i.e. *self* that contains
+	    *name*, *number*, *material*, *diameter*, *flutes*, *maximum_z_depth*,
+	    *inside_diameter*, and *angle*.
+	"""
 
-class Tool_Dowel_Pin(Tool):			# A dowel pin
+	# Verify argument types:
+	zero = L()
+	isinstance(name, str)
+	isinstance(number, int) and number > 0
+	isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	isinstance(diameter, L) and diameter > zero
+	isinstance(flutes, int) and flutes > 0
+	isinstance(maximum_z_depth, L) and diameter > zero
+	isinstance(inside_diameter, L) and inside_diameter > zero
+	isinstance(angle, Angle)
 
-    def __init__(self, name, tip_depth, material):
-	""" *Tool_Dowel_Pin*: Initialize *Tool_Dowel_Pin* object (i.e. *self*)
-	    with *name*, *tip_depth*, and *material*.
+	# Initializethe *Tool_Dove_Tail* object (i.e. *self*):
+	Tool.__init__(self,
+	  name, number, Tool.KIND_DOVE_TAIL, material, diameter, flutes, maximum_z_depth)
+	self._inside_diameter = inside_diameter
+	self._angle = angle
+
+class Tool_Dowel_Pin(Tool):
+
+    def __init__(self, name, number, material, diameter, maximum_z_depth, tip_depth):
+	""" *Tool_Dowel_Pin*: Initialize *Tool_Dowel_Pin* object (i.e. *self*) with *name*,
+	    *number*, *material*, *diameter*, *flutes_count*, *maximum_z_depth*, and *tip_depth*.
 	"""
 
 	# Verify argument types:
 	assert isinstance(name, str)
+	assert isinstance(number, int)
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L)
+	assert isinstance(maximum_z_depth, L)
 	assert isinstance(tip_depth, L)
-	assert isinstance(material, int)
 
 	# Initialize super class:
-	Tool.__init__(self, name, Tool.TOOL_DOWEL_PIN, material)
+	Tool.__init__(self,
+	  name, number, Tool.KIND_DOWEL_PIN, material, diameter, 0, maximum_z_depth)
 
 	# Load up *self*:
-	self.tip_depth = L()		# Tip portion that is not vertical
+	self._tip_depth = tip_depth		# Tip portion that is not vertical
 
     @staticmethod
-    def match(tool, parameter1, parameter2, from_string):
+    def _match(tool, parameter1, parameter2, from_string):
 	""" *Tool_Dowel_Pin*: Return priority of match *tool* matching a
 	    dowel pin.
 	"""
@@ -10897,28 +12994,158 @@ class Tool_Dowel_Pin(Tool):			# A dowel pin
 
 	# Set *debug* to *True* to enable tracing:
 	debug = False
-	debug = True
+	#debug = True
 	if debug:
 	    print("Tool_Dowel_Pin.match()".
-	      format(tool.name, from_string, priority))
+	      format(tool._name_get(), from_string, priority))
 	return priority
 
-class Tool_Drill(Tool):			# A drill bit
+    def _tip_depth_get(self):
+	""" *Tool_Dowel_Pin: Return the tip depth of the *Tool_Dowel_Pin* object (i.e.*self* """
 
-    def __init__(self):
-	self.point_angle = Angle()	# Point angle (degrees)
-	self.style = DRILL_STYLE_NONE	# Style of drill
+	return self._tip_depth
 
-class Tool_End_Mill(Tool):		# An end mill bit
+class Tool_Drill(Tool):
 
-    def __init__(self):
-	self.is_laser = False		# {true}=> is laser, not end mill
+    def __init__(self,
+      name, number, material, diameter, flutes_count, maximum_z_depth, point_angle, drill_style):
+	""" *Tool_Drill*: Initialize *Tool_Drill* object (i.e. *self*) with *name*, *number*,
+	    *material*, *diameter*, *flutes_count*, *maximum_z_depth*, *point_angle*, and
+	    *drill_style*.
+	"""
+
+	# Verify argument types:
+	zero = L()
+	assert isinstance(name, str)
+	assert isinstance(number, int) and number >= 0
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L) and diameter > zero
+	assert isinstance(flutes_count, int) and flutes_count > 0 
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+	assert isinstance(point_angle, Angle) and point_angle > Angle()
+	assert isinstance(drill_style, int) and \
+	  Tool.DRILL_STYLE_NONE < drill_style < Tool.DRILL_STYLE_LAST
+
+	# Load up the *Tool_Drill* object (i.e. *self*):
+	Tool.__init__(self, name, number, Tool.KIND_DRILL, material, diameter, flutes_count, maximum_z_depth)
+	self.point_angle = point_angle
+	self.drill_style = Tool.DRILL_STYLE_NONE
+
+class Tool_End_Mill(Tool):
+    """ A *Tool_End_Mill* represents a flat bottom end mill. """
+
+    def __init__(self,
+      name, number, material, diameter, flutes_count, maximum_z_depth, is_laser):
+	""" *Tool_End_Mill*: Initialize a *Tool_Mill_Drill* object (i.e. *self* that contains
+	    *name*, *number*, *material*, *diameter*, *flutes_count*, *maximum_z_depth* and
+	    *is_laser*.
+	"""
+	
+	# Verify argument types:
+	zero = L()
+	assert isinstance(name, str)
+	assert isinstance(number, int) and number >= 0
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L) and diameter >= zero	# Zero is OK
+	assert isinstance(flutes_count, int) and flutes_count > 0
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+	assert isinstance(is_laser, bool)
+
+	# Load up the *Tool_End_Mill* object (i.e. *self*):
+	Tool.__init__(self,
+	  name, number, Tool.KIND_END_MILL, material, diameter, flutes_count, maximum_z_depth)
+	self._is_laser = is_laser
+
+    @staticmethod
+    def _match(tool, maximum_diameter, maximum_z_depth, from_routine):
+	""" *Tool_End_Mill*: Verify that *tool* is both an end mill and that it has a diameter
+	    less than or equal to *maximum_diameter*.  If *maximim_diameter* is negative,
+	    it will match any end drill.  A positive number that increases with the diameter
+	    is returned if a match occurs.  Otherwise, -1.0 is returned if there is no match.
+	    *from_routine* is the name of the calling routine and is used for debuggion only.
+	"""
+
+	# Set *debug* to *True* to get some tracing:
+	debug = False
+	#debug = True
+
+	# Verify argument types:
+	zero = L()
+	assert isinstance(tool, Tool)
+	assert isinstance(maximum_diameter, L)
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth < zero
+	assert isinstance(from_routine, str)
+    
+	# Grab some values from *tool*:
+	tool_diameter = tool._diameter
+	tool_maximum_z_depth = tool._maximum_z_depth
+    
+	# See whether or not we can return a positive *priority*:
+	priority = -123456.0
+	is_end_mill = isinstance(tool, Tool_End_Mill)
+	tool._search_results_append(is_end_mill, "Is end mill")
+	if is_end_mill:
+	    if debug:
+		print("=>Tool_End_Mill.match('{0}', {1:i}, {2:i}, '{3}')".
+		  format(tool._name, maximum_diameter, maximum_z_depth, from_routine))
+
+	    diameter_ok = maximum_diameter < zero or tool_diameter <= maximum_diameter
+	    tool._search_results_append(diameter_ok,
+	      "Diameter {0:i} < 0 or Diameter {0:i} <= Max Diameter {1:i}".format(
+	      tool_diameter, maximum_diameter))
+	    if diameter_ok:
+		if debug:
+		    print("Tool_End_Mill.match: diameter_ok")
+		# Verify that tool depth works:
+		if debug:
+		    print("Tool_End_Mill.match: maximum_z_depth:{0:i} tool_maximum_z_depth:{1:i}".
+		      format(maximum_z_depth, tool_maximum_z_depth))
+		z_depth_ok = -maximum_z_depth <= tool_maximum_z_depth
+		tool._search_results_append(z_depth_ok,
+		  "Max Z depth {0:i} <= Tool Max Z Depth {1:i}".format(
+		  -maximum_z_depth, tool_maximum_z_depth))
+		if z_depth_ok:
+		    if debug:
+		        print("Tool_End_Mill.match: z_depth ok")
+		    priority = (tool_diameter * 100.0 - tool_maximum_z_depth).inches()
+
+	    if debug:
+		print("<=Tool_End_Mill.match('{0}', {1:i}, {2:i}, '{3}')=>{4}\n".
+		  format(tool._name, maximum_diameter, maximum_z_depth, from_routine, priority))
+
+	assert isinstance(priority, float)
+	return priority
+
+    def _is_laser_get(self):
+	""" *Tool_End_Mill*: Return whether the *Tool_End_Mill* (i.e. *self*) is a laser or not. """
+
+	return self._is_laser
 
 class Tool_Mill_Drill(Tool):		# A mill-drill bit
 
-    def __init__(self):
-	self.point_angle = Angle()	# Point angle
-	self.tip_depth = L()		# Tip depth
+    def __init__(self,
+      name, number, material, diameter, flutes_count, maximum_z_depth, tip_depth, point_angle):
+	""" *Tool_Mill_Drill*: Initialize the *Tool_Mill_Drill* object (i.e. *self*) with *name*,
+	    *number*, *material*, *diameter*, *flutes_count*, *maximum_z_depth*, *tip_depth*,
+	    and *point_angle*.
+	"""
+
+	# Verify argument types:
+	zero = L()
+	assert isinstance(name, str)
+	assert isinstance(number, int) and number >= 0
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L) and diameter > zero
+	assert isinstance(flutes_count, int) and flutes_count > 0
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+	assert isinstance(tip_depth, L) and tip_depth > zero
+	assert isinstance(point_angle, Angle) and point_angle > Angle()
+
+	# Initialize *Tool_Mill_Drill* object (i.e. *self*):
+	Tool.__init__(self,
+	  name, number, Tool.KIND_MILL_DRILL, material, diameter, flutes_count, maximum_z_depth)
+	self._point_angle = point_angle
+	self._tip_depth = tip_depth
 
 class Matrix:
     """ *Matrix* is a class that implements a 4x4 mutable matrix. """
@@ -11429,11 +13656,32 @@ class Matrix:
 
 class Vice:
 
-    def __init__(self):
-	zero = L()
-	self.jaw_height = zero		# Height of jaw
-	self.jaw_width = zero		# Width of vice jaws
-	self.opening = zero		# Width of opening
+    def __init__(self, jaw_height, jaw_width):
+	""" *Vice*: Initialize the *Vice* object (i.e. *self*) to contain *jaw_height*
+	    and *jaw_width*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(jaw_height, L)
+	assert isinstance(jaw_width, L)
+
+	# Load up the *Vice* object (i.e. *self*:
+	self._jaw_height = jaw_height		# Height of jaw
+	self._jaw_width = jaw_width		# Width of vice jaws
+	self._opening = L()			# Width of opening
+
+    def _jaw_height_get(self):
+	""" *Vice*: Return the jaw height field of the *Vice* object (i.e. *self*).
+	"""
+
+	return self._jaw_height
+
+    def _jaw_width_get(self):
+	""" *Vice*: Return the jaw width field of the *Vice* object (i.e. *self*).
+	"""
+
+	return self._jaw_width
+
 
 class XML:
     """ *XML*: Base class. """
