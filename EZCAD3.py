@@ -373,6 +373,13 @@ class L:
 
 	return self._mm / 10.0
 
+    def distance(self, dy):
+	""" L: Return the length of the line between (*self*,*dy) and the origin.  """
+	dx_mm = self._mm
+	dy_mm = dy._mm
+	distance_mm = math.sqrt(dx_mm * dx_mm + dy_mm * dy_mm)
+	return L(mm=distance_mm)
+
     def cosine(self, angle):
 	""" L: Return {self} * cos(angle). """
 
@@ -759,8 +766,14 @@ class Angle:
     def __div__(self, divisor):
 	""" Angle: Return *self* divided by *divisor*. """
 
-	assert isinstance(divisor, float) or isinstance(divisor, int)
-	return Angle(rad = self.radians / float(divisor))
+	result = None
+	if isinstance(divisor, float) or isinstance(divisor, int):
+	    result = Angle(rad = self.radians / float(divisor))
+	elif isinstance(divisor, Angle):
+	    result = self.radians/divisor.radians
+	else:
+	    assert False, "divisor is neither an Angle nor an integer/float"
+	return result
 
     ## @brief Return *True* if angles are equal.
     #  @param self is the first *Angle* to compare.
@@ -10610,8 +10623,8 @@ class Code:
 
 	# Remember some values for VRML line path drawing:
 	self._vrml_start_r0 = self._r0
-	self._vrml_start_x = self._x
-	self._vrml_start_y = self._y
+	self._vrml_start_x = self._x_value()
+	self._vrml_start_y = self._y_value()
 	self._vrml_start_z = self._z
 	self._vrml_motion = -1
 
@@ -10631,7 +10644,7 @@ class Code:
 
 	# Construct a space separated *command*:
 	command = " ".join(self._command_chunks)
-	print("command='{0}'".format(command))
+	#print("command='{0}'".format(command))
 
 	# Write *comand* to *code_stream*:
 	code_stream = self._code_stream
@@ -10645,19 +10658,19 @@ class Code:
 	# Mark that we ended the current command:
 	self._command_started = False
 
-	#if self._vrml_enabled:
-	if True:
+	color_index = -1
+	if self._vrml_motion == 0:
+	    color_index = 0
+	elif self._vrml_motion == 1:
+	    color_index = 1
+
+	if color_index >= 0:
 	    start_index = \
 	      self._vrml_point(self._vrml_start_x, self._vrml_start_y, self._vrml_start_z)
-	    end_index = self._vrml_point(self._x, self._y, self._z)
+	    end_index = self._vrml_point(self._x_value(), self._y_value(), self._z)
 	    self._vrml_point_indices.append(start_index)
 	    self._vrml_point_indices.append(end_index)
 	    self._vrml_point_indices.append(-1)
-	    color_index = 0
-
-	    # Draw rapid moves in a different color:
-	    if self._vrml_motion == 0:
-		color_index = 1
 	    self._vrml_color_indices.append(color_index)
 
     def _comment(self, comment):
@@ -10700,16 +10713,20 @@ class Code:
 	self._dxf_y_offset = dxf_y_offset
 
     def _dxf_y_offset_get(self):
-	""" *Part*: Return the DXF offset Y field of the *Part* object (i.e. *self*) """
+	""" *Code*: Return the DXF offset Y field of the *Code* object (i.e. *self*) """
 
 	return self._dxf_y_offset
 
 
     def _finish(self):
+	""" *Code*: Finish off the current block of G code. """
+
 	code_stream = self._code_stream
 	assert isinstance(code_stream, file)
 	code_stream.close()
 	self._code_stream = None
+
+	# Random comment: the view3dscene can view the resulting .wrl file:
 
 	# Write out headers to *vrml_stream*:
 	vrml_stream = self._vrml_stream
@@ -10721,8 +10738,9 @@ class Code:
 	# Output the colors:
 	vrml_stream.write("  color Color {\n")
 	vrml_stream.write("   color [\n")
-	vrml_stream.write("     1.0 0.0 0.0 # red\n")
 	vrml_stream.write("     0.0 0.0 1.0 # blue\n")
+	vrml_stream.write("     1.0 0.0 0.0 # red\n")
+	vrml_stream.write("     0.0 1.0 0.0 # green\n")
 	vrml_stream.write("   ]\n")
 	vrml_stream.write("  }\n")
 
@@ -11263,6 +11281,13 @@ class Code:
 	self._line_comment(
 	  "x1={0:i} y1={1:i} x2={2:i} y2={3:i} cr={4:i}".format(x1, y1, x2, y2, corner_radius))
     
+	# Set *debug* to *True* to turn on tracing:
+	debug = False
+	#debug = True
+	if debug:
+	    print("Code._simple_pocket_helper: x1={0:i} y1={1:i} x2={2:i} y2={3:i}".
+	      format(x1, y1, x2, y2))
+
 	# Make sure that {x1} < {x2} and {y1} < {y2}:
 	assert x1 < x2
 	assert y1 < y2
@@ -11273,7 +11298,9 @@ class Code:
 	ry1 = y1 + corner_radius
 	ry2 = y2 - corner_radius
 	self._line_comment("rx1={0:i} ry1={1:i} rx2={2:i} ry2={3:i}".format(rx1, ry1, rx2, ry2))
-    
+	if debug:
+	    print("rx1={0:i} ry1={1:i} rx2={2:i} ry2={3:i}".format(rx1, ry1, rx2, ry2))
+
 	# Compute the rectangle path coordinates:
 	px1 = x1 + offset
 	px2 = x2 - offset
@@ -11309,25 +11336,25 @@ class Code:
 	    self._xy_feed(f, s, rx2, py1)
     
 	    # Lower right arc (rx2,py1) to (px2,ry1):
-	    self._xy_ccw_feed(f, r, s, px2, ry1)
+	    self._xy_ccw_feed(f, r, s, px2, ry1, rx=rx2, ry=ry1)
     
 	    # Right vertical line (px2,ry1) to (px2,ry2):
 	    self._xy_feed(f, s, px2, ry2)
     
 	    # Upper right arc (px2,ry2) to (rx2, py2):
-	    self._xy_ccw_feed(f, r, s, rx2, py2)
+	    self._xy_ccw_feed(f, r, s, rx2, py2, rx=rx2, ry=ry2)
     
 	    # Top horizontal line (rx2, py2) to (rx1, py2):
 	    self._xy_feed(f, s, rx1, py2)
     
 	    # Upper left arc (rx1, py2) to (px1, ry2):
-	    self._xy_ccw_feed(f, r, s, px1, ry2)
+	    self._xy_ccw_feed(f, r, s, px1, ry2, rx=rx1, ry=ry2)
     
 	    # Left vertical line (px1, ry2) to (px1, ry1):
 	    self._xy_feed(f, s, px1, ry1)
     
 	    # Lower left arc (px1, ry1) to (rx1, py1):
-	    self._xy_ccw_feed(f, r, s, rx1, py1)
+	    self._xy_ccw_feed(f, r, s, rx1, py1, rx=rx1, ry=ry1)
 	else:
 	    # Mill out a rectangle with "square" corners in a counter
 	    # clockwise direction to force a climb cut:
@@ -11553,6 +11580,202 @@ class Code:
 	self._vice_x = vice_x
 	self._vice_y = vice_y
 
+    def _vrml_arc_draw(self, ax, ay, bx, by, radius, z, clockwise, radius_x=None, radius_y=None):
+	""" *Code*: Draw an arc from (*ax*, *ay*, *z) to (*bx*, *by*, *bz*) with an
+	    arc radius of *radius*.  The arc is drawn in a clockwise direction if
+	    *clockwise* is *True* and a counter-clockwise direction otherwise. """
+    
+	# Verify argument types:
+	assert isinstance(ax, L)
+	assert isinstance(ay, L)
+	assert isinstance(bx, L)
+	assert isinstance(radius, L)
+	assert isinstance(z, L)
+	assert isinstance(clockwise, bool)
+	assert isinstance(radius_x, L) or radius_x == None
+	assert isinstance(radius_y, L) or radius_y == None
+
+	# Enable tracing by setting *debug* to *True*:
+	debug = False
+	#debug = True
+	have_radius = isinstance(radius_x, L) and isinstance(radius_y, L)
+	if debug:
+	    print("\nCode._vrml_arc_draw({0:i}, {1:i}, {2:i}, {3:i}, {4:i}, {5:i}, {6})".
+	      format(ax, ay, bx, by, radius, z, clockwise))
+	    if have_radius:
+		print("radius_x={0:i} radius_y={1:i}".format(radius_x, radius_y))
+
+		ar_dx = ax - radius_x
+		ar_dy = ay - radius_y
+		ar_radius = ar_dx.distance(ar_dy)
+		print("ar_dx={0:i} ar_dy={1:i} ar_radius={2:i}".format(ar_dx, ar_dy, ar_radius))
+
+		br_dx = bx - radius_x
+		br_dy = by - radius_y
+		br_radius = br_dx.distance(br_dy)
+		print("br_dx={0:i} br_dy={1:i} br_radius={2:i}".format(br_dx, br_dy, br_radius))
+
+	# Compute some *Angle* constants:
+	degrees0 = Angle(deg=0.0)
+	degrees15 = Angle(deg=15.0)
+	degrees90 = Angle(deg=90.0)
+	degrees180 = Angle(deg=180.0)
+	degrees360 = Angle(deg=360.0)
+    
+	# Assign *z* to *az* and *bz* for notational consistency.
+        az = z
+	bz = z	
+
+	# The goal of the code below is to draw an arc of radius *radius* from the point
+	# A=(*ax*,*ay*,*az*) to point B=(*bx*,*by*,*bz).  The center point of the arc is
+	# R=(*rx*,*ry*,*rz*).  The goal of the code below is to compute the location of R.
+	# We assume that everything is occuring in the X/Y plane (i.e. *az*=*bz*=*rz*.)
+	# The diagram shows two right triangles ACR and BCR, where C=(*cx*,*cy*,*cz*)
+	# is the center point of the segment AB.  The crummy ASCII art below should help
+	# to clarify the rather simple geometry:
+	#
+	#
+	#               R
+	#              /|\
+	#             / | \
+	#            /  |  \
+	#           /   |   \
+	#          /    |--+ \
+	#         /     |  |  \
+	#        A------C------B
+	#
+	# Please note that A, B an C are shown in the diagram above as being parallel to
+	# the X axis.  A and B can actually be oriented in any direction.
+	
+	# Compute the location of C=(*cx*,*cy*,*cz*), which is exactly in the center
+	# between points A and B:
+	cx = (ax + bx) / 2
+	cy = (ay + by) / 2
+	cz = az
+	if debug:
+            radius3 = (radius_x - cx).distance(radius_y - cy)
+	    print("C=({0:i},{1:i},{2:i}) radius_3={3:i}".format(cx, cy, cz, radius3))
+
+    	# Now compute |AC| which is the length the the AC segment:
+	ac_length = (cx - ax).distance(cy - ay)
+	if debug:
+	    print("ac_length={0:i}".format(ac_length))
+
+	# We know that |AR| is equal to *radius*.  We need to compute |CR|.  This
+	# is basically just the Pythagorean theorem:
+	#
+	#        |AC|^2 + |CR|^2 =         |AR|^2			(1) 
+	#        |AC|^2 + |CR|^2 =       radius^2			(1) 
+	#                 |CR|^2 =       radius^2 - |AC|^2		(2) 
+	#                 |CR|   = sqrt( radius^2 - |AC|^2 )		(3)
+	#                 |CR|   = sqrt( radius^2 - |AC|^2 )		(4)
+	#
+	# Now we do the computation of |CR| using equation (4) above :
+	radius_mm = radius.millimeters()
+	radius_squared_mm = radius_mm * radius_mm
+	ac_mm = ac_length.millimeters()
+	ac_squared_mm = ac_mm * ac_mm
+	if radius_squared_mm < ac_squared_mm:
+	    return
+	assert radius_squared_mm >= ac_squared_mm
+	cr_mm = math.sqrt(radius_squared_mm - ac_squared_mm)
+	cr_length = L(mm=cr_mm)
+
+	# Now we need to compute the location of R=(*rx*,*ry*,*rz*).  This done by
+	# first computing the angle from A to C relative to the X axis.  Once we have
+	# that angle we add/subtract 90 degrees to get the angle from C to R relative
+	# to the X axis.  Once we have that angle, we can compute the location of R
+	# relative to C.
+
+	# Step 1: Compute angle <ACX:
+	ac_dx = cx - ax
+	ac_dy = cy - ay
+	acx_angle = ac_dy.arc_tangent2(ac_dx)	# Yes, dy come before dx:
+	if debug:
+	    print("ac_dx={0:i} ac_dy={1:i} acx_angle={2:d}".format(ac_dx, ac_dy, acx_angle))
+
+	# Step 2: Compute angle <RCX, which is +/- 90 degrees from <ACX:
+	rcx_angle = acx_angle
+	if clockwise:
+	    rcx_angle += degrees90
+	else:
+	    rcx_angle -= degrees90
+	if debug:
+	    print("acx_angle={0:d} rcx_angle={1:d}".format(acx_angle, rcx_angle))
+
+	# Step 3: Normalize rcx_angle to between -180 degrees and +180 degrees:
+	if rcx_angle > degrees180:
+	    rcx_angle -= degrees360
+	elif rcx_angle < -degrees180:
+	    rcx_angle += degrees360
+	if debug:
+	    print("normalized rcx_angle={0:d}".format(rcx_angle))
+
+	# Step 4: Compute R=(*rx*,*ry*,*rz*) using trigonmetry:
+	rx = cx + cr_length.cosine(rcx_angle)
+	ry = cy + cr_length.sine(rcx_angle)
+	rz = az
+	if debug:
+	    print("computed rx={0:i} ry={1:i} passed in rx={2:i} ry={3:i}".
+	      format(rx, ry, radius_x, radius_y))
+
+	# Now we compute the angle <ARX which is a the angle from R to A relative to the X axis:
+	arx_angle = (ay - ry).arc_tangent2(ax - rx)
+
+	# Similarly, we compute the <BRX which is the angle from R to B relative to the Y axis:
+	brx_angle = (by - ry).arc_tangent2(bx - rx)
+
+	if debug:
+	    print("arx_angle={0:d} brx_angle={1:d}".format(arx_angle, brx_angle))
+
+	# Now we can compute angle <ARB which is the angle swept from A to B from R.
+	# Note that <ARB can be positive or negative depending up the direction of travel:
+	arb_angle = brx_angle - arx_angle
+	if debug:
+	    print("arb_angle={0:d}".format(arb_angle))
+
+	# Normalize <ARB to be consistent with *clockwise*:
+	if clockwise and arb_angle < degrees0:
+	    # Clockwise requires *arb_angle* to be positive:
+	    arb_angle += degrees360
+	elif not clockwise and arb_angle > degrees0:
+	    # Counter-clockwise requires *arb_angle* to be negative:
+	    arb_angle -= degrees360
+	if debug:
+	    print("normalize arb_angle={0:d}".format(arb_angle))
+
+	# We want to draw the arc as a sequence of line segments from A to B, where each segment
+	# covers about 15 degrees of the arc.  So first we figure compute the *steps* count:
+	steps = 1 + abs(int(arb_angle / degrees15))
+	assert steps >= 1
+
+	# Now we compute the *step_angle* which is the arc angle coverted by each segment:
+	step_angle = arb_angle / float(steps)
+
+	# Lay down A=(*ax*,*ay*,*az*):
+	vrml_point_indices = self._vrml_point_indices
+	a_index = self._vrml_point(ax, ay, az)
+	vrml_point_indices.append(a_index)
+
+	# Lay down the intermediate points along the arc:
+	for step in range(1, steps - 1):
+	    segment_angle = arx_angle + step_angle * step
+	    segment_x = rx + radius.cosine(segment_angle)
+	    segment_y = ry +   radius.sine(segment_angle)
+	    segment_z = az
+	    segment_index = self._vrml_point(segment_x, segment_y, segment_z)
+	    vrml_point_indices.append(segment_index)
+
+	# Lay down B=(*bx*,*by*,*bz):
+	b_index = self._vrml_point(bx, by, bz)
+	vrml_point_indices.append(b_index)
+
+	# Terminate the polyline:
+	vrml_point_indices.append(-1)
+
+	# Set the color for the polyline:
+	self._vrml_color_indices.append(1)
+
     def _vrml_point(self, x, y, z):
 	""" *Code*: Return the VRML point index for point (*x*, *y*, *z*) using the
 	    *Code* object (i.e. *self*).
@@ -11577,7 +11800,6 @@ class Code:
 	""" *Code*: Reset the VRML sub-system of the *Code* object (i.e. *self*). """
 
 	self._vrml_color_indices = []
-	self._vrml_file = None
 	self._vrml_motion = -1
 	self._vrml_point_indices = []
 	self._vrml_points = []
@@ -11586,6 +11808,7 @@ class Code:
 	self._vrml_start_x = self._x
 	self._vrml_start_y = self._y
 	self._vrml_start_z = self._z
+	self._vrml_stream = None
 
     def _x_value(self):
 	""" *Code*: Return the current value of X offset by the vice X for the *Code* object
@@ -11594,8 +11817,8 @@ class Code:
 
 	return self._x + self._vice_x
 
-    def _xy_cw_feed(self, f, r, s, x, y):
-	""" *Code*: Feed to location (*x*, *y*) as a radius *r* clockwise  circle with a
+    def _xy_cw_feed(self, f, r, s, x, y, rx=None, ry=None):
+	""" *Code*: Feed to location (*x*, *y*) with a radius *r* clockwise  circle with a
 	    feedrate of *f* and spindle speed of *s* using the *Code* object (i.e. *self*):
 	"""
     
@@ -11605,13 +11828,22 @@ class Code:
 	assert isinstance(s, Hertz)
 	assert isinstance(x, L)
 	assert isinstance(y, L)
+	assert isinstance(rx, L) or rx == None
+	assert isinstance(ry, L) or ry == None
     
+	x1 = self._x_value()
+	y1 = self._y_value()
+	z1 = self._z
+	x2 = x
+	y2 = y
+	self._vrml_arc_draw(x1, y1, x2, y2, r, z1, False, rx, ry)
+
 	x_value = self._x_value()
 	y_value = self._y_value()
 	if x_value != x or y_value != y:
 	    # Do the laser code first:
-	    if self._is_laser():
-		self._dxf_arc_append(True, x, y, r)
+	    #if self._is_laser():
+	    #	self._dxf_arc_append(True, x, y, r)
 
 	    # Now do the RS274 self and get F, R0, S, X, and Y updated:
 	    self._z_safe_retract_actual()
@@ -11625,7 +11857,7 @@ class Code:
 	    self._length("Y", y)
 	    self._command_end()
     
-    def _xy_ccw_feed(self, f, r, s, x, y):
+    def _xy_ccw_feed(self, f, r, s, x, y, rx=None, ry=None):
 	""" *Code*: Feed to location (*x*, *y*) as a radius *r* counter clockwise  circle with a
 	    feedrate of *f* and spindle speed of *s* using the *Code* object (i.e. *self*):
 	"""
@@ -11636,10 +11868,17 @@ class Code:
 	assert isinstance(s, Hertz)
 	assert isinstance(x, L)
 	assert isinstance(y, L)
+	assert isinstance(rx, L) or rx == None
+	assert isinstance(ry, L) or ry == None
     
-	x_value = self._x_value()
-	y_value = self._y_value()
-	if x_value != x or y_value != y:
+	x1 = self._x_value()
+	y1 = self._y_value()
+	z1 = self._z
+	x2 = x
+	y2 = y
+	self._vrml_arc_draw(x1, y1, x2, y2, r, z1, True, rx, ry)
+
+	if x1 != x or y1 != y:
 	    # Do the laser code first:
 	    #if self._is_laser():
 	    #	self._dxf_arc_append(True, x, y, r)
