@@ -3038,7 +3038,7 @@ class EZCAD3:
     STL_MODE = 2
     VISUALIZATION_MODE = 3
 
-    def __init__(self, minor = None, adjust = L()):
+    def __init__(self, minor = None, adjust = L(), directory="."):
 	""" *EZCAD*: Initialize the contents of {self} to contain
 	    *major* and *minor* version numbers. """
 
@@ -3051,9 +3051,11 @@ class EZCAD3:
 	none_type = type(None)
 	assert minor == 0
 	assert isinstance(adjust, L)
+	assert isinstance(directory, str)
 
 	# Load up {self}:
 	self._adjust = adjust
+	self._directory = directory
 	self._mode = EZCAD3.DIMENSIONS_MODE
 	self._major = 3
 	self._minor = minor
@@ -3096,6 +3098,13 @@ class EZCAD3:
 
 
 	EZCAD3.ezcad = self
+
+    def _directory_get(self):
+	""" *EZCAD3*: Return the directory to read/write files from/into from the *EZCAD3* object
+	    (i.e. *self*).
+        """
+
+	return self._directory
 
     def process(self, part):
 	""" *EZCAD3*: Perform all of the processing starting at *part*.
@@ -4863,6 +4872,11 @@ class Part:
 	self._z_safe = L(inch=0.5)
 	self.up = up
 
+	# Make sure directory exists:
+	directory = ezcad._directory_get()
+	if not os.path.exists(directory):
+	    os.makdirs(directory)
+
 	#print("<=Part.__init__(*, '{0}', *, place={1})".format(name, place))
 
     def ___bounding_box_check(self, indent):
@@ -5622,6 +5636,12 @@ class Part:
 
 	return self._edge_y
 
+    def _ezcad_get(self):
+	""" *Part*: Return the *EZCAD* object from the *Part* object (i.e. *self*)
+	"""
+
+	return self._ezcad
+
     def _flush(self, program_number):
 	""" *Part*: Flush out the CNC code for the *Part* object (i.e. *self*).
 	"""
@@ -5707,7 +5727,10 @@ class Part:
 
 	# Open the top-level *part_ngc_stream* file that invokes each tool operation
 	# in a separate .ngc file:
-	part_ngc_stream_file_name = "O{0}.ngc".format(program_number)
+	
+	ezcad = self._ezcad
+	directory = ezcad._directory_get()
+	part_ngc_stream_file_name = os.path.join(directory, "O{0}.ngc".format(program_number))
 	part_ngc_stream = open(part_ngc_stream_file_name, "w")
 	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_stream_file_name)
 
@@ -6005,7 +6028,9 @@ class Part:
 
 	# Do the visualization steps:
 	if mode == EZCAD3.VISUALIZATION_MODE:
-	    wrl_file_name = "{0}.wrl".format(part._name)
+	    ezcad = part._ezcad_get()
+	    directory = ezcad._directory_get()
+	    wrl_file_name = os.path.join(directory, "{0}.wrl".format(part._name))
 	    wrl_file = open(wrl_file_name, "w")
 	    part.wrl_write(wrl_file, file_name = wrl_file_name)
 	    wrl_file.close()
@@ -6079,7 +6104,7 @@ class Part:
 	    # *bases_table* keeps track of each different *base_name*.
 	    bases_table = ezcad._bases_table
 
-	    # We ensure that there is a signature table for *base_name*:
+	    # We deterimine there is a signature table entry for *base_name*:
 	    if base_name in bases_table:
 		base_signatures_table = bases_table[base_name]
 	    else:
@@ -6101,7 +6126,8 @@ class Part:
 
 		# Now we see whether we need to write out the file and
 		# run it through openscad:
-		stl_file_name = "{0}_{1}.stl".format(name, signature_hash)
+		directory = ezcad._directory_get()
+		stl_file_name = os.path.join(directory, "{0}_{1}.stl".format(name, signature_hash))
 		if os.path.isfile(stl_file_name):
 		    # Since the .stl file already exists, we must have already
 		    # written out the .scad file.  Thus, there is nothing
@@ -6157,13 +6183,16 @@ class Part:
 		    lines.append("")
 
 		    # Write out *scad_file*:
-		    scad_file_name = "{0}.scad".format(name)
+		    directory = ezcad._directory_get()
+		    scad_file_name = os.path.join(directory, "{0}.scad".format(name))
 		    scad_file = open(scad_file_name, "w")
 		    scad_file.write("\n".join(lines))
 		    scad_file.close()
 
 		    # Delete any previous *.stl file:
-		    previous_stl_files = glob.glob("{0}_*.stl".format(name))
+		    directory = ezcad._directory_get()
+		    glob_pattern = os.path.join(directory, "{0}_*.stl".format(name))
+		    previous_stl_files = glob.glob(glob_pattern)
 		    for previous_stl_file in previous_stl_files:
 			os.remove(previous_stl_file)
 
@@ -6171,9 +6200,8 @@ class Part:
 		    # associated .stl file:
 		    if self._is_part:
 			ignore_file = open("/dev/null", "w")
-			command = [ "openscad",
-			  "-o", stl_file_name,
-			  "{0}.scad".format(name) ]
+			scad_file_name = os.path.join(directory, "{0}.scad".format(name))
+			command = [ "openscad", "-o", stl_file_name,  scad_file_name ]
 			#print("command=", command)
 			subprocess.call(command, stderr=ignore_file) 
 			ignore_file.close()
@@ -6181,7 +6209,8 @@ class Part:
 		    # Write out DXF file:
 		    dxf_scad_lines = self._dxf_scad_lines
 		    if len(dxf_scad_lines) > 0:
-			dxf_scad_file_name = "{0}_Dxf.scad".format(name)
+			directory = ezcad._directory_get()
+			dxf_scad_file_name = os.path.join(directory, "{0}_Dxf.scad".format(name))
 			dxf_scad_file = open(dxf_scad_file_name, "wa")
 			dxf_scad_file.write("use <{0}.scad>;\n".format(name))
 			for dxf_scad_line in dxf_scad_lines:
@@ -6191,12 +6220,13 @@ class Part:
 			dxf_scad_file.close()
 			self._dxf_scad_lines = []
 
-		    command = [ "openscad" , "-o", "{0}.dxf".format(name),
-		      "{0}_Dxf.scad".format(name) ]
-		    print("command = {0}".format(command))
-		    ignore_file = open("/dev/null", "w")
-		    subprocess.call(command, stderr=ignore_file)
-		    ignore_file.close()
+			dxf_file_name = os.path.join(directory, "{0}.dxf".format(name))
+			dxf_scad_file_name = os.path.join(directory, "{0}_Dxf.scad".format(name))
+			command = [ "openscad" , "-o", dxf_file_name, dxf_scad_file_name ]
+			print("openscad command = '{0}'".format(" ".join(command)))
+			ignore_file = open("/dev/null", "w")
+			subprocess.call(command, stderr=ignore_file)
+			ignore_file.close()
     
 	if debug:
 	    print("<=Part._manufacture('{0}'):{1}".
@@ -7539,7 +7569,10 @@ class Part:
 	# Make sure the top level starts with an empty *parts_table*:
 	if indent == 0:
 	    parts_table = {}
-	    wrl_file.write("#VRML V2.0 utf8 Generated by EZCAD3\n")
+	    wrl_file.write("#VRML V2.0 utf8\n")
+	    wrl_file.write("# Generated by EZCAD3\n")
+	    wrl_file.write("Viewpoint { description \"Initial view\" position 0 0 150 }\n")
+	    wrl_file.write("NavigationInfo { type \"EXAMINE\" }\n")
 
 	# Do some preparation work:
 	name = self._name
@@ -7560,7 +7593,10 @@ class Part:
 		if self._is_part and self._color.alpha > 0.0:
 		    # Read in the .stl file that was generated by OpenSCAD:
 		    name = self._name
-		    stl_file_name = "{0}_{1}.stl".format(name, self._signature_hash)
+		    ezcad = self._ezcad_get()
+		    directory = ezcad._directory_get()
+		    stl_file_name = os.path.join(
+		      directory, "{0}_{1}.stl".format(name, self._signature_hash))
 		    stl_file = open(stl_file_name, "r")
 		    stl_lines = stl_file.readlines()
 		    stl_file.close()
@@ -7630,8 +7666,8 @@ class Part:
 		    wrl_file.write(
 		      "{0}   diffuseColor {1} {2} {3}\n".
 		      format(spaces, color.red, color.green, color.blue))
-		    wrl_file.write(
-		      "{0}   transparency {1}\n".format(spaces, color.alpha))
+		    #wrl_file.write(
+		    #  "{0}   transparency {1}\n".format(spaces, color.alpha))
 		    wrl_file.write(
 		      "{0}  }}\n".format(spaces))
 		    wrl_file.write(
@@ -10804,7 +10840,8 @@ class Code:
 	    remainder = program_number % 10
 	    if remainder != 0:
 		program_number += 10 - remainder
-	    file_name = "{0}.ngc".format(program_number)
+	    directory = ezcad._directory_get()
+	    file_name = os.path.join(directory, "{0}.ngc".format(program_number))
 
 	    # Assign program numbers:
 	    for index in range(size):
@@ -10852,7 +10889,8 @@ class Code:
 
 		if tool._is_laser_get():
 		    # We have a laser; generate a .dxf file:
-		    dxf_file_name = "{0}.dxf".format(program_number)
+		    directory = ezcad._directory_get()
+		    dxf_file_name = os.path.join(directory, "{0}.dxf".format(program_number))
 		    dxf_stream = open(dxf_file_name, "wa")
 		    assert isinstance(dxf_stream, file), \
 		      "Unable to open file '{0}'".format(file_name)
@@ -10889,7 +10927,8 @@ class Code:
 		else:
 		    # We have a mill; generate a .ngc file:
 		    program_number = block.program_number
-		    ngc_file_name = "{0}.ngc".format(program_number)
+		    directory = ezcad._directory_get()
+		    ngc_file_name = os.path.join(directory, "{0}.ngc".format(program_number))
 		    code_stream = open(ngc_file_name, "wa")
 		    print(">>>>>>>>>>>>>>>>code_stream_open: '{0}'".format(file_name))
 		    assert isinstance(code_stream, file), \
@@ -11177,7 +11216,9 @@ class Code:
 	assert self._code_stream == None
 
 	# Open new *code_stream*:
-	code_file_name = "O{0}.ngc".format(ngc_program_number)
+	ezcad = part._ezcad_get()
+	directory = ezcad._directory_get()
+	code_file_name = os.path.join(directory, "O{0}.ngc".format(ngc_program_number))
 	code_stream = open(code_file_name, "w")
 	assert code_stream != None, "Could not open '{0}' for writing".format(code_file_name)
 	self._code_stream = code_stream
@@ -11208,7 +11249,8 @@ class Code:
 	    code_stream.write("M9 (Coolant off)\n")
 
 	# Open new *vrml_stream*:
-	vrml_file_name = "O{0}.wrl".format(ngc_program_number)
+	directory = ezcad._directory_get()
+	vrml_file_name = os.path.join(directory, "O{0}.wrl".format(ngc_program_number))
 	vrml_stream = open(vrml_file_name, "w")
 	assert vrml_stream != None, "Could not open '{0}' for writing".format(vrml_file_name)
 	self._vrml_stream = vrml_stream
@@ -11475,7 +11517,8 @@ class Code:
 
 	# Open the top-level *part_ngc_stream* file that invokes each tool operation
 	# in a separate .ngc file:
-	part_ngc_stream_file_name = "o{0}.ngc".format(program_number)
+	directory = ezcad._directory_get()
+	part_ngc_stream_file_name = os.path.join(directory, "O{0}.ngc".format(program_number))
 	part_ngc_stream = open(part_ngc_stream_file_name, "w")
 	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_stream_file_name)
 

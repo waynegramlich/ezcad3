@@ -73,6 +73,6 @@ class Base(Part):
 
 if __name__== "__main__":
     Bounding_Box.unit_test()
-    ezcad = EZCAD3(0)
+    ezcad = EZCAD3(0, directory="/tmp")
     base = Base(None)
     base.process(ezcad)
