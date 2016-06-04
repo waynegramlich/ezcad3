@@ -1164,7 +1164,10 @@ class Bend:
 
 	# Compute *incoming_tangent*:
 	center = self._center
+	assert isinstance(center, P)
 	incoming_tangent_direction = self._incoming_tangent_direction
+	assert isinstance(incoming_tangent_direction, P)
+
 	incoming_tangent = center + incoming_tangent_direction * radius.millimeters()
 	return incoming_tangent
 
@@ -1223,7 +1226,7 @@ class Bend:
 	tracing_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    tracing_detail = 3
+	    #tracing_detail = 3
 	    print("{0}=>Bend._radius_center_and_tangents_compute('{1}', '{2}', '{3}')".format(
 	    ' ' * tracing, bend._name, incoming_bend._name, outgoing_bend._name))
 
@@ -1302,6 +1305,7 @@ class Bend:
 	#
 	#    d = r / sin(<CBO)                                (7)
 
+	# Compute the IB and OB vectors:
 	i = incoming_bend._point
 	b = bend._point
 	o = outgoing_bend._point
@@ -1312,12 +1316,13 @@ class Bend:
 	    print("{0}i={1:i} b={2:i} o={3:i}".format(indent, i, b, o))
 	    print("{0}ib={1:i} ob={2:i}".format(indent, ib, ob))
 
+	# Compute the angles of IB and OB from the origin:
 	ib_angle = ib.xy_angle()
 	ob_angle = ob.xy_angle()
 	if tracing_detail >= 1:
 	    print("{0}ib_angle={1:d} ob_angle={2:d}".format(indent, ib_angle, ob_angle))
 
-	# Compute the 3 absolute angles:
+	# Compute *ibo_angle* and *cbo_angle*:
 	ibo_angle = ib.angle_between(ob)
 	cbo_angle = ibo_angle / 2
 	if tracing_detail >= 2:
@@ -1329,26 +1334,45 @@ class Bend:
 	d_mm = d.millimeters()
 	if tracing_detail >= 2:
 	    print("{0}r={1:i} d={2:i}".format(indent, r, d))
-	
-	# Once we have computed d, we can compute the location of C by:
+
+	# We need to find a some point on the line between C and B.
 	#
-	#        C = B + d * <<CB>>
+	#         I
+	#          \         
+	#           \       Q       
+	#            \     /|   
+	#             \   / C     O
+	#              \ /  |    /            
+	#        <<IB>> +---M---+ <<OB>>
+	#                \  |  /              
+	#                 \ | /
+	#                  \|/
+	#                   B
 	#
-	# where <<CB>> is a normalized direction vector from B to C.
+	# We do this by computing the direction vectors <<IB>> from B to I and <<OB>>
+	# form B to O.  By simly adding <<IB>> and <<OB>> together we find another
+	# point on the line through B and C.  We show it as Q above.  We normalize the
+	# result to get <<CB>>:
 	ib_direction = ib.normalize()
 	ob_direction = ob.normalize()
 	cb_direction = (ib_direction + ob_direction).normalize()
+
+	# Now that we have <<CB>> and d, we can compute C:
+	#
+	#        C = B + d * <<CB>>
 	cb_angle = cb_direction.xy_angle()
+	c = b + cb_direction * d_mm
 	if tracing_detail >= 3:
 	    print("{0}<<ib>>={1:m} <<ob>={2:m} <<cb>>={3:m}". \
 	      format(indent, ib_direction, ob_direction, cb_direction))
 	if tracing_detail >= 2:
 	    print("{0}cb_angle={1:d}".format(indent, cb_angle))
-
-	c = b + cb_direction * d_mm
-	if tracing >= 1:
+	if tracing_detail >= 1:
 	    print("{0}c={1:i}".format(indent, c))
 
+	# The next step is remarkably simple.  The direction vector of <<JC>> from C to J
+	# is just 90 degress from the *ib_angle* because the circle is tangent at J.
+	# Likewsise, for direction vector <<NC>>.
 	degrees90 = Angle(deg=90.0)
 	jc_angle = (ib_angle - degrees90).normalize()
 	jc_direction = jc_angle.xy_direction()
@@ -2755,8 +2779,11 @@ class Contour:
 	assert isinstance(tracing, int)
 
 	# Perform an requested tracing:
+	tracing_detail = -1
 	if tracing >= 0:
-	    print("{0}=>Contour._inside_bends_identify('{1}')".format(' ' * tracing, self._name))
+	    #tracing_detail = 3
+	    indent = ' ' * tracing
+	    print("{0}=>Contour._inside_bends_identify('{1}')".format(indent, self._name))
 
 	# Make srue that we have called *Contour._project*() on the *Contour* object (i.e. *self*):
 	assert self._is_projected
@@ -2835,9 +2862,9 @@ class Contour:
 	    else:
 		outside_bends += 1
 
-	    if tracing >= 0:
+	    if tracing_detail >= 0:
 		print("{0}bend['{1}']: is_inside={2} angle_change={3:d}".
-		  format(' ' * tracing, at_bend._name_get(), is_inside, bearing_change_angle))
+		  format(indent, at_bend._name_get(), is_inside, bearing_change_angle))
 
 	# Remember that we have the *inside_bends_identified*:
 	self._inside_bends_identified = True
@@ -2845,7 +2872,7 @@ class Contour:
 	if tracing >= 0:
 	    print(
 	      "{0}<=Contour._inside_bends_identify('{1}') clockwise={2} insides={3} outsides={4}".
-	      format(' ' * tracing, self._name, is_clockwise, inside_bends, outside_bends))
+	      format(indent, self._name, is_clockwise, inside_bends, outside_bends))
 
     def _is_clockwise_get(self):
 	""" *Contour*: Return *True* if the *Contour* object (i.e. *self*) is a clockwise
@@ -2853,6 +2880,11 @@ class Contour:
 	"""
 
 	return self._is_clockwise
+
+    def _name_get(self):
+	""" *Contour*: Return the name of the *Contour* object (i.e. *self*). """
+
+	return self._name
 
     def _project(self, position, tracing):
 	""" *Contour*: Sweep through the *Contour* object (i.e. *self*) and compute the
@@ -3422,8 +3454,8 @@ class Operation_Contour(Operation):
     # where f+o != 0.
 
     def __init__(self,
-      part, comment, sub_priority, mill_tool, order, follows,feed_speed, spindle_speed,
-      z_start, z_stop, contour, offset, effective_tool_radius, passes):
+      part, comment, sub_priority, mill_tool, order, follows, feed_speed, spindle_speed,
+      z_start, z_stop, contour, offset, effective_tool_radius, passes, tracing):
 	""" *Operation_Contour*: Initialize the *Operation_Contour* object (i.e. *self*)
 	    with *part*, *comment*, *sub_priorit*, *mill_tool*, *order*, *follows*,
 	    *z_start*, *z_stop*, 
@@ -3444,6 +3476,16 @@ class Operation_Contour(Operation):
 	assert isinstance(offset, L)
 	assert isinstance(effective_tool_radius, L)
 	assert isinstance(passes, int)
+	assert isinstance(tracing, int)
+
+	if tracing >= 1:
+	    indent = ' ' * tracing
+	    print("{0}=>Operaton_Contour.__init__(*, '{1}', '{2}', {3}, '{4}', {5}, {6},".
+	      format(indent, part._name_get(), comment, sub_priority, mill_tool._name_get(),
+	      order, isinstance(follows, Operation)))
+	    print("{0} s={1:i} f={2:rpm} zs={3:i} ze={4:i} cntr='{5}' off={6:i} tr={7:i} p={8})".
+	      format(indent, feed_speed, spindle_speed, z_start, z_stop,
+	      contour._name_get(), offset, effective_tool_radius, passes))
 
 	# Initialize super class:
 	Operation.__init__(self, "Contour", Operation.KIND_CONTOUR,
@@ -3457,13 +3499,21 @@ class Operation_Contour(Operation):
 	self._effective_tool_radius = effective_tool_radius
 	self._passes = passes
 
+	if tracing >= 1:
+	    indent = ' ' * tracing
+	    print("{0}<=Operaton_Contour.__init__(*, '{1}', '{2}', {3}, '{4}', {5}, {6},".
+	      format(indent, part._name_get(), comment, sub_priority, mill_tool._name_get(),
+	      order, isinstance(follows, Operation)))
+	    print("{0} s={1:i} f={2:rpm} zs={3:i} ze={4:i} cntr='{5}' off={6:i} tr={7:i} p={8})".
+	      format(indent, feed_speed, spindle_speed, z_start, z_stop,
+	      contour._name_get(), offset, effective_tool_radius, passes))
+
     def _cnc_generate(self, tracing):
 	""" *Operation_Contour*: Ggenerate the CNC code for *self*.
 	"""
 
 	# Verify argument types:
 	assert isinstance(tracing, int)
-	assert tracing >= 0
 
 	if tracing >= 0:
 	    print("{0}=>Operation_Contour._cnc_generate".format(' ' * tracing))
@@ -3508,7 +3558,6 @@ class Operation_Contour(Operation):
 	plunge_offset = tool_diameter
 	#call d@("plunge_offset temporary set to zero\n")
 	zero = L()
-	plunge_offset = zero
 
 	for index in range(passes):
 	    code._line_comment("Pass {0} of {1}".format(index + 1, passes))
@@ -4914,12 +4963,12 @@ class Part:
 	physical part. """
 
     # Flavors of values that can be stored in a {Part}:
-    def __init__(self, up, name = None):
+    def __init__(self, up, name):
 	""" *Part*: Initialize *self* to have a parent of *up*. """
 
         # Check argument types:
-	assert up == None or isinstance(up, Part)
-	assert name == None or isinstance(name, str)
+	assert isinstance(up, Part) or up == None
+	assert isinstance(name, str)
 
 	# Some useful abbreviations:
 	zero = L()
@@ -4955,6 +5004,7 @@ class Part:
 	self._signature_hash = None
 	self._top_surface_set = False
 	self._tool_preferred = ""
+	self._tracing = -1000000
 	self._translate = None
 	self._visible = True
 	self._vice_x = L()
@@ -5543,30 +5593,38 @@ class Part:
 	if trace >= 0:
 	    print("{0}<=Part._cylinder()".format(trace * ' '))
 
-    def _dimensions_update(self, ezcad, trace):
+    def _dimensions_update(self, ezcad, tracing):
 	""" *Part*: Update the dimensions of the *Part* object (i.e. *self*)
 	    and all of its children *Part*'s.
 	"""
 
+	# Verify argument types:
 	assert isinstance(ezcad, EZCAD3)
-	self._ezcad = ezcad
+	assert isinstance(tracing, int)
 
-	# Do any requested tracing:
-	if trace >= 0:
-	    print("{0}=>Part._dimensions_update('{1}')". \
-	      format(' ' * trace, self._name))
+	# Use *part* instead of *self*:
+	part = self
+
+	# Do any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * trace
+	    print("{0}=>Part._dimensions_update('{1}', *)". \
+	      format(indent, part._name))
 	    #print("{0}Part._dimensions_update:places={1}". \
-	    #  format(' ' * trace, self._places))
+	    #  format(' ' * trace, part._places))
 
 	# Start with nothing *changed*:
 	changed = 0
 
-	# First record the current values load into *self*.
+	#FIXME: This is weird, why is this necessary???
+	part._ezcad = ezcad
+
+	# First record the current values load into *part*.
 	sub_parts = []
 	before_values = {}
-	name = self._name
-	for attribute_name in dir(self):
-	    attribute = getattr(self, attribute_name)
+	name = part._name
+	for attribute_name in dir(part):
+	    attribute = getattr(part, attribute_name)
 	    if attribute_name.startswith("__"):
 		pass
 	    elif attribute_name.endswith("_"):
@@ -5604,17 +5662,19 @@ class Part:
 		# ignore *attribute_name*:
 		pass
 
-	# Reset the bounding box for *self*:
-	before_bounding_box = self._bounding_box
-	self._bounding_box = Bounding_Box()
+	# Reset the bounding box for *part*:
+	before_bounding_box = part._bounding_box
+	part._bounding_box = Bounding_Box()
 
-	# Peform dimension updating for *self*:
-	self.construct()
+	# Peform dimension updating for *part*:
+	
+	part._tracing = tracing + 1
+	part.construct()
 
 	# See if anything changed:
 	for attribute_name in before_values.keys():
 	    before_value = before_values[attribute_name]
-	    after_value = getattr(self, attribute_name)
+	    after_value = getattr(part, attribute_name)
 	    assert type(before_value) == type(after_value), \
 	      "{0}.{1} before type ({2}) different from after type ({3})". \
 	      format(name, attribute_name, type(before_value),
@@ -5629,24 +5689,24 @@ class Part:
 		      format(' ' * trace, name, attribute_name,
 		      before_value, after_value))
 
-	# Now update the *bounding_box* for *self*:
-	after_bounding_box = self._bounding_box
+	# Now update the *bounding_box* for *part*:
+	after_bounding_box = part._bounding_box
 	for sub_part in sub_parts:
 	    after_bounding_box.bounding_box_expand(sub_part._bounding_box)
 	if before_bounding_box != after_bounding_box:
 	    changed += 1
-	    self._bounding_box = after_bounding_box
+	    part._bounding_box = after_bounding_box
 
-	    #self._bounding_box_set(after_bounding_box)
+	    #part._bounding_box_set(after_bounding_box)
 
 	# Update bounding box with placed *Part* bounding boxes:
-	# for place in self._places.values():
+	# for place in part._places.values():
 	#for sub_part in sub_parts:
 	#    # Grab some values from *place* and *part*:
 	#    #place_part = place._part
 	#    #place_name = place._name
-	#    place = Place(center = self._center, axis = self._axis,
-	#      rotate = self._rotate, translate = self._translate)
+	#    place = Place(center = part._center, axis = part._axis,
+	#      rotate = part._rotate, translate = part._translate)
 	#    forward_matrix = place._forward_matrix
 	#
 	#    if trace >= 0:
@@ -5655,33 +5715,33 @@ class Part:
 	#	#print("{0}Part._dimensions_update:Merge {1:m} into {2:m}". \
 	#	#  format(' ' * trace, place_box, box))
 	#
-	#    self._box_point_update("[TNE]",
+	#    part._box_point_update("[TNE]",
 	#      forward_matrix.point_multiply(sub_part.tne))
-	#    self._box_point_update("[TNW]",
+	#    part._box_point_update("[TNW]",
 	#      forward_matrix.point_multiply(sub_part.tnw))
-	#    self._box_point_update("[TSE]",
+	#    part._box_point_update("[TSE]",
 	#      forward_matrix.point_multiply(sub_part.tse))
-	#    self._box_point_update("[TSW]",
+	#    part._box_point_update("[TSW]",
 	#      forward_matrix.point_multiply(sub_part.tsw))
-	#    self._box_point_update("BNE]",
+	#    part._box_point_update("BNE]",
 	#      forward_matrix.point_multiply(sub_part.bne))
-	#    self._box_point_update("[BNW]",
+	#    part._box_point_update("[BNW]",
 	#      forward_matrix.point_multiply(sub_part.bnw))
-	#    self._box_point_update("[BSE]",
+	#    part._box_point_update("[BSE]",
 	#      forward_matrix.point_multiply(sub_part.bse))
-	#    self._box_point_update("[BSW]",
+	#    part._box_point_update("[BSW]",
 	#      forward_matrix.point_multiply(sub_part.bsw))
 
 	# Determine whether *box* has changed:
-	#after_box_changed_count = self._box_changed_count
+	#after_box_changed_count = part._box_changed_count
 	#if before_box_changed_count != after_box_changed_count:
 	#    if ezcad._update_count > 10:
 	#	print("{0} bounding box changed".format(name))
 	#    changed += 1
 
-	if trace >= 0:
+	if tracing >= 0:
 	    print("{0}<=Part._dimensions_update('{1}')=>{2}". \
-	      format(' ' * trace, self._name, changed))
+	      format(indent, part._name, changed))
 
 	return changed
 
@@ -5742,15 +5802,15 @@ class Part:
 	assert isinstance(program_number, int)
 	assert isinstance(self, Part)
 	assert isinstance(tracing, int)
-	assert tracing >= 0
 
 	# Use *part* instead of *self*:
 	part = self
 	part_name = part._name
 
 	if tracing >= 0:
-	    print("{0}Part._flush('{1}', prog_no={2})".
-	      format(' ' * tracing, part_name, program_number))
+	    indent = ' ' * tracing
+	    print("{0}=>Part._flush('{1}', prog_no={2})".
+	      format(indent, part_name, program_number))
 
 	#call d@(form@("=>flush@Part(%v%, %d%)\n\") %
 	#  f@(part.name) / f@(program_number))
@@ -5862,8 +5922,8 @@ class Part:
 	new_program_number = (new_program_number + 9) / 10 * 10
 
 	if tracing >= 0:
-	    print("{0}Part._flush('{1}', prog_no={2}) =>{3}".
-	      format(' ' * tracing, part_name, program_number, new_program_number))
+	    print("{0}<=Part._flush('{1}', prog_no={2}) =>{3}".
+	      format(indent, part_name, program_number, new_program_number))
 
 	return program_number
 
@@ -6095,21 +6155,26 @@ class Part:
 	raise AttributeError("Part instance has no attribute named '{0}'". \
 	  format(name))
 
-    def _manufacture(self, ezcad):
-	""" *Part*: Visit a *Part* object (i.e. *self*) and all is
-	    sub-*Part*'s and perform any manufacturing steps.
+    def _manufacture(self, ezcad, tracing):
+	""" *Part*: Visit the *Part* object (i.e. *self*) and all is the children *Part*'s
+	    and perform any manufacturing steps.
 	"""
 
 	# Verify argument types:
 	assert isinstance(ezcad, EZCAD3)
-
-	#print("=>Part._manufacture:{0}".format(self._name))
+	assert isinstance(tracing, int)
 
 	# Use *part* instead of *self*:
 	part = self
 
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part._manufacture:('{1}', *)".format(indent, self._name))
+
 	# Make sure *part* is connected ot *ezcad*:
 	part._ezcad = ezcad
+	part_name = part._name
 
 	# Figure out the mode name:
 	mode = ezcad._mode
@@ -6122,11 +6187,10 @@ class Part:
 	    mode_name = "CNC"
 
 	# Set *debug* to *True* for debugging:
-	debug = False
-	#debug = True
-	if debug:
-	    print("=>Part._manufacture('{0}'):{1}".
-	      format(part._name, mode_name))
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}mode={1}".
+	      format(indent, mode_name))
 
 	# First manufacture any child *Part*'s:
 	for attribute_name in dir(part):
@@ -6135,10 +6199,15 @@ class Part:
 		child_part = getattr(part, attribute_name)
 		assert isinstance(child_part, Part), \
 		  "{0}.{1} is not a Part".format(part.name, attribute_name)
-		child_part._manufacture(ezcad)
+		child_part._manufacture(ezcad, tracing + 1)
 
 	# Now run construct this *part*
+	if tracing >= 0:
+	    print("{0}==>Part.construct('{1}')".format(indent, part_name))
+	part._tracing = tracing + 1
 	part.construct()
+	if tracing >= 0:
+	    print("{0}<==Part.construct('{1}')".format(indent, part_name))
 
 	# Do the visualization steps:
 	if mode == EZCAD3.VISUALIZATION_MODE:
@@ -6146,7 +6215,7 @@ class Part:
 	    directory = ezcad._directory_get()
 	    wrl_file_name = os.path.join(directory, "{0}.wrl".format(part._name))
 	    wrl_file = open(wrl_file_name, "w")
-	    part.wrl_write(wrl_file, file_name = wrl_file_name)
+	    part._wrl_write(wrl_file, file_name = wrl_file_name, tracing = tracing + 1)
 	    wrl_file.close()
 
 	# Now generate any CNC files:
@@ -6154,25 +6223,29 @@ class Part:
 	    # Flush out all of the pending CNC operations:
 
 	    # Set *cnc_debug* to *True* to trace CNC:
-	    cnc_debug = False
-	    cnc_debug = True
-	    if cnc_debug:
-		print("=>Part._manfacture('{0}'):CNC".format(part._name))
+	    if tracing >= 0:
+		print("{0}==>Part._manfacture('{1}'):CNC".format(indent, part._name))
+
+	    # This is where we can disable *cnc_tracing*:
+	    cnc_tracing = tracing + 1
+	    cnc_tracing = -1000000
 
 	    shop = ezcad._shop
 	    program_base = shop._program_base_get()
-	    program_number = part._flush(program_base, 0)
+	    program_number = part._flush(program_base, cnc_tracing + 1)
 
 	    # We want the program base number to start with a mulitple of 10.
 	    remainder = program_number % 10
 	    if remainder != 0:
 		program_number += 10 - remainder
 	    shop.program_base = program_number
-	    if cnc_debug:
-		print("<=Part._manfacture('{0}'):CNC".format(part._name))
+	    if tracing >= 0:
+		print("{0}<==Part._manfacture('{1}'):CNC".format(indent, part._name))
 
 	# Now generate any .stl files:
 	if ezcad._mode == EZCAD3.STL_MODE:
+	    if tracing >= 0:
+		print("{0}==>Part._manfacture('{1}'):STL".format(indent, part._name))
 	    # Now manufacture this node:
 	    #scad_difference_lines = []
 	    #scad_union_lines = []
@@ -6271,14 +6344,14 @@ class Part:
 			lines.append(union_line)
 
 		    # Close off union():
-		    lines.append("    }")
+		    lines.append("    } // union")
 
 		    # Output *scad_difference_lines*:
 		    for difference_line in scad_difference_lines:
 			lines.append(difference_line)
 
 		    # Close off difference():
-		    lines.append("  }")
+		    lines.append("  } // difference")
 
 		    # Perform all the placements:
 		    for sub_part in sub_parts:
@@ -6289,7 +6362,7 @@ class Part:
 			lines.append("{0}();".format(sub_part._name))
 
 		    # Close off the module:
-		    lines.append("}")
+		    lines.append("} // module")
 		    lines.append("")
 
 		    # Call the module we just produced:
@@ -6341,10 +6414,11 @@ class Part:
 			ignore_file = open("/dev/null", "w")
 			subprocess.call(command, stderr=ignore_file)
 			ignore_file.close()
+	    if tracing >= 0:
+		print("{0}<==Part._manfacture('{1}'):STL".format(indent, part._name))
     
-	if debug:
-	    print("<=Part._manufacture('{0}'):{1}".
-	      format(part._name, mode_name))
+	if tracing >= 0:
+	    print("{0}<=Part._manufacture:('{1}', *)".format(indent, self._name))
 
     def _material_get(self):
 	""" *Part*: Return the matrial associated with the *Part* object (i.e. *self*.)"""
@@ -6792,7 +6866,7 @@ class Part:
 	      format(part._name, parameter1, parameter2, from_routine,
 	      best_tool_name))
 
-	assert isinstance(best_tool, Tool), "Could not find a tool that worked"
+	#assert isinstance(best_tool, Tool), "Could not find a tool that worked"
 
 	return best_tool
 
@@ -7329,7 +7403,7 @@ class Part:
 
 	    # Now do the linear extrude operation:
             scad_union_lines.append(
-	      "{0}linear_extrude(height = {1})".format(pad, height))
+	      "{0}linear_extrude(height = {1}, convexity=10)".format(pad, height))
 	    
 	    # Construct the polygon information using *indexed_points*:
 	    indexed_points = Indexed_Points()
@@ -7458,18 +7532,18 @@ class Part:
 	ezcad._mode = EZCAD3.CNC_MODE
 	shop = ezcad._shop
 	shop._cnc_generate_set(True)
-	part._manufacture(ezcad)
+	part._manufacture(ezcad, 0)
 	shop._cnc_generate_set(False)
 	ezcad._update_count += 1
 
 	# Now visit *part* and all of its children in STL mode:
 	ezcad._mode = EZCAD3.STL_MODE
-	part._manufacture(ezcad)
+	part._manufacture(ezcad, 0)
 	ezcad._update_count += 1
 
 	# Now visit *part* and all of its children in visualization mode:
 	ezcad._mode = EZCAD3.VISUALIZATION_MODE
-	part._manufacture(ezcad)
+	part._manufacture(ezcad, 0)
 	ezcad._update_count += 1
 
 	if debug:
@@ -7642,13 +7716,25 @@ class Part:
 	  forward_matrix.point_multiply(bsw))
 	#print("after box={0:m}".format(box))
 
-    def wrl_write(self, wrl_file, indent = 0, parts_table = {}, file_name = ""):
+    def _wrl_write(self,
+      wrl_file, wrl_indent = 0, parts_table = {}, file_name = "", tracing = -1000000):
 	""" *Part*: Write *self* to *wrl_file*. """
+
 	# Check argument types:
 	assert isinstance(wrl_file, file)
-	assert isinstance(indent, int)
+	assert isinstance(wrl_indent, int)
 	assert isinstance(parts_table, dict)
 	assert isinstance(file_name, str)
+	assert isinstance(tracing, int)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.wrl_write('{1}, file_name='{2}')".
+	      format(indent, part._name, file_name))
 
 	# Make sure the top level starts with an empty *parts_table*:
 	if indent == 0:
@@ -7660,7 +7746,7 @@ class Part:
 
 	# Do some preparation work:
 	name = self._name
-	spaces = " " * indent
+	spaces = ' ' * wrl_indent
 
 	#print("{0}=>Part.wrl_write({1}, {2}, {3}, {4}):enter".
 	#  format(spaces, name, indent, parts_table.keys(), file_name))
@@ -7734,11 +7820,14 @@ class Part:
 			index += 7
 		    # We are done with *stl_lines*:
 		    stl_lines = None
-		    spaces = " " * indent
+		    spaces = ' ' * wrl_indent
     
 		    # Write out "DEF name Shape {":
+		    #wrl_file.write(
+		    #  "{0}DEF x{1} Shape {{\n".format(spaces, name))
+		    wrl_file.write("#VRML V2.0 utf8\n")
 		    wrl_file.write(
-		      "{0}DEF x{1} Shape {{\n".format(spaces, name))
+		      "{0}Shape {{\n".format(spaces, name))
     
 		    # Output appearance *color* and material properties::
 		    color = self._color
@@ -7876,6 +7965,10 @@ class Part:
     
 	    #print("{0}<=Part.wrl_write({1}, {2}, {3}, {4}):leave".
 	    #  format(spaces, name, indent, parts_table.keys(), file_name))
+
+	if tracing >= 0:
+	    print("{0}<=Part.wrl_write('{1}, file_name='{2}')".
+	      format(indent, part._name, file_name))
     
     # ===================================
     def __str__(self):
@@ -8022,7 +8115,7 @@ class Part:
 	result = self.ezcad.construct_mode()
 	return result
 
-    def contour(self, comment, contour, start_point, end_point, extra, flags, tracing=-100000):
+    def contour(self, comment, contour, start_point, end_point, extra, flags):
 	""" *Part*: Perform an exterior contour operation of the *Part* object (i.e. *self*)
 	    using *contour* to describe the path.  The Z start and stop depths are
 	    obtained from *start_point.z* and *end_point.z*.  *extra* is the amount
@@ -8047,21 +8140,128 @@ class Part:
 	# Use *part* instead of *self*:
 	part = self
 
-	# Figure out if we are in *cnc_mode:
-	ezcad = part._ezcad
-	cnc_mode = (ezcad._mode == EZCAD3.CNC_MODE)
-
 	# Perform any requested *tracing*:
-	if cnc_mode:
-	    tracing = 0
+	tracing = part._tracing
 	if tracing >= 0:
+	    indent = ' ' * tracing
 	    print("{0}=>Part.contour('{1}, '{2}', '{3:i}', {4:i}', {5:i}, '{6}')".
-	     format(' ' * tracing, part._name, comment, start_point, end_point, extra, flags))
+	     format(indent, part._name, comment, start_point, end_point, extra, flags))
+
 
 	# Before we do anything else, we need to update the bounding box for *part*:
 	bounding_box = part._bounding_box
 	contour._bounding_box_expand(bounding_box)
 
+	# Figure out if we are in *cnc_mode* or *stl_mode*:
+	ezcad = part._ezcad
+	cnc_mode = (ezcad._mode == EZCAD3.CNC_MODE)
+	stl_mode = (ezcad._mode == EZCAD3.STL_MODE)
+
+	if stl_mode:
+	    position = part._position
+
+	    contour._project(position, tracing + 1)
+	    contour._inside_bends_identify(tracing + 1)
+	    contour._radius_center_and_tangents_compute(tracing + 1)
+
+	    scad_difference_lines = part._scad_difference_lines
+	    # A temporary hack for debugging is to actually show the contour removal in the union:
+	    #scad_difference_lines = part._scad_union_lines
+
+	    # Compute the bounds of a box that will enclose the contour:
+	    bounding_box = part._bounding_box
+	    bsw = bounding_box.bsw_get()
+	    tne = bounding_box.tne_get()
+	    extra = L(mm=10)
+	    x1 = bsw.x - extra
+	    x2 = tne.x + extra
+	    y1 = bsw.y - extra
+	    y2 = tne.y + extra
+	    z1 = bsw.z - extra
+	    z2 = tne.z + extra
+
+	    # Grab *bends* and compute the *bends_size*:
+	    bends = contour._bends_get()
+            bends_size = len(bends)
+
+	    # Start the linear_extrude:
+	    scad_difference_lines.append("    // Contour {0}".format(contour._name_get()))
+	    scad_difference_lines.append("    translate([0, 0, {0:m}])".format(z1))
+	    scad_difference_lines.append("    linear_extrude(height = {0:m}) {{".format(z2 - z1))
+
+	    # Start outputing the polygon directive:
+	    scad_difference_lines.append("     polygon(")
+            
+	    # We need to create a *contour_points* of points.  This represents the contour
+	    # a polygon of line segements.  Thus, the bend args are represented as a sequence
+	    # of smaller line segments.
+
+	    # First output each *bend_point* in *bends*::
+            contour_pairs = []
+	    contour_is_clockwise = contour._is_clockwise_get()
+	    scad_difference_lines.append("      points = [")
+	    for bend in bends:
+		bend_point = bend._point_get()
+		bend_name = bend._name_get()
+		bend_radius = bend._radius_get()
+		bend_is_inside = bend._is_inside_get()
+		
+		if contour_is_clockwise:
+		    if bend_is_inside:
+			arc_start = bend._incoming_tangent_compute(-bend_radius)
+			arc_end = bend._outgoing_tangent_compute(-bend_radius)
+		    else:
+			arc_start = bend._incoming_tangent_compute(bend_radius)
+			arc_end = bend._outgoing_tangent_compute(bend_radius)
+
+		else:
+		    if bend_is_inside:
+			arc_start= bend._incoming_tangent_compute(bend_radius)
+			arc_end = bend._outgoing_tangent_compute(bend_radius)
+		    else:
+			arc_start = bend._incoming_tangent_compute(-bend_radius)
+			arc_end = bend._outgoing_tangent_compute(-bend_radius)
+
+		scad_difference_lines.append("       [{0:m}, {1:m}], // {2} incoming".
+		  format(arc_start.x, arc_start.y, bend_name))
+		scad_difference_lines.append("       [{0:m}, {1:m}], // {2} outgoing".
+		  format(arc_end.x, arc_end.y, bend_name))
+		contour_pairs.append( (arc_start, "{0} incoming".format(bend_name) ))
+		contour_pairs.append( (arc_end, "{0} outgoing".format(bend_name) ))
+
+	    contour_pairs_size = len(contour_pairs)
+
+	    # Now tack on the 4 points that enclose the contour with a box:
+	    scad_difference_lines.append("       [{0:m}, {1:m}], // box SW".format(x1, y1))
+	    scad_difference_lines.append("       [{0:m}, {1:m}], // box NW".format(x1, y2))
+	    scad_difference_lines.append("       [{0:m}, {1:m}], // box NE".format(x2, y2))
+	    scad_difference_lines.append("       [{0:m}, {1:m}]  // SE".format(x2, y1))
+	    scad_difference_lines.append("      ],")
+
+	    # Now we output the outermost path the encloses the contour:
+	    scad_difference_lines.append("      paths = [")
+	    scad_difference_lines.append("       [ // box path")
+	    scad_difference_lines.append("        {0}, // SW box".format(contour_pairs_size))
+	    scad_difference_lines.append("        {0}, // NW box".format(contour_pairs_size + 1))
+	    scad_difference_lines.append("        {0}, // NE box".format(contour_pairs_size + 2))
+	    scad_difference_lines.append("        {0}  // SE box".format(contour_pairs_size + 3))
+	    scad_difference_lines.append("       ], // box path")
+
+	    # Now we output the contour path:
+	    scad_difference_lines.append("       [ //contour_path")
+	    comma = ","
+            for index, contour_pair in enumerate(contour_pairs):
+		contour_point = contour_pair[0]
+		contour_text = contour_pair[1]
+		if index >= contour_pairs_size - 1:
+		    comma = ""
+		scad_difference_lines.append("        {0}{1} // {2}".
+		  format(index, comma, contour_text))
+	    scad_difference_lines.append("       ] // contour path")
+	    scad_difference_lines.append("      ] // paths")
+	    scad_difference_lines.append("     ); // polygon")
+
+	    scad_difference_lines.append("    } // linear_extrude")
 	# Do any requested CNC generation:
 	if cnc_mode:
 	    # Project all of the points in *contour* onto a plane normal to *projection_axis*
@@ -8082,16 +8282,18 @@ class Part:
 	    # a mill drill in preference to an end-mill because that way we can overlap
 	    # with any top chamfering hole countersinking (i.e. one fewer tool change).
 	    # Otherwise use an end mill:
-	    z_stop = L()
+	    z_stop = start_point.z - end_point.z
+	    if tracing >= 0:
+		print("{0}z_stop={1:i}".format(indent, z_stop))
 	    mill_drill_tool = part._tools_mill_drill_side_search(smallest_inner_diameter, z_stop)
 	    have_mill_drill = isinstance(mill_drill_tool, Tool_Mill_Drill)
 	    end_mill_tool = part._tools_end_mill_search(smallest_inner_diameter, z_stop, "contour")
 	    have_end_mill = isinstance(end_mill_tool, Tool_End_Mill)
 	    if tracing >= 0:
-		print("{0}mill_drill_tool='{1}'".format(' ' * tracing, mill_drill_tool))
-		print("{0}end_mill_tool='{1}'".format(' ' * tracing, end_mill_tool))
-		print("have_mill_drill={0} have_end_mill={1}".
-		  format(have_mill_drill, have_end_mill))
+		print("{0}mill_drill_tool='{1}'".format(indent, mill_drill_tool))
+		print("{0}end_mill_tool='{1}'".format(indent, end_mill_tool))
+		print("{0}have_mill_drill={1} have_end_mill={2}".
+		  format(indent, have_mill_drill, have_end_mill))
 
 	    # Expand the *flags* into *do_upper_chamfer*, *do_lower_chamfer* and *do_through*:
 	    do_upper_chamfer = False
@@ -8174,20 +8376,21 @@ class Part:
 
 		    # *depth_maximum* is *diameter* * *ratio* / 4:
 		    depth_maximum = diameter * (ratio / 4.0)
-		    #print("diameter={0:i} extra={1:i} ratio={2:i}".
-		    #  format(diameter, extra, ratio))
-		    #print("depth_maximum={0:i}".format(depth_maximum))
+		    if tracing >= 0:
+			print("{0}diameter={1:i} extra={2:i} ratio={3} depth_max={4:i}".
+			  format(indent, diameter, extra, ratio, depth_maximum))
 
 		# Figure out how many *passes* using *depth_maximum*, *z_start*, *z_stop*,
 		# and *z_extra:
 		z_start = start_point.z
 		z_end = end_point.z
 		z_extra = zero
-		z_depth = z_start - z_stop + z_extra
+		z_depth = z_start - z_end + z_extra
 		passes = int(z_depth / depth_maximum) + 1
 
-		#print("zstt={0:i} zstp={1:i} zxtr={2:i} zdpth={3:i} pss={4:i}".format(
-		#  z_start, z_stop, z_extra,z_depth, passes))
+		if tracing >= 0:
+		    print("{0}zstt={1:i} zend={2:i} depmax={3:i} zxtr={4:i} zdpth={5:i} pss={6}".
+		      format(indent, z_start, z_end, depth_maximum, z_extra, z_depth, passes))
 	
 		# Set {sub_priority} to 0 to force this operation before
 		# top/bottom chamfers:
@@ -8202,11 +8405,12 @@ class Part:
 		  sub_priority, mill_tool, Operation.ORDER_MILL_DRILL_EXTERIOR,
 		  follows, mill_feed_speed, mill_spindle_speed,
 		  z_start - tip_depth, z_start - z_depth - tip_depth,
-		  contour, offset, diameter/2, passes)
+		  contour, offset, diameter/2, passes, tracing + 1)
 		part._operation_append(mill_operation_contour)
 
-		#print("zstt-td={0:i} zstt-zdep-td={1:i}".format(
-		#  z_start - tip_depth, z_start - z_depth - tip_depth))
+		if tracing >= 1:
+		    print("{0}zstt-td={1:i} zstt-zdep-td={2:i}".format(
+		      indent, z_start - tip_depth, z_start - z_depth - tip_depth))
 
 	    # Deal with *do_upper_chamfer*:
 	    if do_upper_chamfer:
@@ -9815,7 +10019,14 @@ class Part:
 	# Verify argument types:
 	assert isinstance(comment, str)
 
-	print("Part.tooling_plate_mount() is not implemented yet.")
+	# Perform any requested *tracing*;
+	tracing = self._tracing
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.tooling_plate_mount('{1}'".format(indent, self._name))
+
+	if tracing >= 0:
+	    print("{0}!!!!Part.tooling_plate_mount() is not implemented yet!!!!".format(indent))
 
 	#jig_dy :@= part.jig_dy
 	#half_jig_dy :@= half@(jig_dy)
@@ -9823,6 +10034,10 @@ class Part:
 	##call d@(form@("jig_dy=%i% vice_y=%i%\n\") % f@(jig_dy) / f@(vice_y))
 	#call reposition@(part, vice_y)
 	#call dowel_pin@(part, "Mount on tooling plate")
+
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=Part.tooling_plate_mount('{1}'".format(indent, self._name))
 
     def tube(self, color, material, \
       start_point, end_point, diameter, wall_thickness, sides):
@@ -10084,7 +10299,7 @@ class Part:
 	    xml_stream.write(' Flags="{0}" Comment="{1}"/>\n'. \
 	      format(flags, comment))
 
-    def vice_position(self, comment, surface_point, north_point, west_point, tracing = -1000000):
+    def vice_position(self, comment, surface_point, north_point, west_point):
 	""" *Part*: Cause the *Part* object (i.e. *self*) to be mounted in a vice with
 	    *surface_point* as the top surface, *north_point* as the edge mounted against
 	    the top vice edge, and *west_point* as the edge left pointing edge of *self*.
@@ -10095,7 +10310,6 @@ class Part:
 	assert isinstance(surface_point, P)
 	assert isinstance(north_point, P)
 	assert isinstance(west_point, P)
-	assert isinstance(tracing, int)
 
 	# Use *part* instead of self:
 	part = self
@@ -10103,10 +10317,11 @@ class Part:
 
 	# Start any *tracing*:
 	trace_detail = 0
-	tracing = 0
+	tracing = part._tracing
 	if tracing >= 0:
+	    indent = ' ' *tracing
 	    print("{0}=>Part.vice_position(pn='{1}', com='{2}', sp={3:i} np={4:i} wp={5:i})".
-	      format(' ' * tracing, part_name, comment, surface_point, north_point, west_point))
+	      format(indent, part_name, comment, surface_point, north_point, west_point))
 
 	# Before we get too far, flush any pending screw holes from the previous mounting:
 	if part._top_surface_set:
@@ -10136,8 +10351,8 @@ class Part:
 	projection_axis = unnormalized_projection_axis.normalize()
 	if tracing >= 0:
 	    print("{0}north_axis={1:m} west_axis={2:m} unnormalized projection_axis={3:m}".
-	      format(' ' * tracing, north_axis, west_axis, unnormalized_projection_axis))
-	    print("{0}normailized projection_axis={1:m}".format(' ' * tracing, projection_axis))
+	      format(indent, north_axis, west_axis, unnormalized_projection_axis))
+	    print("{0}normailized projection_axis={1:m}".format(indent, projection_axis))
 
 	# Now that we have the *projection_axis* we need to decide whether or not the
 	# points in the conceptual design orientation need to be rotated to be in the
@@ -10158,7 +10373,7 @@ class Part:
 		print("{0}rotation_axis={1:m} rotation_angle{2:d}".
 		  format(' ' * tracing, rotation_axis, rotation_angle))
 	if tracing >= 0 and trace_detail >= 1:
-	    print("{0}position=\n{1}".format(' ' * tracing, position))
+	    print("{0}position=\n{1}".format(indent, position))
 
 	# Store stuff into *part*:
 	part._position = position
@@ -10171,7 +10386,7 @@ class Part:
 	# Wrap up any *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Part.vice_position(pn='{1}', com='{2}', sp={3:i} np={4:i} wp={5:i})".
-	      format(' ' * tracing, part_name, comment, surface_point, north_point, west_point))
+	      format(indent, part_name, comment, surface_point, north_point, west_point))
 
 class Fastener(Part):
     """ *Fastener*: """
@@ -10803,17 +11018,18 @@ class Code:
 	""" *Code*: Ggenerate the G-code for *contour* using the *Code* object (i.e. *self*).
 	    *plunge_offset* is the offset from contour at which to lower the tool.
 	    *contour_offset* is an additional +/- offset from the contour.  *tool_radius*
-	     is the tool radius to use.  If *clockwise* is *True*, *bends* are traversed
+	    is the tool radius to use.  If *clockwise* is *True*, *bends* are traversed
 	    in a clockwise direction  otherwise a counter-clockwise traversal occurs.
 	    *z* specifies the depth.  *feed_speed* specifies the feedrate and *spindle_speed*
 	    specifies the spindle speed.
 	"""
 
 	# Verify argument types:
+	zero = L()
 	assert isinstance(contour, Contour)
-	assert isinstance(plunge_offset, L)
-	assert isinstance(contour_offset, L)
-	assert isinstance(tool_radius, L)
+	assert isinstance(plunge_offset, L) and plunge_offset >= zero
+	assert isinstance(contour_offset, L) and contour_offset >= zero
+	assert isinstance(tool_radius, L) and tool_radius >= zero
 	assert isinstance(clockwise, bool)
 	assert isinstance(z, L)
 	assert isinstance(feed_speed, Speed)
@@ -10826,43 +11042,71 @@ class Code:
 	# Start performing any *tracing*:
 	tracing_detail = -1
 	if tracing >= 0:
-	    tracing_detail = 3
+	    tracing_detail = 0
 	    indent = ' ' * tracing
 	    print("{0}=>Code._contour(*, po={1:i} co={2:i} tr={3:i} cl={4} z={5:i} *)".format(
 	      indent, plunge_offset, contour_offset, tool_radius, clockwise, z))
 
-	# Generate the starting code:
-	#bends = contour._bends_get()
-	#bend0 = bends[0]
-	#plunge_x = bend0._arc_before_x_get()
-	#plunge_y = bend0._arc_before_y_get()
-	#if tracing >= 0:
-	#    print("{0}Code._contour: plunge_x={1:i}, plunge_y={2:i}".
-	#     format(' ' * tracing, plunge_x, plunge_y))
+	# Grab *bends* from *contour*:
+	bends = contour._bends_get()
+	bends_size = len(bends)
+
+	# Add in *tool_radius* to the exising *contour_offset*:
+	total_offset = contour_offset + tool_radius
+
+	# Search for *west_most_bend* with the X coordinate:
+	west_most_index = 0
+	west_most_bend = bends[west_most_index]
+	west_most_x = west_most_bend._point_get().x
+	for index, bend in enumerate(bends):
+	    bend_point_x = bend._point_get().x
+            if bend_point_x < west_most_x:
+		west_most_index = index
+		west_most_bend = bend
+		west_most_x = bend_point_x
+	if tracing_detail >= 1:
+	    print("{0}".format(indent, ))
+
+	# Make sure that *west_most_bend* is not an inside bend (i.e. it should be impossible):
+	assert not west_most_bend._is_inside_get()
+
+	# Compute the X/Y location to drop the mill bit down:
+	contour_is_clockwise = contour._is_clockwise_get()
+	west_most_radius = west_most_bend._radius_get()
+	start_offset = total_offset + west_most_radius
+	plunge_arc_offset = start_offset + plunge_offset
+	if contour_is_clockwise == clockwise:
+	    start_tangent = west_most_bend._incoming_tangent_compute(start_offset)
+	    plunge_tangent = west_most_bend._incoming_tangent_compute(plunge_arc_offset)
+	else:
+	    start_tangent = west_most_bend._outgoing_tangent_compute(-start_offset)
+	    plunge_tangent = west_most_bend._outgoing_tangent_compute(-plunge_arc_offset)
+	if tracing_detail >= 1:
+	    print("{0}plunge_x={1:i}, plunge_y={2:i}".
+	      format(indent, plunge_tangent.x, plunge_tangent.y))
     
 	# This routine starts and ends at (*plunge_x*, *plunge_y*).
 	# If we are not already at (*plunge_x*, *plunge_y*) we need
 	# to get there safely:
-	#code._xy_rapid(plunge_x, plunge_y)
-    
+	code._xy_rapid(plunge_tangent.x, plunge_tangent.y)
+
 	# Now we get to down to the correct Z level:
-	#code._z_feed(feed_speed/2, spindle_speed, z, "Contour")
-    
-	# Now compute the contour at an offset of {contour_offset}:
-	#contour._path_compute(contour_offset, tool_radius, tracing + 1)
+	code._z_feed(feed_speed/2, spindle_speed, z, "Contour")
 
-	zero = L()
-	degrees0 = Angle(deg=0.0)
-
-	contour_offset += tool_radius
+	# Now feed to the start point using a circular motion so that there is no divit
+	# at the plunge point:
+	if contour_is_clockwise == clockwise:
+	    code._xy_ccw_feed(feed_speed, spindle_speed,
+	      tool_radius * 1.001, start_tangent.x, start_tangent.y)
+	else:
+	    code._xy_cw_feed(feed_speed, spindle_speed,
+	      tool_radius * 1.001, start_tangent.x, start_tangent.y)
 
 	# We iterate across all of the corners.  We need to visit
 	# the first corner one last time at the end; hence we
 	# iterate *size* + 1 times through the loop regardless of
 	# whether we go clockwise or count-clockwise:
-	bends = contour._bends_get()
-	bends_size = len(bends)
-	if contour._is_clockwise_get() == clockwise:
+	if contour_is_clockwise == clockwise:
 	    # Clockwise (climb) Cut:
 	    if tracing_detail >= 0:
 		print("{0}clockwise".format(indent))
@@ -10882,11 +11126,11 @@ class Code:
 		      format(indent, bend_name, bend_point))
 
 		# Compute the *arc_radius*, *arc_start*, and *arc_end* depending upon whether
-		# *bend* *is_inside* or not.  Offset everything by *contour_offset*:
+		# *bend* *is_inside* or not.  Offset everything by *total_offset*:
 		is_inside = bend._is_inside_get()
 		if is_inside:
-		    # For an inside bend, *bend_radius* is decreased by *contour_offset*:
-		    arc_radius = bend_radius - contour_offset
+		    # For an inside bend, *bend_radius* is decreased by *total_offset*:
+		    arc_radius = bend_radius - total_offset
 
 		    # For inside bends, we need to negate the *arc_radius*:
 		    arc_start = bend._incoming_tangent_compute(-arc_radius)
@@ -10894,8 +11138,8 @@ class Code:
 		    code._xy_feed(feed_speed, spindle_speed, arc_start.x, arc_start.y)
 		    code._xy_ccw_feed(feed_speed, spindle_speed, arc_radius, arc_end.x, arc_end.y)
 		else:
-		    # For an outside bend, *bend_radius* is increased by *contour_offset*:
-		    arc_radius = bend_radius + contour_offset
+		    # For an outside bend, *bend_radius* is increased by *total_offset*:
+		    arc_radius = bend_radius + total_offset
 
 		    # For outside bends, no further adjustments are needed:
 		    arc_start = bend._incoming_tangent_compute(arc_radius)
@@ -10906,12 +11150,10 @@ class Code:
 		if tracing_detail >= 1:
 		    print("{0}arc_radius={1:i} arc_start={1:2} arc_end={3:i}".
 		      format(indent, arc_radius, arc_start, arc_end))
-    
-		if tracing_detail >= 0:
 		    print("")
 	else:
 	    # Counter clockwise:
-	    if tracing_detail >= 0:
+	    if tracing_detail >= 1:
 		print("{0}counter-clockwise".format(indent))
 
 	    for bends_index in range(bends_size):
@@ -10925,8 +11167,8 @@ class Code:
 		# the *tool_radius*:
 		is_inside = bend._is_inside_get()
 		if is_inside:
-		    # For inside corners, the *bend_radius* is decreased by *contour_offset*:
-		    arc_radius = bend_radius - contour_offset
+		    # For inside corners, the *bend_radius* is decreased by *total_offset*:
+		    arc_radius = bend_radius - total_offset
 
 		    # For counter-clockwise, we swap incoming with outgoing but leave
 		    # *arc_radius* unchanged (i.e. positive):
@@ -10935,8 +11177,8 @@ class Code:
 		    code._xy_feed(feed_speed, spindle_speed, arc_start.x, arc_start.y)
 		    code._xy_ccw_feed(feed_speed, spindle_speed, arc_radius, arc_end.x, arc_end.y)
 		else:
-		    # For outside corners, the *bend_radius* is increased by *contour_offset*:
-		    arc_radius = bend_radius + contour_offset
+		    # For outside corners, the *bend_radius* is increased by *total_offset*:
+		    arc_radius = bend_radius + total_offset
 
 		    # For counter-clockwise, we swap incoming with outgoing and we invert
 		    # *arc_radius*:
@@ -10948,13 +11190,20 @@ class Code:
 		if tracing_detail >= 1:
 		    print("{0}arc_radius={1:i} arc_start={1:2} arc_end={3:i}".
 		      format(indent, arc_radius, arc_start, arc_end))
-    
-		if tracing_detail >= 0:
 		    print("")
 	    
-	# Return back to the ({plunge_x}, {plunge_y}):
-	#code._xy_feed(feed_speed, spindle_speed, plunge_x, plunge_y)
-    
+	# Return back to the (*start_tangent.x*, *start_tangent.y*):
+	code._xy_feed(feed_speed, spindle_speed, start_tangent.x, start_tangent.y)
+
+	# Now feed to back to the plunge point in a circular motion to avoid diviting the
+	# contour as we retract:
+	if contour_is_clockwise == clockwise:
+	    code._xy_ccw_feed(feed_speed, spindle_speed,
+	      tool_radius * 1.001, plunge_tangent.x, plunge_tangent.y)
+	else:
+	    code._xy_cw_feed(feed_speed, spindle_speed,
+	      tool_radius * 1.001, plunge_tangent.x, plunge_tangent.y)
+
 	if tracing >= 0:
 	    print("{0}=>Code._contour(*, po={1:i} co={2:i} tr={3:i} cl={4} z={5:i} *)".format(
 	      ' ' * tracing, plunge_offset, contour_offset, tool_radius, clockwise, z))
@@ -13170,7 +13419,7 @@ class Shop:
 
 	# Set *debug* to *True* to trace what is going on:
 	debug = False
-	debug = True
+	#debug = True
 	if debug:
 	    print("speeds_table[{0}] = {1}".format(key, speed_range))
 

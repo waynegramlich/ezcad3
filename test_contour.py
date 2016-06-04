@@ -4,16 +4,17 @@ from EZCAD3 import *
 
 class Plate(Part):
 
-    def __init__(self, up):
+    def __init__(self, up, name):
 	""" *Plate*: Initialize *Base* object (i.e. *self*) with a
 	    parent of *up*.
 	"""
 
 	# Verify argument types:
-	assert up == None or isinstance(up, Part)
+	assert isinstance(up, Part) or up == None
+	assert isinstance(name, str)
 
 	# Initialize the superclass:
-	Part.__init__(self, up)
+	Part.__init__(self, up, name)
 
 
     def construct(self):
@@ -32,7 +33,7 @@ class Plate(Part):
 	# 
 	plate.dx_l = dx = L(inch=4.0)
 	plate.dy_l = dy = L(inch=4.0)
-	plate.dz_l = dz = L(inch="1/8")
+	plate.dz_l = dz = L(inch="1/2")
 	plate.color_c = color = Color("blue")
 	#print("dx={0:i} dy={1:i} dz={2:i}".format(dx, dy, dz))
 
@@ -69,21 +70,21 @@ class Plate(Part):
 	plate.tooling_plate_mount("Tooling Plate Mount")
 
 	# Construct the exterior contour:
-	r1 = L(inch="1/4")
+	r1 = L(inch="2/16")
 	contour = Contour("exterior_contour")
 
-	clockwise = True
+	clockwise = False
 	if clockwise:
 	    contour.bend_append("SW corner",     P(x1,   y1,   z2), r1)
 	    contour.bend_append("NW corner",     P(x1,   y2,   z2), r1)
 	    contour.bend_append("NE corner",     P(x2,   y2,   z2), r1)
 	    contour.bend_append("E corner",      P(x2,   zero, z2), r1)
-	    contour.bend_append("O corner", P(zero, zero, z2), r1)
+	    contour.bend_append("O corner", 	 P(zero, zero, z2), r1)
 	    contour.bend_append("S corner",      P(zero, y1,   z2), r1)
 	else:
 	    contour.bend_append("SW corner",     P(x1,   y1,   z2), r1)
 	    contour.bend_append("S corner",      P(zero, y1,   z2), r1)
-	    contour.bend_append("O corner", P(zero, zero, z2), r1)
+	    contour.bend_append("O corner",      P(zero, zero, z2), r1)
 	    contour.bend_append("E corner",      P(x2,   zero, z2), r1)
 	    contour.bend_append("NE corner",     P(x2,   y2,   z2), r1)
 	    contour.bend_append("NW corner",     P(x1,   y2,   z2), r1)
@@ -95,5 +96,5 @@ class Plate(Part):
 
 if __name__== "__main__":
     ezcad = EZCAD3(0)
-    plate= Plate(None)
+    plate= Plate(None, "plate")
     plate.process(ezcad)
