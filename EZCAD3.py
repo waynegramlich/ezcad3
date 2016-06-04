@@ -1140,7 +1140,9 @@ class Bend:
 
 	# These fields are computed as a side-effect by *_center_radius_and_tangents_compute*():
 	bend._center = None
+	bend._incoming_tangent_angle = None
 	bend._incoming_tangent_direction = None
+	bend._outgoing_tangent_angle = None
 	bend._outgoing_tangent_direction = None
 
     def __format__(self, format):
@@ -1153,6 +1155,17 @@ class Bend:
 	""" *Bend*: Return the bearing_change field from the *Bend* object (i.e. *self*). """
 
 	return self._bearing_change
+
+    def _center_get(self):
+	""" *Bend*: Return the radius center for *Bend* object (i.e. *self*). """
+
+	return self._center
+
+    def _incoming_tangent_angle_get(self):
+	""" *Bend*: Return the incoming tangent angle for *Bend* object (i.e. *self*)
+	    relative to the radius center. """
+	
+	return self._incoming_tangent_angle
 
     def _incoming_tangent_compute(self, radius):
 	""" *Bend*: Compute and return the incoming tangent point for the *Bend* object
@@ -1190,6 +1203,12 @@ class Bend:
 	""" *Bend*: Return name with the *Bend* object (i.e. *self*). """
 
 	return self._name
+
+    def _outgoing_tangent_angle_get(self):
+	""" *Bend*: Return the outgoing tangent angle for *Bend* object (i.e. *self*)
+	    relative to the radius center. """
+	
+	return self._outgoing_tangent_angle
 
     def _outgoing_tangent_compute(self, radius):
 	""" *Bend*: Compute and return the outgoing tangent point for the *Bend* object
@@ -1388,7 +1407,9 @@ class Bend:
 
 	# Now we just want to record everything we care about into *bend*:
 	bend._center = c
+	bend._incoming_tangent_angle = jc_angle
 	bend._incoming_tangent_direction = jc_direction
+	bend._outgoing_tangent_angle = nc_angle
 	bend._outgoing_tangent_direction = nc_direction
 
 	if tracing >= 0:
@@ -8142,11 +8163,12 @@ class Part:
 
 	# Perform any requested *tracing*:
 	tracing = part._tracing
+	tracing_detail = -1
 	if tracing >= 0:
+	    #tracing_detail = 0
 	    indent = ' ' * tracing
 	    print("{0}=>Part.contour('{1}, '{2}', '{3:i}', {4:i}', {5:i}, '{6}')".
 	     format(indent, part._name, comment, start_point, end_point, extra, flags))
-
 
 	# Before we do anything else, we need to update the bounding box for *part*:
 	bounding_box = part._bounding_box
@@ -8201,35 +8223,70 @@ class Part:
 	    contour_is_clockwise = contour._is_clockwise_get()
 	    scad_difference_lines.append("      points = [")
 	    for bend in bends:
+		# Grab some values from *bend*:
 		bend_point = bend._point_get()
 		bend_name = bend._name_get()
 		bend_radius = bend._radius_get()
 		bend_is_inside = bend._is_inside_get()
 		
+		# The *arc_radius* is positive or negative depending upon whether
+		# *contour_is_clocwise* or the *bend_is_inside*:
 		if contour_is_clockwise:
 		    if bend_is_inside:
-			arc_start = bend._incoming_tangent_compute(-bend_radius)
-			arc_end = bend._outgoing_tangent_compute(-bend_radius)
+			arc_radius = -bend_radius
 		    else:
-			arc_start = bend._incoming_tangent_compute(bend_radius)
-			arc_end = bend._outgoing_tangent_compute(bend_radius)
-
+			arc_radius = bend_radius
 		else:
 		    if bend_is_inside:
-			arc_start= bend._incoming_tangent_compute(bend_radius)
-			arc_end = bend._outgoing_tangent_compute(bend_radius)
+			arc_radius = bend_radius
 		    else:
-			arc_start = bend._incoming_tangent_compute(-bend_radius)
-			arc_end = bend._outgoing_tangent_compute(-bend_radius)
+			arc_radius = -bend_radius
 
-		scad_difference_lines.append("       [{0:m}, {1:m}], // {2} incoming".
-		  format(arc_start.x, arc_start.y, bend_name))
-		scad_difference_lines.append("       [{0:m}, {1:m}], // {2} outgoing".
-		  format(arc_end.x, arc_end.y, bend_name))
-		contour_pairs.append( (arc_start, "{0} incoming".format(bend_name) ))
-		contour_pairs.append( (arc_end, "{0} outgoing".format(bend_name) ))
+		# We are going to sweep out some line segments from *start_angle* to *end_angle*
+		# (which are angle relative to *center*):
+		center = bend._center_get()
+		start_angle = bend._incoming_tangent_angle_get()
+		start_direction = start_angle.xy_direction()
+		end_angle = bend._outgoing_tangent_angle_get()
+		change_angle = end_angle - start_angle
 
-	    contour_pairs_size = len(contour_pairs)
+		# Make sure that the *bearing_angle_change* is positive for clockwise sweeps
+		# and negative for counter clockwise sweeps:
+		degrees0 = Angle()
+		degrees360 = Angle(deg=360.0)
+		if change_angle >= degrees0:
+		    if contour_is_clockwise and not bend_is_inside or \
+		     not contour_is_clockwise and bend_is_inside:
+			change_angle -= degrees360
+			if tracing_detail >= 1:
+			    print("{0}decrement".format(indent))
+		elif change_angle < degrees0:
+		    if contour_is_clockwise and bend_is_inside or \
+		      not contour_is_clockwise and not bend_is_inside:
+			if tracing >= 1:
+			    print("{0}increment".format(indent))
+			change_angle += degree360
+		if tracing_detail >= 0:
+		    print("{0}name='{1}' start_angle={2:d} end_angle={3:d} change_angle={4:d}".
+		      format(indent, bend_name, start_angle, end_angle, change_angle))
+
+		# Now we compute *deta_angle*:
+		arc_radius_mm = arc_radius.millimeters()
+		count = 4
+		delta_angle = change_angle / float(count - 1)
+		if tracing_detail >= 0:
+		    print("{0}count={1} delta_angle={2:d}".format(indent, count, delta_angle))
+		for index in range(count):
+		    angle = (start_angle + delta_angle * float(index)).normalize()
+		    point = center + angle.xy_direction() * arc_radius_mm
+		    if tracing_detail >= 0:
+			print("{0}[{1}/{2}]:angle={3:d} point={4:i}".
+			  format(indent, index + 1, count, angle, point))
+
+		    scad_difference_lines.append("       [{0:m}, {1:m}], // {2} {3} of {4}".
+		      format(point.x, point.y, bend_name, index + 1, count))
+		    contour_pairs.append( (point, "{0} {1} of {2}".
+		      format(bend_name, index + 1, count) ))
 
 	    # Now tack on the 4 points that enclose the contour with a box:
 	    scad_difference_lines.append("       [{0:m}, {1:m}], // box SW".format(x1, y1))
@@ -8239,6 +8296,7 @@ class Part:
 	    scad_difference_lines.append("      ],")
 
 	    # Now we output the outermost path the encloses the contour:
+	    contour_pairs_size = len(contour_pairs)
 	    scad_difference_lines.append("      paths = [")
 	    scad_difference_lines.append("       [ // box path")
 	    scad_difference_lines.append("        {0}, // SW box".format(contour_pairs_size))
