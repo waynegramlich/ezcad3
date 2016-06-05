@@ -73,7 +73,7 @@ class Plate(Part):
 	r1 = L(inch="2/16")
 	contour = Contour("exterior_contour")
 
-	clockwise = True
+	clockwise = False
 	if clockwise:
 	    contour.bend_append("SW corner",     P(x1,   y1,   z2), r1)
 	    contour.bend_append("NW corner",     P(x1,   y2,   z2), r1)
@@ -89,6 +89,7 @@ class Plate(Part):
 	    contour.bend_append("NE corner",     P(x2,   y2,   z2), r1)
 	    contour.bend_append("NW corner",     P(x1,   y2,   z2), r1)
 
+	plate.tool_prefer("Laser_007")
 	plate.contour("exterior contour", contour, P(x1, y1, z2), P(x1, y1, z1), extra/2, "")
 
 	if debug:
