@@ -27,6 +27,19 @@ def int_compare(left, right):
 	return 0
     return 1
 
+def float_compare(left, right):
+    """ *int*: Return -1, 0, or 1 depending upon whether *left* sorts before,
+	at, or after *right*.
+    """
+
+    assert isinstance(left, float)
+    assert isinstance(right, float)
+    if left < right:
+	return -1
+    elif left == right:
+	return 0
+    return 1
+
 #  The L, P, and Angle classes are listed first because Python does not
 # have a good mechanism for dealing with forward references to class names.
 
@@ -373,18 +386,29 @@ class L:
 
 	return self._mm / 10.0
 
-    def distance(self, dy):
-	""" L: Return the length of the line between (*self*,*dy) and the origin.  """
-	dx_mm = self._mm
-	dy_mm = dy._mm
-	distance_mm = math.sqrt(dx_mm * dx_mm + dy_mm * dy_mm)
-	return L(mm=distance_mm)
+    def compare(self, length):
+	""" *L* Return -1, 0, or 1 depending upon whether the *L* object (i.e. *self*)
+	    is less than, equal to, or greater than *length*, repectively.
+	"""
+
+	# Verify argument types:
+	assert isinstance(length, L)
+
+	return float_compare(self._mm, length._mm)
+
 
     def cosine(self, angle):
 	""" L: Return {self} * cos(angle). """
 
 	assert isinstance(angle, Angle)
 	return L(self._mm * angle.cosine())
+
+    def distance(self, dy):
+	""" L: Return the length of the line between (*self*,*dy) and the origin.  """
+	dx_mm = self._mm
+	dy_mm = dy._mm
+	distance_mm = math.sqrt(dx_mm * dx_mm + dy_mm * dy_mm)
+	return L(mm=distance_mm)
 
     def inches(self):
 	""" L: Return {self} as a scalar in units of inches. """
@@ -3165,6 +3189,12 @@ class EZCAD3:
 
 	return self._directory
 
+    def _mode_get(self):
+	""" *EZCAD3*: Return the mode of the *EZCAD3* object (i.e. *self*). """
+
+	return self._mode
+
+
     def process(self, part):
 	""" *EZCAD3*: Perform all of the processing starting at *part*.
 	"""
@@ -3207,8 +3237,8 @@ class Operation:
     POCKET_KIND_FLAT = 0
     POCKET_KIND_THROUGH = 1
 
-    def __init__(self,
-      name, kind, part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed):
+    def __init__(self, name, kind,
+      part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed):
 	""" *Operation*: Initialize an *Operation* object to contain
 	    *name*, *kind*, *part*, *comment*, *sub_priority*, *tool*,
 	    *order*, *follows*, *feed_speed*, and *spindle_speed*.
@@ -3228,6 +3258,7 @@ class Operation:
 
 	# Load up *self*:
 	self._name = name
+	self._kind = kind
 	self._part = part
 	self._feed_speed = Speed()
 	self._spindle_speed = Hertz()
@@ -3274,17 +3305,17 @@ class Operation:
 	    return result
 
 	# Sort by *kind* fifth:
-	result = int_compare(opertaion1._kind, operation2._kind)
+	result = int_compare(operation1._kind, operation2._kind)
 	if result != 0:
 	    return result
 
 	# Sort by *vice_x* sixth:
-	result = in_compare(operation1._vice_x,	operation2._vice_x)
+	result = operation1._vice_x.compare(operation2._vice_x)
 	if result != 0:
 	    return result
 
 	# Sort by *vice_y* seventh:
-	result = in_compare(operation1._vice_y,	operation2._vice_y)
+	result = operation1._vice_y.compare(operation2._vice_y)
 	if result != 0:
 	    return result
 
@@ -3639,7 +3670,7 @@ class Operation_Dowel_Pin(Operation):
 	self._tip_depth = tip_depth
 	self._z_stop = z_stop
 
-    def _cnc_generate(self, tracing=-1000000):
+    def _cnc_generate(self, tracing):
 	""" *Operation_Dowel_Pin*: Generate the CNC G-code for a an
 	    *Operation_Dowel_Pin* object (i.e. *self*.)
 	"""
@@ -3828,11 +3859,10 @@ class Operation_Drill(Operation):
     #     and lubricants to the surface of the drill retarding material
     #     build-up. This treatment also improves toughness.
 
-    def __init__(self, comment, sub_priority, tool, order, follows,
-      diameter, hole_kind, x, y, z_start, z_stop, is_countersink):
+    def __init__(self, part, comment, sub_priority, tool, order, follows,
+      diameter, hole_kind, start, stop, is_countersink):
 	""" *Operation_Drill*: Initialize *Operation_Drill* to contain
-	    *diameter*, *hole_kind*, *x*, *y*, *z_start*, *z_stop*, and
-	    *counter_sink*.
+	    *diameter*, *hole_kind*, *start*, *stop*, and *counter_sink*.
 	"""
 
 	# Initialize super class:
@@ -3863,12 +3893,13 @@ class Operation_Drill(Operation):
 	self.z_stop = z_stop
 	self.is_countersink = is_countersink
 
-    def _cnc_generate(self, is_last):
+    def _cnc_generate(self, tracing):
 	""" *Operation_Drill*: Generate the CNC G-code for an
 	    *Operation_Drill* object (i.e. *self*).
 	"""
 	# Verify argument types:
-	assert isinstance(is_last, bool)
+	#assert isinstance(is_last, bool)
+	assert isinstance(tracing, int)
 
 	# Use *drill* instead of *self*:
 	drill = self
@@ -3891,7 +3922,7 @@ class Operation_Drill(Operation):
 
 	is_laser = tool.is_laser()
 	if is_laser:
-	    code.dxf_circle(x, y, diameter)
+	    code._dxf_circle(x, y, diameter)
 	else:
 	    hole_kind = drill_hole_kind
 	    if hole_kind == HOLE_KIND_THROUGH:
@@ -4066,12 +4097,12 @@ class Operation_Round_Pocket(Operation):
 	manufacturing operation.
     """
 
-    def __init_(self, part, comment, sub_priority, tool, order, follows,
-      diameter, hole_kind, x, y, z_start, z_stop):
+    def __init__(self, part, comment, sub_priority, tool, order, follows,
+      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed):
 	""" *Operation_Round_Pocket* will intitialize an
 	    *Operation_Round_Pocket* object (i.e. *self*) to contain
 	    *part*, *comment*, *sub_priority*, *tool*, *order*, *follows*,
-	    *diameter*, *hole_kind*, *x*, *y*, *z_start*, and *z_stop*.
+	    *diameter*, *hole_kind*, *start*, *stop*, *feed_speed*, and *spindle_speed*.
 	"""
 
 	# Verify argument types:
@@ -4080,57 +4111,68 @@ class Operation_Round_Pocket(Operation):
 	assert isinstance(sub_priority, int)
 	assert isinstance(tool, Tool)
 	assert isinstance(order, int)
-	assert isinstance(follows, Operation)
+	assert isinstance(follows, Operation) or follows == None
 	assert isinstance(diameter, L)
-	assert isinstance(hole_kind, Hole_Kind)
-	assert isinstance(x, L)
-	assert isinstance(y, L)
-	assert isinstance(z_start, L)
-	assert isinstance(z_stop, L)
+	assert isinstance(countersink_diameter, L)
+	assert isinstance(hole_kind, int)
+	assert isinstance(start, P)
+	assert isinstance(stop, P)
+	assert isinstance(feed_speed, Speed)
+	assert isinstance(spindle_speed, Hertz)
 
 	# Initialize superclass:
-	Operation.__init__(self, "Round_Pocket", KIND_ROUND_POCKET,
-	  part, comment, sub_priority, tool, order, follows)
+	Operation.__init__(self, "Round_Pocket", Operation.KIND_ROUND_POCKET,
+	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
 
 	# Load up *self*:
-	self.diameter = diameter
+	self._diameter = diameter
+	self._countersink_diameter = countersink_diameter
 	self.hole_kind = hole_kind
-	self.x = x
-	self.y = y
-	self.z_start = z_start
-	self.z_stop = z_stop
+	self._start = start
+	self._stop = stop
 
-    def _cnc_generate(self):
-	""" *Operation_Round_Pocket*: Generate the CNC G-code for an
-	    *Operation_Round_Pocket* (i.e. *self*).
+    def _cnc_generate(self, tracing):
+	""" *Operation_Round_Pocket*: Generate the CNC G-code for an *Operation_Round_Pocket*
+	    object (i.e. *self*).
 	"""
 
-	# Extract some values from {round_pocket}:
-	diameter = round_pocket.diameter
-	x = round_pocket.x
-	y = round_pocket.y
-	z_start = round_pocket.z_start
-	z_stop = round_pocket.z_stop
-	assert z_start >= z_stop
+	# Verify argument types:
+	assert isinstance(tracing, int)
 
-	# Compute some values based on {diameter}:
+	# Use *round_pocket* instead of *self*:
+	round_pocket = self
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Operation_Round_Pocket._cnc_generate('{1}')".
+	     format(indent, round_pocket._name))
+
+	# Extract some values from *round_pocket*:
+	part = round_pocket._part
+	diameter = round_pocket._diameter
+	start = round_pocket._start
+	stop = round_pocket._stop
+	assert start.z >= stop.z
+	tool = round_pocket._tool
+
+	# Compute some values based on *diameter*:
 	maximum_depth = diameter / 3.0
 	radius = diameter / 2
 
-	# Extract some values from {part} and {operation}.
+	# Extract some values from *part* and *shop*:
 	shop = part._shop
-	code = shop.code
-	tool = operation.tool
+	code = shop._code_get()
 
-	# Extract some values from {tool}:
-	tool_diameter = tool.diameter
-	comment = operation.comment
-	f = tool.feed
-	s = tool.spindle
+	# Extract some values from *tool*:
+	tool_diameter = tool._diameter_get()
+	comment = round_pocket._comment
+	f = tool._feed_speed_get()
+	s = tool._spindle_speed_get()
 	hole_kind = round_pocket.hole_kind
 
 	# Figure out if *tool* is a laser:
-	is_laser = is_laser(tool)
+	is_laser = tool._is_laser_get()
 
 	# Compute some values based on {tool_diameter}:
 	tool_radius = tool_diameter / 2 
@@ -4138,7 +4180,9 @@ class Operation_Round_Pocket(Operation):
 
 	if is_laser:
 	    # We just cut a simple circle:
-	    code.dxf_circle(x, y, radius - tool_radius)
+	    if tracing >= 0:
+		print("{0}start={1:i} stop={2:i}".format(indent, start, stop))
+	    code._dxf_circle(start.x, start.y, radius + tool_radius)
 	else:
 	    # We do all the work to mill out the round_pocket pocket;
 
@@ -4151,7 +4195,7 @@ class Operation_Round_Pocket(Operation):
 	    code.line_comment(
 	      "z_start={0} z_stop={1}".format(z_start, z_stop))
 	    
-	    z_depth = z_start - z_stop
+	    z_depth = (start - stop).length()
 	    passes = int(z_depth / maximum_depth) + 1
 	    depth_per_pass = z_depth / float(passes)
 	    assert passes < 100
@@ -4206,6 +4250,11 @@ class Operation_Round_Pocket(Operation):
 	      x - half_path_radius, y + half_path_radius)
 	    code.xy_ccw_feed(f, half_path_radius, s, x, y)
 	    code.z_safe_retract(z_feed, s)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Operation_Round_Pocket._cnc_generate('{1}')".
+	      format(indent, round_pocket._name))
 
     def compare(self, pocket2):
 	""" *Operation_Pocket*: Return -1, 0, 1 if *pocket1* (i.e. *self*)
@@ -4292,10 +4341,13 @@ class Operation_Simple_Exterior(Operation):
 	self.corner_radius = corner_radius
 	self.tool_radius = tool_radius
 
-    def _cnc_generate(self):
+    def _cnc_generate(self, tracing):
 	""" *Operation_Simple_Exterior*: Generate the CNC G-code for an
 	    *Operation_Simple_Exterior* object (i.e. self).
 	"""
+
+	# Verify argument types:
+	assert isinstance(tracing, int)
 
 	shop = part._shop
 	code = shop.code
@@ -4466,10 +4518,13 @@ class Operation_Simple_Pocket(Operation):
 
 	return self._corner_radius
 
-    def _cnc_generate(self):
+    def _cnc_generate(self, tracing):
 	""" *Operation_Simple_Pocket*: Generate the CNC G-code for a
 	    *Operation_Simple_Pocket* object (i.e. *self*).
 	"""
+
+	# Verify argument types:
+	assert isinstance(tracing, int)
 
 	# Use *pocket* instead of *self*:
 	pocket = self
@@ -4760,9 +4815,12 @@ class Operation_Vertical_Lathe(Operation):
 	self.z_start = z_start
 	self.z_stop = z_stop
 
-    def _cnc_generate(self):
+    def _cnc_generate(self, tracing):
 	""" *Operation_Vertical_Lathe*:
 	"""
+
+	# Verify argument types:
+	assert isinstance(tracing, int)
 
 	shop = part._shop
 	code = shop.code
@@ -4925,6 +4983,10 @@ class Part:
     """ A {Part} specifies either an assembly of parts or a single
 	physical part. """
 
+    HOLE_THROUGH = 1
+    HOLE_TIP = 2
+    HOLE_FLAT = 3
+
     # Flavors of values that can be stored in a {Part}:
     def __init__(self, up, name):
 	""" *Part*: Initialize *self* to have a parent of *up*. """
@@ -4949,6 +5011,7 @@ class Part:
 	self._dxf_scad_lines = []
 	self._ezcad = ezcad
 	self._is_part = False	
+	self._laser_preferred = False
 	self._material = Material("aluminum", "")
 	self._name = name
 	self._operations = []
@@ -6456,8 +6519,7 @@ class Part:
 	return True
 
     def _operations_get(self):
-	""" *Part*: Return the operations list for the *Part* object (i.e. *self*).
-	"""
+	""" *Part*: Return the operations list for the *Part* object (i.e. *self*). """
         
 	return self._operations
 
@@ -6665,6 +6727,32 @@ class Part:
 	    print("{0}<=Part._tools_dowel_pin_search('0')".format(indent, self._name, tool_name))
 
 	return dowel_pin
+
+    def _tools_drill_search(self, diameter, maximum_z_depth, tracing):
+	""" *Part*: Return a drill tool for the *Part* object (i.e. *self*) that has 
+	    a diameter of *diameter* and go to a depth of at least *maximum_z_depth*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(diameter, L)
+	assert isinstance(maximum_z_depth, L)
+	assert isinstance(tracing, int)
+	
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part._tools_drill_search('{1}', {2:i}, {3:i})".
+	      format(indent, part._name, diameter, maximum_z_depth))
+
+	drill_tool = \
+	  self._tools_search(Tool_Drill._match, diameter, maximum_z_depth, "drill", tracing + 1)
+
+	if tracing >= 0:
+	    tool_name = "NONE"
+	    if drill_tool != None:
+		toll_name = drill_tool._name_get()
+	    print("{0}<=Part._tools_drill_search('{1}', {2:i}, {3:i}) => {4}".
+	      format(indent, part._name, diameter, maximum_z_depth, tool_name))
 
     def _tools_end_mill_search(self, maximum_diameter, maximum_z_depth, from_routine, tracing):
 	""" *Part*: Search for an end mill with a diameter that is less than or equal to
@@ -7488,14 +7576,13 @@ class Part:
 	if trace >= 0:
 	    print("{0}<=Part.extrude()".format(trace * ' '))
 	    
-    def hole(self, comment = "NO_COMMENT", diameter = None,
+    def xhole(self, comment = "NO_COMMENT", diameter = None,
       start = None, end = None, sides = -1, sides_angle = Angle(),
       top = "t", flags = "", start_diameter = None, end_diameter = None,
       trace = -10000):
-	""" Part construct: Make a {diameter} hole in {part} with starting
-	    at {start_point} and ending at {end_point}.  {comment} will
-	    show in any error messages and any generated G-code.  The
-	    allowed flag letters in {flags} are:
+	""" *Part*: Make a *diameter* hole in the *Part* object (i.e. *self*) with starting 
+	    at *start_point* and ending at *end_point*.   *comment will show in any error
+	    messages and any generated G-code.  The allowed flag letters in *flags* are:
 
 	      One of 't' (default), 'f', or 'p':
 		't'	through hole (i.e. Through)
@@ -7503,9 +7590,9 @@ class Part:
 		'p'	tip hole (drill tip stops at {end_point} (i.e. tiP)
 
 	      Allowed additional flags:
-		'u' upper hole edge should be chamfered (i.e. Upper)
-		'l' lower hole edge should be chamfered (i.e. Lower)
-		'm' hole is to be milled (i.e. Milled)
+		'u'	upper hole edge should be chamfered (i.e. Upper)
+		'l'	lower hole edge should be chamfered (i.e. Lower)
+		'm'	hole is to be milled (i.e. Milled)
 	"""
 
 	if trace >= 0:
@@ -8575,6 +8662,194 @@ class Part:
 	    print("{0}<=Part.contour('{1}, '{2}', '{3:i}', {4:i}', {5:i}, '{6}')".
 	     format(' ' * tracing, part._name, comment, start_point, end_point, extra, flags))
 
+    def countersink_hole(self, comment,
+      hole_diameter, countersink_diameter, start, stop, hole_kind, tracing = -1000000):
+	""" *Part*: Put a *hole_diameter* hole into the *Part* object (i.e. *self*)
+	    starting at (*x*, *y*, *z_start*) to an end depth of *z_stop*.  The part will be
+	    have a 90 degree countersink of *countersink_diameter* at a height of *z_start*.
+	    *hole_kind* specifies the kind of hole and *comment* will show  up in any
+	    generated RS-274 code.
+	"""
+    
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(hole_diameter, L)
+	assert isinstance(countersink_diameter, L)
+	assert isinstance(start, P)
+	assert isinstance(stop, P)
+	assert isinstance(hole_kind, int)
+	assert isinstance(tracing, int)
+	assert start.z > stop.z, "start.z (={0:i}) <= stop.z (={1:i})".format(start.z, stop.z)
+
+	# Use *part* instead of *self*
+	part = self
+
+	if tracing == -1000000:
+	    tracing = part._tracing
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>countersink_hole@({1} '{2}' '{3}' {4:i} {5:i} {6:i} {7:i} {8}".
+	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
+	      start, stop, hole_kind))
+    
+	zero = L()
+	assert hole_diameter > zero
+	if countersink_diameter > zero:
+	    assert countersink_diameter >= hole_diameter
+    
+	hole_radius = hole_diameter / 2
+	countersink_radius = countersink_diameter / 2
+    
+	z_depth = start.z - stop.z
+
+	shop = part._shop
+	#if part.solids_generate
+	#    # Initialize {polygon1} through {polygon4}:
+	#    polygon1 :@= create@Simple_Polygon(1t)
+	#    polygon2 :@= create@Simple_Polygon(1t)
+	#    polygon3 :@= create@Simple_Polygon(1t)
+	#    polygon4 :@= create@Simple_Polygon(1t)
+    
+	#    # Initlize {z1} through {z4}:
+	#    z1 :@= zero
+	#    z2 :@= zero
+	#    z3 :@= zero
+	#    z4 :@= zero
+    
+	#    # Compute the heights of the drill polygon {z1}, {z2}, {z3}, and {z4}:
+	#    if countersink_radius <= zero
+	#	countersink_radius := half@(hole_radius)
+	#    z1 := z_start + countersink_radius + in@(1.0)
+	#    if countersink_radius <= hole_radius
+	#	# No countersink; raise a fake countersink above the hole:
+	#	z2 := z_start - (countersink_radius - hole_radius)
+	#	z3 := z_start
+	#    else
+	#	# We have countersink:
+	#	z2 := z_start
+	#	z3 := z_start - (countersink_radius - hole_radius)
+	#    switch hole_kind
+	#      all_cases_required
+	#      case flat, tip
+	#	z4 := z_stop
+	#      case through
+	#	z4 := z_stop - hole_radius - in@(0.020)
+    
+	#    if trace
+	#	call d@(form@("z1=%i% z2=%i% z3=%i% z4=%i%\n\") %
+	#	  f@(z1) % f@(z2) % f@(z3) / f@(z4))
+    
+	#    #FIXME: Use {Angle} type:
+	#    index_to_radians :@= (2.0 * 3.14159265358979323846) / 12.0
+	#    index :@= 0
+	#    while index < 12
+	#	angle :@= double@(index) * index_to_radians
+	#	cosine_angle :@= cosine@(angle)
+	#	sine_angle :@= sine@(angle)
+	#	countersink_x :@= x + smul@(countersink_radius, cosine_angle)
+	#	countersink_y :@= y + smul@(countersink_radius, sine_angle)
+	#	hole_x :@= x + smul@(hole_radius, cosine_angle)
+	#	hole_y :@= y + smul@(hole_radius, sine_angle)
+    
+	#	#call d@(form@("[%d%] x=%i% y=%i% xx=%i% yy=%i%\n\") %
+	#	#  f@(angle_index) % f@(x) % f@(y) % f@(hole_x) / f@(hole_y))
+    
+	#	point1 :@= create@Point(countersink_x, countersink_y, z1)
+	#	point2 :@= create@Point(countersink_x, countersink_y, z2)
+	#	point3 :@= create@Point(hole_x, hole_y, z3)
+	#	point4 :@= create@Point(hole_x, hole_y, z4)
+    
+	#	call point_append@(polygon1, point1)
+	#	call point_append@(polygon2, point2)
+	#	call point_append@(polygon3, point3)
+	#	call point_append@(polygon4, point4)
+    
+	#	#call d@(form@("[%d%] p1=%p% p2=%p% p3=%p% p4=%p%\n\") %
+	#	#  f@(index) % f@(point1) / f@(point2) % f@(point3) / f@(point4))
+    
+	#	index := index + 1
+    
+	#    polygons :@= new@Array[Simple_Polygon]()
+	#    call append@(polygons, polygon1)
+	#    call append@(polygons, polygon2)
+	#    call append@(polygons, polygon3)
+	#    call append@(polygons, polygon4)
+	#    polyhedron :@= polygons_skin@Simple_Polyhedron(polygons)
+    
+	#    #polyhedron :@=
+	#    #  top_bottom_fill@Simple_Polyhedron(top_polygon, bottom_polygon)
+	#    #reposition :@= part.reposition
+	#    #call off_write@(old_polyhedron, "/tmp/old_poly.off", reposition, shop)
+	#    #call off_write@(new_polyhedron, "/tmp/new_poly.off", reposition, shop)
+    
+	#    cache :@= shop.cache
+	#    drill_hash :@=
+	#      polyhedron_write@(cache, polyhedron, part.reposition, shop, 0f)
+    
+	#    #call d@(form@("drill_hash=%v%\n\") / f@(drill_hash))
+	#    #call d@(form@("%v%: z_stop=%i% bottom_z=%i%\n\") %
+	#    #  f@(comment) % f@(z_stop) / f@(bottom_z))
+    
+	#    call binary_operation@(part, "diff", drill_hash, "drill")
+    
+	ezcad = part._ezcad
+	mode = ezcad._mode_get()
+	if mode == EZCAD3.CNC_MODE:
+	    try_flat = False
+	    laser_preferred = part._laser_preferred
+	    if laser_preferred:
+		hole_kind = Part.HOLE_FLAT
+		try_flat = True
+    
+	    spot_operation = None
+	    if hole_kind == Part.HOLE_THROUGH or hole_kind == Part.HOLE_TIP:
+		# Spot drill and countersink the hole at the same time:
+		tool_mill_drill = None
+		z_countersink = start.z - countersink_radius
+		z_depth = start.z - stop.z
+		if countersink_diameter > hole_diameter:
+		    tool_mill_drill = \
+		      part._tools_mill_drill_tip_search(L(inch=-1.0), z_countersink, tracing + 1)
+		tool_drill = part._tools_drill_search(hole_diameter, z_depth, tracing + 1)
+    
+		if tool_drill != None:
+		    # Drill the spot and countersink first:
+		    countersink_comment = "{0} [countersink]".format(comment)
+    
+		    # We want to ensure that countersinks occur first:
+		    if tool_mill_drill != None:
+			sub_priority = 0
+			spot_operation = part.operation_drill_append(
+			  countersink_comment, sub_priority,  tool_mill_drill,
+			  Operation.ORDER_MILL_DRILL_COUNTERSINK, None,
+			  hole_diameter, Part.HOLE_TIP, x, y, z_start, z_countersink, True)
+    
+		    # Now drill the hole:
+		    sub_priority = 1
+		    part.operation_drill_append(comment, sub_priority, tool_drill,
+		      Operation.ORDER_DRILL, spot_operation, hole_diameter, hole_kind,
+		      x, y, z_start, z_stop, False)
+		else:
+		    try_flat = True
+	    elif hole_kind == Part.HOLE_FLATH:
+		try_flat = True
+    
+	    # See if we should try to mill the hole:
+	    if try_flat:
+		end_mill_tool = part._tools_end_mill_search(hole_diameter,
+		  z_depth, "countersink_hole", tracing + 1)
+		if end_mill_tool != None:
+		    operation_round_pocket = Operation_Round_Pocket(part, comment,
+		      0, end_mill_tool, Operation.ORDER_END_MILL_ROUND_POCKET, None,
+		      hole_diameter, countersink_diameter, hole_kind, start, stop,
+		      end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get())
+		    part._operation_append(operation_round_pocket)
+
+	if tracing >= 0:
+	    print("{0}<=countersink_hole@({1} '{2}' '{3}' {4:i} {5:i} {6:i} {7:i} {8}".
+	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
+	      start, stop, hole_kind))
+
 
     def done(self):
 	""" Part (tree_mode): Mark {self} as done.  {self} is
@@ -8874,41 +9149,42 @@ class Part:
 	      format(color, self.transparency, material))
 	    xml_stream.write(' Comment="{0}"/>\n'.format(self.name))
 
-    def hole_through(self, comment, diameter, start_point, flags, \
-      countersink_diameter = L(0.0)):
-	""" Part construct: Make a {diameter} hole in {self} with starting
-	    at {start_point} and going all the way through {self}.
-	    {comment} will show in any error messages and any generated
-	    G-code.  The allowed flag letters in {flags} are:
-
-	      Zero, one or more of the following:
-		't' through hole (i.e. Through)
-		'u' upper hole edge should be chamfered (i.e. Upper)
-		'l' lower hole edge should be chamfered (i.e. Lower)
+    def hole(self, comment, diameter, start, stop, flags):
+	""" *Part*:  Put a *diameter* hole long the axis from *start* down to *stop*
+	    into the *Part* object (i.e. *self*).  *comment* will show up in any
+	    generated RS-274 code or error messages:
 	"""
 
-	ezcad = self._ezcad
-	xml_stream = ezcad._xml_stream
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(diameter, L)
+	assert isinstance(start, P)
+	assert isinstance(stop, P)
+	assert isinstance(flags, str)
 
-	if xml_stream != None:
+	# Perform any requested *tracing*:
+	tracing = self._tracing
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
+	      format(indent, self._name, comment, diameter, start, stop, flags))
 
-	    # Define some useful abbreviations:
-	    inch = L.inch
-	    zero = inch(0)
+	# Compute *hole_kind* from *flags*:
+	hole_kind = Part.HOLE_THROUGH
+	if flags.find('t') >= 0:
+	    hole_kind = Part.HOLE_TIP
+	elif flags.find('f') >= 0:
+            hole_kind = Part.HOLE_FLAT
 
-	    # Extract some values from {ezcad}:
-	    ezcad = self._ezcad
-	    xml_indent = ezcad._xml_indent
+	# Perform the hole using the richer countesink hole operation:
+	zero = L()
+	self.countersink_hole(comment,
+	  diameter, zero, start, stop, hole_kind, tracing + 1)
 
-	    # Write out <Hole_Through Diameter= SX= SY= SZ= Flags= Comment= />:
-	    xml_stream.write('{0}<Hole_Through Diameter="{1}"'. \
-	      format(" " * xml_indent, diameter))
-	    xml_stream.write(' Countersink_Diameter="{0}"'. \
-	      format(countersink_diameter))
-	    xml_stream.write(' SX="{0}" SY="{1}" SZ="{2}"'. \
-	      format(start_point.x, start_point.y, start_point.z))
-	    xml_stream.write(' Flags="{0}" Comment="{1}"/>\n'. \
-	      format(flags, comment))
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}=>hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
+	      format(indent, self._name, comment, diameter, start, stop, flags))
 
     def length(self, length_path):
 	""" Part dimensions: Return the {Angle} associated with {length_path}
@@ -11020,17 +11296,6 @@ class Code:
 
 	self._vrml_reset()
 
-    def _block_append(self, block):
-	""" *Code*: Append *block* onto the blocks list inside of the *Code* object
-	    (i.e. *self*).
-	"""
-
-	# Verify argument types:
-	assert isinstance(block, Block)
-
-	# Append *block* onto the blocks list:
-	self._blocks.append(block)
-
     def _command_begin(self):
 	""" *Code*: Start a new RS274 command in the *Code* object (i.e. *self*). """
 
@@ -11447,7 +11712,7 @@ class Code:
 	    print("{0}<=Code._dxf_arc_append@(cw={1}, end_x={2:i}, end_y={3:i}, radius={4:i})".
 	      format(indent, clockwise, end_x, end_y, radius))
 
-    def _dxf_circle(self, code, x, y, radius):
+    def _dxf_circle(self, x, y, radius):
 	""" *Code*: Append a circle DXF entity to the *Code* object (i.e. *self*)
 	    with a center of (*x*,*y*) and a radius of *radius*.
 	"""
@@ -13886,7 +14151,6 @@ class Tool:
 	    result = tool1._diameter.compare(tool2._diameter)
 	    if result == 0:
 		result = int_compare(tool1._number, tool2._number)
-		assert result != 0
 	return result
 
     def _diameter_get(self):
@@ -14136,9 +14400,53 @@ class Tool_Drill(Tool):
 	  Tool.DRILL_STYLE_NONE < drill_style < Tool.DRILL_STYLE_LAST
 
 	# Load up the *Tool_Drill* object (i.e. *self*):
-	Tool.__init__(self, name, number, Tool.KIND_DRILL, material, diameter, flutes_count, maximum_z_depth)
+	Tool.__init__(self, name, number, Tool.KIND_DRILL,
+	  material, diameter, flutes_count, maximum_z_depth)
 	self.point_angle = point_angle
 	self.drill_style = Tool.DRILL_STYLE_NONE
+
+    @staticmethod
+    def _match(tool, desired_diameter, maximum_z_depth, from_routine, tracing):
+	""" *Tool_Drill*:  Return the diameter of *tool*, provided it is a *Drill_Tool*
+	    object with a diameter that is very close to *desired_diameter* and
+	    can reach at least to *maximum_z_depth*.  If no match occurs, -1.0 is returned.
+	    *from_routine* is used for tracing.
+	"""
+    
+	# Verify argument types:
+	assert isinstance(tool, Tool)
+	assert isinstance(desired_diameter, L)
+	assert isinstance(maximum_z_depth, L)
+	assert isinstance(from_routine, str)
+	assert isinstance(tracing, int)
+
+	# Perform any requested tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Tool_Drill._match('{1}', {2:i}, {3:i}, '{4}')".
+	      format(indent, tool, desired_diameter, maximum_z_depth, from_routine))
+
+	# Priority is negative if *tool* is not a *Tool_Drill* object:
+	priority = -1.0
+	if isinstance(tool, Tool_Drill):
+	    # Make sure *tool* is long enough:
+	    if tool._maximum_z_depth >= maximum_z_depth:
+		# If the *tool* *diameter* is very close to *desired_diameter* we have match::
+		diameter = tool._diameter
+		epsilon = L(inch=0.00001)
+		if (desired_diameter - diameter).absolute() < epsilon:
+		    # We have a match; set *priority* to the diameter:
+		    priority = diameter.millimeters()
+	assert isinstance(priority, float)
+
+	# Wrap-up any requested tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=Tool_Drill._match('{1}', {2:i}, {3:i}, '{4}') => {5}".
+	      format(indent, tool, desired_diameter, maximum_z_depth, from_routine, priority))
+
+	return priority
+
 
 class Tool_End_Mill(Tool):
     """ A *Tool_End_Mill* represents a flat bottom end mill. """
