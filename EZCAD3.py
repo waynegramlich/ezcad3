@@ -5470,155 +5470,6 @@ class Part:
 	#print("<=Part._color_material_update({0}, {1}): c={2} m={3}".
 	#  format(color, material, self._color, self._material))
 
-    def _cylinder(self, lines = None, indent = 0, is_solid = True,
-      comment = None, material = None, color = None, adjust = None,
-      diameter = None, start = None, end = None, sides = None,
-      sides_angle = None, trace = -1000000, start_diameter = None,
-      end_diameter = None):
-	""" *Part*: Deal with commonality between holes (i.e. material
-	    removal) and cylinders made out of a *material*. """
-
-	# Check argument types:
-	none_type = type(None)
-	assert isinstance(comment, str)
-	assert type(lines) == none_type or isinstance(lines, list)
-	assert isinstance(indent, int)
-	assert isinstance(is_solid, bool)
-	assert type(material) == none_type or isinstance(material, Material)
-	assert type(color) == none_type or isinstance(color, Color)
-	assert type(diameter) == none_type or isinstance(diameter, L)
-	assert isinstance(start, P)
-	assert isinstance(end, P)
-	assert isinstance(sides, int)
-	assert isinstance(adjust, L)
-	assert isinstance(sides_angle, Angle)
-	assert type(start_diameter) == none_type or \
-	  isinstance(start_diameter, L)
-	assert type(end_diameter) == none_type or isinstance(end_diameter, L)
-	assert isinstance(diameter, L) or \
-	  (isinstance(start_diameter, L) and isinstance(end_diameter, L))
-
-	#if trace <= 0 and \
-	#   type(start_diameter) != none_type and \
-	#  type(end_diameter) != none_type and \
-	#  start_diameter != end_diameter:
-	#    trace = 0
-
-	if trace >= 0:
-	    print(("{0}=>Part._cylinder(comment='{1}', is_solid={2}," + 
-	     " diameter={3}, start_diam={4}, end_diam={5}, start={6}, end={7}").
-	     format(trace * ' ', comment, is_solid, diameter, start_diameter,
-	     end_diameter, start, end))
-
-	# Update the *color* and *material* of this part:
-	self._color_material_update(color, material)
-	color = self._color
-	material = self._material
-
-	# Compute center axis of the *cylinder*, its *length* and its *center*:
-	axis = end - start
-	length = axis.length()
-	half_length = length / 2
-	center = (start + end) / 2
-
-	# If appropriate, we rotate the hole before translation:
-	rotate_angle = None
-	orthogonal_axis = None
-	zero = L()
-	if axis.x != zero or axis.y != zero:
-	    # We have to tilt the cylinder.print("axis={0}".format(axis))
-	    z_axis = P(zero, zero, L(mm=1.0))
-	    rotate_angle = z_axis.angle_between(axis)
-	    orthogonal_axis = z_axis.cross_product(axis)
-	    #print("rotate_angle={0:d}".format(rotate_angle))
-	    #print("orthogonal_axis={0:m}".format(orthogonal_axis))
-	elif axis.x == zero and axis.y == zero and axis.z < zero:
-	    orthogonal_axis = P(L(mm=1.0), zero, zero)
-	    rotate_angle = Angle(deg=180.0)
-
-	# Update bounding box:
-	if is_solid:
-	    #print("comment={0} radius={1} half_length={2}". \
-	    #  format(comment, radius, half_length))
-	    
-	    maximum_diameter = zero
-	    if isinstance(diameter, L):
-		maximum_diameter = diameter
-	    if isinstance(start_diameter, L):
-		maximum_diameter = maximum_diameter.maximum(start_diameter)
-	    if isinstance(end_diameter, L):
-		maximum_diameter = maximum_diameter.maximum(end_diameter)
-            radius = maximum_diameter / 2
-
-	    bounding_box = Bounding_Box(radius, -radius,
-	      radius, -radius, half_length, -half_length)
-	    if trace >= 0:
-		print("{0}  bounding_box={1}".format(trace * ' ', bounding_box))
-		print("{0}  center={1}".format(trace * ' ', center))
-	    place = Place(part = None, name = comment,
-	      center = None, axis = orthogonal_axis, rotate = rotate_angle,
-	      translate = center, trace = trace + 1)
-	    self._bounding_box_update(bounding_box,
-	      comment, place, trace = trace + 1)
-
-	# Extract some values from {ezcad}:
-	if self._ezcad._mode == EZCAD3.CNC_MODE:
-	    # Make sure *lines* is a list:
-	    assert isinstance(lines, list)
-	    assert length > zero, "Cylinder '{0}' has no height".format(comment)
-
-	    # Make sure we have a reasonable number of *sides*:
-	    if sides < 0:
-		sides = 16
-
-	    # Output a comment to see what is going on:
-	    spaces = " " * indent
-	    lines.append("{0}// '{1}'".format(spaces, comment))
-
-	    # Ouput the color if appropriate:
-	    if is_solid:
-		self._scad_color(lines, color, indent = indent)
-	    self._scad_transform(lines, indent = indent,
-	      center = None, axis = orthogonal_axis, rotate = rotate_angle,
-	      translate = center)
-
-	    if sides_angle != Angle():
-		lines.append("{0}rotate(a={1}, v=[0, 0, 1])".
-		  format(spaces, sides_angle))
-
-	    if type(start_diameter) == none_type:
-		start_diameter = diameter
-	    if type(end_diameter) == none_type:
-		end_diameter = diameter
-            r1 = end_diameter / 2
-	    if r1 > zero:
-		r1 += adjust
-	    r2 = start_diameter / 2
-	    if r2 > zero:
-		r2 += adjust
-	    assert r1 + r2 > zero, \
-	      "sd={0} ed={1} a={2} r1={3} r2={4}".format(start_diameter,
-	      end_diameter, adjust, r1, r2)
-	    if r1 == r2:
-		command = \
-		  "{0}  cylinder(r={1:m}, h={2:m}, center = true, $fn={3});". \
-		  format(spaces, r1, length, sides)
-	    else:
-		command = ("{0}  cylinder(r1={1:m}, r2={2:m}, h={3:m}," +
-		  " center = true, $fn={4});").format(spaces,
-		  r1, r2, length, sides)
-	    if trace >= 0:
-		print("{0}Part._cylinder: r1={1} r2={2} command='{3}'".
-		  format(trace * ' ', r1, r2, command))
-
-	    # Output the cylinder in a vertical orientation centered on the
-	    # origin.  It is processed before either rotation or translation:
-            lines.append(command)
-            lines.append("")
-	
-	if trace >= 0:
-	    print("{0}<=Part._cylinder()".format(trace * ' '))
-
     def _dimensions_update(self, ezcad, tracing):
 	""" *Part*: Update the dimensions of the *Part* object (i.e. *self*)
 	    and all of its children *Part*'s.
@@ -6232,8 +6083,8 @@ class Part:
 	# Now run construct this *part*
 	if tracing >= 0:
 	    print("{0}==>Part.construct('{1}')".format(indent, part_name))
-	part._tracing = -1000000
-	#part._tracing = tracing + 1
+	#part._tracing = -1000000
+	part._tracing = tracing + 1
 	part.construct()
 	if tracing >= 0:
 	    print("{0}<==Part.construct('{1}')".format(indent, part_name))
@@ -6256,7 +6107,7 @@ class Part:
 		print("{0}==>Part._manfacture('{1}'):CNC".format(indent, part._name))
 
 	    # This is where we can disable *cnc_tracing*:
-	    cnc_tracing = -1000000
+	    #cnc_tracing = -1000000
 	    cnc_tracing = tracing + 1
 
 	    shop = ezcad._shop
@@ -6268,8 +6119,6 @@ class Part:
 	    if remainder != 0:
 		program_number += 10 - remainder
 	    shop.program_base = program_number
-	    if tracing >= 0:
-		print("{0}<==Part._manfacture('{1}'):CNC".format(indent, part._name))
 
 	    # See if we have a .dxf file to write:
 	    if code._dxf_content_avaiable():
@@ -6294,15 +6143,20 @@ class Part:
 		dxf_file.write("0\nENDSEC\n0\nEOF\n")
 		dxf_file.close()
 
+	    if tracing >= 0:
+		print("{0}<==Part._manfacture('{1}'):CNC".format(indent, part._name))
+
 	# Now generate any .stl files:
 	if ezcad._mode == EZCAD3.STL_MODE:
 	    if tracing >= 0:
 		print("{0}==>Part._manfacture('{1}'):STL".format(indent, part._name))
+
 	    # Now manufacture this node:
 	    #scad_difference_lines = []
 	    #scad_union_lines = []
 	    #self._scad_difference_lines = scad_difference_lines
 	    #self._scad_union_lines = scad_union_lines
+	    #self.tracing = tracing + 1
 	    #self.construct()
 	    #self._scad_difference_lines = None
 	    #self._scad_union_lines = None
@@ -6848,6 +6702,37 @@ class Part:
 
 	return end_mill_tool
 
+    def _tools_mill_drill_tip_search(self, maximum_diameter, maximum_z_depth, tracing):
+	""" *Part*: Search a mill drill with a total diameter that is less than or
+	    equal to *maximum_diameter* and can mill down to *maximum_z_depth*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(maximum_diameter, L)
+	assert isinstance(maximum_z_depth, L)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part._tools_mill_drill_tip_search('{1}', {2}, {3})".
+	      format(indent, self._name, maximum_diameter, maximum_z_depth))
+
+	# Search for a viable *end_mill_tool*:
+	end_mill_tool = self._tools_search(Tool_Mill_Drill._mill_drill_side_match,
+	  maximum_diameter, maximum_z_depth, "mill drill side", tracing + 1)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    tool_name = "NONE"
+	    if end_mill_tool != None:
+		tool_name = end_milltool._name_get()
+	    print("{0}<=Part._tools_mill_drill_tip_search('{1}', {2}, {3}) => {4}".
+	      format(indent, self._name, maximum_diameter, maximum_z_depth, tool_name))
+
+	return end_mill_tool
+
     def _tools_search(self, match_routine, parameter1, parameter2, from_routine, tracing):
 	""" *Part*: Search for the best *Tool* object using *match_routine*,
 	    *parameter1*, and *parameter2*.  *from_routine* is used for debugging*:
@@ -7197,7 +7082,7 @@ class Part:
 	    #  x1, y1, z1, x2, y2, z2)
 
             # The transforms are done in reverse order:
-	    self._scad_transform(union_lines, center = center,
+	    self._scad_transform(union_lines, 0, center = center,
 	      axis = axis, rotate = rotate, translate = translate)
 
 	    # Get the lower south west corner positioned:
@@ -7688,13 +7573,13 @@ class Part:
 	ezcad._mode = EZCAD3.CNC_MODE
 	shop = ezcad._shop
 	shop._cnc_generate_set(True)
-	part._manufacture(ezcad, 0)
+	part._manufacture(ezcad, -1000000)
 	shop._cnc_generate_set(False)
 	ezcad._update_count += 1
 
 	# Now visit *part* and all of its children in STL mode:
 	ezcad._mode = EZCAD3.STL_MODE
-	part._manufacture(ezcad, -1000000)
+	part._manufacture(ezcad, 0)
 	ezcad._update_count += 1
 
 	# Now visit *part* and all of its children in visualization mode:
@@ -8663,12 +8548,12 @@ class Part:
 	     format(' ' * tracing, part._name, comment, start_point, end_point, extra, flags))
 
     def countersink_hole(self, comment,
-      hole_diameter, countersink_diameter, start, stop, hole_kind, tracing = -1000000):
-	""" *Part*: Put a *hole_diameter* hole into the *Part* object (i.e. *self*)
-	    starting at (*x*, *y*, *z_start*) to an end depth of *z_stop*.  The part will be
-	    have a 90 degree countersink of *countersink_diameter* at a height of *z_start*.
-	    *hole_kind* specifies the kind of hole and *comment* will show  up in any
-	    generated RS-274 code.
+      hole_diameter, countersink_diameter, start, end, flags, tracing = -1000000):
+	""" *Part*: Put a *hole_diameter* hole into the *Part* object (i.e. *self*) starting
+	    at *start* to an end depth of *end*.  If *countersink_diameter* is non-zero,
+	    the part will be have a 90 degree countersink of *countersink_diameter* at *start*.
+	    *comment* will show up in any  generated RS-274 code.  *hole_kind* specifies the
+	    kind of hole.
 	"""
     
 	# Verify argument types:
@@ -8676,138 +8561,58 @@ class Part:
 	assert isinstance(hole_diameter, L)
 	assert isinstance(countersink_diameter, L)
 	assert isinstance(start, P)
-	assert isinstance(stop, P)
-	assert isinstance(hole_kind, int)
+	assert isinstance(end, P)
+	assert isinstance(flags, str)
 	assert isinstance(tracing, int)
-	assert start.z > stop.z, "start.z (={0:i}) <= stop.z (={1:i})".format(start.z, stop.z)
+	assert start.z > end.z, "start.z (={0:i}) <= stop.z (={1:i})".format(start.z, end.z)
 
-	# Use *part* instead of *self*
+	# Use *part* instead of *self*:
 	part = self
 
+	# Perform an requested *tracing*:
 	if tracing == -1000000:
 	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>countersink_hole@({1} '{2}' '{3}' {4:i} {5:i} {6:i} {7:i} {8}".
+	    print("{0}=>countersink_hole@('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
 	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
-	      start, stop, hole_kind))
+	      start, end, flags))
     
-	zero = L()
-	assert hole_diameter > zero
-	if countersink_diameter > zero:
-	    assert countersink_diameter >= hole_diameter
-    
-	hole_radius = hole_diameter / 2
-	countersink_radius = countersink_diameter / 2
-    
-	z_depth = start.z - stop.z
+	# Compute the radii:
+	hole_radius = hole_diameter/2
+	countersink_radius = countersink_diameter/2
 
-	shop = part._shop
-	#if part.solids_generate
-	#    # Initialize {polygon1} through {polygon4}:
-	#    polygon1 :@= create@Simple_Polygon(1t)
-	#    polygon2 :@= create@Simple_Polygon(1t)
-	#    polygon3 :@= create@Simple_Polygon(1t)
-	#    polygon4 :@= create@Simple_Polygon(1t)
-    
-	#    # Initlize {z1} through {z4}:
-	#    z1 :@= zero
-	#    z2 :@= zero
-	#    z3 :@= zero
-	#    z4 :@= zero
-    
-	#    # Compute the heights of the drill polygon {z1}, {z2}, {z3}, and {z4}:
-	#    if countersink_radius <= zero
-	#	countersink_radius := half@(hole_radius)
-	#    z1 := z_start + countersink_radius + in@(1.0)
-	#    if countersink_radius <= hole_radius
-	#	# No countersink; raise a fake countersink above the hole:
-	#	z2 := z_start - (countersink_radius - hole_radius)
-	#	z3 := z_start
-	#    else
-	#	# We have countersink:
-	#	z2 := z_start
-	#	z3 := z_start - (countersink_radius - hole_radius)
-	#    switch hole_kind
-	#      all_cases_required
-	#      case flat, tip
-	#	z4 := z_stop
-	#      case through
-	#	z4 := z_stop - hole_radius - in@(0.020)
-    
-	#    if trace
-	#	call d@(form@("z1=%i% z2=%i% z3=%i% z4=%i%\n\") %
-	#	  f@(z1) % f@(z2) % f@(z3) / f@(z4))
-    
-	#    #FIXME: Use {Angle} type:
-	#    index_to_radians :@= (2.0 * 3.14159265358979323846) / 12.0
-	#    index :@= 0
-	#    while index < 12
-	#	angle :@= double@(index) * index_to_radians
-	#	cosine_angle :@= cosine@(angle)
-	#	sine_angle :@= sine@(angle)
-	#	countersink_x :@= x + smul@(countersink_radius, cosine_angle)
-	#	countersink_y :@= y + smul@(countersink_radius, sine_angle)
-	#	hole_x :@= x + smul@(hole_radius, cosine_angle)
-	#	hole_y :@= y + smul@(hole_radius, sine_angle)
-    
-	#	#call d@(form@("[%d%] x=%i% y=%i% xx=%i% yy=%i%\n\") %
-	#	#  f@(angle_index) % f@(x) % f@(y) % f@(hole_x) / f@(hole_y))
-    
-	#	point1 :@= create@Point(countersink_x, countersink_y, z1)
-	#	point2 :@= create@Point(countersink_x, countersink_y, z2)
-	#	point3 :@= create@Point(hole_x, hole_y, z3)
-	#	point4 :@= create@Point(hole_x, hole_y, z4)
-    
-	#	call point_append@(polygon1, point1)
-	#	call point_append@(polygon2, point2)
-	#	call point_append@(polygon3, point3)
-	#	call point_append@(polygon4, point4)
-    
-	#	#call d@(form@("[%d%] p1=%p% p2=%p% p3=%p% p4=%p%\n\") %
-	#	#  f@(index) % f@(point1) / f@(point2) % f@(point3) / f@(point4))
-    
-	#	index := index + 1
-    
-	#    polygons :@= new@Array[Simple_Polygon]()
-	#    call append@(polygons, polygon1)
-	#    call append@(polygons, polygon2)
-	#    call append@(polygons, polygon3)
-	#    call append@(polygons, polygon4)
-	#    polyhedron :@= polygons_skin@Simple_Polyhedron(polygons)
-    
-	#    #polyhedron :@=
-	#    #  top_bottom_fill@Simple_Polyhedron(top_polygon, bottom_polygon)
-	#    #reposition :@= part.reposition
-	#    #call off_write@(old_polyhedron, "/tmp/old_poly.off", reposition, shop)
-	#    #call off_write@(new_polyhedron, "/tmp/new_poly.off", reposition, shop)
-    
-	#    cache :@= shop.cache
-	#    drill_hash :@=
-	#      polyhedron_write@(cache, polyhedron, part.reposition, shop, 0f)
-    
-	#    #call d@(form@("drill_hash=%v%\n\") / f@(drill_hash))
-	#    #call d@(form@("%v%: z_stop=%i% bottom_z=%i%\n\") %
-	#    #  f@(comment) % f@(z_stop) / f@(bottom_z))
-    
-	#    call binary_operation@(part, "diff", drill_hash, "drill")
-    
+	# Compute *is_tip_hole*, *is_flat_hole* and *is_through_hole* from *flags*:
+	is_tip_hole = flags.find('p') >= 0
+	is_flat_hole = flags.find('f') >= 0
+	if not (is_tip_hole or is_flat_hole):
+	    is_through_hole = True
+	    if part._laser_preferred:
+		is_flat_hole = True
+		is_through_hole = False
+	is_countersink = countersink_diameter > hole_diameter
+
+	# Compute *hole_kind*:
+	if is_tip_hole:
+	    hole_kind = Part.HOLE_TIP
+	elif is_flat_hole:
+	    hole_kind = Part.HOLE_TIP
+	elif is_through_hole:
+	    hole_kind = Part.HOLE_THROUGH
+	else:
+	    assert False, "No hole kind specified"
+        
 	ezcad = part._ezcad
 	mode = ezcad._mode_get()
-	if mode == EZCAD3.CNC_MODE:
-	    try_flat = False
-	    laser_preferred = part._laser_preferred
-	    if laser_preferred:
-		hole_kind = Part.HOLE_FLAT
-		try_flat = True
-    
+    	if mode == EZCAD3.CNC_MODE:
 	    spot_operation = None
-	    if hole_kind == Part.HOLE_THROUGH or hole_kind == Part.HOLE_TIP:
+	    if is_through_hole or is_tip_hole:
 		# Spot drill and countersink the hole at the same time:
-		tool_mill_drill = None
 		z_countersink = start.z - countersink_radius
-		z_depth = start.z - stop.z
-		if countersink_diameter > hole_diameter:
+		z_depth = start.z - end.z
+
+		tool_mill_drill = None
+		if is_countersink:
 		    tool_mill_drill = \
 		      part._tools_mill_drill_tip_search(L(inch=-1.0), z_countersink, tracing + 1)
 		tool_drill = part._tools_drill_search(hole_diameter, z_depth, tracing + 1)
@@ -8817,7 +8622,7 @@ class Part:
 		    countersink_comment = "{0} [countersink]".format(comment)
     
 		    # We want to ensure that countersinks occur first:
-		    if tool_mill_drill != None:
+		    if is_countersink:
 			sub_priority = 0
 			spot_operation = part.operation_drill_append(
 			  countersink_comment, sub_priority,  tool_mill_drill,
@@ -8841,15 +8646,155 @@ class Part:
 		if end_mill_tool != None:
 		    operation_round_pocket = Operation_Round_Pocket(part, comment,
 		      0, end_mill_tool, Operation.ORDER_END_MILL_ROUND_POCKET, None,
-		      hole_diameter, countersink_diameter, hole_kind, start, stop,
+		      hole_diameter, countersink_diameter, hole_kind, start, end,
 		      end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get())
 		    part._operation_append(operation_round_pocket)
 
-	if tracing >= 0:
-	    print("{0}<=countersink_hole@({1} '{2}' '{3}' {4:i} {5:i} {6:i} {7:i} {8}".
-	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
-	      start, stop, hole_kind))
+	if mode == EZCAD3.STL_MODE:
+	    # Compute the heights of the drill polygon *z1*, *z2*, *z3*, and *z4*:
+	    # Compute *drill_z_start* and *drill_z_end*:
+	    drill_start_z = start.z + L(inch = 0.020)
+	    if is_flat_hole or is_tip_hole:
+		drill_end_z = end.z
+	    elif is_through_hole:
+		drill_end_z = end.z - hole_radius - L(inch=0.02)
+	    else:
+		assert False, "Unkown hole type"
+	    if tracing >= 0:
+		print("{0}drill_start_z={1:i} drill_end_z={2:i}".
+		  format(indent, drill_start_z, drill_end_z))
 
+	    lines = part._scad_difference_lines
+	    # For debugging:, set *lines* to *_scad_union_lines*:
+	    #lines = part._scad_union_lines
+
+	    # Perform the drill with a cylinder:
+	    drill_start = P(start.x, start.y, drill_start_z)
+	    drill_end = P(end.x, end.y, drill_end_z)
+	    part._cylinder(comment + " drill", hole_diameter, hole_diameter, drill_start, drill_end,
+	      lines, 4, False, None, None, tracing + 1)
+
+	    # Peform any requested countersink with a cone:
+	    if is_countersink:
+		countersink_start_z = start.z + countersink_radius
+		countersink_end_z = start.z - countersink_radius
+		countersink_start_diameter = countersink_diameter * 2
+		countersink_start = P(start.x, start.y, countersink_start_z)
+		countersink_end = P(end.x, end.y, countersink_end_z)
+		zero = L()
+		part._cylinder(comment + " countersink", countersink_start_diameter, zero,
+		  countersink_start, countersink_end, lines, 4, False, None, None, tracing + 1)
+
+	if tracing >= 0:
+	    print("{0}<=countersink_hole@('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
+	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
+	      start, end, flags))
+
+    def _cylinder(self, comment, start_diameter, end_diameter, start, end,
+      lines, scad_indent, is_solid, material, color, tracing):
+	""" *Part*: Generate an open some openscad code the *Part* object (i.e. *self*)
+	    for drawing a cylinder (or cone) that is *start_diameter* on the top and
+	    *end_diameter* on the bottom, that starts at *start* and ends at *end*.
+	    *lines* is the list to which the lines are appended with each line indented
+	    by *scad_indent*.  If *is_solid* is *True* the resulting cylinder/cone with
+	    have a material of *material* and a color of *color*; otherwise *material*
+	    and *color* are *None*.
+	"""    
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(start_diameter, L)
+	assert isinstance(end_diameter, L)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+	assert isinstance(lines, list)
+	assert isinstance(scad_indent, int)
+	assert isinstance(is_solid, bool)
+	assert isinstance(material, Material) or material == None
+	assert isinstance(color, Color) or color == None
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(
+	      "{0}=>Part._cylinder('{1}', {2:i}, {3:i}, {4:i}, {5:i}, *, {6}, {7}, '{8}', '{9}')".
+	      format(indent, comment, start_diameter, end_diameter, start, end,
+	      scad_indent, is_solid, material, color))
+
+	# Compute center axis of the *cylinder*, its *length* and its *center*:
+	zero = L()
+	axis = end - start
+	length = axis.length()
+	half_length = length / 2
+	center = (start + end) / 2
+	assert length > zero, "Cylinder '{0}' has no height".format(comment)
+
+	# If appropriate, we rotate the hole before translation:
+	#rotate_angle = None
+	#orthogonal_axis = None
+	#zero = L()
+	#if axis.x != zero or axis.y != zero:
+	#    # We have to tilt the cylinder.print("axis={0}".format(axis))
+	#    z_axis = P(zero, zero, L(mm=1.0))
+	#    rotate_angle = z_axis.angle_between(axis)
+	#    orthogonal_axis = z_axis.cross_product(axis)
+	#    #print("rotate_angle={0:d}".format(rotate_angle))
+	#    #print("orthogonal_axis={0:m}".format(orthogonal_axis))
+	#elif axis.x == zero and axis.y == zero and axis.z < zero:
+	#    orthogonal_axis = P(L(mm=1.0), zero, zero)
+	#    rotate_angle = Angle(deg=180.0)
+
+	# Update bounding box:
+	if self._ezcad._mode == EZCAD3.STL_MODE:
+	    # Output a comment to see what is going on:
+	    spaces = ' ' * scad_indent
+	    lines.append("{0}// {1}".format(spaces, comment))
+
+	    start_x = start.x
+	    start_y = start.y
+
+	    # Ouput the color if appropriate:
+	    if is_solid:
+	    	self._scad_color(lines, color, indent = scad_indent)
+
+	    self._scad_transform(lines, scad_indent, translate=center)
+
+	    #if sides_angle != Angle():
+	    #	lines.append("{0}rotate(a={1}, v=[0, 0, 1])".
+	    #	  format(spaces, sides_angle))
+
+            r1 = end_diameter / 2
+	    #if r1 > zero:
+	    #	r1 += adjust
+	    r2 = start_diameter / 2
+	    #if r2 > zero:
+	    #	r2 += adjust
+
+	    assert r1 + r2 > zero, \
+	      "sd={0:i} ed={1:i} r1={2:i} r2={3:i}".format(start_diameter, end_diameter, r1, r2)
+            sides = 12
+	    if r1 == r2:
+		command = \
+		  "{0}  cylinder(r={1:m}, h={2:m}, center = true, $fn={3});". \
+		  format(spaces, r1, length, sides)
+	    else:
+		command = ("{0}  cylinder(r1={1:m}, r2={2:m}, h={3:m}," +
+		  " center = true, $fn={4});").format(spaces,
+		  r1, r2, length, sides)
+	    if tracing >= 0:
+		print("{0}Part._cylinder: r1={1} r2={2} command='{3}'".
+		  format(indent, r1, r2, command))
+
+	    # Output the cylinder in a vertical orientation centered on the
+	    # origin.  It is processed before either rotation or translation:
+            lines.append(command)
+	
+	if tracing >= 0:
+	    print(
+	      "{0}<=Part._cylinder('{1}', {2:i}, {3:i}, {4:i}, {5:i}, *, {6}, {7}, '{8}', '{9}')".
+	      format(indent, comment, start_diameter, end_diameter, start, end,
+	      scad_indent, is_solid, material, color))
 
     def done(self):
 	""" Part (tree_mode): Mark {self} as done.  {self} is
@@ -9169,17 +9114,10 @@ class Part:
 	    print("{0}=>hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
 	      format(indent, self._name, comment, diameter, start, stop, flags))
 
-	# Compute *hole_kind* from *flags*:
-	hole_kind = Part.HOLE_THROUGH
-	if flags.find('t') >= 0:
-	    hole_kind = Part.HOLE_TIP
-	elif flags.find('f') >= 0:
-            hole_kind = Part.HOLE_FLAT
-
 	# Perform the hole using the richer countesink hole operation:
 	zero = L()
 	self.countersink_hole(comment,
-	  diameter, zero, start, stop, hole_kind, tracing + 1)
+	  diameter, zero, start, stop, flags, tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -9350,6 +9288,7 @@ class Part:
 	  diameter.half() - L.inch(.0001), sides)
 
     def _scad_color(self, lines, color, indent = 0):
+	""" *Part*: """
 	if isinstance(color, Color):
 	    red = color.red
 	    green = color.green
@@ -9363,26 +9302,28 @@ class Part:
 		lines.append("{0}color([{1},{2},{3}])".
 	          format(spaces, red, green, blue))
 
-    def _scad_transform(self, lines, indent = 0,
-       center = None, axis = None, rotate = None, translate = None):
+    def _scad_transform(self, lines, indent,
+       center = None, axis = None, rotate = None, translate = None, tracing = -1000000):
+	""" *Part*: """
 
 	none_type = type(None)
-	assert type(lines) == none_type or isinstance(lines, list)
+	assert isinstance(lines, list)
 	assert isinstance(indent, int)
-	assert type(center) == none_type or isinstance(center, P)
-	assert type(axis) == none_type or isinstance(axis, P)
-	assert type(rotate) == none_type or isinstance(rotate, Angle)
-	assert type(translate) == none_type or isinstance(translate, P)
+	assert isinstance(center, P) or center == None
+	assert isinstance(axis, P) or axis == None
+	assert isinstance(rotate, Angle) or rotate == None
+	assert isinstance(translate, P) or translate == None
+	assert isinstance(tracing, int)
 
 	ezcad = self._ezcad
-	if ezcad._mode == EZCAD3.CNC_MODE:
+	if ezcad._mode == EZCAD3.STL_MODE:
             assert isinstance(lines, list)
 	    spaces = " " *indent
 
 	    # What we want to do is 4 transforms:
 	    #
             #  1) Move the object such that its *center* is at the origin:
-	    #  2) Rotate the boject around *axis* by *angle*:
+	    #  2) Rotate the object around *axis* by *angle*:
 	    #  3) Restore the object to where it was before step 1.
 	    #  4) Move the object over by *translate*:
 	    #
@@ -9400,7 +9341,7 @@ class Part:
 		  "{0}translate([{1:m}, {2:m}, {3:m}])".format(
 		  spaces, translate.x, translate.y, translate.z))
 
-	    # Steps 1-3 only make sence if exists and is *angle* is non-zero:
+	    # Steps 1-3 only make sense if exists and is *angle* is non-zero:
 	    if isinstance(rotate, Angle) and rotate != Angle():
 		# Again, we do the transforms in reverse order.
 		# Start with step 3:
@@ -14598,6 +14539,12 @@ class Tool_Mill_Drill(Tool):		# A mill-drill bit
 	assert isinstance(from_routine, str)
 	assert isinstance(tracing, int)
 
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("=>{0}Tool_Mill_Drill._mill_drill_side_match('{1}', {2:i}, {3:i}, '{4}')".
+	      format(indent, maximum_diameter, maximum_z_depth, from_routine))
+
 	priority = -1.0
 	if isinstance(tool, Tool_Mill_Drill):
 	    tip_depth = tool._tip_depth
@@ -14607,8 +14554,48 @@ class Tool_Mill_Drill(Tool):		# A mill-drill bit
 		if maximum_z_depth >= -(tool._maximum_z_depth - tip_depth):
 		    priority = diameter.millimeters()
 
-	#call d@(form@("<=mill_drill_match@Tool(%v%, %i%) => %f%\n\") %
-	#  f@(tool.name) % f@(maximum_diameter) / f@(priority))
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("<={0}Tool_Mill_Drill._mill_drill_side_match('{1}', {2:i}, {3:i}, '{4}')=>{5}".
+	      format(indent, maximum_diameter, maximum_z_depth, from_routine, priority))
+
+	return priority
+
+    @staticmethod
+    def _mill_drill_tip_match(tool, maximum_diameter, maximum_z_depth, from_routine, tracing):
+	""" *Tool_Mill_Drill*: Verify that {tool} is both a mill drill and that
+	    # it has a diameter less than or equal to *maximum_diameter*.  If
+	    # *maximim_diameter* is negative, it will match any mill drill.
+	    # A positive number that increases with the diameter is returned
+	    # if a match occurs.  Otherwise, -1.0 is returned if there is no match.
+	"""
+
+	# Verify argument types:
+	assert isinstance(tool, Tool)
+	assert isinstance(maximum_diameter, L)
+	assert isinstance(maximum_z_depth, L)
+	assert isinstance(from_routine, str)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("=>{0}Tool_Mill_Drill._mill_drill_tip_match('{1}', {2:i}, {3:i}, '{4}')".
+	      format(indent, maximum_diameter, maximum_z_depth, from_routine))
+
+	priority = -1.0
+	if isinstance(tool, Tool_Mill_Drill):
+	    tip_depth = tool._tip_depth
+	    diameter = tool._diameter
+	    zero = L()
+	    if maximum_diameter < zero or diameter <= maximum_diameter:
+		if maximum_z_depth >= -(tool._maximum_z_depth - tip_depth):
+		    priority = diameter.millimeters()
+
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("<={0}Tool_Mill_Drill._mill_drill_tip_match('{1}', {2:i}, {3:i}, '{4}')=>{5}".
+	      format(indent, maximum_diameter, maximum_z_depth, from_routine, priority))
 
 	return priority
 

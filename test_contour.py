@@ -102,15 +102,15 @@ class Plate(Part):
 	no_36 = L(inch=0.1065)
 	hole1_end =   P(x2, y2, z1)
 	hole1_start = P(x2, y2, z2)
-	plate.hole("hole1", no_36, hole1_start, hole1_end, "t")
+	plate.countersink_hole("hole1", no_36, no_36*2, hole1_start, hole1_end, "t")
 
 	hole2_end =   P(x2, y3, z1)
 	hole2_start = P(x2, y3, z2)
-	plate.hole("hole2", no_36, hole2_start, hole2_end, "t")
+	plate.countersink_hole("hole2", no_36, no_36*2, hole2_start, hole2_end, "t")
 
 	hole3_end =   P(x3, y3, z1)
 	hole3_start = P(x3, y3, z2)
-	plate.hole("hole3", no_36, hole3_start, hole3_end, "t")
+	plate.countersink_hole("hole3", no_36, no_36*2, hole3_start, hole3_end, "t")
 
 	if debug:
 	    print("<=Base.construct(*)")
