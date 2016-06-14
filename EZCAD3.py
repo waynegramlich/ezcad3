@@ -1880,10 +1880,14 @@ class Bounding_Box:
 	# Verify argument types:
 	assert isinstance(format_text, str)
 
+	formatting_text = "[bsw={0} tne={1}]"
+	if format_text != "":
+	    formatting_text = "[bsw={0:" + format_text + "} tne={1:" + format_text + "}]"
+
 	if self._is_empty:
 	    result = "[None]"
 	else:
-	    result = "[bsw={0} tne={1}]".format(self.bsw_get(), self.tne_get())
+	    result = formatting_text.format(self.bsw_get(), self.tne_get())
 	return result
 
     def __ne__(self, bounding_box2):
@@ -2612,13 +2616,13 @@ class Indexed_Points:
 	self._table = {}
 	self._paths = []
 
-    def lookup(self, x, y, label):
-	# Check argument types:
+    def _lookup(self, x, y, label):
+	# Verify argument types:
 	assert isinstance(x, float)
 	assert isinstance(y, float)
 	assert isinstance(label, str)
 
-	# Is *point* alread in *table*?:
+	# Is *point* already in *table*?:
 	key = (x, y)
 	table = self._table
 	if key in table:
@@ -3004,97 +3008,22 @@ class Contour:
 	self._bends.append(bend)
 	return bend
 
-    # Is this used anymore?
-    def path_append(self, extrude_axis = None, indexed_points = None,
-      maximum_angle = Angle(deg=16.0), trace = -1000000):
+    # Used for extrusion:
+    def _path_append(self, indexed_points, maximum_angle, tracing = -1000000):
 	""" *Contour*: Append a path to *indexed_points*. """
+
+	# Verify argument types:
 	assert isinstance(indexed_points, Indexed_Points)
 	assert isinstance(maximum_angle, Angle)
-	assert isinstance(extrude_axis, P)
-	assert isinstance(trace, int)
+	assert isinstance(tracing, int)
 
-	if trace >= 0:
+	# Perform any requested *tracing*:
+	if tracing >= 0:
 	    print("{0}=>Contour.path_append(extrude_axis={1}, self={2})".
 	          format(trace * ' ', extrude_axis, self))
 
-	# Compute the bend information:
-	self._bends_compute(extrude_axis, trace = trace + 1)
-
-	pi = math.pi
-	r2d = 180.0 / pi 
-
-	path = indexed_points.path_create()
 	bends = self._bends
-	bends_size = len(bends)
-	for index in range(bends_size):
-	    before_bend = bends[(index - 1) % bends_size]
-	    bend = bends[index]
-	    #bend_after = bends[(index + 1) % bends_size]
-	    before_total_fraction = \
-	      before_bend._after_fraction + bend._before_fraction
-	    if before_total_fraction > 1.00001:
-		#assert False,
-		#  "We have a bogus edge {0} + {1} = {2} > 1.00001". \
-		#  format(before_bend._after_fraction, bend._before_fraction,
-		#  before_total_fraction)
-		pass
-
-	    #print("Bend[{0}]:{1}".format(index, bend))
-
-	    radius = bend.radius._mm
-            after_tangent_x = bend._after_tangent_x
-            after_tangent_y = bend._after_tangent_y
-            before_tangent_x = bend._before_tangent_x
-            before_tangent_y = bend._before_tangent_y
-	    center_x = bend._center_x
-	    center_y = bend._center_y
-
-	    if before_total_fraction < 1.0:
-		indexed_point = indexed_points.lookup(
-		  before_tangent_x, before_tangent_y,
-		  format("Bend[{0}]:before tangent".format(index)))
-		path.append(indexed_point)
-
-	    before_dy = before_tangent_y - center_y
-	    before_dx = before_tangent_x - center_x
-	    before_angle = math.atan2(before_dy, before_dx)
-
-	    after_dy = after_tangent_y - center_y
-	    after_dx = after_tangent_x - center_x
-	    after_angle = math.atan2(after_dy, after_dx)
-
-	    #print("before_angle={0:.4f} after_angle={1:.4f}".
-	    #  format(before_angle * r2d, after_angle * r2d))
-
-	    # Compute and normalize *delta_angle* from *before_angle* to
-	    # *after_angle*.  *delta_angle* could wind up being positiver
-	    # or negative:
-	    delta_angle = after_angle - before_angle
-	    while delta_angle > pi:
-		delta_angle -= 2.0 * pi
-            while delta_angle < -pi:
-		delta_angle += 2.0 * pi
-
-	    # We want to divide *delta_angle* by an integer *step_count*
-	    # such that the resulting *step_angle* is as close to
-	    # *maximum_angle* as possible.  We start by simply dividing
-	    # computing *fractional* by divided *delta_angle* by
-	    # *maximum_angle*:
-	    max_angle = maximum_angle.radians	
-	    fractional = delta_angle / max_angle
-	    #print(
-	    #  "delta_angle={0:.4f} max_angle={1:.4f} fractional={2:.4f}".
-	    #  format(delta_angle * r2d, max_angle * r2d, fractional))
-
-	    # Compute the *step_count* which is the number of chunks
-	    # we divide *delta_angle* by to get the *step_angle*.  We
-	    # want *step_angle* to be as close to *maximum_angle* without
-	    # going over.  Remember *step_angle* can be positive or negative:
-	    step_count = int(abs(fractional)) + 1
-	    step_angle = delta_angle / float(step_count)
-	    #print("step_count={0} step_angle={1:.4f}".
-	    #  format(step_count, step_angle * r2d))
-
+	for bend in bends:
 	    # Now output the step-wise approximation for the arc:
 	    for step_index in range(1, step_count):
 		angle = before_angle + float(step_index) * step_angle
@@ -7335,132 +7264,272 @@ class Part:
 
 	self._dxf_scad_lines = scad_lines
 
-    def extrude(self, comment = "no_comment", material = None, color = None,
-      outer_contour = None, inner_contours = None, start = None, end = None,
-      center = None, axis = None, rotate = None, translate = None,
-      trace = -1000000):
-	""" *Part*: """
+    def extrude(self, comment, material, color, contours, start, end, rotate, tracing = -1000000):
+	""" *Part*: Create an extrusion long the axis from *start* to *end* out of *material*
+	    (with a render color of *color*.   *contours* is a list of *Contour* objects
+	    where the first (required) *Contour* object specifies the outer contour and
+	    second and subsequent *Contour* objects (optional) specify internal hole contours.
+	    Only the X/Y coordinates of the *Contour* objects are actaully used (i.e. we
+	    only use the projection along the Z axis.)  *rotate* specifies how much to
+	    rotate the extrusion along the extrusion axis. *comment* will show up in error
+	    messages and anycreated G-code.
+	"""
 
-	if trace >= 0:
-	    print("{0}=>Part.extrude({1})".format(trace * ' ', outer_contour))
-
-	# Check argument types:
+	# Verify argument types:
 	assert isinstance(comment, str)
-	none_type = type(None)
-	if type(inner_contours) == none_type:
-	    inner_contours = []
-	if type(material) == none_type:
-	    material = self._material
-	    if type(material) == none_type:
-		material = Material("plastic", "abs")
-	if type(color) == none_type:
-	    color = self._color
-	    if type(color) == none_type:
-		color = Color()
-	assert isinstance(outer_contour, Contour)
-	assert isinstance(inner_contours, list)
+	assert isinstance(material, Material)
+	assert isinstance(color, Color)
+	assert isinstance(contours, list) and len(contours) >= 1
 	assert isinstance(start, P)
 	assert isinstance(end, P)
-	assert isinstance(trace, int)
+	assert isinstance(rotate, Angle)
+	assert isinstance(tracing, int)
 
-	# Do contour adjustments:
+	# Use *part* instead of *self*:
+	part = self
+
+	# Perform any requested *tracing*
+	tracing = 0
+	if tracing == -1000000:
+	    tracing = part._tracing
+	tracing_detail = -1
+	if tracing >= 0:
+	    tracing_detail = 0
+	    indent = ' ' * tracing
+	    print("{0}=>Part.extrude('{1}', {2}, {3}, *, {4:i}, {5:i}, {6:d})".
+	      format(indent, comment, material, color, start, end, rotate))
+
+	# Some constants:
 	zero = L()
-	ezcad = self._ezcad
-	adjust = ezcad._adjust
-
-	#print("Part.extrude: adjust = {0}".format(adjust))
-	if adjust != zero:
-	    outer_contour = outer_contour.adjust(
-	      delta = -adjust, start = start, end = end)
-	    for index in range(len(inner_contours)):
-		inner_contour = inner_contours[index]
-		assert isinstance(inner_contour, Contour)
-		inner_contour = inner_contour.adjust(
-		  delta = -adjust, start = start, end = end)
-		inner_contours[index] = inner_contour
+	one = L(mm=1.0)
+	degrees0 = Angle()
+	z_axis = P(zero, zero, one)
 
 	# Record the *color* and *material*:
-	self._material = material
-	self._color = color
+	part._material = material
+	part._color = color
 
+	# openscad forces all extrusions to occur along the Z axis from the origin upwards
+	# (i.e. +Z.)  This means we need to perform a series of rotations and translations
+	# to reorient the +Z vertical extrusion so that it starts at *start* and ends at *end*
+	# in 3D space.  For openscad the are 5 transformations to be performed.  For the
+	# code below, we compute 5 transformation matrices:
+	#
+	# 1. *initial_translation*:
+	#    The extrusion is translated in -Z such that the extrusion center is at the origin.
+	#
+	# 2. *initial_rotation*:
+	#    We rotate around the Z axis such that the contour in the X/Y plane is oriented
+	#    properly for the next rotation.  For example, if the contour looks like a
+	#    capital "T", we want the make sure that the top of the "T" stays on top.
+	#
+	# 3. *plane_change*:
+	#    We rotate the extrusion so the at the extrusion aligns with the line that
+	#    goes through *start* and *end*.
+	#
+	# 4. *user_rotate*:
+	#    We rotate along line that goes through *start* and *end* by *rotate*.
+	#
+	# 5. *final_translation*:
+	#    We translate the extrusion so that its end-points align with *start* and *end*.
+	#
+	# While, this is pretty involved, it results in what the user would naturally expect.
+
+	# Compute the *initial_translation*:
 	extrude_axis = end - start
+	center = (start + end) / 2
 	height = extrude_axis.length()
-	place = Place(part = None, name = comment, center = center,
-	  axis = axis, rotate = rotate, translate = translate)
+	initial_translation = Matrix.translate_create(zero, zero, -height/2.0)
+	if tracing_detail >= 0:
+	    print("{0}end-start={1:i} center={2:i} height={3:i}".
+	      format(indent, extrude_axis, center, height))
+	if tracing_detail >= 3:
+		print("{0}initial_translation matrix=".format(indent))
+		print("{0}".format(initial_translation))
 
-	# Figure out what axis is the extrude axis:
-	extrude_x = extrude_axis.x.absolute()
-	extrude_y = extrude_axis.y.absolute()
-	extrude_z = extrude_axis.z.absolute()
-	is_x_axis_extrude = False
-	is_y_axis_extrude = False
-	is_z_axis_extrude = False
-	if extrude_x > extrude_y and extrude_x > extrude_z:
-	    is_x_axis_extrude = True
-	if extrude_y > extrude_x and extrude_y > extrude_z:
-	    is_y_axis_extrude = True
+	# Compute *initial_rotation* matix.  This is done by 
+	one = L(mm=1.0)
+	z_axis = P(zero, zero, one)
+	extrude_axis_x = extrude_axis.x
+	extrude_axis_y = extrude_axis.y
+	if extrude_axis_x == zero and extrude_axis_y == zero:
+	    extrude_xy_angle = zero
+	    initial_rotation = Matrix.identity()
 	else:
-	    is_z_axis_extrude = True
+	    extrude_xy_angle = extrude_axis_y.arc_tangent2(extrude_axis_x)
+	    initial_rotation = Matrix.rotate_create(zero, zero, one, extrude_xy_angle)
+	if tracing_detail >= 3:
+	    print("{0}initial_rotation matrix=".format(indent))
+	    print("{0}".format(initial_rotation))
 
-	# Compute bounding box:
-	zero = L()
-	bounding_box = outer_contour.bounding_box_compute(start, end)
-	self._bounding_box_update(bounding_box,
-	  comment, place, trace = trace + 1)
-	if trace >= 0:
-	    print("{0} Part.extrude:bounding_box={0}".
-	     format(trace * ' ', bounding_box))
+	# Compute the *plane_change*:
+	degrees0 = Angle()
+	plane_change = Matrix.identity()
+	extrude_direction = extrude_axis.normalize()
+	if z_axis.distance(extrude_direction) <= L(mm=0.0000001):
+	    rotate_axis = z_axis
+	    rotate_angle = degrees0
+	    plane_change = Matrix.identity()
+	else:
+	    # Yes, we need to rotate aound the *rotate_axis* by *rotate_angle*:
+	    rotate_axis = z_axis.cross_product(extrude_direction).normalize()
+	    rotate_angle = z_axis.angle_between(extrude_direction)
+	    plane_change = Matrix.rotate(rotate_axis.x, rotate_axis.y, rotate_axis.z, rotate_angle)
+	if tracing_detail >= 1:
+	    print("{0}rotate_axis={1:m} rotate_angle={2:d}".
+	      format(indent, rotate_axis, rotate_angle))
+	if tracing_detail >= 3:
+	    print("{0}plane_change matrix=".format(indent))
+	    print("{0}".format(plane_change))
+
+	# Compute the *user_rotate* matrix:
+	if rotate == degrees0:
+	    user_rotate = Matrix.identity()
+	else:
+	    user_rotate = Matrix.rotate_create(
+	      extrude_direction.x, extrude_direction.y, extrude_direction.z, rotate)
+	if tracing_detail >= 3:
+	    print("{0}user_rotate matrix=".format(indent))
+	    print("{0}".format(user_rotate))
+
+	# Compute the *final_translation* matrix:
+	final_translation = Matrix.translate_create(center.x, center.y, center.z)
+	if tracing_detail >= 3:
+	    print("{0}final_translation matrix=".format(indent))
+	    print("{0}".format(final_translation))
+
+	# In order to compute the bounding box, to translate the *outer_contour* to both
+	# a *start* and *end* using two matrices
+	start_translation = Matrix.translate_create(start.x, start.y, start.z)
+	end_translation = Matrix.translate_create(end.x, end.y, end.z)
+
+	steps_2_4 = initial_rotation * plane_change * user_rotate
+	start_matrix = steps_2_4 * start_translation
+	end_matrix = steps_2_4 * end_translation
+	if tracing_detail >= 3:
+	    print("{0}start_translation=".format(indent))
+	    print("{0}".format(start_translation))
+	    print("{0}end_end_translation=".format(indent))
+	    print("{0}".format(end_translation))
+	    print("{0}steps_2_4=".format(indent))
+	    print("{0}".format(steps_2_4))
+	    print("{0}start_matrix=".format(indent))
+	    print("{0}".format(start_matrix))
+	    print("{0}end_matrix=".format(indent))
+	    print("{0}".format(end_matrix))
+
+	# Extract the *outer_contour*:
+	outer_contour = contours[0]
+
+	# Now we can expand the *bounding_box* by visiting each *bend* in *bends*:
+	bounding_box = self._bounding_box
+	bends = outer_contour._bends_get()
+	for bend in bends:
+	    # Compute the mapped bend points:
+	    point = bend._point_get()
+	    bend_start_point = start_matrix.point_multiply(point)
+	    bend_end_point = end_matrix.point_multiply(point)
+	    if tracing_detail >= 2:
+		print("{0}point={1:i} bend_start_point={2:i} bend_end_point={3:i}".
+		  format(indent, point, bend_start_point, bend_end_point))
+	    if tracing_detail >= 3:
+		print("{0}start_bend after plane_change={1:i}".
+		  format(indent, plane_change.point_multiply(bend_start_point)))
+
+	    # Now expand *bounding_box*:
+	    bounding_box.point_expand(bend_start_point)
+	    bounding_box.point_expand(bend_end_point)
+	if tracing >= 0:
+	    print("{0}bounding_box={1:i}".format(indent, bounding_box))
+	    
+	part._dowel_x = zero
+	part._dowel_y = zero
 
 	self._is_part = True
 	ezcad = self._ezcad
 	assert isinstance(ezcad, EZCAD3)
-
-	if ezcad._mode == EZCAD3.CNC_MODE:
-	    if trace >= 0:
-		print("{0}Part.extrude:manufacture".format(trace * ' '))
+	if ezcad._mode == EZCAD3.STL_MODE:
+	    if tracing >= 0:
+		print("{0}==>Part.extrude:STL".format(indent))
 	    # Set up the transform and extrude:
-            scad_union_lines = self._scad_union_lines
+            lines = self._scad_union_lines
 	    pad = " " * 6
 
-	    # Perform the extrusion in the correct direction:
-	    if is_x_axis_extrude:
-		# Extrude in X after a 90 degree flip around Y axis:
-		scad_union_lines.append("{0}// X axis extrude".format(pad))
-		scad_union_lines.append(
-		  "{0}translate([{1:m}, 0, 0])".format(pad, end.x))
-		scad_union_lines.append(
-		  "{0}rotate(a={1}, v=[0, 1, 0])".format(pad, Angle(deg=-90)))
-	    elif is_y_axis_extrude:
-		# Extrude in Y after a 90 degree flip around X axis:
-		scad_union_lines.append("{0}// Y axis extrude".format(pad))
-		scad_union_lines.append(
-		  "{0}translate([0, {1:m}, 0])".format(pad, end.y))
-		scad_union_lines.append(
-		  "{0}rotate(a={1}, v=[1, 0, 0])".format(pad, Angle(deg=90)))
-	    else:
-		# Extrude in Z:
-		scad_union_lines.append("{0}// Z axis extrude".format(pad))
-		scad_union_lines.append(
-		  "{0}translate([0, 0, {1:m}])".format(pad, start.z))
-
-	    # Now do the linear extrude operation:
-            scad_union_lines.append(
-	      "{0}linear_extrude(height = {1}, convexity=10)".format(pad, height))
+	    # Now do the linear extrude operation.  Openscad is weird in the operations
+	    # are done in reverse order:
+	    lines.append(
+		"{0}translate([ {1:m}, {2:m}, {3:m} ]) // Translate center to correct location".
+		format(pad, center.x, center.y, center.z))
+	    if rotate_angle != degrees0:
+		lines.append(
+		  "{0}rotate(v=[ {1:m}, {2:m}, {3:m} ], a={4:d}) // Change the plane".
+		  format(pad, rotate_axis.x, rotate_axis.y, rotate_axis.z, rotate_angle))
+	    if extrude_xy_angle != degrees0:
+		lines.append(
+		  "{0}rotate(v=[ 0, 0, 1 ], a={1:d}) // Rotate the extrusion around the Z axis".
+		  format(pad, extrude_xy_angle))
+	    lines.append(
+	      "{0}translate([ 0, 0, {1:m} ]) // Center the extrusion at the orgin".
+	      format(pad, -height/2))
+            lines.append(
+	      "{0}linear_extrude(height = {1:m}, convexity=10)".format(pad, height))
 	    
-	    # Construct the polygon information using *indexed_points*:
-	    indexed_points = Indexed_Points()
-	    outer_contour.path_append(
-	      indexed_points = indexed_points,
-	      extrude_axis = extrude_axis, trace = trace + 1)
-	    for inner_contour in inner_contours:
-		inner_contour.path_append(
-		  indexed_points = indexed_points,
-		  extrude_axis = extrude_axis)
-	    indexed_points.polygon_append(scad_union_lines, 6)
+	    # Output the polygon operation:
+	    lines.append("{0}polygon(".format(pad))
+	    lines.append("{0}  convexity = 10,".format(pad))
+	    lines.append("{0}  points = [".format(pad))
+	    contours_size = len(contours)
+	    for contour_index, contour in enumerate(contours):
+		line = "{0}    ".format(pad)
+		bends = contour._bends_get()
+		bends_size = len(bends)
+		for bend_index, bend in enumerate(bends):
+		    bend_point = bend._point_get()
+		    bend_comma = ","
+		    if bend_index + 1 >= bends_size and contour_index + 1 >= contours_size:
+			bend_comma = ""
+		    line += "[{0:m}, {1:m}]{2} ".format(bend_point.x, bend_point.y, bend_comma)
+		line += "// Contour {0}".format(contour_index)
+		lines.append(line)
+            lines.append("{0}  ],".format(pad))
+            lines.append("{0}  paths = [".format(pad))
 
-	if trace >= 0:
-	    print("{0}<=Part.extrude()".format(trace * ' '))
-	    
+	    # Output the contour points, staring with the outer contour and followed
+	    # by any inner contours:
+	    point_index = 0
+	    for contour_index, contour in enumerate(contours):
+		line = "{0}    [ ".format(pad)
+		# Output one set of contour points:
+		bends = contour._bends_get()
+		bends_size = len(bends)
+		for bend_index, bend in enumerate(bends):
+ 		    bend_point = bend._point_get()
+		    bend_comma = ","
+		    if bend_index + 1 >= bends_size:
+			bend_comma = ""
+		    line += "{0}{1} ".format(point_index, bend_comma)
+		    point_index += 1
+
+		# Output End of line stuff:
+		contour_comma = ","
+		if contour_index + 1 >= contours_size:
+		    contour_comma = ""
+		line += "]{0} // Contour {1}".format(contour_comma, contour_index)
+		lines.append(line)
+
+	    # Wrap the polygon up:
+            lines.append("{0}  ]".format(pad))
+            lines.append("{0}); // polygon".format(pad))
+
+	    # Wrap up any *tracing*:
+	    if tracing >= 0:
+		print("{0}==>Part.extrude:STL".format(indent))
+
+	# Perform any requested tracing;
+	if tracing >= 0:
+	    print("{0}<=Part.extrude('{1}', {2}, {3}, *, {4:i}, {5:i}, {6:d})".
+	     format(indent, comment, material, color, start, end, rotate))
+
     def xhole(self, comment = "NO_COMMENT", diameter = None,
       start = None, end = None, sides = -1, sides_angle = Angle(),
       top = "t", flags = "", start_diameter = None, end_diameter = None,
@@ -8887,7 +8956,7 @@ class Part:
 	half_dz = dz/2
 	self.extra_ewnstb(half_dx, half_dx, half_dy, half_dy, half_dz, half_dz)
 
-    def extrusion(self, color, material, kind, start_point, end_point, \
+    def extrusion(self, comment, kind, material, color, start, end,
       a_width, a_thickness, b_width, b_thickness, rotate):
 	""" Part dimensions: Create a {kind} extrusion manufactured out of
 	    {material} that goes from {start_point} to {end_point} rotated
@@ -8897,10 +8966,11 @@ class Part:
 	    must be aligned with one of the X, Y or Z axes. """
 
 	# Check argument types:
-	assert isinstance(color, str)
-	assert isinstance(material, str)
-	assert isinstance(start_point, P)
-	assert isinstance(end_point, P)
+	assert isinstance(comment, str)
+	assert isinstance(color, Color)
+	assert isinstance(material, Material)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
 	assert isinstance(a_width, L)
 	assert isinstance(a_thickness, L)
 	assert isinstance(b_width, L)
@@ -8908,14 +8978,7 @@ class Part:
 	assert isinstance(rotate, Angle)
 
 	# Define soem useful abreviations:
-	cosine = Angle.cosine
-	inch = L.inch
-	sine = Angle.sine
-	zero = inch(0)
-
-	# Make sure we are in the right mode:
-	assert not self.part_tree_mode(), \
-	  "Part.extrusion: Part '{0}' is in part tree mode".format(self.name)
+	zero = L()
 
 	# Compute {extrusion_axis}, the axis along with the tube is aligned:
 	extrusion_axis = end_point - start_point
@@ -8993,83 +9056,6 @@ class Part:
 	    assert False, "Z beam not defined"
 	else:
 	    assert False, "Unrecognized extrusion '{0}'".format(kind)
-
-	# Figure out what axis we are aligned on:
-	if extrusion_axis_x != zero and \
-	  extrusion_axis_y == zero and extrusion_axis_z == zero:
-	    # Extrusion aligned on X:
-	    # (a1, b1) (a1, b2) (a2, b1) (a2, b2)
-	    a1_b1_distance = L.distance2(a1, b1)
-	    a1_b1_angle = a1.arc_tangent2(b1) + rotate
-	    a1_b1_y = y1 + a1_b1_distance.cosine(a1_b1_angle)
-	    a1_b1_z = z1 + a1_b1_distance.sine(a1_b1_angle)
-	    #print("extrusion: a1b1d={0} a1b1a={1} a1b1x={2} a1b1y={3}". \
-	    #  format(a1_b1_distance, a1_b1_angle, a1_b1_y, a1_b1_z))
-
-	    a1_b2_distance = L.distance2(a1, b2)
-	    a1_b2_angle = a1.arc_tangent2(b2) + rotate
-            a1_b2_y = y1 + a1_b2_distance.cosine(a1_b2_angle)
-            a1_b2_z = z1 + a1_b2_distance.sine(a1_b2_angle)
-	    #print("extrusion: a1b2d={0} a1b2a={1} a1b2x={2} a1b2y={3}". \
-	    #  format(a1_b2_distance, a1_b2_angle, a1_b2_y, a1_b2_z))
-
-	    a2_b1_distance = L.distance2(a2, b1)
-	    a2_b1_angle = a2.arc_tangent2(b1) + rotate
-            a2_b1_y = y1 + a2_b1_distance.cosine(a2_b1_angle)
-            a2_b1_z = z1 + a2_b1_distance.sine(a2_b1_angle)
-	    #print("extrusion: a2b1d={0} a2b1a={1} a2b1x={2} a2b1y={3}". \
-	    #  format(a2_b1_distance, a2_b1_angle, a2_b1_y, a2_b1_z))
-
-	    a2_b2_distance = L.distance2(a2, b2)
-	    a2_b2_angle = a2.arc_tangent2(b2) + rotate
-            a2_b2_y = y1 + a2_b2_distance.cosine(a2_b2_angle)
-            a2_b2_z = z1 + a2_b2_distance.sine(a2_b2_angle)
-	    #print("extrusion: a2b2d={0} a2b2a={1} a2b2x={2} a2b2y={3}". \
-	    #  format(a2_b2_distance, a2_b2_angle, a2_b2_y, a2_b2_z))
-
-	    e = max(x1, x2)
-	    w = min(x1, x2)
-	    n = max(max(a1_b1_y, a1_b2_y), max(a2_b1_y, a2_b2_y))
-	    s = min(min(a1_b1_y, a1_b2_y), min(a2_b1_y, a2_b2_y))
-	    t = max(max(a1_b1_z, a1_b2_z), max(a2_b1_z, a2_b2_z))
-	    b = min(min(a1_b1_z, a1_b2_z), min(a2_b1_z, a2_b2_z))
-	    #print("extrusion: e={0} w={1} n={2} s={3} t={4} b={5}". \
-	    #  format(e, w, n, s, t, b))
-	elif extrusion_axis_x == zero and \
-	  extrusion_axis_y != zero and extrusion_axis_z == zero:
-	    # Extrusion aligned on Y:
-	    assert False, "Fix Y alignment"
-
-	    e = max(xa1, xa2)
-	    w = min(xa1, xa2)
-	    n = max(y1, y2)
-	    s = min(y1, y2)
-            t = max(zb1, zb2)
-            b = min(zb1, zb2)
-	elif extrusion_axis_x == zero and \
-	  extrusion_axis_y == zero and extrusion_axis_z != zero:
-	    # Extrusion aligned on Z:
-	    assert False, "Fix Z alignment"
-
-	    e = max(xa1, xa2)
-	    w = min(xa1, xa2)
-	    n = max(yb1, yb2)
-	    s = min(yb1, yb2)
-            t = max(z1, z2)
-            b = min(z1, z2)
-	else:
-	    assert not self.construct_mode(), \
- 	      "Angle extrusion is not aligned with X, Y, or Z axis"
-	    t = z2
-            b = z1
-	    n = y2
-	    s = y1
-	    w = x1
-	    e = x2
-
-	# Record the angle corners in {self}:
-	self.point_xyz_set(kind + "_extrusion_corner_bsw", w, s, b)
-	self.point_xyz_set(kind + "_extrusion_corner_tne", e, n, t)
 
 	# Record the material in {self}:
 	self._material = material
@@ -14602,9 +14588,29 @@ class Tool_Mill_Drill(Tool):		# A mill-drill bit
 class Matrix:
     """ *Matrix* is a class that implements a 4x4 mutable matrix. """
 
-    # FIXME: Warning this stuff basically started out as C code.  I needs
-    # to be entiry switched over to the Python numpy class.  You
-    # have been warned!!!
+    # FIXME: Warning this stuff basically started out as C code.  It needs to be entirely
+    # switched over to the Python numpy class.  You have been warned!!!
+
+    # Notes for fix:
+    #
+    # Matrix Format (4x4)
+    #	[ r00 r01 r02 0 ]
+    #   [ r10 r11 r12 0 ]
+    #   [ r20 r21 r22 0 ]
+    #   [ dx  dy  dz  1 ]
+    # Point format (4x4):
+    #   [ x y z 1 ]
+    # We multiply with the point on the left (1x4) and the matrix on the right (4x4).
+    # This yields a 1x4 point matrix of the same form.
+    #
+    # Only two transforms are supported:
+    # * Matrix.translate(Point)
+    # * Mattix.rotate(Point, Angle)
+    #
+    # A Matrix should be immutable.
+    # It should have its inverse matrix computed.
+    # It should point to the previous matrix and the transform object.
+    # This allows us to use the Matrix object to set up openscad.
 
     def __init__(self, values = None):
 	""" Matrix public: Initialize {self} to values. """
@@ -14625,6 +14631,7 @@ class Matrix:
 
 	matrix = self.mat
 	item_format = "   {0:" + format + "}"
+	item_format = "   {0:10f}"
 	result = ""
 	for row in range(4):
 	    result += "["
@@ -14636,10 +14643,16 @@ class Matrix:
     def __mul__(self, m):
 	""" *Matrix*: Return *self* multiplied by *m*. """
 
-	result_mat = self.mat * m.mat
-	result = Matrix([[0]])
-	result.mat = result_mat
+	result = Matrix()
+	result.mat = self.mat.dot(m.mat)
 	return result
+
+    def copy(self):
+	""" *Matrix*: Return a copy of the *Matrix* object (i.e. *self*). """
+
+	copied_matrix = Matrix()
+	numpy.copyto(copied_matrix.mat, self.mat)
+	return copied_matrix
 
     @staticmethod
     def identity():
@@ -14647,7 +14660,7 @@ class Matrix:
 
 	#FIXME: this should be numby.eye(4):
 	matrix = Matrix()
-	matrix.identity_store()
+	matrix.mat = numpy.eye(4)
 	return matrix
 
     @staticmethod
@@ -14724,13 +14737,27 @@ class Matrix:
 	return point
 
     def point_multiply(self, point):
-	""" Matrix public: Return the point that results from mulitiplying
+	""" *Matrix*: Return the point that results from mulitiplying
 	    {point} by {self} and converting it back into a {P} with
 	    {part} as the reference frame. """
 
-	point_matrix = point.matrix_create()
-	result_matrix = point_matrix * self
-	result_point = result_matrix.point_create()
+	point_matrix = numpy.array(
+	  [ [point.x.millimeters(), point.y.millimeters(), point.z.millimeters(), 1.0] ])
+	#print("point_matix=", point_matrix, "shape=", point_matrix.shape)
+
+	mat = self.mat
+	assert isinstance(mat, numpy.ndarray)
+	translated_point = point_matrix.dot(mat)
+	#translated_matrix = point_matrix.dot(mat)
+	#print("point_matrix:")
+	#print("{0}".format(point_matrix))
+	#print("translated_matrix:")
+	#print("{0}:".format(translated_matrix))
+
+	x = L(mm=translated_point[0, 0])
+	y = L(mm=translated_point[0, 1])
+	z = L(mm=translated_point[0, 2])
+	result_point = P(x, y, z)
 	return result_point
 
     def right_coefficients_multiply_store(self, to_matrix,
@@ -15018,19 +15045,19 @@ class Matrix:
 	# This routine store a translate for the vector ({dx},{dy},{dz})
 	# into *matrix* as follows:
 	#
-	# [ 1 0 0 dx ]
-	# [ 0 1 0 dy ]
-	# [ 0 0 1 dz ]
-	# [ 0 0 0 1  ]
+	# [ 1  0  0  0 ]
+	# [ 0  1  0  0 ]
+	# [ 0  0  1  0 ]
+	# [ dx dy dz 1 ]
 
 	# First convert into an identity *matrix*:
 	matrix.identity_store()
 
 	# Now load in *dx*, *dy*, and *dz*:
 	mat = self.mat
-	mat[0,3] = dx.millimeters()
-	mat[1,3] = dy.millimeters()
-	mat[2,3] = dz.millimeters()
+	mat[3,0] = dx.millimeters()
+	mat[3,1] = dy.millimeters()
+	mat[3,2] = dz.millimeters()
 
     def translate_multiply_store(self, from_matrix, dx, dy, dz):
 	""" *Matrix*: This routine returns the {matrix} that results from moving
