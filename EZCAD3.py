@@ -4478,6 +4478,11 @@ class Operation_Simple_Pocket(Operation):
 	# Verify argument types:
 	assert isinstance(tracing, int)
 
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Operation_Simple_Pocket._cnc_generate()".format(indent))
+
 	# Use *pocket* instead of *self*:
 	pocket = self
 
@@ -4531,10 +4536,12 @@ class Operation_Simple_Pocket(Operation):
 	# Compute the number of depth passes required:
 	maximum_operation_depth = tool_radius / 2
 	if is_laser:
-	    maximum_operation_depth = tool.maximum_z_depth
+	    maximum_operation_depth = tool._maximum_z_depth
 
 	total_cut = z_start - z_stop + z_extra
-	print("z_start={0:i} z_stop={1:i} z_extra={2:i}".format(z_start, z_stop, z_extra))
+	if tracing >= 0:
+	    print("{0}z_start={1:i} z_stop={2:i} z_extra={3:i}".
+	     format(indent, z_start, z_stop, z_extra))
 	passes = int(total_cut / maximum_operation_depth)
 	while maximum_operation_depth* float(passes) < total_cut:
 	    passes = passes + 1
@@ -4651,6 +4658,11 @@ class Operation_Simple_Pocket(Operation):
 	# Return the tool to a safe location above the material:
 	code._z_safe_retract(f, s)
 	code._line_comment("Simple Pocket Done")
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=Operation_Simple_Pocket._cnc_generate()".format(indent))
 
     @staticmethod
     def _compare(simple_pocket, simple_pocket2):
@@ -5517,7 +5529,7 @@ class Part:
 		if changed > 0:
 		    #print("here 2")
 		    pass
-		if ezcad._update_count > 10 or trace >= 0:
+		if ezcad._update_count > 10 or tracing >= 0:
 		    print("{0}Part._dimensions_update:{1}.{2} ({3}=>{4})". \
 		      format(' ' * trace, name, attribute_name,
 		      before_value, after_value))
@@ -7291,77 +7303,6 @@ class Part:
 
 	self._dxf_scad_lines = scad_lines
 
-    def rectangular_tube_extrude(self, comment, material, color,
-      width, height, thickness, start, start_extra, end, end_extra, rotate, tracing = -1000000):
-	""" *Part*: Create an extrusion long the axis from *start* to *end* out of *material*
-	    (with a render color of *color*.)  The tube will be *height* high, *width* wide,
-	    with tube wall thickness of *thickness*.  The tube wills start at *start* and
-	    end at *end*.  *rotate* specifies how much to rotate the extrusion along the
-	    extrusion axis. *comment* will show up in error messages and anycreated G-code.
-	"""
-
-	# Verify argument types:
-	assert isinstance(comment, str)
-	assert isinstance(material, Material)
-	assert isinstance(color, Color)
-	assert isinstance(width, L)
-	assert isinstance(height, L)
-	assert isinstance(thickness, L)
-	assert isinstance(start, P)
-	assert isinstance(start_extra, L)
-	assert isinstance(end, P)
-	assert isinstance(end_extra, L)
-	assert isinstance(rotate, Angle)
-	assert isinstance(tracing, int)
-
-	# Perform any requested *tracing*:
-	#tracing = 0
-	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print(("{0}=>Part.{1}('{2}', {3}, {4}, {5:i}, {6:i}," +
-	      " {7:i}, {8:i}, {9:i}, {10:i}, {11:i}, {12:d})").
-	      format(indent, "rectangual_tube_extrude", comment, material, color,
-	      width, height, thickness, start, start_extra, end, end_extra, rotate))
-
-	# Specify the X/Y coordinates of the rectangular tube:
-	x1 = -height/2
-	x2 = x1 + thickness
-	x3 = -x2
-	x4 = -x1	
-	y1 = -width/2
-	y2 = y1 + thickness
-	y3 = -y2
-	y4 = -y1
-
-	# Construct the *outer_contour*:
-	zero = L()
-	outer_contour = Contour("outer tube contour")
-	outer_contour.bend_append("outer SW", P(x1, y1, zero), zero)
-	outer_contour.bend_append("outer NW", P(x1, y4, zero), zero)
-	outer_contour.bend_append("outer NE", P(x4, y4, zero), zero)
-	outer_contour.bend_append("outer SE", P(x4, y1, zero), zero)
-
-	# Construct the *inner_contour*:
-	inner_contour = Contour("inner tube contour")
-	inner_contour.bend_append("inner SW", P(x2, y2, zero), zero)
-	inner_contour.bend_append("inner NW", P(x2, y3, zero), zero)
-	inner_contour.bend_append("inner NE", P(x3, y3, zero), zero)
-	inner_contour.bend_append("inner SE", P(x3, y2, zero), zero)
-	
-	# Construct the *contours list:
-	contours = [outer_contour, inner_contour]
-
-	# Perform the extrusion:
-	self.extrude(comment, material, color,
-	  contours, start, start_extra, end, end_extra, rotate, tracing + 1)
-
-	# Wrap up any requested *tracing*;
-	if tracing >= 0:
-	    print(("{0}<=Part.{1}('{2}', {3}, {4}, {5:i}, {6:i}," +
-	      " {7:i}, {8:i}, {9:i}, {10:i}, {11:i}, {12:d})\n").
-	      format(indent, "rectangual_tube_extrude", comment, material, color,
-	      width, height, thickness, start, start_extra, end, end_extra, rotate))
-
     def extrude(self, comment, material, color,
       contours, start, start_extra, end, end_extra,rotate, tracing = -1000000):
 	""" *Part*: Create an extrusion long the axis from *start* to *end* out of *material*
@@ -7482,7 +7423,7 @@ class Part:
 	extrude_axis_x = extrude_axis.x
 	extrude_axis_y = extrude_axis.y
 	if extrude_axis_x == zero and extrude_axis_y == zero:
-	    extrude_xy_angle = zero
+	    extrude_xy_angle = Angle()
 	    initial_rotation = Matrix.identity()
 	else:
 	    extrude_xy_angle = extrude_axis_y.arc_tangent2(extrude_axis_x)
@@ -7787,6 +7728,79 @@ class Part:
 	if debug:
 	    print("<=Part.process('{0}')".format(part._name))
 
+    def rectangular_tube_extrude(self, comment, material, color,
+      width, height, thickness, start, start_extra, end, end_extra, rotate, tracing = -1000000):
+	""" *Part*: Create an extrusion long the axis from *start* to *end* out of *material*
+	    (with a render color of *color*.)  The tube will be *height* high, *width* wide,
+	    with tube wall thickness of *thickness*.  If *thickness* is zero, the entire
+	    tube will be filled in.  The tube starts at *start* and ends at *end*.  *rotate*
+	    specifies how much to rotate the extrusion along the extrusion axis. *comment*
+	    will show up in error messages and anycreated G-code.
+	"""
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(material, Material)
+	assert isinstance(color, Color)
+	assert isinstance(width, L)
+	assert isinstance(height, L)
+	assert isinstance(thickness, L) and thickness >= L()
+	assert isinstance(start, P)
+	assert isinstance(start_extra, L)
+	assert isinstance(end, P)
+	assert isinstance(end_extra, L)
+	assert isinstance(rotate, Angle)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	#tracing = 0
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(("{0}=>Part.{1}('{2}', {3}, {4}, {5:i}, {6:i}," +
+	      " {7:i}, {8:i}, {9:i}, {10:i}, {11:i}, {12:d})").
+	      format(indent, "rectangual_tube_extrude", comment, material, color,
+	      width, height, thickness, start, start_extra, end, end_extra, rotate))
+
+	# Specify the X/Y coordinates of the rectangular tube:
+	x1 = -height/2
+	x2 = x1 + thickness
+	x3 = -x2
+	x4 = -x1	
+	y1 = -width/2
+	y2 = y1 + thickness
+	y3 = -y2
+	y4 = -y1
+
+	# Construct the *outer_contour* and stuff into *contours* list::
+	zero = L()
+	outer_contour = Contour("outer tube contour")
+	outer_contour.bend_append("outer SW", P(x1, y1, zero), zero)
+	outer_contour.bend_append("outer NW", P(x1, y4, zero), zero)
+	outer_contour.bend_append("outer NE", P(x4, y4, zero), zero)
+	outer_contour.bend_append("outer SE", P(x4, y1, zero), zero)
+	contours = [outer_contour]
+
+	# If *thickness* is non-zero, we provide an *inner_contour* to append to *contours*:
+	if thickness > zero:
+	    # Construct the *inner_contour*:
+	    inner_contour = Contour("inner tube contour")
+	    inner_contour.bend_append("inner SW", P(x2, y2, zero), zero)
+	    inner_contour.bend_append("inner NW", P(x2, y3, zero), zero)
+	    inner_contour.bend_append("inner NE", P(x3, y3, zero), zero)
+	    inner_contour.bend_append("inner SE", P(x3, y2, zero), zero)
+	    contours.append(inner_contour)
+
+	# Perform the extrusion:
+	self.extrude(comment, material, color,
+	  contours, start, start_extra, end, end_extra, rotate, tracing + 1)
+
+	# Wrap up any requested *tracing*;
+	if tracing >= 0:
+	    print(("{0}<=Part.rectangular_tube_extrude{1}('{2}', {3}, {4}, {5:i}, {6:i}," +
+	      " {7:i}, {8:i}, {9:i}, {10:i}, {11:i}, {12:d})\n").
+	      format(indent, "rectangual_tube_extrude", comment, material, color,
+	      width, height, thickness, start, start_extra, end, end_extra, rotate))
+
     def reposition(self, vice_y):
 	""" *Part*:
 	"""
@@ -7853,6 +7867,83 @@ class Part:
 
 	# Update the position of the vice edge:
 	part.vice_y = vice_y
+
+    def round_tube_extrude(self, comment, material, color,
+      outer_diameter, inner_diameter, start, start_extra, end, end_extra, tracing = -1000000):
+	""" *Part*: Create an extrusion long the axis from *start* to *end* out of *material*
+	    (with a render color of *color*.)  The tube will be extended in the along the
+	    line through *start* and *end* by *start_exta* on the side of *start* and by
+	    *end_extra* on the side of *end*.   The tube will have an outside diameter of
+	    *outer_diameter* and an inside diameter of *inner_diameter*.  If *inner_diameter*
+	    is zero, the tube will be entirely filled with material (i.e. a rod.)  *comment*
+	    will show up in error messages and any created G-code.
+	"""
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(material, Material)
+	assert isinstance(color, Color)
+	assert isinstance(outer_diameter, L)
+	assert isinstance(inner_diameter, L)
+	assert isinstance(start, P)
+	assert isinstance(start_extra, L)
+	assert isinstance(end, P)
+	assert isinstance(end_extra, L)
+	assert isinstance(tracing, int)
+
+	# Some constants:
+	zero = L()
+	degrees0 = Angle(deg=0.0)
+	degrees360 = Angle(deg=360.0)
+
+	# Perform any requested *tracing*:
+	#tracing = 0
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(("{0}=>Part.round_tube_extrude('{1}, '{2}', {3}, {4}, {5:i}, {6:i}," +
+	      " {7:i}, {8:i}, {9:i}, {10:i})").
+	      format(indent, self._name,  comment, material, color,
+	      outer_diameter, inner_diameter, start, start_extra, end, end_extra))
+
+	# Specify the X/Y coordinates of the rectangular tube:
+	outer_radius = outer_diameter/2
+	outer_contour = Contour("{0} outer tube contour".format(comment))
+	count = 32
+	delta_angle = degrees360 / float(count)
+	for index in range(count):
+	    angle = delta_angle * float(index)
+	    x = outer_radius.cosine(angle)
+	    y = outer_radius.sine(angle)
+	    contour_comment = "{0} outer contour {1}".format(comment, index)
+	    outer_contour.bend_append(contour_comment, P(x, y, zero), outer_radius)
+	contours = [outer_contour]
+
+	# If *inner_diameter* is non-zero, we provide an *inner_contour* to append to *contours*:
+	if inner_diameter > zero:
+	    # Construct the *inner_contour*:
+	    if tracing >= 0:
+		print("{0}inner_diameter={1:i}".format(indent, inner_diameter))
+	    inner_radius = inner_diameter/2
+	    inner_contour = Contour("{0} inner tube contour".format(comment))
+	
+	    for index in range(count):
+		angle = delta_angle * float(index)
+		x = inner_radius.cosine(angle)
+		y = inner_radius.sine(angle)
+		contour_comment = "{0} outer contour {1}".format(comment, index)
+		inner_contour.bend_append(contour_comment, P(x, y, zero), inner_radius)
+	    contours.append(inner_contour)
+
+	# Perform the extrusion:
+	self.extrude(comment, material, color,
+	  contours, start, start_extra, end, end_extra, degrees0, tracing + 1)
+
+	# Wrap up any requested *tracing*;
+	if tracing >= 0:
+	    print(("{0}<=Part.round_tube_extrude('{1}, '{2}', {3}, {4}, {5:i}, {6:i}," +
+	      " {7:i}, {8:i}, {9:i}, {10:i})").
+	      format(indent, self._name,  comment, material, color,
+	      outer_diameter, inner_diameter, start, start_extra, end, end_extra))
 
     def translate(self, center):
 	""" *Part*: Move the origin of the *Part* object (i.e. *self*) by
@@ -8489,7 +8580,7 @@ class Part:
 
 		# Now we compute *deta_angle*:
 		arc_radius_mm = arc_radius.millimeters()
-		count = 4
+		count = max(4, int(arc_radius_mm))
 		delta_angle = change_angle / float(count - 1)
 		if tracing_detail >= 0:
 		    print("{0}count={1} delta_angle={2:d}".format(indent, count, delta_angle))
@@ -8537,6 +8628,7 @@ class Part:
 	    scad_difference_lines.append("     ); // polygon")
 
 	    scad_difference_lines.append("    } // linear_extrude")
+
 	# Do any requested CNC generation:
 	if cnc_mode:
 	    # Project all of the points in *contour* onto a plane normal to *projection_axis*
@@ -8631,7 +8723,6 @@ class Part:
 		assert diameter > zero
 
 		depth_maximum = zero
-
 
 		is_laser = mill_tool._is_laser_get()
 		if is_laser:
@@ -10115,21 +10206,10 @@ class Part:
 
     def simple_pocket(self, comment = "no comment",
       bottom_corner = None, top_corner = None, radius = None, pocket_top = "t",
-      center = None, axis = None, rotate = None, translate = None):
+      center = None, axis = None, rotate = None, translate = None, tracing = -1000000):
 	""" *Part*: Create a simple rectangular pocket in the *Part* object (i.e. *self*)
 	    bounding corners of *bottom_corner* and *top_corner*, a corner radius if *radius*.
 	"""
-
-	print("block_corners(name='{0}', top_corner={1:i}, bottomcorner={2:i}, radius={3:i})".
-	  format(self._name, top_corner, bottom_corner, radius))
-
-	# Deal with argument defaults:
-	if not isinstance(bottom_corner, P):
-	    zero = L()
-	    bottom_corner = P(zero, zero, zero)
-	if not isinstance(top_corner, P):
-	    one = L(cm=1.0)
-	    top_corner = P(one, one, one)
 
 	# Check argument types:
 	assert isinstance(comment, str)
@@ -10141,9 +10221,15 @@ class Part:
 	assert axis == None or isinstance(axis, P)
 	assert rotate == None or isinstance(rotate, Angle)
 	assert translate == None or isinstance(translate, P)
+	assert isinstance(tracing, int)
 
-	# Make sure that the corners are diagonal from bottom south west
-	# to top north east:
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
+	      format(indent, self._name, comment, top_corner, bottom_corner, radius, pocket_top))
+
+	# Make sure that the corners are diagonal from bottom south west to top north east:
 	x1 = min(bottom_corner.x, top_corner.x)
 	x2 = max(bottom_corner.x, top_corner.x)
 	y1 = min(bottom_corner.y, top_corner.y)
@@ -10221,7 +10307,7 @@ class Part:
 
             # The transforms are done in reverse order:
 
-	    self._scad_transform(difference_lines, center = center,
+	    self._scad_transform(difference_lines, 0, center = center,
 	      axis = axis, rotate = rotate, translate = translate)
 
 	    # Get the lower south west corner positioned:
@@ -10234,21 +10320,28 @@ class Part:
 	      x2 - x1, y2 - y1, z2 - z1))
 
 	    maximum_diameter = 2 * radius
-	    end_mill_tool = self._tools_end_mill_search(maximum_diameter, dz, "simple_pocket")
-	    print("end_mill_toll=", end_mill_tool)
-	    print("end_mill={0}".format(end_mill_tool._name_get()))
+	    end_mill_tool = \
+	      self._tools_end_mill_search(maximum_diameter, dz, "simple_pocket", tracing + 1)
+	    if tracing >= 0:
+	        print("{0}end_mill_tool='{1}'".format(indent, end_mill_tool._name_get()))
 	    end_mill_diameter = end_mill_tool._diameter_get()
 	    end_mill_radius = end_mill_diameter / 2
 	    end_mill_feed_speed = end_mill_tool._feed_speed_get()
 	    end_mill_spindle_speed = end_mill_tool._spindle_speed_get()
 
-	    print("x1={0:i} x2={1:i} y1={2:i} y2={3:i}".format(x1, x2, y1, y2))
-	    print("z1={0:i} z2={1:i}".format(z1, z2))
+	    if tracing >= 0:
+		print("{0}x1={1:i} x2={2:i} y1={3:i} y2={4:i}".format(indent, x1, x2, y1, y2))
+		print("{0}z1={1:i} z2={2:i}".format(indent, z1, z2))
 	    operation_order = Operation.ORDER_END_MILL_SIMPLE_POCKET
 	    operation_simple_pocket = Operation_Simple_Pocket(self, comment, 0,
 	      end_mill_tool, operation_order, None, end_mill_feed_speed, end_mill_spindle_speed,
 	      x1, y1, x2, y2, z1, z2, radius, end_mill_radius, Operation.POCKET_KIND_FLAT)
 	    self._operation_append(operation_simple_pocket)
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
+	      format(indent, self._name, comment, top_corner, bottom_corner, radius, pocket_top))
 
     def xxx_simple_pocket(self, comment, \
       corner1_point, corner2_point, radius, flags):
@@ -12497,25 +12590,25 @@ class Code:
 	    self._xy_feed(f, s, rx2, py1)
     
 	    # Lower right arc (rx2,py1) to (px2,ry1):
-	    self._xy_ccw_feed(f, r, s, px2, ry1, rx=rx2, ry=ry1)
+	    self._xy_ccw_feed(f, s, r, px2, ry1, rx=rx2, ry=ry1)
     
 	    # Right vertical line (px2,ry1) to (px2,ry2):
 	    self._xy_feed(f, s, px2, ry2)
     
 	    # Upper right arc (px2,ry2) to (rx2, py2):
-	    self._xy_ccw_feed(f, r, s, rx2, py2, rx=rx2, ry=ry2)
+	    self._xy_ccw_feed(f, s, r, rx2, py2, rx=rx2, ry=ry2)
     
 	    # Top horizontal line (rx2, py2) to (rx1, py2):
 	    self._xy_feed(f, s, rx1, py2)
     
 	    # Upper left arc (rx1, py2) to (px1, ry2):
-	    self._xy_ccw_feed(f, r, s, px1, ry2, rx=rx1, ry=ry2)
+	    self._xy_ccw_feed(f, s, r, px1, ry2, rx=rx1, ry=ry2)
     
 	    # Left vertical line (px1, ry2) to (px1, ry1):
 	    self._xy_feed(f, s, px1, ry1)
     
 	    # Lower left arc (px1, ry1) to (rx1, py1):
-	    self._xy_ccw_feed(f, r, s, rx1, py1, rx=rx1, ry=ry1)
+	    self._xy_ccw_feed(f, s, r, rx1, py1, rx=rx1, ry=ry1)
 	else:
 	    # Mill out a rectangle with "square" corners in a counter
 	    # clockwise direction to force a climb cut:
@@ -14544,7 +14637,7 @@ class Tool_End_Mill(Tool):
 	zero = L()
 	assert isinstance(tool, Tool)
 	assert isinstance(maximum_diameter, L)
-	assert isinstance(maximum_z_depth, L) and maximum_z_depth >= zero
+	assert isinstance(maximum_z_depth, L)
 	assert isinstance(from_routine, str)
 	assert isinstance(tracing, int)
     
