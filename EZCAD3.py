@@ -1910,9 +1910,9 @@ class Bounding_Box:
 
 	# Since both boxes are aligned in the X/Y/Z axes, we can get
 	# by with just expanding based on the two corners:
-	if not extra_bounding_box.is_empty:
-	    self.point_expand(extra_bounding_box.tne_get())
-	    self.point_expand(extra_bounding_box.bsw_get())
+	if not bounding_box._is_empty:
+	    self.point_expand(bounding_box.tne_get())
+	    self.point_expand(bounding_box.bsw_get())
 
     def b_get(self):
 	""" *Bounding_Box*: Return the center of the bottom rectangle of the *Bounding_Box* object
@@ -2772,9 +2772,10 @@ class Contour:
 	assert isinstance(tracing, int)
 
 	# Perform an requested tracing:
+	#tracing = 0
 	tracing_detail = -1
 	if tracing >= 0:
-	    #tracing_detail = 3
+	    tracing_detail = 3
 	    indent = ' ' * tracing
 	    print("{0}=>Contour._inside_bends_identify('{1}')".format(indent, self._name))
 
@@ -2811,6 +2812,9 @@ class Contour:
 	    after_projected_point = after_bend._projected_point_get()
 	    after_x = after_projected_point.x
 	    after_y = after_projected_point.y
+	    if tracing_detail >= 3:
+		print("{0}bx={1:i} by={2:i} @x={3:i} @y={4:i} ax={5:i} ay={6:i}".format(
+		  indent, before_x, before_y, at_x, at_y, after_x, after_y))
 
 	    # Compute the change in dx and dy for entry to and exit from *at_bend*:
 	    before_dx = at_x - before_x
@@ -2838,6 +2842,8 @@ class Contour:
 	# Now we figure out if the contour *is_clockwise* or not:
 	is_clockwise = bearing_changes_sum <= degrees0
 	self._is_clockwise = is_clockwise
+	if tracing >= 0:
+	    print("{0}is_clockwise={1}".format(indent, is_clockwise))
 
 	# Now sweep through each of the *bends* and set the determine if it *is_inside* or not:
         outside_bends = 0
@@ -2889,21 +2895,29 @@ class Contour:
 	assert isinstance(position, Matrix)
 
 	# Perform any requested *tracing*:
+	#tracing = 0
 	if tracing >= 0:
-	    print("{0}=>Contour._project('{1}', *)".format(' ' * tracing, self._name))
+	    indent = ' ' * tracing
+	    print("{0}=>Contour._project('{1}', *)".format(indent, self._name))
+	if tracing >= 0:
+	    print("{0}position matrix".format(indent))
+	    print("{0}".format(position))
 
 	# For each *bend* in bends, perform the project from 3D down to 2D:
 	for bend in self._bends:
 	    # Grab the X/Y/Z coordinates for *point*:
-	    projected_point = position.point_multiply(bend._point)
+	    point = bend._point_get()
+	    projected_point = position.point_multiply(point)
 	    bend._projected_point_set(projected_point)
+	    if tracing >= 0:
+		print("{0}point={1:i} projected_point={2:i}".format(indent, point, projected_point))
 
 	# Remember that we have performed the projection:
 	self._is_projected = True
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Contour._project('{1}', *)".format(' ' * tracing, self._name))
+	    print("{0}<=Contour._project('{1}', *)".format(indent, self._name))
 
     def _radius_center_and_tangents_compute(self, tracing):
 	""" *Contour*: """
@@ -2942,6 +2956,7 @@ class Contour:
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
+	#tracing = 0
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Contour._smallest_inner_radius_compute('{1}')".format(indent, self._name))
@@ -2954,8 +2969,15 @@ class Contour:
 	zero = L()
 	smallest_inner_radius = -L(mm=1.0)	# Start with a big radius:
 	for bend in self._bends:
-	    if bend._is_inside_get():
-		radius = bend._radius_get()
+	    # Grab some values from *bend*:
+	    point = bend._point_get()
+	    radius = bend._radius_get()
+	    is_inside = bend._is_inside_get()
+	    if tracing >= 0:
+		print("{0}bend: point={1:i} radius={2:i} is_inside={3}".
+		  format(indent, point, radius, is_inside))
+
+	    if is_inside:
 		if smallest_inner_radius < zero:
 		    smallest_inner_radius = radius
 		else:
@@ -2963,7 +2985,8 @@ class Contour:
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Contour._smallest_inner_radius_compute('{1}')".format(indent, self._name))
+	    print("{0}<=Contour._smallest_inner_radius_compute('{1}') => {2}".
+	      format(indent, self._name, smallest_inner_radius))
 
 	return smallest_inner_radius
 
@@ -4930,8 +4953,12 @@ class Part:
 	z_axis = P(zero, zero, one)
 
 	ezcad = EZCAD3.ezcad
+	self._axis = z_axis
 	self._bounding_box = Bounding_Box()
 	self._color = None
+	self._center = P()
+	self._dowel_x = zero
+	self._dowel_y = zero
 	self._dx_original = zero
 	self._dxf_x_offset = zero
 	self._dxf_y_offset = zero
@@ -4946,7 +4973,7 @@ class Part:
 	self._operations = []
 	self._plunge_x = zero
 	self._plunge_y = zero
-	self._position = Matrix()
+	self._position = Matrix.identity()
 	self._position_count = 0
 	self._priority = 0
 	self._projection_axis = z_axis
@@ -5436,7 +5463,7 @@ class Part:
 	    elif attribute_name.endswith("_"):
 		assert isinstance(attribute, Part), \
 		  "{0}.{1} is not a Part".format(name, attribute_name)
-		changed += attribute._dimensions_update(ezcad, trace + 1)
+		changed += attribute._dimensions_update(ezcad, tracing + 1)
 		sub_parts.append(attribute)
 	    elif attribute_name.endswith("_l"):
 		assert isinstance(attribute, L), \
@@ -6191,7 +6218,7 @@ class Part:
 		    # Perform all the placements:
 		    for sub_part in sub_parts:
 			#print("Part._manufacture.place={0}".format(place))
-			self._scad_transform(lines, center = sub_part._center,
+			self._scad_transform(lines, 0, center = sub_part._center,
 			  axis = sub_part._axis, rotate = sub_part._rotate,
 			  translate = sub_part._translate);
 			lines.append("{0}();".format(sub_part._name))
@@ -6545,7 +6572,7 @@ class Part:
 
 	# Verify argument types:
 	zero = L()
-	assert isinstance(maximum_diameter, L) and maximum_diameter > zero
+	assert isinstance(maximum_diameter, L)
 	assert isinstance(maximum_z_depth, L)
 	assert isinstance(from_routine, str)
 	assert isinstance(tracing, int)
@@ -7264,7 +7291,79 @@ class Part:
 
 	self._dxf_scad_lines = scad_lines
 
-    def extrude(self, comment, material, color, contours, start, end, rotate, tracing = -1000000):
+    def rectangular_tube_extrude(self, comment, material, color,
+      width, height, thickness, start, start_extra, end, end_extra, rotate, tracing = -1000000):
+	""" *Part*: Create an extrusion long the axis from *start* to *end* out of *material*
+	    (with a render color of *color*.)  The tube will be *height* high, *width* wide,
+	    with tube wall thickness of *thickness*.  The tube wills start at *start* and
+	    end at *end*.  *rotate* specifies how much to rotate the extrusion along the
+	    extrusion axis. *comment* will show up in error messages and anycreated G-code.
+	"""
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(material, Material)
+	assert isinstance(color, Color)
+	assert isinstance(width, L)
+	assert isinstance(height, L)
+	assert isinstance(thickness, L)
+	assert isinstance(start, P)
+	assert isinstance(start_extra, L)
+	assert isinstance(end, P)
+	assert isinstance(end_extra, L)
+	assert isinstance(rotate, Angle)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	#tracing = 0
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(("{0}=>Part.{1}('{2}', {3}, {4}, {5:i}, {6:i}," +
+	      " {7:i}, {8:i}, {9:i}, {10:i}, {11:i}, {12:d})").
+	      format(indent, "rectangual_tube_extrude", comment, material, color,
+	      width, height, thickness, start, start_extra, end, end_extra, rotate))
+
+	# Specify the X/Y coordinates of the rectangular tube:
+	x1 = -height/2
+	x2 = x1 + thickness
+	x3 = -x2
+	x4 = -x1	
+	y1 = -width/2
+	y2 = y1 + thickness
+	y3 = -y2
+	y4 = -y1
+
+	# Construct the *outer_contour*:
+	zero = L()
+	outer_contour = Contour("outer tube contour")
+	outer_contour.bend_append("outer SW", P(x1, y1, zero), zero)
+	outer_contour.bend_append("outer NW", P(x1, y4, zero), zero)
+	outer_contour.bend_append("outer NE", P(x4, y4, zero), zero)
+	outer_contour.bend_append("outer SE", P(x4, y1, zero), zero)
+
+	# Construct the *inner_contour*:
+	inner_contour = Contour("inner tube contour")
+	inner_contour.bend_append("inner SW", P(x2, y2, zero), zero)
+	inner_contour.bend_append("inner NW", P(x2, y3, zero), zero)
+	inner_contour.bend_append("inner NE", P(x3, y3, zero), zero)
+	inner_contour.bend_append("inner SE", P(x3, y2, zero), zero)
+	
+	# Construct the *contours list:
+	contours = [outer_contour, inner_contour]
+
+	# Perform the extrusion:
+	self.extrude(comment, material, color,
+	  contours, start, start_extra, end, end_extra, rotate, tracing + 1)
+
+	# Wrap up any requested *tracing*;
+	if tracing >= 0:
+	    print(("{0}<=Part.{1}('{2}', {3}, {4}, {5:i}, {6:i}," +
+	      " {7:i}, {8:i}, {9:i}, {10:i}, {11:i}, {12:d})\n").
+	      format(indent, "rectangual_tube_extrude", comment, material, color,
+	      width, height, thickness, start, start_extra, end, end_extra, rotate))
+
+    def extrude(self, comment, material, color,
+      contours, start, start_extra, end, end_extra,rotate, tracing = -1000000):
 	""" *Part*: Create an extrusion long the axis from *start* to *end* out of *material*
 	    (with a render color of *color*.   *contours* is a list of *Contour* objects
 	    where the first (required) *Contour* object specifies the outer contour and
@@ -7281,7 +7380,9 @@ class Part:
 	assert isinstance(color, Color)
 	assert isinstance(contours, list) and len(contours) >= 1
 	assert isinstance(start, P)
+	assert isinstance(start_extra, L)
 	assert isinstance(end, P)
+	assert isinstance(end_extra, L)
 	assert isinstance(rotate, Angle)
 	assert isinstance(tracing, int)
 
@@ -7289,15 +7390,14 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*
-	tracing = 0
 	if tracing == -1000000:
 	    tracing = part._tracing
 	tracing_detail = -1
 	if tracing >= 0:
 	    tracing_detail = 0
 	    indent = ' ' * tracing
-	    print("{0}=>Part.extrude('{1}', {2}, {3}, *, {4:i}, {5:i}, {6:d})".
-	      format(indent, comment, material, color, start, end, rotate))
+	    print("{0}=>Part.extrude('{1}', {2}, {3}, *, {4:i}, {5:i}, {6:i}, {7:i}, {8:d})".
+	      format(indent, comment, material, color, start, start_extra, end, end_extra, rotate))
 
 	# Some constants:
 	zero = L()
@@ -7308,6 +7408,36 @@ class Part:
 	# Record the *color* and *material*:
 	part._material = material
 	part._color = color
+
+	# Extend the *start* and *end* by *start_extra* and *end_extra* respectively:
+	extrude_axis = end - start
+	extrude_direction = extrude_axis.normalize()
+
+	extrude_direction_x = extrude_direction.x.millimeters()
+	extrude_direction_y = extrude_direction.y.millimeters()
+	extrude_direction_z = extrude_direction.z.millimeters()
+	if tracing >= 0:
+	    print("{0}extrude_direction_x={1} extrude_direction_y={2} extrude_direction_y={3}".
+	      format(indent, extrude_direction_x, extrude_direction_y, extrude_direction_z))
+	    print("{0}start_extra={1:i} end_extra={2:i}".format(indent, start_extra, end_extra))
+
+	start_extra_dx = -start_extra * extrude_direction_x
+	start_extra_dy = -start_extra * extrude_direction_y
+	start_extra_dz = -start_extra * extrude_direction_z
+	start_extra_delta = P(start_extra_dx, start_extra_dy, start_extra_dz)
+
+	end_extra_dx = end_extra * extrude_direction_x
+	end_extra_dy = end_extra * extrude_direction_y
+	end_extra_dz = end_extra * extrude_direction_z
+	end_extra_delta = P(end_extra_dx, end_extra_dy, end_extra_dz)
+
+	if tracing >= 0:
+	    print("{0}extrude_direction={1:m} start_extra_delta={2:i} end_extra_delta={3:i}".
+	      format(indent, extrude_direction, start_extra_delta, end_extra_delta))
+
+	start = start + start_extra_delta
+	end = end + end_extra_delta
+	extrude_axis = end - start
 
 	# openscad forces all extrusions to occur along the Z axis from the origin upwards
 	# (i.e. +Z.)  This means we need to perform a series of rotations and translations
@@ -7336,7 +7466,6 @@ class Part:
 	# While, this is pretty involved, it results in what the user would naturally expect.
 
 	# Compute the *initial_translation*:
-	extrude_axis = end - start
 	center = (start + end) / 2
 	height = extrude_axis.length()
 	initial_translation = Matrix.translate_create(zero, zero, -height/2.0)
@@ -7344,8 +7473,8 @@ class Part:
 	    print("{0}end-start={1:i} center={2:i} height={3:i}".
 	      format(indent, extrude_axis, center, height))
 	if tracing_detail >= 3:
-		print("{0}initial_translation matrix=".format(indent))
-		print("{0}".format(initial_translation))
+	    print("{0}initial_translation matrix=".format(indent))
+	    print("{0}".format(initial_translation))
 
 	# Compute *initial_rotation* matix.  This is done by 
 	one = L(mm=1.0)
@@ -7365,7 +7494,6 @@ class Part:
 	# Compute the *plane_change*:
 	degrees0 = Angle()
 	plane_change = Matrix.identity()
-	extrude_direction = extrude_axis.normalize()
 	if z_axis.distance(extrude_direction) <= L(mm=0.0000001):
 	    rotate_axis = z_axis
 	    rotate_angle = degrees0
@@ -7527,8 +7655,8 @@ class Part:
 
 	# Perform any requested tracing;
 	if tracing >= 0:
-	    print("{0}<=Part.extrude('{1}', {2}, {3}, *, {4:i}, {5:i}, {6:d})".
-	     format(indent, comment, material, color, start, end, rotate))
+	    print("{0}<=Part.extrude('{1}', {2}, {3}, *, {4:i}, {5:i}, {6:i}, {7:i}, {8:d})".
+	      format(indent, comment, material, color, start, start_extra, end, end_extra, rotate))
 
     def xhole(self, comment = "NO_COMMENT", diameter = None,
       start = None, end = None, sides = -1, sides_angle = Angle(),
@@ -7648,7 +7776,7 @@ class Part:
 
 	# Now visit *part* and all of its children in STL mode:
 	ezcad._mode = EZCAD3.STL_MODE
-	part._manufacture(ezcad, 0)
+	part._manufacture(ezcad, -1000000)
 	ezcad._update_count += 1
 
 	# Now visit *part* and all of its children in visualization mode:
@@ -8025,7 +8153,7 @@ class Part:
 			if zero_rotate and zero_translate:
 			    # We have neither a rotation nor a translation;
 			    # so we output *part* without a "Transform..."
-			    sub_part.wrl_write(wrl_file,
+			    sub_part._wrl_write(wrl_file,
 			      wrl_indent + 2, parts_table, file_name)
 			else:
 			    # We have either a rotation and/or a translation;
@@ -8055,7 +8183,7 @@ class Part:
 			    # "children [...]":
 			    wrl_file.write(
 			      "{0}   children [\n".format(spaces))
-			    sub_part.wrl_write(wrl_file,
+			    sub_part._wrl_write(wrl_file,
 			      wrl_indent + 4, parts_table, file_name)
 			    wrl_file.write(
 			      "{0}   ]\n".format(spaces))
@@ -8354,7 +8482,7 @@ class Part:
 		      not contour_is_clockwise and not bend_is_inside:
 			if tracing >= 1:
 			    print("{0}increment".format(indent))
-			change_angle += degree360
+			change_angle += degrees360
 		if tracing_detail >= 0:
 		    print("{0}name='{1}' start_angle={2:d} end_angle={3:d} change_angle={4:d}".
 		      format(indent, bend_name, start_angle, end_angle, change_angle))
@@ -8416,10 +8544,10 @@ class Part:
 	    position = part._position
 	    contour._project(position, tracing + 1)
 
-	    # The returned value from *_bends_compute*() will be either negative (for no
-	    # smallest inner corner radius), or positive for the smallest inner corner
-	    # radius.  Either value will find the correct end-mill or mill-drill tool for
-	    # searching purposes:
+	    # The returned value from *_smallest_inner_diameter_compute*() will be either
+	    # negative (for no smallest inner corner radius), or positive for the smallest
+	    # inner corner radius.  Either value will find the correct end-mill or mill-drill
+	    # tool for searching purposes:
 	    zero = L()
 	    contour._inside_bends_identify(tracing + 1)
 	    smallest_inner_radius = contour._smallest_inner_radius_compute(tracing + 1)
@@ -13644,7 +13772,6 @@ class Shop:
 	aluminum = Material("Aluminum", "")
 	fpm600 = Speed(ft_per_min=600)
 	fpm1200 = Speed(ft_per_min=1200)
-	print("type(hss)=", type(hss))
 	self._surface_speeds_insert(aluminum, hss, fpm600, fpm1200)
 	self._surface_speeds_insert(aluminum, hss, fpm600, fpm1200)
 	self._surface_speeds_insert(plastic, hss, fpm600, fpm1200)
