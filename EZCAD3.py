@@ -498,6 +498,9 @@ class P:
     def __format__(self, format):
 	""" *P*: Return *self* formatted as a string. """
 
+	if format == "N":
+	    return "np.array([[{0}, {1}, {2}, 1.]])".format(self.x.millimeters(), self.y.millimeters(), self.z.millimeters())
+
 	assert isinstance(format, str)
 	if format != "":
 	    format = ":" + format
@@ -1349,9 +1352,9 @@ class Bend:
 	#    d = r / sin(<CBO)                                (7)
 
 	# Compute the IB and OB vectors:
-	i = incoming_bend._point
-	b = bend._point
-	o = outgoing_bend._point
+	i = incoming_bend._projected_point
+	b = bend._projected_point
+	o = outgoing_bend._projected_point
 	ib = i - b
 	ob = o - b
 	if tracing_detail >= 1:
@@ -1430,6 +1433,8 @@ class Bend:
 	      format(indent, jc_direction, nc_direction))
 
 	# Now we just want to record everything we care about into *bend*:
+	if tracing >= 0:
+	    print("{0}center={1:i}".format(indent, c))
 	bend._center = c
 	bend._incoming_tangent_angle = jc_angle
 	bend._incoming_tangent_direction = jc_direction
@@ -6664,7 +6669,7 @@ class Part:
 	    indent = ' ' * tracing
 	    tool_name = "NONE"
 	    if end_mill_tool != None:
-		tool_name = end_milltool._name_get()
+		tool_name = end_mill_tool._name_get()
 	    print("{0}<=Part._tools_mill_drill_side_search('{1}', {2}, {3}) => {4}".
 	      format(indent, self._name, maximum_diameter, maximum_z_depth, tool_name))
 
@@ -6864,7 +6869,7 @@ class Part:
 	    tool_name = "NONE"
 	    if best_tool != None:
 		tool_name = best_tool._name_get()
-	    print("{0}=>Part._tools_search('{1}', *, {2:i}, {3:i}, '{4}') => '{5}'".
+	    print("{0}<=Part._tools_search('{1}', *, {2:i}, {3:i}, '{4}') => '{5}'".
 	      format(indent, part._name, parameter1, parameter2, from_routine, tool_name))
 
 	return best_tool
@@ -7756,9 +7761,9 @@ class Part:
 	#tracing = 0
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print(("{0}=>Part.{1}('{2}', {3}, {4}, {5:i}, {6:i}," +
+	    print(("{0}=>Part.('{1}', '{2}', {3}, {4}, {5:i}, {6:i}," +
 	      " {7:i}, {8:i}, {9:i}, {10:i}, {11:i}, {12:d})").
-	      format(indent, "rectangual_tube_extrude", comment, material, color,
+	      format(indent, self._name, comment, material, color,
 	      width, height, thickness, start, start_extra, end, end_extra, rotate))
 
 	# Specify the X/Y coordinates of the rectangular tube:
@@ -7796,9 +7801,9 @@ class Part:
 
 	# Wrap up any requested *tracing*;
 	if tracing >= 0:
-	    print(("{0}<=Part.rectangular_tube_extrude{1}('{2}', {3}, {4}, {5:i}, {6:i}," +
+	    print(("{0}<=Part.rectangular_tube_extrude('{1}', '{2}', {3}, {4}, {5:i}, {6:i}," +
 	      " {7:i}, {8:i}, {9:i}, {10:i}, {11:i}, {12:d})\n").
-	      format(indent, "rectangual_tube_extrude", comment, material, color,
+	      format(indent, self._name, comment, material, color,
 	      width, height, thickness, start, start_extra, end, end_extra, rotate))
 
     def reposition(self, vice_y):
@@ -8444,7 +8449,7 @@ class Part:
 	result = self.ezcad.construct_mode()
 	return result
 
-    def contour(self, comment, contour, start_point, end_point, extra, flags):
+    def contour(self, comment, contour, start_point, end_point, extra, flags, tracing = -1000000):
 	""" *Part*: Perform an exterior contour operation of the *Part* object (i.e. *self*)
 	    using *contour* to describe the path.  The Z start and stop depths are
 	    obtained from *start_point.z* and *end_point.z*.  *extra* is the amount
@@ -8470,7 +8475,8 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*:
-	tracing = part._tracing
+	if tracing == -1000000:
+	    tracing = part._tracing
 	tracing_detail = -1
 	if tracing >= 0:
 	    #tracing_detail = 0
@@ -8498,26 +8504,37 @@ class Part:
 	    # A temporary hack for debugging is to actually show the contour removal in the union:
 	    #scad_difference_lines = part._scad_union_lines
 
-	    # Compute the bounds of a box that will enclose the contour:
-	    bounding_box = part._bounding_box
-	    bsw = bounding_box.bsw_get()
-	    tne = bounding_box.tne_get()
-	    extra = L(mm=10)
-	    x1 = bsw.x - extra
-	    x2 = tne.x + extra
-	    y1 = bsw.y - extra
-	    y2 = tne.y + extra
-	    z1 = bsw.z - extra
-	    z2 = tne.z + extra
-
 	    # Grab *bends* and compute the *bends_size*:
 	    bends = contour._bends_get()
             bends_size = len(bends)
 
+	    # Compute the bounds of a box that will enclose the contour:
+	    for index, bend in enumerate(bends):
+		point = bend._projected_point_get()
+		x = point.x
+		y = point.y
+		z = point.z
+		if index == 0:
+		    x_maximum = x_minimum = x
+		    y_maximum = y_minimum = y
+		    z_maximum = z_minimum = z
+		else:
+		    x_maximum = max(x_maximum, x)
+		    y_maximum = max(y_maximum, y)
+		    z_maximum = max(z_maximum, z)
+	    trim_extra = L(inch=2.0)
+	    x1 = x_minimum - trim_extra
+	    x2 = x_maximum + trim_extra
+	    y1 = y_minimum - trim_extra
+	    y2 = y_maximum + trim_extra
+	    z1 = z_minimum - trim_extra
+	    z2 = z_maximum + trim_extra
+
 	    # Start the linear_extrude:
 	    scad_difference_lines.append("    // Contour {0}".format(contour._name_get()))
-	    scad_difference_lines.append("    translate([0, 0, {0:m}])".format(z1))
-	    scad_difference_lines.append("    linear_extrude(height = {0:m}) {{".format(z2 - z1))
+	    scad_difference_lines.append("    translate([0, 0, {0:m}])".format(-z1))
+	    height = (end_point - start_point).length()
+	    scad_difference_lines.append("    linear_extrude(height = {0:m}) {{".format(height))
 
 	    # Start outputing the polygon directive:
 	    scad_difference_lines.append("     polygon(")
@@ -14805,32 +14822,266 @@ class Tool_Mill_Drill(Tool):		# A mill-drill bit
 
 	return priority
 
+class Transform:
+
+    # The matrix format is an afine 4x4 matrix in the following format:
+    #
+    #	[ r00 r01 r02 0 ]
+    #   [ r10 r11 r12 0 ]
+    #   [ r20 r21 r22 0 ]
+    #   [ dx  dy  dz  1 ]
+    #
+    # The afine point format is a 1x4 matrxi of the following format:
+    #
+    #   [ x y z 1 ]
+    #
+    # We multiply with the point on the left (1x4) and the matrix on the right (4x4).
+    # This yields a 1x4 point matrix of the same form.
+    #
+    # Only two transforms are supported:
+    # * Transform.translate(Point)
+    # * Transform.rotate(Point, Angle)
+    #
+    # A Transform object is immutable:
+    # It should have its inverse matrix computed.
+    # It should point to the previous matrix and the transform object.
+    # This allows us to use the Matrix object to set up openscad.
+
+    def __init__(self):
+	""" *Transform*: Initialize the *Transform* object (i.e. *self*) to be the identity
+	    transform.
+	"""
+
+	# Create *forward_matrix* and *reverse_matrix* as immutable identity matrices:
+	forward_matrix = numpy.eye(4)
+	#forward_matrix.flags.writable = False
+	reverse_matrix = numpy.eye(4)
+	#reverse_matrix.flags.writable = False
+
+	# Load up *self*:
+	self._forward_matrix = forward_matrix
+	self._reverse_matrix = reverse_matrix
+	self._forward_scad_lines = ()
+	self._reverse_scad_lines = ()
+
+    def __format__(self, format):
+	""" *Transform*: Return a formatted version of the *Transform* object"""
+
+	result = ""
+	if format.startswith("s"):
+	    result = "{0}".format(self._forward_scad_lines)
+	elif format.startswith("m"):
+	    result = numpy.array_str(self._forward_matrix, precision=8, suppress_small=True)
+	    result = result.replace("\n", " ").replace("  ", " ").replace("[ ", "[")
+	    if format.endswith("N"):
+		result = "np.array(" + result.replace(" ", ",") + ")"
+	else:
+	    assert False, "Bad format '{0}'".format(format)
+	return result
+
+    def __eq__(self, transform2):
+	""" *Transform*: Return *True* if the *Transform* object (i.e. *self*)
+	    is equal to *transform2*.
+	"""
+
+	#print("transform1._forward_scad_lines=", self._forward_scad_lines)
+	#print("transform2._forward_scad_lines=", transform2._forward_scad_lines)
+	return self._forward_scad_lines == transform2._forward_scad_lines
+
+    def __ne__(self, transform2):
+	""" *Transform*: Return *True* if the *Transform* object (i.e. *self*)
+	    is not equal to *transform2*.
+	"""
+
+	#print("transform1._forward_scad_lines=", self._forward_scad_lines)
+	#print("transform2._forward_scad_lines=", transform2._forward_scad_lines)
+	return self._forward_scad_lines != transform2._forward_scad_lines
+
+    def __mul__(self, point):
+	""" *Transform*:
+	"""
+
+	# Verify argument types:
+	assert isinstance(point, P)
+
+	x = point.x.millimeters()
+	y = point.y.millimeters()
+	z = point.z.millimeters()
+
+	afine_point = numpy.array([ [x, y, z, 1.0] ])
+
+	translated_point = afine_point.dot(self._forward_matrix)
+	translated_x = L(mm=translated_point[0, 0])
+	translated_y = L(mm=translated_point[0, 1])
+	translated_z = L(mm=translated_point[0, 2])
+
+	return P(translated_x, translated_y, translated_z)
+
+    @staticmethod
+    def _zero_fix(value):
+	""" *Transform*: Return *value* rounding small values to zero and ensure that there
+	    is no -0.0.
+	"""
+
+	assert isinstance(value, float)
+	if abs(value) < 1.0e-10:
+	    value = 0.0
+	return value
+
+    def reverse(self):
+	""" *Transform*: Return the reverse of the *Transform* object (i.e. *self*). """
+
+	result = Transform()
+	result._forward_matrix = self._reverse_matrix
+	result._reverse_matrix = self._forward_matrix
+	result._forward_scad_lines = self._reverse_scad_lines
+	result._reverse_scad_lines = self._forward_scad_lines
+	return result
+
+    def rotate(self, axis, angle):
+	""" *Transform*: Return a rotation of the *Transform* object (i.e. *self*) rotated
+	    by *angle* around *axis*.
+	"""
+
+	# Verify argument_types:
+	assert isinstance(axis, P)
+	assert isinstance(angle, Angle)
+
+	# Is this a null rotation?:
+	if angle == Angle():
+	    # Yes it is a null rotation, so we can return *self*:
+	    result = self
+	else:
+	    # This is a non-null rotation, we have to compute both the *forward_matix* and
+	    # the *reverse_matrix*:
+
+	    # The matrix for rotating by *angle* around the normalized vector (*x*,*y*,*z*) is:
+	    #
+	    # [ xx(1-c)+c   yx(1-c)-zs  zx(1-c)+ys   0  ]
+	    # [ xy(1-c)+zs  yy(1-c)+c   zy(1-c)-xs   0  ]
+	    # [ xz(1-c)-ys  yz(1-c)+xs  zz(1-c)+c    0  ]
+	    # [ 0           0           0            1  ]
+	    #
+	    # Where c = cos(*angle*), s = sin(*angle*), and *angle* is measured in radians.
+
+	    # Convert small values to zero.  Also covnvert -0.0 to 0.0:
+	    def zero_clean(value):
+		if abs(value) < 1.0e-10:
+		    value = 0.0
+		return value
+
+	    # First, compute the normalized axis values (*nx*, *ny*, and *nz*):
+	    normalized = axis.normalize()
+	    zf = Transform._zero_fix
+	    nx = zf(normalized.x.millimeters())
+	    ny = zf(normalized.y.millimeters())
+	    nz = zf(normalized.z.millimeters())
+
+	    # Compute some sub expressions for the *forward_matrix*:
+	    c = -angle.cosine()
+	    s = -angle.sine()
+	    omc = 1.0 - c
+	    x_omc = nx * omc
+	    y_omc = ny * omc
+	    z_omc = nz * omc
+	    xs = nx * s
+	    ys = ny * s
+	    zs = nz * s
+    
+	    # Create the *forward_matrix*:
+	    forward_matrix = numpy.array([                                           \
+	      [zf(nx * x_omc + c),  zf(nx * y_omc - zs), zf(nx * z_omc + ys), 0.0], \
+	      [zf(ny * x_omc + zs), zf(ny * y_omc + c),  zf(ny * z_omc - xs), 0.0], \
+	      [zf(nz * x_omc - ys), zf(nz * y_omc + xs), zf(nz * z_omc + c),  0.0], \
+	      [0.0,	            0.0,                 0.0,                 1.0] ])
+
+	    # Perform the *reverse_matrix* computations using -*angle*:
+	    c = angle.cosine()
+	    s = angle.sine()
+	    omc = 1.0 - c
+	    x_omc = nx * omc
+	    y_omc = ny * omc
+	    z_omc = nz * omc
+	    xs = nx * s
+	    ys = ny * s
+	    zs = nz * s
+    
+	    # Create the *reverse_matrix*:
+	    reverse_matrix = numpy.array([                                          \
+	      [zf(nx * x_omc + c),  zf(nx * y_omc - zs), zf(nx * z_omc + ys), 0.0], \
+	      [zf(ny * x_omc + zs), zf(ny * y_omc + c),  zf(ny * z_omc - xs), 0.0], \
+	      [zf(nz * x_omc - ys), zf(nz * y_omc + xs), zf(nz * z_omc + c),  0.0], \
+	      [0.0,	            0.0,                 0.0,                 1.0] ])
+
+	    # Create the new transform *result*:
+	    result = Transform()
+	    result._previous = self
+	    result._forward_matrix = self._forward_matrix.dot(forward_matrix)
+	    result._reverse_matrix = numpy.linalg.inv(result._forward_matrix)
+	    result._forward_scad_lines =                                            \
+	      ("rotate(a={0:d}, v=[{1}, {2}, {3}])".format( angle, nx, ny, nz), ) + \
+	      self._forward_scad_lines
+	    result._reverse_scad_lines = self._reverse_scad_lines +                 \
+	      ("rotate(a={0:d}, v=[{1}, {2}, {3}])".format(-angle, nx, ny, nz), )
+
+	return result
+
+    def translate(self, dx_dy_dz):
+	""" Transform*: Perform a translate of the *Transform* object (i.e. *self*) by *dx_dy_dz*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(dx_dy_dz, P)
+
+	# Extract *dx*, *dy*, and *dz*:
+	zf = Transform._zero_fix
+	dx = zf(dx_dy_dz.x.millimeters())
+	dy = zf(dx_dy_dz.y.millimeters())
+	dz = zf(dx_dy_dz.z.millimeters())
+
+	# Compute the negative values:
+	ndx = zf(-dx)
+	ndy = zf(-dy)
+	ndz = zf(-dz)
+
+	# Is the translate null?
+	if dx == 0.0 and dy == 0.0 and dz == 0.0:
+	    # The translate is null, so we can return *self*:
+	    result = self
+	else:
+	    # The translate is non-null, so we have to compute both *forward_matrix* and
+	    # *reverse_matrix*:
+	    forward_matrix = numpy.array([
+	      [1.0, 0.0, 0.0, 0.0],
+	      [0.0, 1.0, 0.0, 0.0],
+	      [0.0, 0.0, 1.0, 0.0],
+	      [dx,  dy,  dz,  1.0]
+	    ])
+	    reverse_matrix = numpy.array([
+	      [1.0, 0.0, 0.0, 0.0],
+	      [0.0, 1.0, 0.0, 0.0],
+	      [0.0, 0.0, 1.0, 0.0],
+	      [ndx, ndy, ndz, 1.0]
+	    ])
+
+	    # Now we can create the new *result*:
+	    result = Transform()
+	    result._previous = self
+	    result._forward_matrix = self._forward_matrix.dot(forward_matrix)
+	    result._reverse_matrix = numpy.linalg.inv(result._forward_matrix)
+	    result._forward_scad_lines = \
+	      ("translate([{0}, {1}, {2}])".format( dx,  dy,  dz), ) +  self._forward_scad_lines
+	    result._reverse_scad_lines = \
+	      self._reverse_scad_lines + ("translate([{0}, {1}, {2}])".format(ndx, ndy, ndz), )
+
+	return result
+
 class Matrix:
     """ *Matrix* is a class that implements a 4x4 mutable matrix. """
 
     # FIXME: Warning this stuff basically started out as C code.  It needs to be entirely
     # switched over to the Python numpy class.  You have been warned!!!
 
-    # Notes for fix:
-    #
-    # Matrix Format (4x4)
-    #	[ r00 r01 r02 0 ]
-    #   [ r10 r11 r12 0 ]
-    #   [ r20 r21 r22 0 ]
-    #   [ dx  dy  dz  1 ]
-    # Point format (4x4):
-    #   [ x y z 1 ]
-    # We multiply with the point on the left (1x4) and the matrix on the right (4x4).
-    # This yields a 1x4 point matrix of the same form.
-    #
-    # Only two transforms are supported:
-    # * Matrix.translate(Point)
-    # * Mattix.rotate(Point, Angle)
-    #
-    # A Matrix should be immutable.
-    # It should have its inverse matrix computed.
-    # It should point to the previous matrix and the transform object.
-    # This allows us to use the Matrix object to set up openscad.
 
     def __init__(self, values = None):
 	""" Matrix public: Initialize {self} to values. """
