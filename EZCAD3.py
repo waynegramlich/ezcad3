@@ -2890,39 +2890,41 @@ class Contour:
 
 	return self._name
 
-    def _project(self, position, tracing):
+    def _project(self, transform, tracing):
 	""" *Contour*: Sweep through the *Contour* object (i.e. *self*) and compute the
-	    X/Y coordinates of *Bend* object on an X/Y plane using the *position* matrix
-	    to position each point prior to being projected down to the X/Y plane.
+	    X/Y coordinates of *Bend* object on an X/Y plane using *transform* each point
+	    in the contour prior prior to being projected down to the X/Y plane.
 	"""
 
 	# Verify argument types:
-	assert isinstance(position, Matrix)
+	assert isinstance(transform, Transform)
 
 	# Perform any requested *tracing*:
 	#tracing = 0
+	tracing_detail = -1
 	if tracing >= 0:
+	    tracing_detail = 1
 	    indent = ' ' * tracing
-	    print("{0}=>Contour._project('{1}', *)".format(indent, self._name))
-	if tracing >= 0:
-	    print("{0}position matrix".format(indent))
-	    print("{0}".format(position))
+	    print("{0}=>Contour._project('{1}', {2:s})".format(indent, self._name, transform))
 
 	# For each *bend* in bends, perform the project from 3D down to 2D:
+	zero = L()
 	for bend in self._bends:
 	    # Grab the X/Y/Z coordinates for *point*:
 	    point = bend._point_get()
-	    projected_point = position.point_multiply(point)
+	    transformed_point = transform * point
+	    projected_point = P(transformed_point.x, transformed_point.y, zero)
 	    bend._projected_point_set(projected_point)
-	    if tracing >= 0:
-		print("{0}point={1:i} projected_point={2:i}".format(indent, point, projected_point))
+	    if tracing_detail >= 2:
+		print("{0}point={1:i} projected_point={2:i} transform={3:s}".
+		  format(indent, point, projected_point, transform))
 
 	# Remember that we have performed the projection:
 	self._is_projected = True
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Contour._project('{1}', *)".format(indent, self._name))
+	    print("{0}<=Contour._project('{1}', {2:s})".format(indent, self._name, transform))
 
     def _radius_center_and_tangents_compute(self, tracing):
 	""" *Contour*: """
@@ -2950,6 +2952,175 @@ class Contour:
 	    print("{0}<=Contour._radius_center_and_tangents_compute('{1}')".
 	      format(' ' * tracing, self._name))
 
+
+
+    def _scad_lines_polygon_append(self, scad_lines, pad, box_enclose, tracing = -1000000):
+	""" *Contour*: """
+
+	# Verify argument types:
+	assert isinstance(scad_lines, list)
+	assert isinstance(pad, str)
+	assert isinstance(box_enclose, bool)
+	assert isinstance(tracing, int)
+
+	# Use *contour* instead of *self*:
+	contour = self
+
+	# Perform any requested *tracing*:
+	tracing_detail = -1
+	if tracing >= 0:
+	    tracing_detail = 3
+	    indent = ' ' * tracing
+	    print("{0}=>Contour._scad_lines_polygon_append('{1}', *, '{2}, {3})".
+	      format(indent, contour._name, pad, box_enclose))
+
+	# Grab *bends* from *contour*:
+	bends = contour._bends_get()
+	assert len(bends) >= 1
+
+	# Compute the bounds of a box that will enclose the contour:
+	if box_enclose:
+	    # Visit each *bend* in *bends8:
+	    for index, bend in enumerate(bends):
+		# Extract the *x*/*y*/*z* from *bend*:
+		point = bend._projected_point_get()
+		x = point.x
+		y = point.y
+		z = point.z
+
+		# The first time through, we just set the miminims/maximums from x/y/z:
+		if index == 0:
+		    x_maximum = x_minimum = x
+		    y_maximum = y_minimum = y
+		    z_maximum = z_minimum = z
+		else:
+		    # All other times, we compute the maximum and minimum:
+		    x_minimum = min(x_minimum, x)
+		    y_minimum = min(y_minimum, y)
+		    z_minimum = min(z_minimum, z)
+		    x_maximum = max(x_maximum, x)
+		    y_maximum = max(y_maximum, y)
+		    z_maximum = max(z_maximum, z)
+
+	    # FIXME: *trim* extra should be computed:
+	    # Now tack on extra box area:
+	    trim_extra = L(inch=2.0)
+	    x1 = x_minimum - trim_extra
+	    x2 = x_maximum + trim_extra
+	    y1 = y_minimum - trim_extra
+	    y2 = y_maximum + trim_extra
+	    z1 = z_minimum - trim_extra
+	    z2 = z_maximum + trim_extra
+
+	# Start by outputing the polygon directive:
+	scad_lines.append("{0}polygon(".format(pad))
+            
+	# First output each *bend_point* in *bends*::
+        contour_pairs = []
+	contour_is_clockwise = contour._is_clockwise_get()
+	scad_lines.append("{0}  points = [".format(pad))
+	for bend in bends:
+	    # Grab some values from *bend*:
+	    bend_point = bend._projected_point_get()	# Should this be _projected_bend_point?
+	    bend_name = bend._name_get()
+	    bend_radius = bend._radius_get()
+	    bend_is_inside = bend._is_inside_get()
+		
+	    # The *arc_radius* is positive or negative depending upon whether
+	    # *contour_is_clocwise* or the *bend_is_inside*:
+	    if contour_is_clockwise:
+		if bend_is_inside:
+		    arc_radius = -bend_radius
+		else:
+		    arc_radius = bend_radius
+	    else:
+		if bend_is_inside:
+		    arc_radius = bend_radius
+		else:
+		    arc_radius = -bend_radius
+
+	    # We are going to sweep out some line segments from *start_angle* to *end_angle*
+	    # (which are angle relative to *center*):
+	    center = bend._center_get()
+	    start_angle = bend._incoming_tangent_angle_get()
+	    start_direction = start_angle.xy_direction()
+	    end_angle = bend._outgoing_tangent_angle_get()
+	    change_angle = end_angle - start_angle
+
+	    # Make sure that the *bearing_angle_change* is positive for clockwise sweeps
+	    # and negative for counter clockwise sweeps:
+	    degrees0 = Angle()
+	    degrees360 = Angle(deg=360.0)
+	    if change_angle >= degrees0:
+		if contour_is_clockwise and not bend_is_inside or \
+		 not contour_is_clockwise and bend_is_inside:
+		    change_angle -= degrees360
+		    if tracing_detail >= 1:
+			print("{0}decrement".format(indent))
+	    elif change_angle < degrees0:
+		if contour_is_clockwise and bend_is_inside or \
+		  not contour_is_clockwise and not bend_is_inside:
+		    if tracing >= 1:
+			print("{0}increment".format(indent))
+		    change_angle += degrees360
+	    if tracing_detail >= 0:
+		print("{0}name='{1}' start_angle={2:d} end_angle={3:d} change_angle={4:d}".
+		  format(indent, bend_name, start_angle, end_angle, change_angle))
+
+	    # Now we compute *deta_angle*:
+	    arc_radius_mm = arc_radius.millimeters()
+	    count = max(4, int(arc_radius_mm))
+	    delta_angle = change_angle / float(count - 1)
+	    if tracing_detail >= 0:
+		print("{0}count={1} delta_angle={2:d}".format(indent, count, delta_angle))
+	    for index in range(count):
+		angle = (start_angle + delta_angle * float(index)).normalize()
+		point = center + angle.xy_direction() * arc_radius_mm
+		if tracing_detail >= 0:
+		    print("{0}[{1}/{2}]:angle={3:d} point={4:i}".
+		      format(indent, index + 1, count, angle, point))
+
+		scad_lines.append("{0}  [{1:m}, {2:m}], // {3} {4} of {5}".
+		  format(pad, point.x, point.y, bend_name, index + 1, count))
+		contour_pairs.append( (point, "{0} {1} of {2}".
+		  format(bend_name, index + 1, count) ))
+
+	# Now tack on the 4 points that enclose the contour with a box:
+	if box_enclose:
+	    scad_lines.append("{0}   [{1:m}, {2:m}], // box SW".format(pad, x1, y1))
+	    scad_lines.append("{0}   [{1:m}, {2:m}], // box NW".format(pad, x1, y2))
+	    scad_lines.append("{0}   [{1:m}, {2:m}], // box NE".format(pad, x2, y2))
+	    scad_lines.append("{0}   [{1:m}, {2:m}]  // box SE".format(pad, x2, y1))
+	    scad_lines.append("{0}  ],".format(pad))
+
+	# Now we output the outermost path the encloses the contour:
+	contour_pairs_size = len(contour_pairs)
+	scad_lines.append("{0}  paths = [".format(pad))
+	if box_enclose:
+	    scad_lines.append("{0}   [ // box path".format(pad))
+	    scad_lines.append("{0}    {1}, // SW box".format(pad, contour_pairs_size))
+	    scad_lines.append("{0}    {1}, // NW box".format(pad, contour_pairs_size + 1))
+	    scad_lines.append("{0}    {1}, // NE box".format(pad, contour_pairs_size + 2))
+	    scad_lines.append("{0}    {1}  // SE box".format(pad, contour_pairs_size + 3))
+	    scad_lines.append("{0}   ], // box path".format(pad))
+
+	# Now we output the contour path:
+	scad_lines.append("{0}   [ //contour_path".format(pad))
+	comma = ","
+        for index, contour_pair in enumerate(contour_pairs):
+	    contour_point = contour_pair[0]
+	    contour_text = contour_pair[1]
+	    if index >= contour_pairs_size - 1:
+		comma = ""
+	    scad_lines.append("{0}    {1}{2} // {3}".format(pad, index, comma, contour_text))
+	scad_lines.append("{0}   ] // contour path".format(pad))
+	scad_lines.append("{0}  ] // paths".format(pad))
+	scad_lines.append("{0} ); // polygon".format(pad))
+
+	# Wrap up any *tracing*:
+	if tracing >= 0:
+	    print("{0}=>Contour._scad_lines_polygon_append('{1}', *, '{2}, {3})".
+	      format(indent, contour._name, pad, box_enclose))
 
     def _smallest_inner_radius_compute(self, tracing):
 	""" *Contour*: Return the smallest bend radius of any the inside bend for the
@@ -4990,18 +5161,19 @@ class Part:
 	self._operations = []
 	self._plunge_x = zero
 	self._plunge_y = zero
-	self._position = Matrix.identity()
+	self._position = Matrix.identity()	# Scheduled to go away
 	self._position_count = 0
 	self._priority = 0
-	self._projection_axis = z_axis
+	self._projection_axis = z_axis		# Scheduled to go away
 	#self._places = {}
-	self._reposition = Matrix()
+	self._reposition = Matrix()		# Scheduled to go away
 	self._rotate = None
 	self._shop = ezcad._shop
 	self._scad_difference_lines = []
 	self._scad_union_lines = []
 	self._signature_hash = None
-	self._top_surface_set = False
+	self._top_surface_transform = Transform()
+	self._top_surface_set = False		# Scheduled to go away
 	self._tool_preferred = ""
 	self._tracing = -1000000
 	self._translate = None
@@ -6018,6 +6190,7 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*:
+	#tracing = 0
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._manufacture:('{1}', *)".format(indent, self._name))
@@ -6077,7 +6250,7 @@ class Part:
 
 	    # Set *cnc_debug* to *True* to trace CNC:
 	    if tracing >= 0:
-		print("{0}==>Part._manfacture('{1}'):CNC".format(indent, part._name))
+		print("{0}==>Part._manufacture('{1}'):CNC".format(indent, part._name))
 
 	    # This is where we can disable *cnc_tracing*:
 	    #cnc_tracing = -1000000
@@ -6117,12 +6290,14 @@ class Part:
 		dxf_file.close()
 
 	    if tracing >= 0:
-		print("{0}<==Part._manfacture('{1}'):CNC".format(indent, part._name))
+		print("{0}<==Part._manufacture('{1}'):CNC".format(indent, part._name))
 
 	# Now generate any .stl files:
 	if ezcad._mode == EZCAD3.STL_MODE:
+	    tracing_detail = -1
 	    if tracing >= 0:
-		print("{0}==>Part._manfacture('{1}'):STL".format(indent, part._name))
+		tracing_detail = 3
+		print("{0}==>Part._manufacture('{1}'):STL".format(indent, part._name))
 
 	    # Now manufacture this node:
 	    #scad_difference_lines = []
@@ -6136,6 +6311,9 @@ class Part:
 
 	    scad_difference_lines = self._scad_difference_lines
 	    scad_union_lines = self._scad_union_lines
+	    if tracing_detail >= 3:
+		print("{0}len(scad_difference_lines)={1} len(scad_union_lines={2}".
+		  format(indent, len(scad_difference_lines), len(scad_union_lines)))
 
 	    sub_parts = []
 	    sub_part_names = []
@@ -6160,6 +6338,8 @@ class Part:
 	      scad_union_lines + scad_difference_lines + sub_part_names)
             signature_hash = hashlib.sha1(signature).hexdigest()
 	    self._signature_hash = signature_hash
+	    if tracing_detail >= 3:
+		print("{0}signature_hash={1}".format(indent, signature_hash))
 
             # We want to create a *name* the consists of *base_name* followed
 	    # by a digit.  We want a unique *name* for each *signature*.
@@ -6177,18 +6357,21 @@ class Part:
 		base_signatures_table = {}
 		bases_table[base_name] = base_signatures_table
 
-            # Now ensure see whether we have encountered this *signature*
-	    # before:
+            # Now ensure see whether we have encountered this *signature* before:
 	    if signature in base_signatures_table:
 		# Yes we have, so reuse the previously assigned name:
 		name = base_signatures_table[signature]
 		self._name = name
+		if tracing_detail >= 3:
+		    print("{0}reuse name '{1}'".format(indent, name))
 	    else:
 		# No we have not so we create a new one *and* write out
 		# the associated *name*.scad file:
 		name = "{0}{1}".format(base_name, len(base_signatures_table))
 		base_signatures_table[signature] = name
 		self._name = name
+		if tracing_detail >= 3:
+		    print("{0}new name '{1}'".format(indent, name))
 
 		# Now we see whether we need to write out the file and
 		# run it through openscad:
@@ -6198,10 +6381,14 @@ class Part:
 		    # Since the .stl file already exists, we must have already
 		    # written out the .scad file.  Thus, there is nothing
 		    # more to do:
+		    if tracing_detail >= 3:
+			print("{0}{1} already exists".format(indent, stl_file_name))
 		    pass
 		else:
 		    # We need to write out the .scad file and generate the
 		    # assocatied .stl file:
+		    if tracing_detail >= 3:
+			print("{0}{1} does not exist".format(indent, stl_file_name))
 
 		    # Deal with the part *places*:
 		    lines = []
@@ -6254,21 +6441,28 @@ class Part:
 		    scad_file = open(scad_file_name, "w")
 		    scad_file.write("\n".join(lines))
 		    scad_file.close()
+		    if tracing_detail >= 3:
+			print("{0}'{1} written".format(indent, scad_file_name))
 
-		    # Delete any previous *.stl file:
+		    # Delete any previous *.stl files:
 		    directory = ezcad._directory_get()
 		    glob_pattern = os.path.join(directory, "{0}_*.stl".format(name))
 		    previous_stl_files = glob.glob(glob_pattern)
 		    for previous_stl_file in previous_stl_files:
 			os.remove(previous_stl_file)
+			if tracing_detail >= 3:
+			    print("{0}{1} removed".format(indent, previous_stl_file))
 
 		    # Run the command that convert the .scad file into the
 		    # associated .stl file:
+                    if tracing_detail >= 0:
+			print("{0}is_part={1}".format(indent, self._is_part))
 		    if self._is_part:
 			ignore_file = open("/dev/null", "w")
 			scad_file_name = os.path.join(directory, "{0}.scad".format(name))
 			command = [ "openscad", "-o", stl_file_name,  scad_file_name ]
-			#print("command=", command)
+			if tracing_detail >= 2:
+			    print("{0}command='{1}".format(indent, command))
 			subprocess.call(command, stderr=ignore_file) 
 			ignore_file.close()
 
@@ -6294,7 +6488,7 @@ class Part:
 			subprocess.call(command, stderr=ignore_file)
 			ignore_file.close()
 	    if tracing >= 0:
-		print("{0}<==Part._manfacture('{1}'):STL".format(indent, part._name))
+		print("{0}<==Part._manufacture('{1}'):STL".format(indent, part._name))
     
 	if tracing >= 0:
 	    print("{0}<=Part._manufacture:('{1}', *)".format(indent, self._name))
@@ -6569,7 +6763,7 @@ class Part:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_drill_search('{1}', {2:i}, {3:i})".
-	      format(indent, part._name, diameter, maximum_z_depth))
+	      format(indent, self._name, diameter, maximum_z_depth))
 
 	drill_tool = \
 	  self._tools_search(Tool_Drill._match, diameter, maximum_z_depth, "drill", tracing + 1)
@@ -6579,7 +6773,7 @@ class Part:
 	    if drill_tool != None:
 		toll_name = drill_tool._name_get()
 	    print("{0}<=Part._tools_drill_search('{1}', {2:i}, {3:i}) => {4}".
-	      format(indent, part._name, diameter, maximum_z_depth, tool_name))
+	      format(indent, self._name, diameter, maximum_z_depth, tool_name))
 
     def _tools_end_mill_search(self, maximum_diameter, maximum_z_depth, from_routine, tracing):
 	""" *Part*: Search for an end mill with a diameter that is less than or equal to
@@ -6700,7 +6894,7 @@ class Part:
 	    indent = ' ' * tracing
 	    tool_name = "NONE"
 	    if end_mill_tool != None:
-		tool_name = end_milltool._name_get()
+		tool_name = end_mill_tool._name_get()
 	    print("{0}<=Part._tools_mill_drill_tip_search('{1}', {2}, {3}) => {4}".
 	      format(indent, self._name, maximum_diameter, maximum_z_depth, tool_name))
 
@@ -6926,51 +7120,55 @@ class Part:
 
     # Public methods come here:
 
-    def block(self, comment = "no comment", material = None, color = None,
-      corner1 = None, corner2 = None, welds = "", trace = False,
-      center = None, axis = None, rotate = None, translate = None, top = None):
-	""" {Part} construct: Create a block with corners at {corner1} and
-	    {corner2}.  The block is made of {material} and visualized as
-	    {color}. """
+    def block(self, comment, material, color, corner1, corner2, top, welds, tracing = -100000):
+	""" *Part*: Add block of material to the *Part* object (i.e. *self*) that has corners
+	    at *corner1* and *corner2*.  The block is made of *material* and rendered in
+	    *color*.  The initial top surface (for milling, laser, etc.) is specified by
+	    a surface letter of "t", "b", "n", "s", "e", or "w" for the *top* argument.
+	    The surface letter can have "90" appended to it to indicate the preferred
+	    orientation in the milling vice, laser, etc.  Multiple blocks can be welded
+	    together by specifying that 0 to 6 surface layer letters that are weldable
+	    (e.g. "tb" would specify that the top and bottom layers are weldable.)
+	    {Mention the extra}.
+	"""
 
-	if trace:
-	    print("=>Part.block(comment={0}".format(comment))
-
-	#print "block_corners('{0}', {1}, {2}, '{3}', '{4}')".format( \
-	#  self.name, corner1, corner2, color, material)
-
-	# Check argument status:
-	none_type = type(None)
-	assert type(comment) == none_type or isinstance(comment, str)
-	assert type(corner1) == none_type or isinstance(corner1, P)
-	assert type(corner2) == none_type  or isinstance(corner2, P)
-	assert type(material) == none_type or isinstance(material, Material)
-	assert type(welds) == none_type or isinstance(welds, str)
-	assert type(color) == none_type or isinstance(color, Color)
-	assert type(center) == none_type or isinstance(center, P)
-	assert type(axis) == none_type or isinstance(axis, P)
-	assert type(rotate) == none_type or isinstance(rotate, Angle)
-	assert type(translate) == none_type or isinstance(translate, P)
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(material, Material)
+	assert isinstance(color, Color)
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
 	assert isinstance(top, str)
-
-	# Deal with the extra sturf
-
-	# Deal with argument defaults:
-	self._color_material_update(color, material)
-	color = self._color
-	material = self._material
-
-	zero = L(0.0)
-	if type(corner1) == none_type:
-	    corner1 = P(zero, zero, zero)
-	if type(corner2) == none_type:
-	    one = L.mm(1.0)
-	    corner2 = P(one, one, one)
 	assert isinstance(welds, str)
+	assert isinstance(tracing, int)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Perform any requested *tracing*:
+	tracing_detail = -1
+	if tracing >= 0:
+	    tracing_detail = 1
+	    indent = ' ' * tracing
+	    print("{0}=>Part.block('{1}', '{2}', '{3}', '{4}', {5:i}, {6:i}, '{7}', '{8}')".
+	      format(indent, part._name, comment, material, color, corner1, corner2, top, welds))
+
+	# Some constants:
+	zero = L()
+	one = L(mm=1.0)
+	x_axis = P(one, zero, zero)
+	y_axis = P(zero, one, zero)
+	z_axis = P(zero, zero, one)
+	degrees0 = Angle(deg=0.0)
+	degrees90 = Angle(deg=90.0)
+	degrees180 = Angle(deg=180.0)
 
 	# Record the *color* and *material*:
-	self._material = material
-	self._color = color
+	part._material = material
+	part._color = color
+
+	# Tell the various generators that need to generate a part:
+	part._is_part = True
 
 	# Define a helper function to help out:
 	def min_max(value1, value2):
@@ -6986,12 +7184,12 @@ class Part:
 	z1, z2 = min_max(corner1.z, corner2.z)
 
 	# Deal with extras:
-	x1 -= self._extra_west
-	x2 += self._extra_east
-	y1 -= self._extra_south
-	y2 += self._extra_north
-	z1 -= self._extra_bottom
-	z1 += self._extra_top
+	#x1 -= self._extra_west
+	#x2 += self._extra_east
+	#y1 -= self._extra_south
+	#y2 += self._extra_north
+	#z1 -= self._extra_bottom
+	#z1 += self._extra_top
 
 	# Reset the extras:
 	self._extra_east = zero
@@ -7001,16 +7199,74 @@ class Part:
 	self._extra_top = zero
 	self._extra_bottom = zero
 
+	# Update *bounding_box*:
 	bounding_box = self._bounding_box
 	bounding_box.point_expand(P(x1, y1, z1))
 	bounding_box.point_expand(P(x2, y2, z2))
+	if tracing_detail >= 1:
+	    print("{0}corner1={1} corner2={2}".format(indent, P(x1, y1, z1), P(x2, y2, z2)))
+	    print("{0}bounding_box={1}".format(indent, bounding_box))
 
+	# Compute the block center points::
+	x_center = (x1 + x2)/2
+	y_center = (y1 + y2)/2
+	z_center = (z1 + z2)/2
+
+	# Do the pre-work needed to compute the *top_surface_transform*.  We will need
+	# The *top_surface_point* which is in the center of the top surface.  We need
+	# the *top_surface_rotate_axis* to and *top_surface_rotate_angle* to realign
+	# the surface with the X/Y plane.
+
+	# Compute *top_surface_point* based on *top* argument:
+	if top.startswith("t"):
+	    # Top surface:
+	    top_surface_point = P(x_center, y_center, z2)
+	    # No rotation needed:
+	    top_surface_rotate_axis = y_axis
+	    top_surface_rotate_angle = degrees0
+	elif top.startswith("b"):
+	    # Bottom surface:
+	    top_surface_point = P(x_center, y_center, z1)
+	    top_surface_rotate_axis = y_axis
+	    top_surface_rotate_angle = degrees180
+	elif top.startswith("n"):
+	    # North surface:
+	    top_surface_point = P(x_center, y2, z_center)
+	    top_surface_rotate_axis = x_axis
+	    top_surface_rotate_angle = degrees90
+	elif top.startswith("s"):
+	    # South surface:
+	    top_surface_point = P(x_center, y1, z_center)
+	    top_surface_rotate_axis = x_axis
+	    top_surface_rotate_angle = -degrees90
+	elif top.startswith("e"):
+	    # East surface:
+	    top_surface_point = P(x2, y_center, z_center)
+	    top_surface_rotate_axis = y_axis
+	    top_surface_rotate_angle = -degrees90
+	elif top.startswith("w"):
+	    # West surface:
+	    top_surface_point = P(x1, y_center, z_center)
+	    top_surface_rotate_axis = y_axis
+	    top_surface_rotate_angle = degrees90
+	else:
+            assert False, "top argument must start with 't', 'b', 'n', 's', 'e', or 'w'"
+
+	# Compute the *top_surface_transform*:
+	top_surface_transform = Transform()
+	top_surface_transform = top_surface_transform.translate(
+	  "block top to origin", -top_surface_point)
+	top_surface_transform = top_surface_transform.rotate(
+	  "block plane_change to X/Y", top_surface_rotate_axis, top_surface_rotate_angle)
+
+	# Deal with suffix of "90" in *top*:
+	if top.endswith("90"):
+	    assert len(top) == 3, "Too many characters in top argument '{0}'".format(top)
+	    top_surface_transform = top_surface_transform("block rotate 90", z_axis, degrees90)
+	# 
 	ezcad = self._ezcad
-
-	self._is_part = True
-	#print("Part.block:{0}._is_part = True".format(self._name))
-        
-	if ezcad._mode == EZCAD3.CNC_MODE:
+	ezcad_mode = ezcad._mode
+	if ezcad_mode == EZCAD3.CNC_MODE:
 	    union_lines = self._scad_union_lines
 
 	    # Now make the block a little bigger for "welding":
@@ -7029,52 +7285,33 @@ class Part:
 	    if welds.find("w") >= 0:
 		x1 -= weld_extra
 
-	    # Deal with welding *adjust*:
-	    #zero = L()
-	    #adjust = ezcad._adjust
-	    #if top == "t" or top == "b":
-	    #	#print("block adjust={0}".format(adjust))
-	    #	x1 -= adjust
-	    #	x2 += adjust
-	    #	y1 -= adjust
-	    #	y2 += adjust
-	    #elif top == "n" or top == "s":
-	    #	x1 -= adjust
-	    #	x2 += adjust
-	    #	z1 -= adjust
-	    #	z2 += adjust
-	    #elif top == "e" or top == "w":
-	    #	y1 -= adjust
-	    #	y2 += adjust
-	    #	z1 -= adjust
-	    #	z2 += adjust
-	    #else:
-	    #	assert adjust == zero, "Part.Block: top argument not set"
+	if ezcad_mode == EZCAD3.STL_MODE:
+	    # Block scad lines go into *union_lines*:
+	    union_lines = part._scad_union_lines
+	    pad = ' ' * 6
 
-	    #print "c1=({0},{1},{2}) c2=({3},{4},{5})".format( \
-	    #  x1, y1, z1, x2, y2, z2)
+	    # Compute *dx*, *dy*, *dz*:
+	    dx = x2 - x1
+	    dy = y2 - y1
+	    dz = z2 - z1
 
-            # The transforms are done in reverse order:
-	    self._scad_transform(union_lines, 0, center = center,
-	      axis = axis, rotate = rotate, translate = translate)
+	    # Move the block center to (*x_center*, *y_center*, *z_center*):
+	    union_lines.append("{0}translate([{1:m}, {2:m}, {3:m}])".
+	      format(pad, x_center, y_center, z_center))
 
-	    # Get the lower south west corner positioned:
-	    union_lines.append(
-	      "      translate([{0:m}, {1:m}, {2:m}])".format(x1, y1, z1))
-
-	    # The color can be output any old time before the cube:
-	    union_lines.append(
-	      "      color([{0}, {1}, {2}, {3}])".
-	      format(color.red, color.green, color.blue, color.alpha))
+	    # Output the *color*:
+	    union_lines.append("{0}color([{1}, {2}, {3}, {4}])".
+	      format(pad, color.red, color.green, color.blue, color.alpha))
 
 	    # Finally, we can output the cube:
 	    union_lines.append(
-	      "        cube([{0:m}, {1:m}, {2:m}]);".format(
-	      x2 - x1, y2 - y1, z2 - z1))
-	    #print("cube: x2(={0}) - x1(={1}) = {2}".format(x2, x1, x2 - x1))
+	      "{0}cube([{1:m}, {2:m}, {3:m}], center=true); // {4}".
+	      format(pad, dx, dy, dz, comment))
 
-	if trace:
-	    print("<=Part.block(comment={0}".format(comment))
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=Part.block('{1}', '{2}', '{3}', '{4}', {5:i}, {6:i}, '{7}', '{8}')".
+	      format(indent, part._name, comment, material, color, corner1, corner2, top, welds))
 
     def cnc_fence(self):
 	""" *Part*: Erect a virtual fence that prevents any CNC operations
@@ -7336,11 +7573,13 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*
+	if part._ezcad._mode == EZCAD3.STL_MODE:
+	    tracing = 0
 	if tracing == -1000000:
 	    tracing = part._tracing
 	tracing_detail = -1
 	if tracing >= 0:
-	    tracing_detail = 0
+	    tracing_detail = 1
 	    indent = ' ' * tracing
 	    print("{0}=>Part.extrude('{1}', {2}, {3}, *, {4:i}, {5:i}, {6:i}, {7:i}, {8:d})".
 	      format(indent, comment, material, color, start, start_extra, end, end_extra, rotate))
@@ -7355,154 +7594,55 @@ class Part:
 	part._material = material
 	part._color = color
 
-	# Extend the *start* and *end* by *start_extra* and *end_extra* respectively:
 	extrude_axis = end - start
 	extrude_direction = extrude_axis.normalize()
+	start_extra_delta = -start_extra.millimeters() * extrude_direction
+	start += start_extra_delta
+	end_extra_delta = end_extra.millimeters() * extrude_direction
+	end += end_extra_delta
+	extrude_axis = end - start
+	height = extrude_axis.length()
 
-	extrude_direction_x = extrude_direction.x.millimeters()
-	extrude_direction_y = extrude_direction.y.millimeters()
-	extrude_direction_z = extrude_direction.z.millimeters()
+	tracing_detail = -1
 	if tracing >= 0:
-	    print("{0}extrude_direction_x={1} extrude_direction_y={2} extrude_direction_y={3}".
-	      format(indent, extrude_direction_x, extrude_direction_y, extrude_direction_z))
-	    print("{0}start_extra={1:i} end_extra={2:i}".format(indent, start_extra, end_extra))
-
-	start_extra_dx = -start_extra * extrude_direction_x
-	start_extra_dy = -start_extra * extrude_direction_y
-	start_extra_dz = -start_extra * extrude_direction_z
-	start_extra_delta = P(start_extra_dx, start_extra_dy, start_extra_dz)
-
-	end_extra_dx = end_extra * extrude_direction_x
-	end_extra_dy = end_extra * extrude_direction_y
-	end_extra_dz = end_extra * extrude_direction_z
-	end_extra_delta = P(end_extra_dx, end_extra_dy, end_extra_dz)
-
-	if tracing >= 0:
-	    print("{0}extrude_direction={1:m} start_extra_delta={2:i} end_extra_delta={3:i}".
+	    tracing_detail = 1
+	    print("{0}direction={1:m} start_extra_delta={2:i} end_extra_delta={3:i}".
 	      format(indent, extrude_direction, start_extra_delta, end_extra_delta))
 
-	start = start + start_extra_delta
-	end = end + end_extra_delta
-	extrude_axis = end - start
+	# Compute the transform that will place *start* on the X/Y plane with *start*-*end*
+	# pointing in the negative Z axis direction:
+	top_surface_transform = \
+	  Transform.top_surface("extrude", start, end, rotate, tracing + 1)
+	if tracing_detail >= 2:
+	    print("{0}top_surface_transform={1:s}".format(indent, top_surface_transform))
 
-	# openscad forces all extrusions to occur along the Z axis from the origin upwards
-	# (i.e. +Z.)  This means we need to perform a series of rotations and translations
-	# to reorient the +Z vertical extrusion so that it starts at *start* and ends at *end*
-	# in 3D space.  For openscad the are 5 transformations to be performed.  For the
-	# code below, we compute 5 transformation matrices:
-	#
-	# 1. *initial_translation*:
-	#    The extrusion is translated in -Z such that the extrusion center is at the origin.
-	#
-	# 2. *initial_rotation*:
-	#    We rotate around the Z axis such that the contour in the X/Y plane is oriented
-	#    properly for the next rotation.  For example, if the contour looks like a
-	#    capital "T", we want the make sure that the top of the "T" stays on top.
-	#
-	# 3. *plane_change*:
-	#    We rotate the extrusion so the at the extrusion aligns with the line that
-	#    goes through *start* and *end*.
-	#
-	# 4. *user_rotate*:
-	#    We rotate along line that goes through *start* and *end* by *rotate*.
-	#
-	# 5. *final_translation*:
-	#    We translate the extrusion so that its end-points align with *start* and *end*.
-	#
-	# While, this is pretty involved, it results in what the user would naturally expect.
+	# Remember *top_surface_transform* for other operations:
+	part._top_surface_transform = top_surface_transform
 
-	# Compute the *initial_translation*:
-	center = (start + end) / 2
-	height = extrude_axis.length()
-	initial_translation = Matrix.translate_create(zero, zero, -height/2.0)
-	if tracing_detail >= 0:
-	    print("{0}end-start={1:i} center={2:i} height={3:i}".
-	      format(indent, extrude_axis, center, height))
+	# Now compute the transforms that will take a contour in the X/Y plane and map
+	# them to appropate planes at *start* and *end*:
+	start_contour_transform = top_surface_transform.reverse()
+	end_contour_transform = start_contour_transform.translate("move to end", end - start)
+
 	if tracing_detail >= 3:
-	    print("{0}initial_translation matrix=".format(indent))
-	    print("{0}".format(initial_translation))
-
-	# Compute *initial_rotation* matix.  This is done by 
-	one = L(mm=1.0)
-	z_axis = P(zero, zero, one)
-	extrude_axis_x = extrude_axis.x
-	extrude_axis_y = extrude_axis.y
-	if extrude_axis_x == zero and extrude_axis_y == zero:
-	    extrude_xy_angle = Angle()
-	    initial_rotation = Matrix.identity()
-	else:
-	    extrude_xy_angle = extrude_axis_y.arc_tangent2(extrude_axis_x)
-	    initial_rotation = Matrix.rotate_create(zero, zero, one, extrude_xy_angle)
-	if tracing_detail >= 3:
-	    print("{0}initial_rotation matrix=".format(indent))
-	    print("{0}".format(initial_rotation))
-
-	# Compute the *plane_change*:
-	degrees0 = Angle()
-	plane_change = Matrix.identity()
-	if z_axis.distance(extrude_direction) <= L(mm=0.0000001):
-	    rotate_axis = z_axis
-	    rotate_angle = degrees0
-	    plane_change = Matrix.identity()
-	else:
-	    # Yes, we need to rotate aound the *rotate_axis* by *rotate_angle*:
-	    rotate_axis = z_axis.cross_product(extrude_direction).normalize()
-	    rotate_angle = z_axis.angle_between(extrude_direction)
-	    plane_change = Matrix.rotate(rotate_axis.x, rotate_axis.y, rotate_axis.z, rotate_angle)
-	if tracing_detail >= 1:
-	    print("{0}rotate_axis={1:m} rotate_angle={2:d}".
-	      format(indent, rotate_axis, rotate_angle))
-	if tracing_detail >= 3:
-	    print("{0}plane_change matrix=".format(indent))
-	    print("{0}".format(plane_change))
-
-	# Compute the *user_rotate* matrix:
-	if rotate == degrees0:
-	    user_rotate = Matrix.identity()
-	else:
-	    user_rotate = Matrix.rotate_create(
-	      extrude_direction.x, extrude_direction.y, extrude_direction.z, rotate)
-	if tracing_detail >= 3:
-	    print("{0}user_rotate matrix=".format(indent))
-	    print("{0}".format(user_rotate))
-
-	# Compute the *final_translation* matrix:
-	final_translation = Matrix.translate_create(center.x, center.y, center.z)
-	if tracing_detail >= 3:
-	    print("{0}final_translation matrix=".format(indent))
-	    print("{0}".format(final_translation))
-
-	# In order to compute the bounding box, to translate the *outer_contour* to both
-	# a *start* and *end* using two matrices
-	start_translation = Matrix.translate_create(start.x, start.y, start.z)
-	end_translation = Matrix.translate_create(end.x, end.y, end.z)
-
-	steps_2_4 = initial_rotation * plane_change * user_rotate
-	start_matrix = steps_2_4 * start_translation
-	end_matrix = steps_2_4 * end_translation
-	if tracing_detail >= 3:
-	    print("{0}start_translation=".format(indent))
-	    print("{0}".format(start_translation))
-	    print("{0}end_end_translation=".format(indent))
-	    print("{0}".format(end_translation))
-	    print("{0}steps_2_4=".format(indent))
-	    print("{0}".format(steps_2_4))
-	    print("{0}start_matrix=".format(indent))
-	    print("{0}".format(start_matrix))
-	    print("{0}end_matrix=".format(indent))
-	    print("{0}".format(end_matrix))
+	    print("{0}before start_contour_transform={1:s}".format(indent, start_contour_transform))
 
 	# Extract the *outer_contour*:
 	outer_contour = contours[0]
+	outer_contour._project(top_surface_transform, tracing + 1)
+
+	if tracing_detail >= 3:
+	    print("{0}middle1 start_contour_transform={1:s}".
+	      format(indent, start_contour_transform))
 
 	# Now we can expand the *bounding_box* by visiting each *bend* in *bends*:
 	bounding_box = self._bounding_box
 	bends = outer_contour._bends_get()
 	for bend in bends:
 	    # Compute the mapped bend points:
-	    point = bend._point_get()
-	    bend_start_point = start_matrix.point_multiply(point)
-	    bend_end_point = end_matrix.point_multiply(point)
+	    projected_point = bend._projected_point_get()
+	    bend_start_point = start_contour_transform * projected_point
+	    bend_end_point = end_contour_transform * projected_point
 	    if tracing_detail >= 2:
 		print("{0}point={1:i} bend_start_point={2:i} bend_end_point={3:i}".
 		  format(indent, point, bend_start_point, bend_end_point))
@@ -7513,9 +7653,11 @@ class Part:
 	    # Now expand *bounding_box*:
 	    bounding_box.point_expand(bend_start_point)
 	    bounding_box.point_expand(bend_end_point)
-	if tracing >= 0:
+	if tracing_detail >= 1:
 	    print("{0}bounding_box={1:i}".format(indent, bounding_box))
-	    
+	if tracing_detail >= 3:
+	    print("{0}after start_contour_transform={1:s}".format(indent, start_contour_transform))
+
 	part._dowel_x = zero
 	part._dowel_y = zero
 
@@ -7523,28 +7665,24 @@ class Part:
 	ezcad = self._ezcad
 	assert isinstance(ezcad, EZCAD3)
 	if ezcad._mode == EZCAD3.STL_MODE:
-	    if tracing >= 0:
+	    if tracing_detail >= 1:
 		print("{0}==>Part.extrude:STL".format(indent))
 	    # Set up the transform and extrude:
             lines = self._scad_union_lines
-	    pad = " " * 6
+	    pad = ' ' * 6
 
-	    # Now do the linear extrude operation.  Openscad is weird in the operations
-	    # are done in reverse order:
+	    lines.append("{0}// extrude('{1}', {2}, {3}, {4:m}, {5:m}, {6:m}, {7:m}, {8:d})".
+	      format(pad, comment, material, color, start, start_extra, end, end_extra, rotate))
+
+	    scad_lines = start_contour_transform._scad_lines_get()
+	    if tracing >= 0:
+		print("{0}start_contour_transform={1:s}".format(indent, start_contour_transform))
+	    for scad_line in scad_lines:
+		lines.append("{0}{1}".format(pad, scad_line))
+
 	    lines.append(
-		"{0}translate([ {1:m}, {2:m}, {3:m} ]) // Translate center to correct location".
-		format(pad, center.x, center.y, center.z))
-	    if rotate_angle != degrees0:
-		lines.append(
-		  "{0}rotate(v=[ {1:m}, {2:m}, {3:m} ], a={4:d}) // Change the plane".
-		  format(pad, rotate_axis.x, rotate_axis.y, rotate_axis.z, rotate_angle))
-	    if extrude_xy_angle != degrees0:
-		lines.append(
-		  "{0}rotate(v=[ 0, 0, 1 ], a={1:d}) // Rotate the extrusion around the Z axis".
-		  format(pad, extrude_xy_angle))
-	    lines.append(
-	      "{0}translate([ 0, 0, {1:m} ]) // Center the extrusion at the orgin".
-	      format(pad, -height/2))
+	      "{0}translate([ 0, 0, {1:m} ]) // Put top of extrusion at origin".
+	      format(pad, -height))
             lines.append(
 	      "{0}linear_extrude(height = {1:m}, convexity=10)".format(pad, height))
 	    
@@ -7596,8 +7734,8 @@ class Part:
             lines.append("{0}); // polygon".format(pad))
 
 	    # Wrap up any *tracing*:
-	    if tracing >= 0:
-		print("{0}==>Part.extrude:STL".format(indent))
+	    if tracing_detail >= 1:
+		print("{0}<==Part.extrude:STL".format(indent))
 
 	# Perform any requested tracing;
 	if tracing >= 0:
@@ -8494,164 +8632,34 @@ class Part:
 	stl_mode = (ezcad._mode == EZCAD3.STL_MODE)
 
 	if stl_mode:
-	    position = part._position
-
-	    contour._project(position, tracing + 1)
+	    # Perform all of the *contour* massaging:
+	    top_surface_transform = part._top_surface_transform
+	    contour._project(top_surface_transform, tracing + 1)
 	    contour._inside_bends_identify(tracing + 1)
 	    contour._radius_center_and_tangents_compute(tracing + 1)
 
-	    scad_difference_lines = part._scad_difference_lines
-	    # A temporary hack for debugging is to actually show the contour removal in the union:
-	    #scad_difference_lines = part._scad_union_lines
+	    # Output the *top_surface_transform_reverse* to *differenct_lines*:
+	    difference_lines = part._scad_difference_lines
+	    pad = ' ' * 4
+	    top_surface_transform_reverse = top_surface_transform.reverse()
+            scad_lines = top_surface_transform_reverse._scad_lines_get()
+	    for scad_line in scad_lines:
+		difference_lines.append("{0}{1}".format(pad, scad_line))
 
-	    # Grab *bends* and compute the *bends_size*:
-	    bends = contour._bends_get()
-            bends_size = len(bends)
-
-	    # Compute the bounds of a box that will enclose the contour:
-	    for index, bend in enumerate(bends):
-		point = bend._projected_point_get()
-		x = point.x
-		y = point.y
-		z = point.z
-		if index == 0:
-		    x_maximum = x_minimum = x
-		    y_maximum = y_minimum = y
-		    z_maximum = z_minimum = z
-		else:
-		    x_maximum = max(x_maximum, x)
-		    y_maximum = max(y_maximum, y)
-		    z_maximum = max(z_maximum, z)
-	    trim_extra = L(inch=2.0)
-	    x1 = x_minimum - trim_extra
-	    x2 = x_maximum + trim_extra
-	    y1 = y_minimum - trim_extra
-	    y2 = y_maximum + trim_extra
-	    z1 = z_minimum - trim_extra
-	    z2 = z_maximum + trim_extra
-
-	    # Start the linear_extrude:
-	    scad_difference_lines.append("    // Contour {0}".format(contour._name_get()))
-	    scad_difference_lines.append("    translate([0, 0, {0:m}])".format(-z1))
+	    # Output the linear_extrude to *difference_lines*:
+	    difference_lines.append("{0}// Contour {1}".format(pad, contour._name_get()))
 	    height = (end_point - start_point).length()
-	    scad_difference_lines.append("    linear_extrude(height = {0:m}) {{".format(height))
-
-	    # Start outputing the polygon directive:
-	    scad_difference_lines.append("     polygon(")
-            
-	    # We need to create a *contour_points* of points.  This represents the contour
-	    # a polygon of line segements.  Thus, the bend args are represented as a sequence
-	    # of smaller line segments.
-
-	    # First output each *bend_point* in *bends*::
-            contour_pairs = []
-	    contour_is_clockwise = contour._is_clockwise_get()
-	    scad_difference_lines.append("      points = [")
-	    for bend in bends:
-		# Grab some values from *bend*:
-		bend_point = bend._point_get()
-		bend_name = bend._name_get()
-		bend_radius = bend._radius_get()
-		bend_is_inside = bend._is_inside_get()
-		
-		# The *arc_radius* is positive or negative depending upon whether
-		# *contour_is_clocwise* or the *bend_is_inside*:
-		if contour_is_clockwise:
-		    if bend_is_inside:
-			arc_radius = -bend_radius
-		    else:
-			arc_radius = bend_radius
-		else:
-		    if bend_is_inside:
-			arc_radius = bend_radius
-		    else:
-			arc_radius = -bend_radius
-
-		# We are going to sweep out some line segments from *start_angle* to *end_angle*
-		# (which are angle relative to *center*):
-		center = bend._center_get()
-		start_angle = bend._incoming_tangent_angle_get()
-		start_direction = start_angle.xy_direction()
-		end_angle = bend._outgoing_tangent_angle_get()
-		change_angle = end_angle - start_angle
-
-		# Make sure that the *bearing_angle_change* is positive for clockwise sweeps
-		# and negative for counter clockwise sweeps:
-		degrees0 = Angle()
-		degrees360 = Angle(deg=360.0)
-		if change_angle >= degrees0:
-		    if contour_is_clockwise and not bend_is_inside or \
-		     not contour_is_clockwise and bend_is_inside:
-			change_angle -= degrees360
-			if tracing_detail >= 1:
-			    print("{0}decrement".format(indent))
-		elif change_angle < degrees0:
-		    if contour_is_clockwise and bend_is_inside or \
-		      not contour_is_clockwise and not bend_is_inside:
-			if tracing >= 1:
-			    print("{0}increment".format(indent))
-			change_angle += degrees360
-		if tracing_detail >= 0:
-		    print("{0}name='{1}' start_angle={2:d} end_angle={3:d} change_angle={4:d}".
-		      format(indent, bend_name, start_angle, end_angle, change_angle))
-
-		# Now we compute *deta_angle*:
-		arc_radius_mm = arc_radius.millimeters()
-		count = max(4, int(arc_radius_mm))
-		delta_angle = change_angle / float(count - 1)
-		if tracing_detail >= 0:
-		    print("{0}count={1} delta_angle={2:d}".format(indent, count, delta_angle))
-		for index in range(count):
-		    angle = (start_angle + delta_angle * float(index)).normalize()
-		    point = center + angle.xy_direction() * arc_radius_mm
-		    if tracing_detail >= 0:
-			print("{0}[{1}/{2}]:angle={3:d} point={4:i}".
-			  format(indent, index + 1, count, angle, point))
-
-		    scad_difference_lines.append("       [{0:m}, {1:m}], // {2} {3} of {4}".
-		      format(point.x, point.y, bend_name, index + 1, count))
-		    contour_pairs.append( (point, "{0} {1} of {2}".
-		      format(bend_name, index + 1, count) ))
-
-	    # Now tack on the 4 points that enclose the contour with a box:
-	    scad_difference_lines.append("       [{0:m}, {1:m}], // box SW".format(x1, y1))
-	    scad_difference_lines.append("       [{0:m}, {1:m}], // box NW".format(x1, y2))
-	    scad_difference_lines.append("       [{0:m}, {1:m}], // box NE".format(x2, y2))
-	    scad_difference_lines.append("       [{0:m}, {1:m}]  // SE".format(x2, y1))
-	    scad_difference_lines.append("      ],")
-
-	    # Now we output the outermost path the encloses the contour:
-	    contour_pairs_size = len(contour_pairs)
-	    scad_difference_lines.append("      paths = [")
-	    scad_difference_lines.append("       [ // box path")
-	    scad_difference_lines.append("        {0}, // SW box".format(contour_pairs_size))
-	    scad_difference_lines.append("        {0}, // NW box".format(contour_pairs_size + 1))
-	    scad_difference_lines.append("        {0}, // NE box".format(contour_pairs_size + 2))
-	    scad_difference_lines.append("        {0}  // SE box".format(contour_pairs_size + 3))
-	    scad_difference_lines.append("       ], // box path")
-
-	    # Now we output the contour path:
-	    scad_difference_lines.append("       [ //contour_path")
-	    comma = ","
-            for index, contour_pair in enumerate(contour_pairs):
-		contour_point = contour_pair[0]
-		contour_text = contour_pair[1]
-		if index >= contour_pairs_size - 1:
-		    comma = ""
-		scad_difference_lines.append("        {0}{1} // {2}".
-		  format(index, comma, contour_text))
-	    scad_difference_lines.append("       ] // contour path")
-	    scad_difference_lines.append("      ] // paths")
-	    scad_difference_lines.append("     ); // polygon")
-
-	    scad_difference_lines.append("    } // linear_extrude")
+	    difference_lines.append("{0}translate([0, 0, {1:m}])".format(pad, -height))
+	    difference_lines.append("{0}linear_extrude(height = {1:m}) {{".format(pad, height))
+	    contour._scad_lines_polygon_append(difference_lines, pad, True, tracing + 1)
+	    difference_lines.append("{0}}} // linear_extrude".format(pad))
 
 	# Do any requested CNC generation:
 	if cnc_mode:
 	    # Project all of the points in *contour* onto a plane normal to *projection_axis*
 	    # and then rotate that plane to be the X/Y plane:
-	    position = part._position
-	    contour._project(position, tracing + 1)
+	    top_surface_transform = part._top_surface_transform
+	    contour._project(top_surface_transform, tracing + 1)
 
 	    # The returned value from *_smallest_inner_diameter_compute*() will be either
 	    # negative (for no smallest inner corner radius), or positive for the smallest
@@ -14917,6 +14925,11 @@ class Transform:
 
 	return P(translated_x, translated_y, translated_z)
 
+    def _scad_lines_get(self):
+	""" *Transform*: Return the scad lines for the *Transform* object (i.e. *self*). """
+
+	return self._forward_scad_lines
+
     @staticmethod
     def _zero_fix(value):
 	""" *Transform*: Return *value* rounding small values to zero and ensure that there
@@ -14931,19 +14944,25 @@ class Transform:
     def reverse(self):
 	""" *Transform*: Return the reverse of the *Transform* object (i.e. *self*). """
 
+	assert len(self._forward_scad_lines) == len(self._reverse_scad_lines)
+
 	result = Transform()
 	result._forward_matrix = self._reverse_matrix
 	result._reverse_matrix = self._forward_matrix
 	result._forward_scad_lines = self._reverse_scad_lines
 	result._reverse_scad_lines = self._forward_scad_lines
+
+	assert len(result._forward_scad_lines) == len(result._reverse_scad_lines)
+
 	return result
 
-    def rotate(self, axis, angle):
+    def rotate(self, comment, axis, angle):
 	""" *Transform*: Return a rotation of the *Transform* object (i.e. *self*) rotated
-	    by *angle* around *axis*.
+	    by *angle* around *axis*.  *comment* shows up in the .scad file
 	"""
 
 	# Verify argument_types:
+	assert isinstance(comment, str)
 	assert isinstance(axis, P)
 	assert isinstance(angle, Angle)
 
@@ -15015,23 +15034,130 @@ class Transform:
 
 	    # Create the new transform *result*:
 	    result = Transform()
-	    result._previous = self
 	    result._forward_matrix = self._forward_matrix.dot(forward_matrix)
 	    result._reverse_matrix = numpy.linalg.inv(result._forward_matrix)
-	    result._forward_scad_lines =                                            \
-	      ("rotate(a={0:d}, v=[{1}, {2}, {3}])".format( angle, nx, ny, nz), ) + \
-	      self._forward_scad_lines
-	    result._reverse_scad_lines = self._reverse_scad_lines +                 \
-	      ("rotate(a={0:d}, v=[{1}, {2}, {3}])".format(-angle, nx, ny, nz), )
+	    assert len(result._forward_scad_lines) == len(result._reverse_scad_lines)
+
+	    forward_scad_line = \
+	      ("rotate(a={0:d}, v=[{1}, {2}, {3}]) //F: {4}".format( angle, nx, ny, nz, comment), )
+	    reverse_scad_line = \
+	      ("rotate(a={0:d}, v=[{1}, {2}, {3}]) //R: {4}".format(-angle, nx, ny, nz, comment), )
+	    result._forward_scad_lines = forward_scad_line + self._forward_scad_lines
+	    result._reverse_scad_lines = self._reverse_scad_lines + reverse_scad_line
 
 	return result
 
-    def translate(self, dx_dy_dz):
-	""" Transform*: Perform a translate of the *Transform* object (i.e. *self*) by *dx_dy_dz*.
+    @staticmethod
+    def top_surface(comment, start, end, rotate, tracing = -1000000):
+	""" *Transform*: Compute the transform to map *start* - *end* vector to start
+	    at the origin and with pointing downwards along the z-axis.  A final
+	    rotation of *rotate* is performed at the end.
 	"""
 
 	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+	assert isinstance(rotate, Angle)
+
+	# Perform any requested *tracing*:
+	#tracing = 0
+	tracing_detail = -1
+	if tracing >= 0:
+	    tracing_detail = 1
+	    indent = ' ' * tracing
+	    print("{0}=>Transform.top_surface('{1}', {2:i}, {3:i}, {4:d})". \
+	      format(indent, comment, start, end, rotate))
+
+	# Some constants:
+	epsilon = L(mm=.0000001)
+	zero = L()
+	one = L(mm=1.0)
+	z_axis = P(zero, zero, one)
+	negative_z_axis = -z_axis
+	degrees0 = Angle()
+	
+	# Start with the identity *transform*:
+	transform = Transform()
+
+	# Move *start* down to origin:
+	transform = transform.translate("{0}: start to origin".format(comment), -start)
+	if tracing_detail >= 2:
+	    print("{0}translate_transform_f={1:s}".format(indent, transform))
+	if tracing_detail >= 3:
+	    print("{0}translate_transform_r={1:s}\n".format(indent, transform.reverse()))
+
+	direction_axis = end - start
+	direction = direction_axis.normalize()
+	if tracing_detail >= 1:
+	    print("{0}direction={1:m}".format(indent, direction))
+	if direction.distance(negative_z_axis).absolute() <= epsilon:
+	    # We are already pointed in the negative Z axis direction:
+	    pass
+	elif direction.distance(z_axis).absolute() <= epsilon:
+	    # We are poinnted in the Z axis direction, just rotate by 180 degrees:
+	    y_axis = P(zero, one, zero)
+	    degrees180 = Angle(deg=180.0)
+	    transform = transform.rotate("{0}: z-axis flip".format(comment), y_axis, degrees180)
+	else:
+	    # We are pointed in some other direction:
+
+	    # Yes, we need to rotate aound the *rotate_axis* by *rotate_angle*:
+	    if tracing_detail >= 3:
+		print("{0}negative_z_axis={1:i} direction_axis{2:i}".
+		  format(indent, negative_z_axis, direction_axis))
+	    #plane_change_axis = negative_z_axis.cross_product(direction_axis).normalize()
+	    plane_change_axis = direction_axis.cross_product(negative_z_axis).normalize()
+	    rotate_angle = negative_z_axis.angle_between(direction_axis)
+	    if tracing_detail >= 1:
+		print("{0}plane_change_axis={1:m} rotate_angle={2:d}".
+		  format(indent, plane_change_axis, rotate_angle))
+	    transform = \
+	      transform.rotate("{0}: plane change".format(comment), plane_change_axis, rotate_angle)
+	    if tracing_detail >= 2:
+		print("{0}plane_change transform_f={1:s}".format(indent, transform))
+	    if tracing_detail >= 3:
+		print("{0}plane_change transform_r={1:s}\n".format(indent, transform.reverse()))
+
+	    # For extrusions, we want to be sure that the contour is aligned with
+	    # the plane change.  So we project the *direction_axis* onto the the
+	    # X/Y plane and rotate to the projected direction:
+	    direction_x = direction_axis.x
+	    direction_y = direction_axis.y
+	    pre_rotate_angle = direction_y.arc_tangent2(direction_x)
+	    assert len(transform._forward_scad_lines) == len(transform._reverse_scad_lines)
+	    transform = \
+	      transform.rotate("{0}: pre-rotate".format(comment), z_axis, pre_rotate_angle)
+	    assert len(transform._forward_scad_lines) == len(transform._reverse_scad_lines)
+	    if tracing_detail >= 2:
+		print("{0}pre_rotate transform_f={1:s}".format(indent, transform))
+	    if tracing_detail >= 3:
+		print("{0}pre_rotate transform_r={1:s}\n".format(indent, transform.reverse()))
+
+	# Finally, perform the user requested *rotate*:
+	transform = transform.rotate("{0}: user rotate".format(comment), z_axis, rotate)
+	if tracing_detail >= 2:
+	    print("{0}user_rotate transform_f={1:s}".format(indent, transform))
+	if tracing_detail >= 2:
+	    print("{0}user_rotate transform_r={1:s}\n".format(indent, transform.reverse()))
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=Transform.top_surface('{1}', {2:i}, {3:i}, {4:d})=>{5:s}".
+	      format(indent, comment, start, end, rotate, transform))
+
+	return transform
+
+    def translate(self, comment, dx_dy_dz):
+	""" Transform*: Perform a translate of the *Transform* object (i.e. *self*) by *dx_dy_dz*.
+	    *comment* will show up in the .scad file.
+	"""
+
+	# Verify argument types:
+	assert isinstance(comment, str)
 	assert isinstance(dx_dy_dz, P)
+
 
 	# Extract *dx*, *dy*, and *dz*:
 	zf = Transform._zero_fix
@@ -15066,14 +15192,15 @@ class Transform:
 
 	    # Now we can create the new *result*:
 	    result = Transform()
-	    result._previous = self
 	    result._forward_matrix = self._forward_matrix.dot(forward_matrix)
 	    result._reverse_matrix = numpy.linalg.inv(result._forward_matrix)
-	    result._forward_scad_lines = \
-	      ("translate([{0}, {1}, {2}])".format( dx,  dy,  dz), ) +  self._forward_scad_lines
-	    result._reverse_scad_lines = \
-	      self._reverse_scad_lines + ("translate([{0}, {1}, {2}])".format(ndx, ndy, ndz), )
-
+	    forward_scad_line = \
+	      ("translate([{0}, {1}, {2}]) //F: {3}".format( dx,  dy,  dz, comment), )
+	    reverse_scad_line = \
+	      ("translate([{0}, {1}, {2}]) //R: {3}".format(ndx, ndy, ndz, comment), )
+	    result._forward_scad_lines = forward_scad_line + self._forward_scad_lines
+	    result._reverse_scad_lines = self._reverse_scad_lines + reverse_scad_line
+	
 	return result
 
 class Matrix:

@@ -40,7 +40,6 @@ class Plate(Part):
 	# Start with a solid block of the right dimensions:
 	zero = L()
 
-
 	# Define the extra material to be add to the next block operation:
 	extra = L(inch="1/8")
 	plate.extra_xyz(extra, extra, zero)
@@ -63,17 +62,7 @@ class Plate(Part):
 	corner1 = P(x1, y1, z1)
 	corner2 = P(x4, y4, z2)
 	material = Material("plastic", "acrylic")
-	plate.block(comment = "Initial block of material for plate",
-	  corner1 = corner1,
-	  corner2 = corner2,
-	  material = material,
-	  color = color,
-	  top = "t")
-
-	# Mount up the block:
-	plate.vice_position("Mount Block", plate.t, plate.tn, plate.tw)
-	plate.tooling_plate("Tooling Plate", "2r 2c")
-	plate.tooling_plate_mount("Tooling Plate Mount")
+	plate.block("Plate block", material, color, corner1, corner2, "t", "")
 
 	# Construct the exterior contour:
 	r1 = L(inch="2/16")

@@ -36,18 +36,17 @@ def test_transform():
     assert not identity != identity
 
     # Do a null translate:
-    translate_null = identity.translate(origin)
+    translate_null = identity.translate("null translate", origin)
     assert translate_null == identity
 
     # Do a null rotate:
-    rotate_null = identity.rotate(z_axis, degrees0)
+    rotate_null = identity.rotate("null_rotate", z_axis, degrees0)
     assert rotate_null == identity
 
     # Do a simple *translate* by 1 along the *x_axis*:
-    translate = identity.translate(x_axis)
+    translate = identity.translate("", x_axis)
     matrix_text = "[[1. 0. 0. 0.] [0. 1. 0. 0.] [0. 0. 1. 0.] [1. 0. 0. 1.]]"
-    assert "{0:m}".format(translate) == matrix_text
-    assert "{0:s}".format(translate) ==  "('translate([1.0, 0.0, 0.0])',)"
+    assert "{0:s}".format(translate) == "('translate([1.0, 0.0, 0.0]) //F: ',)"
     assert translate * origin == x_axis
     assert translate * x_axis == P(two, zero, zero)
 
@@ -56,22 +55,23 @@ def test_transform():
     assert translate_reverse * P(two, zero, zero) == x_axis
     assert translate_reverse * x_axis == origin
     assert translate_reverse * P(two, zero, zero) == x_axis
-    assert "{0:s}".format(translate_reverse) == "('translate([-1.0, 0.0, 0.0])',)"
+    assert "{0:s}".format(translate_reverse) == "('translate([-1.0, 0.0, 0.0]) //R: ',)"
 
     # Do a simple rotate around the Z axis:
-    rotate = identity.rotate(z_axis, degrees90)
+    rotate = identity.rotate("", z_axis, degrees90)
     matrix_text = "[[0. 1. 0. 0.] [-1. 0. 0. 0.] [0. 0. 1. 0.] [0. 0. 0. 1.]]"
     assert "{0:m}".format(rotate) == matrix_text
-    assert "{0:s}".format(rotate) == "('rotate(a=90.0, v=[0.0, 0.0, 1.0])',)"
+    assert "{0:s}".format(rotate) == "('rotate(a=90.0, v=[0.0, 0.0, 1.0]) //F: ',)"
     assert rotate * x_axis == y_axis
 
     # Now make sure we can get back from *rotate_z_axis*:
     rotate_reverse = rotate.reverse()
     assert rotate_reverse * y_axis == x_axis
-    assert "{0:s}".format(rotate_reverse) == "('rotate(a=-90.0, v=[0.0, 0.0, 1.0])',)"
+    assert "{0:s}".format(rotate_reverse) == "('rotate(a=-90.0, v=[0.0, 0.0, 1.0]) //R: ',)"
 
     # Do a translate and then a rotate:
-    translate_rotate = identity.translate(x_axis).rotate(z_axis, degrees90)
+    translate_rotate = \
+      identity.translate("x_axis translate 2", x_axis).rotate("rotate z_axis 2", z_axis, degrees90)
     #print("translate_rotate={0:m}".format(translate_rotate))
     translate_rotate_p = translate_rotate * x_axis
     #print("translate_rotate_p={0:m}".format(translate_rotate_p))
@@ -84,7 +84,8 @@ def test_transform():
     scad_file_write("translate_rotate.scad", translate_rotate, x_axis)
 
     # Do a rotate then a translate:
-    rotate_translate = identity.rotate(z_axis, degrees90).translate(x_axis)
+    rotate_translate = \
+      identity.rotate("rotate z_axis 3", z_axis, degrees90).translate("x_axis translate 3", x_axis)
     #print("rotate_translate={0:m}".format(translate_rotate))
     rotate_translate_p = rotate_translate * x_axis
     #print("rotate_translate_p={0:m}".format(translate_rotate_p))
@@ -119,7 +120,7 @@ def scad_file_write(file_name, transform, point):
 	scad_file.write("\n")
 
     # The final translate places the *point*:
-    scad_file.write("translate([{0}, {1}, {2}])".format(x, y, z))
+    scad_file.write("translate([{0}, {1}, {2}])\n".format(x, y, z))
     scad_file.write("color(\"green\", 1)\n")
     scad_file.write("cube([.1, .1, .1], center = true);\n")
 
@@ -128,13 +129,13 @@ def scad_file_write(file_name, transform, point):
 	scad_file.write(scad_line)
 	scad_file.write("\n")
 
-    # Now we output the *forward_scad_lines* "second"
+    # Now we output the *forward_scad_lines* "second":
     for scad_line in transform._forward_scad_lines:
 	scad_file.write(scad_line)
 	scad_file.write("\n")
 
     # The final translate places the *point* come "third":
-    scad_file.write("translate([{0}, {1}, {2}])".format(x, y, z))
+    scad_file.write("translate([{0}, {1}, {2}])\n".format(x, y, z))
     scad_file.write("color(\"blue\", 1)\n")
     scad_file.write("cube([.1, .1, .1], center = true);\n")
 

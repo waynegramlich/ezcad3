@@ -18,55 +18,22 @@ class Tube(Part):
     def construct(self):
 	""" *Tube*: Construct the *Base* object (i.e. *self*). """
 
-	# Set *debug* to *True* to trace:
-	debug = False
-	#debug = True
-	if debug:
-	    print("=>Base.construct(*)")
-
-	# Use *tube* instead of *self*:
-	tube = self
+	# Some constants:
+	zero = L()
+	degrees0 = Angle()
 
 	# Perform the extrusion:
-	zero = L()
-	thickness = L(inch="1/8")
-	dx = L(inch=1.0)
-	dy = dx
-
-	x1 = -dx/2
-	x2 = x1 + thickness
-	x3 = -x2
-	x4 = -x1	
-
-	y1 = x1
-	y2 = x2
-	y3 = x3
-	y4 = x4
-
-	r = zero
-
-	outer_contour = Contour("outer tube contour")
-	outer_contour.bend_append("outer SW", P(x1, y1, zero), r)
-	outer_contour.bend_append("outer NW", P(x1, y4, zero), r)
-	outer_contour.bend_append("outer NE", P(x4, y4, zero), r)
-	outer_contour.bend_append("outer SE", P(x4, y1, zero), r)
-
-	inner_contour = Contour("inner tube contour")
-	inner_contour.bend_append("inner SW", P(x2, y2, zero), r)
-	inner_contour.bend_append("inner NW", P(x2, y3, zero), r)
-	inner_contour.bend_append("inner NE", P(x3, y3, zero), r)
-	inner_contour.bend_append("inner SE", P(x3, y2, zero), r)
-	
-	contours = [outer_contour, inner_contour]
-
 	xy = L(inch=2.0)
-	start = P(-xy,  xy, zero)
-	end =   P( xy, -xy, zero)
-	degrees0 = Angle()
+	height = L(inch=1.0)
+	width = height
+	start = P( -xy, zero, zero)
+	end =   P(zero, zero, zero)
 	material = Material("aluminum", "")
 	color = Color("green")
-
-	tube.extrude("rectangular tube", material, color, contours, start, end, degrees0)
+	thickness = L(inch="1/8")
+	
+	self.rectangular_tube_extrude("rectangular tube", material, color,
+	  width, height, thickness, start, zero, end, zero, degrees0)
 	  
 if __name__== "__main__":
     ezcad = EZCAD3(0)
