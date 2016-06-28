@@ -2602,8 +2602,13 @@ class Color:
     def __format__(self, format):
 	""" *Color*: Return formatted version of *self*. """
 
-	return "[r={0:.2f}, g={1:.2f}, b={2:.2f}, a={3:.2f}]".format(
-	  self.red, self.green, self.blue, self.alpha)
+	if format == "s":
+	    result = "[{0:.2f}, {1:.2f}, {2:.2f}, {3:.2f}]".format(
+	      self.red, self.green, self.blue, self.alpha)
+	else:
+	    result = "[r={0:.2f}, g={1:.2f}, b={2:.2f}, a={3:.2f}]".format(
+	      self.red, self.green, self.blue, self.alpha)
+	return result
 
 # These classes are unused???
 
@@ -3019,7 +3024,8 @@ class Contour:
         contour_pairs = []
 	contour_is_clockwise = contour._is_clockwise_get()
 	scad_lines.append("{0}  points = [".format(pad))
-	for bend in bends:
+	bends_size = len(bends)
+	for bend_index, bend in enumerate(bends):
 	    # Grab some values from *bend*:
 	    bend_point = bend._projected_point_get()	# Should this be _projected_bend_point?
 	    bend_name = bend._name_get()
@@ -3073,6 +3079,7 @@ class Contour:
 	    delta_angle = change_angle / float(count - 1)
 	    if tracing_detail >= 0:
 		print("{0}count={1} delta_angle={2:d}".format(indent, count, delta_angle))
+	    comma = ","
 	    for index in range(count):
 		angle = (start_angle + delta_angle * float(index)).normalize()
 		point = center + angle.xy_direction() * arc_radius_mm
@@ -3080,8 +3087,10 @@ class Contour:
 		    print("{0}[{1}/{2}]:angle={3:d} point={4:i}".
 		      format(indent, index + 1, count, angle, point))
 
-		scad_lines.append("{0}  [{1:m}, {2:m}], // {3} {4} of {5}".
-		  format(pad, point.x, point.y, bend_name, index + 1, count))
+		if bend_index + 1 == bends_size and index + 1 == count and not box_enclose:
+		    comma = ""
+		scad_lines.append("{0}   [{1:m}, {2:m}]{3} // {4} {5} of {6}".
+		  format(pad, point.x, point.y, comma, bend_name, index + 1, count))
 		contour_pairs.append( (point, "{0} {1} of {2}".
 		  format(bend_name, index + 1, count) ))
 
@@ -3091,7 +3100,9 @@ class Contour:
 	    scad_lines.append("{0}   [{1:m}, {2:m}], // box NW".format(pad, x1, y2))
 	    scad_lines.append("{0}   [{1:m}, {2:m}], // box NE".format(pad, x2, y2))
 	    scad_lines.append("{0}   [{1:m}, {2:m}]  // box SE".format(pad, x2, y1))
-	    scad_lines.append("{0}  ],".format(pad))
+
+	# Close off all the points:
+	scad_lines.append("{0}  ],".format(pad))
 
 	# Now we output the outermost path the encloses the contour:
 	contour_pairs_size = len(contour_pairs)
@@ -7573,8 +7584,8 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*
-	if part._ezcad._mode == EZCAD3.STL_MODE:
-	    tracing = 0
+	#if part._ezcad._mode == EZCAD3.STL_MODE:
+	#    tracing = 0
 	if tracing == -1000000:
 	    tracing = part._tracing
 	tracing_detail = -1
@@ -9353,6 +9364,104 @@ class Part:
 	if tracing >= 0:
 	    print("{0}=>hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
 	      format(indent, self._name, comment, diameter, start, stop, flags))
+
+    def lathe(self, comment, material, color, start, end, contour, faces, tracing = -1000000):
+	""" *Part*: Add a a circular symetry object to the *Part* object (i.e. *self*).
+	    that starts at *start* and extends towards *end*.  The part is made out of
+	    *material* and is rendered in *color*.  *faces* specifies how many faces around
+	    the circle to produce.  A *faces* value of 0 will cause a reasonable number
+	    of faces to be produced.  The *contour* object specifies the edge profile
+	    for the lathe along the Y axis, where all X coordinates specify the radius
+	    for the profile.  All X coordinates must be positive, since negative radii
+	    are not allowed.  *start* is attached to top-most point in Y direction.
+	    Please note, that the object is *NOT* streached to match *end*; *end* only
+	    specifies the direction of the lathe contour from *start*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(material, Material)
+	assert isinstance(color, Color)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+	assert isinstance(contour, Contour)
+	assert isinstance(faces, int)
+	assert isinstance(tracing, int)
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Perform any requested *tracing*:
+	#tracing = 0
+	tracing_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    tracing_detail = 3
+	    print("{0}=>Part.lathe('{1}', '{2}', {3}, {4:i}, {5:i}, *, {6})".
+	      format(indent, self._name, comment, material, color, start, end, contour, faces))
+
+	part._is_part = True
+	part._color = color
+	part._material = material
+
+	ezcad = part._ezcad
+	mode = ezcad._mode_get()
+	if mode == EZCAD3.STL_MODE:
+	    part._is_part = True
+	    pad = ' ' * 4
+
+	    identity = Transform()
+	    contour._project(identity, tracing + 1)
+	    contour._inside_bends_identify(tracing + 1)
+	    contour._radius_center_and_tangents_compute(tracing + 1)
+
+	    # Define some constants:
+	    zero = L()
+	    degrees0 = Angle(deg=0.0)
+
+	    # Make sure *faces* is reasonable:
+	    if faces <= 0:
+		faces = 16
+	    faces = max(faces, 3)
+
+	    # Find *minimum_y* and *maximim_y* for *contour*:
+	    bends = contour._bends_get()
+	    for index, bend in enumerate(bends):
+		point = bend._projected_point_get()
+		x = point.x
+		y = point.y
+		assert x >= zero
+		if index == 0:
+		    y_minimum = y_maximum = y
+		else:
+		    y_minimum = min(y_minimum, y)
+		    y_maximum = max(y_maximum, y)
+	    if tracing >= 0:
+		print("{0}y_minimum={1:i} y_maximum={2:i}".format(indent, y_minimum, y_maximum))
+
+	    # Do the reverse transform:
+	    union_lines = part._scad_union_lines
+	    top_surface_transform = Transform.top_surface("lathe", start, end, degrees0)
+	    part._top_surface_transform = top_surface_transform
+	    top_surface_transform_reverse = top_surface_transform.reverse()
+	    scad_lines = top_surface_transform_reverse._scad_lines_get()
+	    for scad_line in scad_lines:
+		union_lines.append("{0}{1}".format(pad, scad_line))
+
+	    # This is a little stange.  The openscad rotate_extude command takes a profile
+	    # in the Y direction and renders it in the Z direction.  Hence, the translate
+	    # below uses -*y_maximum* to translate down the Z axis:
+	    union_lines.append("{0}translate([0, 0, {1:m}])".format(pad, -y_maximum))
+
+	    # Now we can do a rotate_extrude of the appropriate contour polygon:
+	    union_lines.append("{0}color({1:s})".format(pad, color))
+	    union_lines.append("{0}rotate_extrude($fn={1})".format(pad, faces))
+	    contour._scad_lines_polygon_append(union_lines, pad, False, tracing + 1)
+
+	# Wrap-up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part.lathe('{1}', '{2}', {3}, {4:i}, {5:i}, *, {6})".
+	      format(indent, self._name, comment, material, color, start, end, contour, faces))
 
     def length(self, length_path):
 	""" Part dimensions: Return the {Angle} associated with {length_path}
@@ -15038,10 +15147,12 @@ class Transform:
 	    result._reverse_matrix = numpy.linalg.inv(result._forward_matrix)
 	    assert len(result._forward_scad_lines) == len(result._reverse_scad_lines)
 
-	    forward_scad_line = \
-	      ("rotate(a={0:d}, v=[{1}, {2}, {3}]) //F: {4}".format( angle, nx, ny, nz, comment), )
-	    reverse_scad_line = \
-	      ("rotate(a={0:d}, v=[{1}, {2}, {3}]) //R: {4}".format(-angle, nx, ny, nz, comment), )
+	    forward_scad_line =                               \
+	      ("rotate(a={0:d}, v=[{1}, {2}, {3}]) //F: {4}". \
+	      format( angle, nx, ny, nz, comment), )
+	    reverse_scad_line =                               \
+	      ("rotate(a={0:d}, v=[{1}, {2}, {3}]) //R: {4}". \
+	      format(-angle, nx, ny, nz, comment), )
 	    result._forward_scad_lines = forward_scad_line + self._forward_scad_lines
 	    result._reverse_scad_lines = self._reverse_scad_lines + reverse_scad_line
 
@@ -15098,7 +15209,8 @@ class Transform:
 	    # We are poinnted in the Z axis direction, just rotate by 180 degrees:
 	    y_axis = P(zero, one, zero)
 	    degrees180 = Angle(deg=180.0)
-	    transform = transform.rotate("{0}: z-axis flip".format(comment), y_axis, degrees180)
+	    transform = \
+	      transform.rotate("{0}: z-axis flip".format(comment), y_axis, degrees180)
 	else:
 	    # We are pointed in some other direction:
 
