@@ -2908,7 +2908,7 @@ class Contour:
 	#tracing = 0
 	tracing_detail = -1
 	if tracing >= 0:
-	    tracing_detail = 1
+	    tracing_detail = 3
 	    indent = ' ' * tracing
 	    print("{0}=>Contour._project('{1}', {2:s})".format(indent, self._name, transform))
 
@@ -2921,7 +2921,7 @@ class Contour:
 	    projected_point = P(transformed_point.x, transformed_point.y, zero)
 	    bend._projected_point_set(projected_point)
 	    if tracing_detail >= 2:
-		print("{0}point={1:i} projected_point={2:i} transform={3:s}".
+		print("{0}point={1:m} projected_point={2:m} transform={3:s}".
 		  format(indent, point, projected_point, transform))
 
 	# Remember that we have performed the projection:
@@ -2956,8 +2956,6 @@ class Contour:
 	if tracing >= 0:
 	    print("{0}<=Contour._radius_center_and_tangents_compute('{1}')".
 	      format(' ' * tracing, self._name))
-
-
 
     def _scad_lines_polygon_append(self, scad_lines, pad, box_enclose, tracing = -1000000):
 	""" *Contour*: """
@@ -3391,7 +3389,7 @@ class Operation:
 	assert isinstance(sub_priority, int)
 	assert isinstance(tool, Tool)
 	assert isinstance(order, int) and Operation.ORDER_NONE < order < Operation.ORDER_LAST
-	assert follows is None or isinstance(follows, Operation)
+	assert isinstance(follows, Operation) or follows is None
 	assert isinstance(feed_speed, Speed)
 	assert isinstance(spindle_speed, Hertz)
 
@@ -4236,8 +4234,9 @@ class Operation_Round_Pocket(Operation):
 	manufacturing operation.
     """
 
-    def __init__(self, part, comment, sub_priority, tool, order, follows,
-      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed):
+    def __init__(self, part, comment, sub_priority, tool, order, follows, diameter,
+      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
+      top_surface_transform, tracing):
 	""" *Operation_Round_Pocket* will intitialize an
 	    *Operation_Round_Pocket* object (i.e. *self*) to contain
 	    *part*, *comment*, *sub_priority*, *tool*, *order*, *follows*,
@@ -4258,6 +4257,17 @@ class Operation_Round_Pocket(Operation):
 	assert isinstance(stop, P)
 	assert isinstance(feed_speed, Speed)
 	assert isinstance(spindle_speed, Hertz)
+	assert isinstance(tracing, int)
+	assert isinstance(top_surface_transform, Transform)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(("{0}=>Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
+	      " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12}, {13:rpm}, {14:s})").format(indent,
+	      "Round_Pocket", part._name_get(), comment, sub_priority, tool, order, diameter,
+	      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
+	      top_surface_transform))
 
 	# Initialize superclass:
 	Operation.__init__(self, "Round_Pocket", Operation.KIND_ROUND_POCKET,
@@ -4269,6 +4279,17 @@ class Operation_Round_Pocket(Operation):
 	self.hole_kind = hole_kind
 	self._start = start
 	self._stop = stop
+	self._tracing = tracing
+	self._top_surface_transform = top_surface_transform
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(("{0}<=Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
+	      " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12}, {13:rpm}, {14:s})").format(indent,
+	      "Round_Pocket", part._name_get(), comment, sub_priority, tool, order, diameter,
+	      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
+	      top_surface_transform))
 
     def _cnc_generate(self, tracing):
 	""" *Operation_Round_Pocket*: Generate the CNC G-code for an *Operation_Round_Pocket*
@@ -4282,6 +4303,8 @@ class Operation_Round_Pocket(Operation):
 	round_pocket = self
 
 	# Perform any requested *tracing*:
+	if tracing < 0:
+	    tracing = round_pocket._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Operation_Round_Pocket._cnc_generate('{1}')".
@@ -4292,8 +4315,11 @@ class Operation_Round_Pocket(Operation):
 	diameter = round_pocket._diameter
 	start = round_pocket._start
 	stop = round_pocket._stop
-	assert start.z >= stop.z
 	tool = round_pocket._tool
+
+	top_surface_transform = round_pocket._top_surface_transform
+	mapped_start = top_surface_transform * start
+	mapped_stop = top_surface_transform * stop
 
 	# Compute some values based on *diameter*:
 	maximum_depth = diameter / 3.0
@@ -4320,8 +4346,8 @@ class Operation_Round_Pocket(Operation):
 	if is_laser:
 	    # We just cut a simple circle:
 	    if tracing >= 0:
-		print("{0}start={1:i} stop={2:i}".format(indent, start, stop))
-	    code._dxf_circle(start.x, start.y, radius + tool_radius)
+		print("{0}start={1:i} stop={2:i}".format(indent, mapped_start, mapped_stop))
+	    code._dxf_circle(mapped_start.x, mapped_start.y, radius - tool_radius)
 	else:
 	    # We do all the work to mill out the round_pocket pocket;
 
@@ -6260,7 +6286,10 @@ class Part:
 	    # Flush out all of the pending CNC operations:
 
 	    # Set *cnc_debug* to *True* to trace CNC:
+	    if tracing < 0:
+		tracing = part._tracing
 	    if tracing >= 0:
+		indent = ' ' * tracing
 		print("{0}==>Part._manufacture('{1}'):CNC".format(indent, part._name))
 
 	    # This is where we can disable *cnc_tracing*:
@@ -6733,6 +6762,12 @@ class Part:
 	""" *Part*: Return the priority of the *Part* (i.e. *self*). """
 
 	return self._priority
+
+    def _top_surface_transform_get(self):
+	""" *Part*: Return the top surface *Trasform* object from the *Part* object (i.e. *self*).
+	"""
+
+	return self._top_surface_transform
 
     def _tools_dowel_pin_search(self, tracing):
 	""" *Part*: Find and return a *Tool_Dowel_Pin* object. """
@@ -7605,6 +7640,7 @@ class Part:
 	part._material = material
 	part._color = color
 
+	
 	extrude_axis = end - start
 	extrude_direction = extrude_axis.normalize()
 	start_extra_delta = -start_extra.millimeters() * extrude_direction
@@ -7685,11 +7721,9 @@ class Part:
 	    lines.append("{0}// extrude('{1}', {2}, {3}, {4:m}, {5:m}, {6:m}, {7:m}, {8:d})".
 	      format(pad, comment, material, color, start, start_extra, end, end_extra, rotate))
 
-	    scad_lines = start_contour_transform._scad_lines_get()
 	    if tracing >= 0:
 		print("{0}start_contour_transform={1:s}".format(indent, start_contour_transform))
-	    for scad_line in scad_lines:
-		lines.append("{0}{1}".format(pad, scad_line))
+	    start_contour_transform._scad_lines_append(lines, pad)
 
 	    lines.append(
 	      "{0}translate([ 0, 0, {1:m} ]) // Put top of extrusion at origin".
@@ -8643,25 +8677,30 @@ class Part:
 	stl_mode = (ezcad._mode == EZCAD3.STL_MODE)
 
 	if stl_mode:
+	    degrees0 = Angle(deg=0.0)
+	    top_surface_transform = \
+	      Transform.top_surface("extrude", start_point, end_point, degrees0, tracing + 1)
+	    part._top_surface_transform = top_surface_transform
+
 	    # Perform all of the *contour* massaging:
 	    top_surface_transform = part._top_surface_transform
 	    contour._project(top_surface_transform, tracing + 1)
 	    contour._inside_bends_identify(tracing + 1)
 	    contour._radius_center_and_tangents_compute(tracing + 1)
 
-	    # Output the *top_surface_transform_reverse* to *differenct_lines*:
+	    # Output the *top_surface_transform_reverse* to *difference_lines*:
 	    difference_lines = part._scad_difference_lines
 	    pad = ' ' * 4
 	    top_surface_transform_reverse = top_surface_transform.reverse()
-            scad_lines = top_surface_transform_reverse._scad_lines_get()
-	    for scad_line in scad_lines:
-		difference_lines.append("{0}{1}".format(pad, scad_line))
+	    top_surface_transform_reverse._scad_lines_append(difference_lines, pad)
 
 	    # Output the linear_extrude to *difference_lines*:
+	    extra = L(mm=1.0)
 	    difference_lines.append("{0}// Contour {1}".format(pad, contour._name_get()))
 	    height = (end_point - start_point).length()
-	    difference_lines.append("{0}translate([0, 0, {1:m}])".format(pad, -height))
-	    difference_lines.append("{0}linear_extrude(height = {1:m}) {{".format(pad, height))
+	    difference_lines.append("{0}translate([0, 0, {1:m}])".format(pad, -height - extra))
+	    difference_lines.append("{0}linear_extrude(height = {1:m}) {{".
+	     format(pad, height + 2.0 * extra))
 	    contour._scad_lines_polygon_append(difference_lines, pad, True, tracing + 1)
 	    difference_lines.append("{0}}} // linear_extrude".format(pad))
 
@@ -8888,7 +8927,6 @@ class Part:
 	assert isinstance(end, P)
 	assert isinstance(flags, str)
 	assert isinstance(tracing, int)
-	assert start.z > end.z, "start.z (={0:i}) <= stop.z (={1:i})".format(start.z, end.z)
 
 	# Use *part* instead of *self*:
 	part = self
@@ -8898,7 +8936,7 @@ class Part:
 	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>countersink_hole@('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
+	    print("{0}=>Part.countersink_hole('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
 	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
 	      start, end, flags))
     
@@ -8971,58 +9009,61 @@ class Part:
 		    operation_round_pocket = Operation_Round_Pocket(part, comment,
 		      0, end_mill_tool, Operation.ORDER_END_MILL_ROUND_POCKET, None,
 		      hole_diameter, countersink_diameter, hole_kind, start, end,
-		      end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get())
+		      end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
+		      part._top_surface_transform, tracing + 1)
 		    part._operation_append(operation_round_pocket)
 
 	if mode == EZCAD3.STL_MODE:
-	    # Compute the heights of the drill polygon *z1*, *z2*, *z3*, and *z4*:
-	    # Compute *drill_z_start* and *drill_z_end*:
-	    drill_start_z = start.z + L(inch = 0.020)
+	    drill_start_extra = 0.500
 	    if is_flat_hole or is_tip_hole:
-		drill_end_z = end.z
+		drill_end_extra = 0.0
 	    elif is_through_hole:
-		drill_end_z = end.z - hole_radius - L(inch=0.02)
+		drill_end_extra = hole_radius.millimeters() + 0.500
 	    else:
 		assert False, "Unkown hole type"
 	    if tracing >= 0:
-		print("{0}drill_start_z={1:i} drill_end_z={2:i}".
-		  format(indent, drill_start_z, drill_end_z))
+		print("{0}drill_start_extra={1} drill_end_extra={2}".
+		  format(indent, drill_start_extra, drill_end_extra))
 
 	    lines = part._scad_difference_lines
 	    # For debugging:, set *lines* to *_scad_union_lines*:
 	    #lines = part._scad_union_lines
 
+	    pad = ' ' * 4
+	    lines.append("{0}// countersink_hole('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
+	      format(pad, part._name, comment, hole_diameter, countersink_diameter,
+	      start, end, flags))
+
 	    # Perform the drill with a cylinder:
-	    drill_start = P(start.x, start.y, drill_start_z)
-	    drill_end = P(end.x, end.y, drill_end_z)
-	    part._cylinder(comment + " drill", hole_diameter, hole_diameter, drill_start, drill_end,
-	      lines, 4, False, None, None, tracing + 1)
+	    drill_direction = (end - start).normalize()
+	    drill_start = start - drill_direction * drill_start_extra
+	    drill_end = end + drill_direction * drill_end_extra
+	    
+	    part._scad_cylinder(comment + " drill", hole_diameter, hole_diameter,
+	      drill_start, drill_end, lines, pad, Color("black"), tracing + 1)
 
 	    # Peform any requested countersink with a cone:
 	    if is_countersink:
-		countersink_start_z = start.z + countersink_radius
-		countersink_end_z = start.z - countersink_radius
+		countersink_start_extra = countersink_radius
+		countersink_end_extra = countersink_radius
 		countersink_start_diameter = countersink_diameter * 2
-		countersink_start = P(start.x, start.y, countersink_start_z)
-		countersink_end = P(end.x, end.y, countersink_end_z)
+		countersink_start = start - drill_direction * countersink_start_extra.millimeters()
+		countersink_end = start + drill_direction * countersink_end_extra.millimeters()
 		zero = L()
-		part._cylinder(comment + " countersink", countersink_start_diameter, zero,
-		  countersink_start, countersink_end, lines, 4, False, None, None, tracing + 1)
+		part._scad_cylinder(comment + " countersink", countersink_start_diameter, zero,
+		  countersink_start, countersink_end, lines, pad, Color("black"), tracing + 1)
 
 	if tracing >= 0:
-	    print("{0}<=countersink_hole@('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
+	    print("{0}<=Part.countersink_hole('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
 	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
 	      start, end, flags))
 
-    def _cylinder(self, comment, start_diameter, end_diameter, start, end,
-      lines, scad_indent, is_solid, material, color, tracing):
+    def _scad_cylinder(self,
+      comment, start_diameter, end_diameter, start, end, lines, pad, color, tracing = -1000000):
 	""" *Part*: Generate an open some openscad code the *Part* object (i.e. *self*)
-	    for drawing a cylinder (or cone) that is *start_diameter* on the top and
-	    *end_diameter* on the bottom, that starts at *start* and ends at *end*.
-	    *lines* is the list to which the lines are appended with each line indented
-	    by *scad_indent*.  If *is_solid* is *True* the resulting cylinder/cone with
-	    have a material of *material* and a color of *color*; otherwise *material*
-	    and *color* are *None*.
+	    for drawing a cylinder (or cone) that is *start_diameter* on at *start*
+	    *end_diameter* at *end*.  *lines* is the list to which the lines are
+	    appended with each line prefixed by *pad*.  The cylinder is rendered with *color*.
 	"""    
 
 	# Verify argument types:
@@ -9032,80 +9073,48 @@ class Part:
 	assert isinstance(start, P)
 	assert isinstance(end, P)
 	assert isinstance(lines, list)
-	assert isinstance(scad_indent, int)
-	assert isinstance(is_solid, bool)
-	assert isinstance(material, Material) or material == None
-	assert isinstance(color, Color) or color == None
+	assert isinstance(pad, str)
+	assert isinstance(color, Color)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print(
-	      "{0}=>Part._cylinder('{1}', {2:i}, {3:i}, {4:i}, {5:i}, *, {6}, {7}, '{8}', '{9}')".
-	      format(indent, comment, start_diameter, end_diameter, start, end,
-	      scad_indent, is_solid, material, color))
+	    print("{0}=>Part._cylinder('{1}', '{2}', {3:i}, {4:i}, {5:i}, {6:i}, *, {7}, {8})".
+	      format(indent, self._name, comment,
+	        start_diameter, end_diameter, start, end, pad, color))
 
-	# Compute center axis of the *cylinder*, its *length* and its *center*:
-	zero = L()
-	axis = end - start
-	length = axis.length()
-	half_length = length / 2
-	center = (start + end) / 2
-	assert length > zero, "Cylinder '{0}' has no height".format(comment)
-
-	# If appropriate, we rotate the hole before translation:
-	#rotate_angle = None
-	#orthogonal_axis = None
-	#zero = L()
-	#if axis.x != zero or axis.y != zero:
-	#    # We have to tilt the cylinder.print("axis={0}".format(axis))
-	#    z_axis = P(zero, zero, L(mm=1.0))
-	#    rotate_angle = z_axis.angle_between(axis)
-	#    orthogonal_axis = z_axis.cross_product(axis)
-	#    #print("rotate_angle={0:d}".format(rotate_angle))
-	#    #print("orthogonal_axis={0:m}".format(orthogonal_axis))
-	#elif axis.x == zero and axis.y == zero and axis.z < zero:
-	#    orthogonal_axis = P(L(mm=1.0), zero, zero)
-	#    rotate_angle = Angle(deg=180.0)
-
-	# Update bounding box:
+	# Only do the append in STL mode:
 	if self._ezcad._mode == EZCAD3.STL_MODE:
-	    # Output a comment to see what is going on:
-	    spaces = ' ' * scad_indent
-	    lines.append("{0}// {1}".format(spaces, comment))
 
-	    start_x = start.x
-	    start_y = start.y
+	    # Append to *lines*:
+	    lines.append("{0}// {1} cylinder!".format(pad, comment))
 
-	    # Ouput the color if appropriate:
-	    if is_solid:
-	    	self._scad_color(lines, color, indent = scad_indent)
+	    # Perform the transform:
+	    top_surface_transform = Transform.top_surface(comment, start, end, Angle(deg=0.0))
+	    top_surface_transform_reverse = top_surface_transform.reverse()
+	    top_surface_transform_reverse._scad_lines_append(lines, pad)
 
-	    self._scad_transform(lines, scad_indent, translate=center)
+	    # Compute center axis of the *cylinder*, its *length* and its *center*:
+	    zero = L()
+	    axis = end - start
+	    height = axis.length()
+	    assert height > zero, "Cylinder '{0}' has no height".format(comment)
 
-	    #if sides_angle != Angle():
-	    #	lines.append("{0}rotate(a={1}, v=[0, 0, 1])".
-	    #	  format(spaces, sides_angle))
+	    lines.append("{0}translate([0, 0, {1:m}])".format(pad, -height))
 
             r1 = end_diameter / 2
-	    #if r1 > zero:
-	    #	r1 += adjust
 	    r2 = start_diameter / 2
-	    #if r2 > zero:
-	    #	r2 += adjust
-
 	    assert r1 + r2 > zero, \
 	      "sd={0:i} ed={1:i} r1={2:i} r2={3:i}".format(start_diameter, end_diameter, r1, r2)
+
             sides = 12
 	    if r1 == r2:
-		command = \
-		  "{0}  cylinder(r={1:m}, h={2:m}, center = true, $fn={3});". \
-		  format(spaces, r1, length, sides)
+		command = "{0}cylinder(r={1:m}, h={2:m}, $fn={3}, $fa=12);".format(
+		  pad, r1, height, sides)
 	    else:
-		command = ("{0}  cylinder(r1={1:m}, r2={2:m}, h={3:m}," +
-		  " center = true, $fn={4});").format(spaces,
-		  r1, r2, length, sides)
+		command = "{0}cylinder(r1={1:m}, r2={2:m}, h={3:m}, $fn={4}, $fa=12);".format(
+		  pad, r1, r2, height, sides)
 	    if tracing >= 0:
 		print("{0}Part._cylinder: r1={1} r2={2} command='{3}'".
 		  format(indent, r1, r2, command))
@@ -9114,11 +9123,12 @@ class Part:
 	    # origin.  It is processed before either rotation or translation:
             lines.append(command)
 	
+
+	# Wrap up any *tracing*:
 	if tracing >= 0:
-	    print(
-	      "{0}<=Part._cylinder('{1}', {2:i}, {3:i}, {4:i}, {5:i}, *, {6}, {7}, '{8}', '{9}')".
-	      format(indent, comment, start_diameter, end_diameter, start, end,
-	      scad_indent, is_solid, material, color))
+	    print("{0}<=Part._cylinder('{1}', '{2}', {3:i}, {4:i}, {5:i}, {6:i}, *, {7}, {8})".
+	      format(indent, self._name, comment,
+	        start_diameter, end_diameter, start, end, pad, color))
 
     def done(self):
 	""" Part (tree_mode): Mark {self} as done.  {self} is
@@ -9335,7 +9345,7 @@ class Part:
 	      format(color, self.transparency, material))
 	    xml_stream.write(' Comment="{0}"/>\n'.format(self.name))
 
-    def hole(self, comment, diameter, start, stop, flags):
+    def hole(self, comment, diameter, start, stop, flags, tracing = -1000000):
 	""" *Part*:  Put a *diameter* hole long the axis from *start* down to *stop*
 	    into the *Part* object (i.e. *self*).  *comment* will show up in any
 	    generated RS-274 code or error messages:
@@ -9347,9 +9357,11 @@ class Part:
 	assert isinstance(start, P)
 	assert isinstance(stop, P)
 	assert isinstance(flags, str)
+	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
-	tracing = self._tracing
+	if tracing == -1000000:
+	    tracing = self._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
@@ -9444,9 +9456,7 @@ class Part:
 	    top_surface_transform = Transform.top_surface("lathe", start, end, degrees0)
 	    part._top_surface_transform = top_surface_transform
 	    top_surface_transform_reverse = top_surface_transform.reverse()
-	    scad_lines = top_surface_transform_reverse._scad_lines_get()
-	    for scad_line in scad_lines:
-		union_lines.append("{0}{1}".format(pad, scad_line))
+	    top_surface_transform_reverse._scad_lines_append(union_lines, pad)
 
 	    # This is a little stange.  The openscad rotate_extude command takes a profile
 	    # in the Y direction and renders it in the Z direction.  Hence, the translate
@@ -15034,10 +15044,23 @@ class Transform:
 
 	return P(translated_x, translated_y, translated_z)
 
-    def _scad_lines_get(self):
-	""" *Transform*: Return the scad lines for the *Transform* object (i.e. *self*). """
+    #def _scad_lines_get(self):
+    #	""" *Transform*: Return the scad lines for the *Transform* object (i.e. *self*). """
+    #
+    #	return self._forward_scad_lines
 
-	return self._forward_scad_lines
+    def _scad_lines_append(self, lines, prefix):
+	""" *Transform*: Append the openscad transform lines from the *Transform* object
+	    (i.e. *self) to *lines* where each line is preceeded by *prefix*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(lines, list)
+	assert isinstance(prefix, str)
+		
+	# Append each *line* to *lines* preceeded by *prefix*:
+	for line in self._forward_scad_lines:
+	    lines.append("{0}{1}".format(prefix, line))
 
     @staticmethod
     def _zero_fix(value):

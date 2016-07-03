@@ -104,7 +104,10 @@ class Plate(Part):
 	if debug:
 	    print("<=Base.construct(*)")
 
-if __name__== "__main__":
-    ezcad = EZCAD3(0)
+def test_contour():
+    ezcad = EZCAD3(0, directory="/tmp")
     plate= Plate(None, "plate")
     plate.process(ezcad)
+
+if __name__== "__main__":
+    test_contour()

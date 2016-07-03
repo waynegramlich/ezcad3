@@ -4,21 +4,19 @@ from EZCAD3 import *
 
 class Base(Part):
 
-    def __init__(self, up):
-	""" *Base*: Initialize *Base* object (i.e. *self*) with a
-	    parent of *up*.
-	"""
+    def __init__(self, up, name):
+	""" *Base*: Initialize *Base* object (i.e. *self*) with a parent of *up*. """
 
 	# Verify argument types:
-	assert up == None or isinstance(up, Part)
+	assert isinstance(up, Part) or up == None
+	assert isinstance(name, str)
 
 	# Initialize the superclass:
-	Part.__init__(self, up)
+	Part.__init__(self, up, name)
 
 
     def construct(self):
-	""" *Base*: Construct the *Base* object (i.e. *self*).
-	"""
+	""" *Base*: Construct the *Base* object (i.e. *self*). """
 
 	# Set *debug* to *True* to trace:
 	debug = False
@@ -45,12 +43,7 @@ class Base(Part):
 	base.extra_xyz(extra, extra, zero)
 	corner1 = P(-dx/2, -dy/2, zero)
 	corner2 = P( dx/2,  dy/2, -dz)
-	base.block(comment = "Initial block of material",
-	  corner1 = corner1,
-	  corner2 = corner2,
-	  material = material,
-	  color = color,
-	  top = "t")
+	base.block("Initial block of material", material, color, corner1, corner2, "t", "")
 
 	# Mount up the block:
 	base.vice_position("Mount Block", base.t, base.tn, base.tw)
@@ -71,8 +64,13 @@ class Base(Part):
 	if debug:
 	    print("<=Base.construct(*)")
 
-if __name__== "__main__":
-    Bounding_Box.unit_test()
+def test_simple_pocket():
     ezcad = EZCAD3(0, directory="/tmp")
-    base = Base(None)
+    base = Base(None, "Base")
     base.process(ezcad)
+    
+def test_bounding_box():
+    Bounding_Box.unit_test()
+
+if __name__== "__main__":
+    test_simple_pocket()

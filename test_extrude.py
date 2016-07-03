@@ -35,7 +35,10 @@ class Tube(Part):
 	self.rectangular_tube_extrude("rectangular tube", material, color,
 	  width, height, thickness, start, zero, end, zero, degrees0)
 	  
-if __name__== "__main__":
-    ezcad = EZCAD3(0)
+def test_extrude():
+    ezcad = EZCAD3(0, directory="/tmp")
     tube= Tube(None, "extrusion")
     tube.process(ezcad)
+
+if __name__== "__main__":
+    test_extrude()
