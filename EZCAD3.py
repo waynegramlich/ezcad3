@@ -4796,77 +4796,82 @@ class Operation_Simple_Pocket(Operation):
 
 	code._z_safe_assert("simple_pocket", comment)
 
-	# Compute the total number of rectangular paths needed:
-	#call d@(form@("comment=%v% r=%i% t=%i%\n\") %
-	#   f@(comment) % f@(r) / f@(t))
-	paths = 0
-	remaining = half_minimum
-	while remaining > zero:
-	    #call d@(form@("comment=%v% paths=%d% remaining=%i%\n\") %
+	is_laser = isinstance(tool, Tool_End_Mill) and tool._is_laser_get()
+
+	if is_laser:
+	    code._simple_pocket_helper(pocket, zero, s, f, zero, True)
+	else:
+	    # Compute the total number of rectangular paths needed:
+	    #call d@(form@("comment=%v% r=%i% t=%i%\n\") %
+	    #   f@(comment) % f@(r) / f@(t))
+	    paths = 0
+	    remaining = half_minimum
+	    while remaining > zero:
+		#call d@(form@("comment=%v% paths=%d% remaining=%i%\n\") %
+		a#  f@(comment) % f@(paths) / f@(remaining))
+
+		if paths == 0:
+		    # {r + r} does not work if pocket width equals tool width,
+		    # so we just use {r + t} every time now:
+		    #remaining = remaining - (r + r)
+		    remaining = remaining - (r + t)
+		else:
+		    remaining = remaining - (r + t)
+		paths += 1
+	    #call d@(form@("comment=%v% paths=%d% remaining=%i% (final)\n\") %
 	    #  f@(comment) % f@(paths) / f@(remaining))
 
-	    if paths == 0:
-		# {r + r} does not work if pocket width equals tool width,
-		# so we just use {r + t} every time now:
-		#remaining = remaining - (r + r)
-		remaining = remaining - (r + t)
-	    else:
-		remaining = remaining - (r + t)
-	    paths += 1
-	#call d@(form@("comment=%v% paths=%d% remaining=%i% (final)\n\") %
-	#  f@(comment) % f@(paths) / f@(remaining))
+	    # Generate {passes} deep depth passes over the pocket:
+	    for depth_pass in range(passes):
+		# Output "(Depth Pass # of #)" comment:
+		code._line_comment("Depth Pass {0} of {1}".
+		  format(depth_pass + 1, passes))
 
-	# Generate {passes} deep depth passes over the pocket:
-	for depth_pass in range(passes):
-	    # Output "(Depth Pass # of #)" comment:
-	    code._line_comment("Depth Pass {0} of {1}".
-	      format(depth_pass + 1, passes))
+		# Compute the plunge depth for each pass:
+		z_plunge = z_start - z_step * float(depth_pass + 1)
 
-	    # Compute the plunge depth for each pass:
-	    z_plunge = z_start - z_step * float(depth_pass + 1)
+		if pocket_kind == Operation.POCKET_KIND_THROUGH:
+		    # We only need to do the exterior path to a depth of {z_plunge}:
+		    code.simple_pocket_helper(pocket, r, s, f, z_plunge, depth_pass != 0)
 
-	    if pocket_kind == Operation.POCKET_KIND_THROUGH:
-		# We only need to do the exterior path to a depth of {z_plunge}:
-		code.simple_pocket_helper(pocket, r, s, f, z_plunge, depth_pass != 0)
+		elif pocket_kind == Operation.POCKET_KIND_FLAT:
+		    # Generate {paths} rectangular passes over the pocket:
+		    for path in range(paths):
+			# Provide a context comment:
+			code._line_comment("Rectangular Path {0} of {1}".format(path + 1, paths))
 
-	    elif pocket_kind == Operation.POCKET_KIND_FLAT:
-		# Generate {paths} rectangular passes over the pocket:
-		for path in range(paths):
-		    # Provide a context comment:
-		    code._line_comment("Rectangular Path {0} of {1}".format(path + 1, paths))
+			# Compute the {offset} for this path:
+			offset = r + (r + t) * float((paths - 1) - path)
 
-		    # Compute the {offset} for this path:
-		    offset = r + (r + t) * float((paths - 1) - path)
+			# If {offset} exceeds {half_minimum} it will cause
+			# {px1} > {px2} or {py1} > {py2}, which is bad.
+			# We solve the problem by not  letting {offset}
+			# exceed {half_minimum}:
+			if offset > half_minimum:
+			    offset = half_minimum
 
-		    # If {offset} exceeds {half_minimum} it will cause
-		    # {px1} > {px2} or {py1} > {py2}, which is bad.
-		    # We solve the problem by not  letting {offset}
-		    # exceed {half_minimum}:
-		    if offset > half_minimum:
-			offset = half_minimum
-
-		    # We need to get the tool to the starting point safely:
-		    rapid_move = False
-		    if path == 0:
-			# This is the first cut at a new depth:
-			if depth_pass == 0:
-			    # We are at {z_safe}, so we can move rapidly to the
-			    # plunge point:
-			    rapid_move = True
-			else:
-			    # We are sitting at the outer edge at the old depth,
-			    # and there is no material between where are now
-			    # and ({start_x}, {start_y}); a rapid could be too
-			    # fast, so we do a linear move:
-			    rapid_move = False
-		    else:
-			# We are at the previous internal path at this depth
-			# and need to move out and cut material as we go:
+			# We need to get the tool to the starting point safely:
 			rapid_move = False
+			if path == 0:
+			    # This is the first cut at a new depth:
+			    if depth_pass == 0:
+				# We are at {z_safe}, so we can move rapidly to the
+				# plunge point:
+				rapid_move = True
+			    else:
+				# We are sitting at the outer edge at the old depth,
+				# and there is no material between where are now
+				# and ({start_x}, {start_y}); a rapid could be too
+				# fast, so we do a linear move:
+				rapid_move = False
+			else:
+			    # We are at the previous internal path at this depth
+			    # and need to move out and cut material as we go:
+			    rapid_move = False
 
-		    code._simple_pocket_helper(pocket, offset, s, f, z_plunge, rapid_move)
-	    else:
-		assert False, "Unknown pocket kind: {0}".format(pocket_kind)
+			code._simple_pocket_helper(pocket, offset, s, f, z_plunge, rapid_move)
+		else:
+		    assert False, "Unknown pocket kind: {0}".format(pocket_kind)
 
 	# Return the tool to a safe location above the material:
 	code._z_safe_retract(f, s)
@@ -7944,7 +7949,7 @@ class Part:
 	#tracing = 0
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print(("{0}=>Part.('{1}', '{2}', {3}, {4}, {5:i}, {6:i}," +
+	    print(("{0}=>Part.rectangular_tube_extrude('{1}', '{2}', {3}, {4}, {5:i}, {6:i}," +
 	      " {7:i}, {8:i}, {9:i}, {10:i}, {11:i}, {12:d})").
 	      format(indent, self._name, comment, material, color,
 	      width, height, thickness, start, start_extra, end, end_extra, rotate))
@@ -15088,7 +15093,7 @@ class Transform:
 
 	return result
 
-    def rotate(self, comment, axis, angle):
+    def rotate(self, comment, axis, angle, tracing = -1000000):
 	""" *Transform*: Return a rotation of the *Transform* object (i.e. *self*) rotated
 	    by *angle* around *axis*.  *comment* shows up in the .scad file
 	"""
@@ -15098,9 +15103,16 @@ class Transform:
 	assert isinstance(axis, P)
 	assert isinstance(angle, Angle)
 
+	# Perform any requested *tracing*
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Transform.rotate('{1}', {2:m}, {3:d})".format(indent, comment, axis, angle))
+
 	# Is this a null rotation?:
 	if angle == Angle():
 	    # Yes it is a null rotation, so we can return *self*:
+	    if tracing >= 0:
+		print("{0}null rotation: {1:d}".format(indent, angle))
 	    result = self
 	else:
 	    # This is a non-null rotation, we have to compute both the *forward_matix* and
@@ -15129,8 +15141,8 @@ class Transform:
 	    nz = zf(normalized.z.millimeters())
 
 	    # Compute some sub expressions for the *forward_matrix*:
-	    c = -angle.cosine()
-	    s = -angle.sine()
+	    c = (-angle).cosine()
+	    s = (-angle).sine()
 	    omc = 1.0 - c
 	    x_omc = nx * omc
 	    y_omc = ny * omc
@@ -15145,6 +15157,9 @@ class Transform:
 	      [zf(ny * x_omc + zs), zf(ny * y_omc + c),  zf(ny * z_omc - xs), 0.0], \
 	      [zf(nz * x_omc - ys), zf(nz * y_omc + xs), zf(nz * z_omc + c),  0.0], \
 	      [0.0,	            0.0,                 0.0,                 1.0] ])
+
+	    if tracing >= 0:
+		print("{0}forward_matrix={1}".format(indent, forward_matrix))
 
 	    # Perform the *reverse_matrix* computations using -*angle*:
 	    c = angle.cosine()
@@ -15168,7 +15183,6 @@ class Transform:
 	    result = Transform()
 	    result._forward_matrix = self._forward_matrix.dot(forward_matrix)
 	    result._reverse_matrix = numpy.linalg.inv(result._forward_matrix)
-	    assert len(result._forward_scad_lines) == len(result._reverse_scad_lines)
 
 	    forward_scad_line =                               \
 	      ("rotate(a={0:d}, v=[{1}, {2}, {3}]) //F: {4}". \
@@ -15178,6 +15192,10 @@ class Transform:
 	      format(-angle, nx, ny, nz, comment), )
 	    result._forward_scad_lines = forward_scad_line + self._forward_scad_lines
 	    result._reverse_scad_lines = self._reverse_scad_lines + reverse_scad_line
+
+	# Wrap-up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Transform.rotate('{1}', {2:m}, {3:d})".format(indent, comment, axis, angle))
 
 	return result
 
@@ -15198,7 +15216,7 @@ class Transform:
 	#tracing = 0
 	tracing_detail = -1
 	if tracing >= 0:
-	    tracing_detail = 1
+	    tracing_detail = 3
 	    indent = ' ' * tracing
 	    print("{0}=>Transform.top_surface('{1}', {2:i}, {3:i}, {4:d})". \
 	      format(indent, comment, start, end, rotate))
@@ -15227,13 +15245,16 @@ class Transform:
 	    print("{0}direction={1:m}".format(indent, direction))
 	if direction.distance(negative_z_axis).absolute() <= epsilon:
 	    # We are already pointed in the negative Z axis direction:
-	    pass
+	    if tracing >= 0:
+		print("{0}We are already pointed in the negative Z axis direction:".format(indent))
 	elif direction.distance(z_axis).absolute() <= epsilon:
 	    # We are poinnted in the Z axis direction, just rotate by 180 degrees:
 	    y_axis = P(zero, one, zero)
 	    degrees180 = Angle(deg=180.0)
-	    transform = \
-	      transform.rotate("{0}: z-axis flip".format(comment), y_axis, degrees180)
+	    transform = transform.rotate("{0}: z-axis flip".format(comment),
+	      y_axis, degrees180, tracing = tracing + 1)
+	    if tracing >= 0:
+		print("{0}Z-axis flip={1:m}".format(indent, transform))
 	else:
 	    # We are pointed in some other direction:
 
@@ -15248,7 +15269,8 @@ class Transform:
 		print("{0}plane_change_axis={1:m} rotate_angle={2:d}".
 		  format(indent, plane_change_axis, rotate_angle))
 	    transform = \
-	      transform.rotate("{0}: plane change".format(comment), plane_change_axis, rotate_angle)
+	      transform.rotate("{0}: plane change".format(comment),
+	      plane_change_axis, rotate_angle, tracing = tracing + 1)
 	    if tracing_detail >= 2:
 		print("{0}plane_change transform_f={1:s}".format(indent, transform))
 	    if tracing_detail >= 3:
@@ -15270,7 +15292,8 @@ class Transform:
 		print("{0}pre_rotate transform_r={1:s}\n".format(indent, transform.reverse()))
 
 	# Finally, perform the user requested *rotate*:
-	transform = transform.rotate("{0}: user rotate".format(comment), z_axis, rotate)
+	transform = transform.rotate("{0}: user rotate".format(comment),
+	  z_axis, rotate, tracing = tracing + 1)
 	if tracing_detail >= 2:
 	    print("{0}user_rotate transform_f={1:s}".format(indent, transform))
 	if tracing_detail >= 2:

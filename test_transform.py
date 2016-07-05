@@ -97,8 +97,50 @@ def test_transform():
     assert back_p == x_axis
     scad_file_write("rotate_translate.scad", rotate_translate, x_axis)
 
+    top_surface_transform("bottom", -z_axis)
+    top_surface_transform("north",   y_axis)
+    top_surface_transform("south",  -y_axis)
+    top_surface_transform("east",    x_axis)
+    top_surface_transform("west",   -x_axis)
+    top_surface_transform("top",     z_axis)
+
     print("<=test_transform()")
 
+def top_surface_transform(comment, end, tracing=-1000000):
+    # Verify argument types:
+    assert isinstance(comment, str)
+    assert isinstance(end, P)
+
+    if tracing >= 0:
+	indent = ' ' * tracing
+	print("{0}=>top_surface_transform('{1}', {2:m})".format(indent, comment, end))
+
+    # Some constants:
+    zero = L()
+    one = L(mm=1.00)
+    origin = P(zero, zero, zero)
+    z_axis = P(zero, zero, one)
+    degrees0 = Angle(deg=0.00)
+    epsilon = L(mm=.0000001)
+
+    # Perform a z-axis invert:
+    transform = Transform.top_surface(comment, origin, end, degrees0, tracing = tracing + 1)
+    transform_p = transform * end
+    if tracing >= 0:
+	print("{0}transform={1:s} transform_p={2:m} -z_axis={3:m}".
+	  format(indent, transform, transform_p, -z_axis))
+	print("{0}transform={1:m}".format(indent, transform))
+    assert transform_p.distance(-z_axis).absolute() < epsilon
+
+    transform_reverse = transform.reverse()
+    back_p = transform_reverse * transform_p
+    assert back_p == end
+
+    scad_file_write("{0}.scad".format(comment), transform, end)
+
+    if tracing >= 0:
+	indent = ' ' * tracing
+	print("{0}<=top_surface_transform('{1}', {2:m})".format(indent, comment, end))
 
 def scad_file_write(file_name, transform, point):
     # Verify argument types:
