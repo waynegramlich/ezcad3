@@ -11738,7 +11738,8 @@ class Code:
 	    print("{0}".format(indent, ))
 
 	# Make sure that *west_most_bend* is not an inside bend (i.e. it should be impossible):
-	assert not west_most_bend._is_inside_get()
+	assert not west_most_bend._is_inside_get(), \
+	  "west_most_bed of contour '{0}' is inside".format(contour._name_get())
 
 	# Compute the X/Y location to drop the mill bit down:
 	contour_is_clockwise = contour._is_clockwise_get()
