@@ -3007,7 +3007,7 @@ class Contour:
 
 	    # FIXME: *trim* extra should be computed:
 	    # Now tack on extra box area:
-	    trim_extra = L(inch=2.0)
+	    trim_extra = L(inch=4.0)
 	    x1 = x_minimum - trim_extra
 	    x2 = x_maximum + trim_extra
 	    y1 = y_minimum - trim_extra
@@ -7384,47 +7384,56 @@ class Part:
 	assert False, \
 	  "No construct() method defined for part '{0}'".format(self._name)
 
-    def cylinder(self, comment = "NO_COMMENT",
-      material = Material(), color = Color(),
-      diameter = L(mm = 1.0), start = P(), end = P(z = L(mm = 1.0)),
-      start_diameter = None, end_diameter = None,
-      sides = -1, sides_angle = Angle(), welds = "", flags = "", adjust = L(),
-      trace = -1000000):
+    def cylinder(self, comment, material, color, start_diameter, end_diameter,
+      start, end, sides, sides_angle, welds, flags, tracing = -1000000):
 	""" *Part*: Place a *diameter* wide cylinder from *start* to *end*. """
 
-	if trace >= 0:
-	    print("{0}=>Part.cylinder(diam={1} start={2} end={3})".
-	      format(trace * ' ', diameter, start, end))
-
-	# Check argument types:
-	none_type = type(None)
+	# Verify argument types:
 	assert isinstance(comment, str)
-	assert type(material) == none_type or isinstance(material, Material)
-	assert type(color) == none_type or isinstance(color, Color)
-	assert isinstance(diameter, L)
+	assert isinstance(material, Material)
+	assert isinstance(color, Color)
+	assert isinstance(start_diameter, L)
+	assert isinstance(end_diameter, L)
 	assert isinstance(start, P)
 	assert isinstance(end, P)
 	assert isinstance(sides, int)
 	assert isinstance(sides_angle, Angle)
 	assert isinstance(welds, str)
 	assert isinstance(flags, str)
-	assert type(start_diameter) == none_type or \
-	  isinstance(start_diameter, L)
-	assert type(end_diameter) == none_type or \
-	  isinstance(end_diameter, L)
 
-	ezcad = self._ezcad
-	adjust = ezcad._adjust
+        # Use *part* instead of *self*:
+	part = self
+	part._is_part = True
+	part._color = color
+	part._material = material
 
-	union_lines = self._scad_union_lines
-	self._cylinder(lines = union_lines, indent = 6, is_solid = True,
-	  comment = comment, material = material, color = color,
-	  diameter = diameter, start = start, end = end, sides = sides,
-	  adjust = adjust, sides_angle = sides_angle, trace = trace + 1,
-	  start_diameter = start_diameter, end_diameter = end_diameter)
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(("{0}=>Part.cylinder('{1}', '{2}', {3}, {4}, {5:i}, {6:i}," +
+	      " {7:i}, {8:i}, {9}, {10:d}, '{11}', '{12}')").
+	      format(indent, self._name, comment, material, color, start_diameter, end_diameter,
+	      start, end, sides, sides_angle, welds, flags))
 
-	if trace >= 0:
-	    print("{0}<=Part.cylinder()".format(trace * ' '))
+	if self._ezcad._mode_get() == EZCAD3.STL_MODE:
+	    # Output some openscad stuff:
+	    pad = ' ' * 4
+	    lines = part._scad_union_lines
+	    lines.append(("{0}// Part.cylinder('{1}', '{2}', {3}, {4}, {5:i}, {6:i}," +
+	      " {7:i}, {8:i}, {9}, {10:d}, '{11}', '{12}')").
+	      format(pad, self._name, comment, material, color, start_diameter, end_diameter,
+	      start, end, sides, sides_angle, welds, flags))
+
+	    # Perform the cylinder: 
+	    part._scad_cylinder(comment, start_diameter, end_diameter,
+	      start, end, lines, pad, color, tracing + 1)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print(("{0}<=Part.cylinder('{1}', '{2}', {3}, {4}, {5:i}, {6:i}," +
+	      " {7:i}, {8:i}, {9}, {10:d}, '{11}', '{12}')").
+	      format(indent, self._name, comment, material, color, start_diameter, end_diameter,
+	      start, end, sides, sides_angle, welds, flags))
 
     def dowel_pin(self, comment):
 	""" *Part*: Request that a dowel pin be used to align the *Part* object (i.e. *self*)
@@ -8361,8 +8370,9 @@ class Part:
 		    wrl_file.write(
 		      "{0}   diffuseColor {1} {2} {3}\n".
 		      format(spaces, color.red, color.green, color.blue))
-		    #wrl_file.write(
-		    #  "{0}   transparency {1}\n".format(spaces, color.alpha))
+		    if color.alpha < 1.0:
+			wrl_file.write(
+			  "{0}   transparency {1}\n".format(spaces, 1.0 - color.alpha))
 		    wrl_file.write(
 		      "{0}  }}\n".format(spaces))
 		    wrl_file.write(
