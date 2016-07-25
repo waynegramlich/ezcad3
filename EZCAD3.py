@@ -3007,7 +3007,7 @@ class Contour:
 
 	    # FIXME: *trim* extra should be computed:
 	    # Now tack on extra box area:
-	    trim_extra = L(inch=6.0)
+	    trim_extra = L(inch=8.0)
 	    x1 = x_minimum - trim_extra
 	    x2 = x_maximum + trim_extra
 	    y1 = y_minimum - trim_extra
@@ -4632,11 +4632,11 @@ class Operation_Simple_Pocket(Operation):
 
     def __init__(self,
       part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed,
-      x1, y1, x2, y2, z1, z2, corner_radius, tool_radius, pocket_kind):
+      corner1, corner2, corner_radius, tool_radius, pocket_kind):
 	""" *Operation_Simple_Pocket*: Initialize an *Operation_Simple_Pocket*
 	    object (i.e. *self*) to contain *part*, *comment*, *sub_priority*,
-	    *tool*, *order*, *follows*, *x1*, *y1*, *x2*, *y2*, *z1*,
-	    *z2*, *corner_radius*, *tool_radius*, and *pocket_kind*.
+	    *tool*, *order*, *follows*, *corner1*, *corner2*, *corner_radius*,
+	    *tool_radius*, and *pocket_kind*.
 	"""
 
 	# Verify argument types:
@@ -4648,30 +4648,22 @@ class Operation_Simple_Pocket(Operation):
 	assert isinstance(follows, Operation) or follows == None
 	assert isinstance(feed_speed, Speed)
 	assert isinstance(spindle_speed, Hertz)
-	assert isinstance(x1, L)
-	assert isinstance(y1, L)
-	assert isinstance(x2, L)
-	assert isinstance(y2, L)
-	assert isinstance(z2, L)
-	assert isinstance(z1, L)
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
 	assert isinstance(corner_radius, L)
 	assert isinstance(tool_radius, L)
 	assert isinstance(pocket_kind, int)
-	assert z1 < z2, \
-	  "z1 ({0:i}) is not less than z2 ({1:i})".format(z1, z2)
 
 	# Initialize superclass:
 	operation_kind = Operation.KIND_SIMPLE_POCKET
 	Operation.__init__(self, "Simple_Pocket", operation_kind,
 	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
 
+	assert corner1.z < corner2.z
+
 	# Load up the rest of *self*:
-	self._x1 = x1
-	self._y1 = y1
-	self._x2 = x2
-	self._y2 = y2
-	self._z_start = z2
-	self._z_stop = z1
+	self._corner1 = corner1
+	self._corner2 = corner2
 	self._corner_radius = corner_radius
 	self._tool_radius = tool_radius
 	self._pocket_kind = pocket_kind
@@ -4691,25 +4683,31 @@ class Operation_Simple_Pocket(Operation):
 	# Verify argument types:
 	assert isinstance(tracing, int)
 
-	# Perform any requested *tracing*:
-	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print("{0}=>Operation_Simple_Pocket._cnc_generate()".format(indent))
-
 	# Use *pocket* instead of *self*:
 	pocket = self
 
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Operation_Simple_Pocket._cnc_generate('{1}')".
+	      format(indent, pocket._comment))
+
 	# Grap some values from *pocket*:
-	x1 = pocket._x1
-	y1 = pocket._y1
-	x2 = pocket._x2
-	y2 = pocket._y2
-	z_start = pocket._z_start
-	z_stop = pocket._z_stop
+	corner1 = pocket._corner1
+	corner2 = pocket._corner2
+
 	tool_radius = pocket._tool_radius
 	corner_radius = pocket._corner_radius
 	pocket_kind = pocket._pocket_kind
 	comment = pocket._comment
+
+	# Unpack from the corners:
+	x1 = corner1.x
+	y1 = corner1.y
+	z_stop = corner1.z
+	x2 = corner2.x
+	y2 = corner2.y
+	z_start = corner2.z
 	assert z_stop < z_start
 
 	# Extract some values from {part} and {operation}
@@ -4743,7 +4741,6 @@ class Operation_Simple_Pocket(Operation):
 	half_minimum = minimum_span / 2
 
 	# Emit the preparatory G-Code:
-
 	is_laser = tool._is_laser_get()
 
 	# Compute the number of depth passes required:
@@ -4808,7 +4805,7 @@ class Operation_Simple_Pocket(Operation):
 	    remaining = half_minimum
 	    while remaining > zero:
 		#call d@(form@("comment=%v% paths=%d% remaining=%i%\n\") %
-		a#  f@(comment) % f@(paths) / f@(remaining))
+		#  f@(comment) % f@(paths) / f@(remaining))
 
 		if paths == 0:
 		    # {r + r} does not work if pocket width equals tool width,
@@ -4880,7 +4877,8 @@ class Operation_Simple_Pocket(Operation):
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}<=Operation_Simple_Pocket._cnc_generate()".format(indent))
+	    print("{0}<=Operation_Simple_Pocket._cnc_generate('{1}')".
+	      format(indent, pocket._comment))
 
     @staticmethod
     def _compare(simple_pocket, simple_pocket2):
@@ -7425,8 +7423,8 @@ class Part:
 	      start, end, sides, sides_angle, welds, flags))
 
 	    # Perform the cylinder: 
-	    part._scad_cylinder(comment, start_diameter, end_diameter,
-	      start, end, lines, pad, color, tracing + 1)
+	    part._scad_cylinder(comment, color, start_diameter, end_diameter,
+	      start, end, lines, pad, sides, sides_angle, tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -8946,6 +8944,10 @@ class Part:
 	# Use *part* instead of *self*:
 	part = self
 
+	# Some constants:
+	zero = L()
+	degrees0 = Angle(deg=0.0)
+
 	# Perform an requested *tracing*:
 	if tracing == -1000000:
 	    tracing = part._tracing
@@ -9054,8 +9056,8 @@ class Part:
 	    drill_start = start - drill_direction * drill_start_extra
 	    drill_end = end + drill_direction * drill_end_extra
 	    
-	    part._scad_cylinder(comment + " drill", hole_diameter, hole_diameter,
-	      drill_start, drill_end, lines, pad, Color("black"), tracing + 1)
+	    part._scad_cylinder(comment + " drill", Color("black"), hole_diameter, hole_diameter,
+	      drill_start, drill_end, lines, pad, -1, degrees0, tracing + 1)
 
 	    # Peform any requested countersink with a cone:
 	    if is_countersink:
@@ -9065,16 +9067,17 @@ class Part:
 		countersink_start = start - drill_direction * countersink_start_extra.millimeters()
 		countersink_end = start + drill_direction * countersink_end_extra.millimeters()
 		zero = L()
-		part._scad_cylinder(comment + " countersink", countersink_start_diameter, zero,
-		  countersink_start, countersink_end, lines, pad, Color("black"), tracing + 1)
+		part._scad_cylinder(comment + " countersink", Color("black"),
+		  countersink_start_diameter, zero, countersink_start, countersink_end, lines, pad,
+		  -1, degrees0 , tracing + 1)
 
 	if tracing >= 0:
 	    print("{0}<=Part.countersink_hole('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
 	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
 	      start, end, flags))
 
-    def _scad_cylinder(self,
-      comment, start_diameter, end_diameter, start, end, lines, pad, color, tracing = -1000000):
+    def _scad_cylinder(self, comment, color,
+      start_diameter, end_diameter, start, end, lines, pad, sides, sides_angle, tracing = -1000000):
 	""" *Part*: Generate an open some openscad code the *Part* object (i.e. *self*)
 	    for drawing a cylinder (or cone) that is *start_diameter* on at *start*
 	    *end_diameter* at *end*.  *lines* is the list to which the lines are
@@ -9082,6 +9085,7 @@ class Part:
 	"""    
 
 	# Verify argument types:
+	assert isinstance(color, Color)
 	assert isinstance(comment, str)
 	assert isinstance(start_diameter, L)
 	assert isinstance(end_diameter, L)
@@ -9089,7 +9093,8 @@ class Part:
 	assert isinstance(end, P)
 	assert isinstance(lines, list)
 	assert isinstance(pad, str)
-	assert isinstance(color, Color)
+	assert isinstance(sides, int)
+	assert isinstance(sides_angle, Angle)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -9106,7 +9111,7 @@ class Part:
 	    lines.append("{0}// {1} cylinder!".format(pad, comment))
 
 	    # Perform the transform:
-	    top_surface_transform = Transform.top_surface(comment, start, end, Angle(deg=0.0))
+	    top_surface_transform = Transform.top_surface(comment, start, end, sides_angle)
 	    top_surface_transform_reverse = top_surface_transform.reverse()
 	    top_surface_transform_reverse._scad_lines_append(lines, pad)
 
@@ -9123,7 +9128,8 @@ class Part:
 	    assert r1 + r2 > zero, \
 	      "sd={0:i} ed={1:i} r1={2:i} r2={3:i}".format(start_diameter, end_diameter, r1, r2)
 
-            sides = 12
+	    if sides < 3:
+		sides = 12
 	    if r1 == r2:
 		command = "{0}cylinder(r={1:m}, h={2:m}, $fn={3}, $fa=12);".format(
 		  pad, r1, height, sides)
@@ -9425,7 +9431,7 @@ class Part:
 	    indent = ' ' * tracing
 	    tracing_detail = 3
 	    print("{0}=>Part.lathe('{1}', '{2}', {3}, {4:i}, {5:i}, *, {6})".
-	      format(indent, self._name, comment, material, color, start, end, contour, faces))
+	      format(indent, part._name, comment, material, color, start, end, contour, faces))
 
 	part._is_part = True
 	part._color = color
@@ -9453,6 +9459,8 @@ class Part:
 
 	    # Find *minimum_y* and *maximim_y* for *contour*:
 	    bends = contour._bends_get()
+	    assert len(bends) > 0, \
+	      "Lathe operaton for '{0}:{1}' has no bends in contour".format(part._name, comment)
 	    for index, bend in enumerate(bends):
 		point = bend._projected_point_get()
 		x = point.x
@@ -9486,7 +9494,7 @@ class Part:
 	# Wrap-up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Part.lathe('{1}', '{2}', {3}, {4:i}, {5:i}, *, {6})".
-	      format(indent, self._name, comment, material, color, start, end, contour, faces))
+	      format(indent, part._name, comment, material, color, start, end, contour, faces))
 
     def length(self, length_path):
 	""" Part dimensions: Return the {Angle} associated with {length_path}
@@ -10363,124 +10371,195 @@ class Part:
 	for part in self.parts.values():
 	    part.show(indent + " ")
 
-    def simple_pocket(self, comment = "no comment",
-      bottom_corner = None, top_corner = None, radius = None, pocket_top = "t",
-      center = None, axis = None, rotate = None, translate = None, tracing = -1000000):
+    def simple_pocket(self,
+      comment, corner1, corner2, radius, pocket_top, rotate, flags, tracing = -1000000):
 	""" *Part*: Create a simple rectangular pocket in the *Part* object (i.e. *self*)
 	    bounding corners of *bottom_corner* and *top_corner*, a corner radius if *radius*.
 	"""
 
 	# Check argument types:
 	assert isinstance(comment, str)
-	assert isinstance(bottom_corner, P)
-	assert isinstance(top_corner, P)
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
 	assert isinstance(radius, L)
 	assert isinstance(pocket_top, str)
-	assert center == None or isinstance(center, P)
-	assert axis == None or isinstance(axis, P)
-	assert rotate == None or isinstance(rotate, Angle)
-	assert translate == None or isinstance(translate, P)
+	assert isinstance(rotate, Angle)
+	assert isinstance(flags, str)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
-	      format(indent, self._name, comment, top_corner, bottom_corner, radius, pocket_top))
+	    print("{0}=>Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}', {7:d}, '{8}')".
+	      format(indent, self._name,
+	      comment, corner1, corner2, radius, pocket_top, rotate, flags))
 
 	# Make sure that the corners are diagonal from bottom south west to top north east:
-	x1 = min(bottom_corner.x, top_corner.x)
-	x2 = max(bottom_corner.x, top_corner.x)
-	y1 = min(bottom_corner.y, top_corner.y)
-	y2 = max(bottom_corner.y, top_corner.y)
-	z1 = min(bottom_corner.z, top_corner.z)
-	z2 = max(bottom_corner.z, top_corner.z)
-	#print("Part.box:{0:m}:{1:m},{2:m}:{3:m},{4:m}:{5:m}". \
-	#  format(x1, x2, y1, y2, z1, z2))
+	x1 = min(corner1.x, corner2.x)
+	x2 = max(corner1.x, corner2.x)
+	y1 = min(corner1.y, corner2.y)
+	y2 = max(corner1.y, corner2.y)
+	z1 = min(corner1.z, corner2.z)
+	z2 = max(corner1.z, corner2.z)
 
-	# Deal with *top* argument:
-	extra = L(mm = 1.0)
+	# Verify that we have properly ordered coordinates:
+	assert x1 < x2, "x1={0} should be less than x2={1}".format(x1, x2)
+	assert y1 < y2, "y1={0} should be less than y2={1}".format(y1, y2)
+	assert z1 < z2, "z1={0} should be less than z2={1}".format(z1, z2)
+
+	# Create the *bsw_corner* and *tne_corner* points:
+	bsw_corner = P(x1, y1, z1)
+	tne_corner = P(x2, y2, z2)
+
+	# Some constants:
+	zero = L()
+	
 	ezcad = self._ezcad
-	adjust = ezcad._adjust
-	#print("simple_pocket:B:x1/x2 y1/y2 z1/z2 = {0}/{1} {2}/{3} {4}/{5}".
-	#  format(x1, x2, y1, y2, z1, z2))
-	if pocket_top == "t":
-	    z2 += extra
-	    x1 += adjust
-	    x2 -= adjust
-	    y1 += adjust
-	    y2 -= adjust
-	elif pocket_top == "b":
-	    z1 -= extra
-	    x1 += adjust
-	    x2 -= adjust
-	    y1 += adjust
-	    y2 -= adjust
-	elif pocket_top == "n":
-	    y2 += extra
-	    x1 += adjust
-	    x2 -= adjust
-	    z1 += adjust
-	    z2 -= adjust
-	elif pocket_top == "s":
-	    y1 -= extra
-	    x1 += adjust
-	    x2 -= adjust
-	    z1 += adjust
-	    z2 -= adjust
-	elif pocket_top == "e":
-	    x2 += extra
-	    y1 += adjust
-	    y2 -= adjust
-	    z1 += adjust
-	    z2 -= adjust
-	elif pocket_top == "w":
-	    x1 -= extra
-	    y1 += adjust
-	    y2 -= adjust
-	    z1 += adjust
-	    z2 -= adjust
-	else:
-            assert False, \
-	      "pocket_top = '{0}' instead of 't', 'b', 'n', 's', 'e', or 'w'". \
-	      format(pocket_top)
-	#print("simple_pocket:A:x1/x2 y1/y2 z1/z2 = {0}/{1} {2}/{3} {4}/{5}".
-	#  format(x1, x2, y1, y2, z1, z2))
+	start_extra = L(mm = 1.0)
+	end_extra = zero
+	if flags == "t":
+	    end_extra = L(mm = 1.0)
+	#adjust = ezcad._adjust
 
-	dz = z1 - z2
+	if ezcad._mode == EZCAD3.STL_MODE:
+	    #print("bsw_corner={0:m} tne_corner={1:m}".format(bsw_corner, tne_corner))
 
-	place = Place(part = None, name = comment, center = center,
-	  axis = axis, rotate = rotate, translate = translate)
-	forward_matrix = place._forward_matrix
+	    # Compute the center points:
+	    x_center = (x1 + x2) / 2
+	    y_center = (y1 + y2) / 2
+	    z_center = (z1 + z2) / 2
 
-	ezcad = self._ezcad
-	if ezcad._mode == EZCAD3.CNC_MODE:
+	    # Deal with *pocket_top* argument:
+	    if pocket_top == "t":
+		start = P(x_center, y_center, z2)
+		end =   P(x_center, y_center, z1)
+	    elif pocket_top == "b":
+		start = P(x_center, y_center, z1)
+		end =   P(x_center, y_center, z2)
+	    elif pocket_top == "n":
+		start = P(x_center, y2, z_center)
+		end =   P(x_center, y1, z_center)
+	    elif pocket_top == "s":
+		start = P(x_center, y1, z_center)
+		end =   P(x_center, y2,   z_center)
+	    elif pocket_top == "e":
+		start = P(x2, y_center, z_center)
+		end =   P(x1,   y_center, z_center)
+	    elif pocket_top == "w":
+		start = P(x1, y_center, z_center)
+		end =   P(x2,   y_center, z_center)
+	    else:
+		assert False, \
+		  "pocket_top = '{0}' instead of 't', 'b', 'n', 's', 'e', or 'w'". \
+		  format(pocket_top)
+
+	    # Generate the openscad stuff:
 	    difference_lines = self._scad_difference_lines
+	    pad = ' ' * 6
 
-	    assert x1 < x2, "x1={0} should be less than x2={1}".format(x1, x2)
-	    assert y1 < y2, "y1={0} should be less than y2={1}".format(y1, y2)
-	    assert z1 < z2, "z1={0} should be less than z2={1}".format(z1, z2)
+	    # Compute *top_transform* and transform the two corners:
+	    top_transform = Transform.top_surface(comment, start, end, rotate, tracing + 1)
+	    transformed_bsw_corner = top_transform * bsw_corner
+	    transformed_tne_corner = top_transform * tne_corner
 
-	    #print "c1=({0},{1},{2}) c2=({3},{4},{5})".format( \
-	    #  x1, y1, z1, x2, y2, z2)
+            # Output the transform that will put everything in the correct location:
+	    top_transform_reverse = top_transform.reverse()
+	    top_transform_reverse._scad_lines_append(difference_lines, pad)
 
-            # The transforms are done in reverse order:
+	    # Now transform the corner coordinates:
+	    tx1 = transformed_bsw_corner.x
+	    ty1 = transformed_bsw_corner.y
+	    tz1 = transformed_bsw_corner.z
+	    tx2 = transformed_tne_corner.x
+	    ty2 = transformed_tne_corner.y
+	    tz2 = transformed_tne_corner.z
 
-	    self._scad_transform(difference_lines, 0, center = center,
-	      axis = axis, rotate = rotate, translate = translate)
+	    # Now compute the minimum and maximum coordinates:
+	    x1 = min(tx1, tx2)
+	    y1 = min(ty1, ty2)
+	    z1 = min(tz1, tz2) - end_extra
+	    x2 = max(tx1, tx2)
+	    y2 = max(ty1, ty2)
+	    z2 = max(tz1, tz2) + start_extra
 
-	    # Get the lower south west corner positioned:
 	    difference_lines.append(
-	      "      translate([{0:m}, {1:m}, {2:m}])".format(x1, y1, z1))
+	      "{0}// Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}', {7:d}, '{8}')".
+	      format(pad, self._name, comment, corner1, corner2, radius, pocket_top, rotate, flags))
+	    #difference_lines.append(
+	    #  "{0}//start={1:m} end={2:m}".format(pad, start, end))
+	    #difference_lines.append(
+	    #  "{0}//transformed_bsw_corner={1:m}".format(pad, transformed_bsw_corner))
+	    #difference_lines.append(
+	    #  "{0}//transformed_tne_corner={1:m}".format(pad, transformed_tne_corner))
+
+	    # Get lower the cube so that its 
+	    difference_lines.append(
+	      "{0}translate([0, 0, {1:m}])".format(pad, -(z2 - z1)/2))
 
 	    # Finally, we can output the cube:
 	    difference_lines.append(
-	      "        cube([{0:m}, {1:m}, {2:m}]);".format(
-	      x2 - x1, y2 - y1, z2 - z1))
+	      "{0}cube([{1:m}, {2:m}, {3:m}], center=true);".format(pad, x2 - x1, y2 - y1, z2 - z1))
 
+	if ezcad._mode == EZCAD3.CNC_MODE:
+	    # Deal with *pocket_top* argument:
+	    if pocket_top == "t":
+		start = P(zero, zero, z2)
+		end =   P(zero, zero, z1)
+	    elif pocket_top == "b":
+		start = P(zero, zero, z1)
+		end =   P(zero, zero, z2)
+	    elif pocket_top == "n":
+		start = P(zero, y2, zero)
+		end =   P(zero, y1, zero)
+	    elif pocket_top == "s":
+		start = P(zero, y1, zero)
+		end =   P(zero, y2, zero)
+	    elif pocket_top == "e":
+		start = P(x2, zero, zero)
+		end =   P(x1, zero, zero)
+	    elif pocket_top == "w":
+		start = P(x1, zero, zero)
+		end =   P(x2, zero, zero)
+	    else:
+		assert False, \
+		  "pocket_top = '{0}' instead of 't', 'b', 'n', 's', 'e', or 'w'". \
+		  format(pocket_top)
+	    #print("SP:start={0:m} end={0:m}".format(start, end))
+
+	    # Compute *top_transform* and transform the two corners:
+	    top_surface_transform = self._top_surface_transform
+
+	    #top_transform = Transform.top_surface(comment, start, end, rotate, tracing + 1)
+	    transformed_bsw_corner = top_surface_transform * bsw_corner
+	    transformed_tne_corner = top_surface_transform * tne_corner
+	    dz = (transformed_tne_corner.z - transformed_bsw_corner.z).absolute()
+	    #print("tbsw={0:m} ttne={1:m}".format(transformed_bsw_corner, transformed_tne_corner))
+
+	    # Now transform the corner coordinates:
+	    tx1 = transformed_bsw_corner.x
+	    ty1 = transformed_bsw_corner.y
+	    tz1 = transformed_bsw_corner.z
+	    tx2 = transformed_tne_corner.x
+	    ty2 = transformed_tne_corner.y
+	    tz2 = transformed_tne_corner.z
+
+	    # Now compute the minimum and maximum coordinates:
+	    x1 = min(tx1, tx2)
+	    y1 = min(ty1, ty2)
+	    z1 = min(tz1, tz2)
+	    x2 = max(tx1, tx2)
+	    y2 = max(ty1, ty2)
+	    z2 = max(tz1, tz2)
+
+	    t_corner1 = P(x1, y1, z1)
+	    t_corner2 = P(x2, y2, z2)
+
+	    # Search for a matching *end_mill_tool*:
 	    maximum_diameter = 2 * radius
 	    end_mill_tool = \
 	      self._tools_end_mill_search(maximum_diameter, dz, "simple_pocket", tracing + 1)
+	    assert end_mill_tool != None, \
+	      "Could not find a end mill to mill {0:i} radius pockets".format(radius)
 	    if tracing >= 0:
 	        print("{0}end_mill_tool='{1}'".format(indent, end_mill_tool._name_get()))
 	    end_mill_diameter = end_mill_tool._diameter_get()
@@ -10488,19 +10567,18 @@ class Part:
 	    end_mill_feed_speed = end_mill_tool._feed_speed_get()
 	    end_mill_spindle_speed = end_mill_tool._spindle_speed_get()
 
-	    if tracing >= 0:
-		print("{0}x1={1:i} x2={2:i} y1={3:i} y2={4:i}".format(indent, x1, x2, y1, y2))
-		print("{0}z1={1:i} z2={2:i}".format(indent, z1, z2))
+	    # Create the pocket operation:
 	    operation_order = Operation.ORDER_END_MILL_SIMPLE_POCKET
 	    operation_simple_pocket = Operation_Simple_Pocket(self, comment, 0,
 	      end_mill_tool, operation_order, None, end_mill_feed_speed, end_mill_spindle_speed,
-	      x1, y1, x2, y2, z1, z2, radius, end_mill_radius, Operation.POCKET_KIND_FLAT)
+	      t_corner1, t_corner2, radius, end_mill_radius, Operation.POCKET_KIND_FLAT)
 	    self._operation_append(operation_simple_pocket)
+
 	# Perform any requested *tracing*:
 	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print("{0}<=Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
-	      format(indent, self._name, comment, top_corner, bottom_corner, radius, pocket_top))
+	    print("{0}<=Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}', {7:d}, '{8}')".
+	      format(indent, self._name,
+	      comment, corner1, corner2, radius, pocket_top, rotate, flags))
 
     def xxx_simple_pocket(self, comment, \
       corner1_point, corner2_point, radius, flags):
@@ -12678,7 +12756,6 @@ class Code:
 	"""
     
 	# Verify argument types:
-	#assert isinstance(block, Block)
 	assert isinstance(pocket, Operation_Simple_Pocket)
 	assert isinstance(offset, L)
 	assert isinstance(s, Hertz)
@@ -12687,10 +12764,23 @@ class Code:
 	assert isinstance(rapid_move, bool)
 
 	# Extract the corners:
-	x1 = pocket._x1_get()
-	y1 = pocket._y1_get()
-	x2 = pocket._x2_get()
-	y2 = pocket._y2_get()
+	corner1 = pocket._corner1
+	corner2 = pocket._corner2
+	cx1 = corner1.x
+	cy1 = corner1.y
+	cz1 = corner1.z
+	cx2 = corner2.x
+	cy2 = corner2.y
+	cz2 = corner2.z
+
+	# Now order the arguments:
+	x1 = min(cx1, cx2)
+	y1 = min(cy1, cy2)
+	z1 = min(cz1, cz2)
+	x2 = max(cx1, cx2)
+	y2 = max(cy1, cy2)
+	z2 = max(cz1, cz2)
+
 	corner_radius = pocket._corner_radius_get()
 	self._line_comment(
 	  "x1={0:i} y1={1:i} x2={2:i} y2={3:i} cr={4:i}".format(x1, y1, x2, y2, corner_radius))
@@ -14835,9 +14925,9 @@ class Tool_End_Mill(Tool):
 		    print("{0}Tool_End_Mill._match: max_z_depth:{1:i} tool_maximum_z_depth:{2:i}".
 		      format(indent, maximum_z_depth, tool_maximum_z_depth))
 		z_depth_ok = -maximum_z_depth <= tool_maximum_z_depth
-		tool._search_results_append(z_depth_ok,
-		  "Max Z depth {0:i} <= Tool Max Z Depth {1:i}".format(
-		  -maximum_z_depth, tool_maximum_z_depth))
+		#tool._search_results_append(z_depth_ok,
+		#  "Max Z depth {0:i} <= Tool Max Z Depth {1:i}".format(
+		#  -maximum_z_depth, tool_maximum_z_depth))
 		if z_depth_ok:
 		    if tracing_detail >= 0:
 			print("{0}Tool_End_Mill.match: z_depth ok".format(indent))

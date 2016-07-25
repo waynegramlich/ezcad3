@@ -40,6 +40,7 @@ class Base(Part):
 	# Start with a solid block of the right dimensions:
 	zero = L()
 	extra = L(mm=10.0)
+	degrees0 = Angle(deg=0.0)
 	base.extra_xyz(extra, extra, zero)
 	corner1 = P(-dx/2, -dy/2, zero)
 	corner2 = P( dx/2,  dy/2, -dz)
@@ -52,14 +53,13 @@ class Base(Part):
 	base.cnc_fence()
 
 	# Pocket out the body of the box:
-	bottom_corner = P(-dx/2 + thickness, -dy/2 + thickness, -dz+L(inch="1/8"))
-	top_corner =    P( dx/2 - thickness,  dy/2 - thickness, zero)
-	print("pocket bottom_corner={0:i} top_corner={1:i}".format(bottom_corner, top_corner))
-	base.simple_pocket(comment = "Box Pocket",
-	  bottom_corner = bottom_corner,
-	  top_corner = top_corner,
-	  radius = L(inch=1),
-	  pocket_top ="t")
+	corner1 = P(-dx/2 + thickness, -dy/2 + thickness, -dz+L(inch="1/8"))
+	corner2 = P( dx/2 - thickness,  dy/2 - thickness, zero)
+	radius = L(inch=1.0)
+	pocket_t = "t"
+	flags = ""
+	print("pocket bottom_corner={0:i} top_corner={1:i}".format(corner1, corner2))
+	base.simple_pocket("Box Pocket", corner1, corner2, radius, pocket_t, degrees0, flags)
 
 	if debug:
 	    print("<=Base.construct(*)")
