@@ -3007,7 +3007,7 @@ class Contour:
 
 	    # FIXME: *trim* extra should be computed:
 	    # Now tack on extra box area:
-	    trim_extra = L(inch=8.0)
+	    trim_extra = L(inch=24.0)
 	    x1 = x_minimum - trim_extra
 	    x2 = x_maximum + trim_extra
 	    y1 = y_minimum - trim_extra
