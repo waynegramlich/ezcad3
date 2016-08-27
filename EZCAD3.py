@@ -690,6 +690,17 @@ class P:
 
 	return result
 
+    @staticmethod
+    def polar(angle, distance):
+	""" P: """
+
+	assert isinstance(angle, Angle)
+	assert isinstance(distance, L)
+
+	x = distance.cosine(angle)
+	y = distance.sine(angle)
+	return P(x, y, L())
+
     def twice(self):
 	""" P dimensions: Return {self} * 2. """
 
@@ -3007,7 +3018,7 @@ class Contour:
 
 	    # FIXME: *trim* extra should be computed:
 	    # Now tack on extra box area:
-	    trim_extra = L(inch=24.0)
+	    trim_extra = L(inch=36.0)
 	    x1 = x_minimum - trim_extra
 	    x2 = x_maximum + trim_extra
 	    y1 = y_minimum - trim_extra
