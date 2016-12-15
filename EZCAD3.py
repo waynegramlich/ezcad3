@@ -639,7 +639,13 @@ class P:
 	y = self.y._mm
 	z = self.z._mm
 	length = math.sqrt(x * x + y * y + z * z)
-	normalized = P(L(mm = x / length), L(mm = y / length), L(mm = z / length))
+	zero = L()
+	if length == 0.0:
+            normalized = self
+	    print("P.normailize() was passed all zeros.")
+        else:
+            normalized = P(L(mm = x / length), L(mm = y / length), L(mm = z / length))
+
 	#print("x={0} y={1} z={2} length={3} nomalized={4:m}".format(x, y, z, length, normalized))
 	return normalized
 	
@@ -2737,18 +2743,18 @@ class Contour:
 	# it with the opening curly brace:
 	chunks = ["{"]
 
-	# Visit each *bend* in *bends* to add a new *chunk* to *chuniks_
+	# Visit each *bend* in *bends* to add a new *chunk* to *chunks*:
 	bends = self._bends
 	for index, bend in enumerate(bends):
-	    chunk = "[{0}]: {1}, {2}".format(index, bend.point, bend.radius)
+	    chunk = "[{0}]: {1}".format(index, bend)
 	    chunks.append(chunk)
 
 	# Tack the closing curly brace onto *chunks*:
-	chunks.append["}"]
+	chunks.append("}")
 
 	# Convert *chunks* into a space separated *result* string:
-	result = ' '.join(chunks)
-	return reslult
+	result = '\n'.join(chunks)
+	return result
 
     def _bends_get(self):
 	""" *Contour*: Return the list of *Bend* objects associated with the *Contour* object
@@ -11185,13 +11191,18 @@ class Fastener(Part):
     # M5.0x0.80 ~= #10-32	  0.1960	5.3 = 0.2087*
     # M6.0x1.00 ~= 1/4-20	  0.2570*	6.4 = 0.2520
 
-    def __init__(self, up, comment = None):
+    def __init__(self, up, name):
 	""" *Fastener*: """
-	assert isinstance(comment, str)
 
-	Part.__init__(self, up)
+	# Verify argument types:
+	assert isinstance(up, Part) or up == None
+	assert isinstance(name, str)
+
+	# Initialize the *Part* super class:
+	Part.__init__(self, up, name)
+
 	zero = L()
-	self.comment_s = "NO_COMMENT"
+	self.comment_s = name
 	self.color = Color("black")
 	self.material = Material("steel", "stainless")
 	self.start_p = P()
@@ -11210,9 +11221,6 @@ class Fastener(Part):
 	self.hex_nut_tip_width_l = zero
 	self.sides_angle_a = Angle()
 	self.flat_head_point_angle_a = Angle()
-
-	if isinstance(comment, str):
-	    self.comment_s = comment
 
     def configure(self, comment = None, material = None, color = None,
       flags = None, start = None, end = None, sides_angle = None,
@@ -11364,12 +11372,9 @@ class Fastener(Part):
 
 	assert self.comment_s != "NO_COMMENT", \
 	  "Fastener name is not set (not configured!)"
-	self.cylinder(comment = self.comment_s,
-	  material = self.material,
-	  color = self.color,
-	  diameter = self.major_diameter_l,
-	  start = self.start_p,
-	  end = self.end_p)
+	diameter = self.major_diameter_l
+	self.cylinder(self.comment_s, self.material, self.color,
+	  diameter, diameter, self.start_p, self.end_p, 16, Angle(deg=0.0), "", "")
 
     def nut_ledge(self, part = None, flags = ""):
         """ *Fastener*: Cut out ledge for a screw and a nut. """
@@ -11518,11 +11523,7 @@ class Fastener(Part):
 		assert False, "select='{0}', not 'thread', 'close' or 'free'".\
 		  format(select)
 
-	    part.hole(comment = "'{0} Drill'".format(self.comment_s),
-	      diameter = diameter,
-	      start = start,
-	      end = end,
-	      flags = "t")
+	    part.hole("'{0} Drill'".format(self.comment_s), diameter, start, end, "t")
 
 	    zero = L()
 	    flat_head_point_angle = self.flat_head_point_angle_a
@@ -11583,12 +11584,9 @@ class Fastener(Part):
                     #    "Part[{0}]:start={1} end={2} normalize={3} fh_end={4}".
 		    #    format(part._name,
 		    #    start, end, normalized_direction, flat_head_end))
-		    part.hole(comment = "Flat Head:" + self.comment_s,
-		      start_diameter = 2 * flat_head_diameter,
-		      end_diameter = L(),
-		      start = flat_head_start,
-		      end = flat_head_end,
-		      trace = trace + 1)
+		    part.hole("Flat Head:" + self.comment_s,
+		      2 * flat_head_diameter, flat_head_start,
+		      flat_head_end, "", tracing = trace + 1)
 
 	    if self.hex_insert_b:
 		direction = end - start
@@ -11604,13 +11602,9 @@ class Fastener(Part):
 		    #  format(end, start, direction, direction_len, nut_hght))
 		    #print("insert_end = {0}".format(insert_end))
 
-		    part.hole(comment = "Hex Insert:" + self.comment_s,
-		      diameter = self.hex_nut_tip_width_l,
-		      start = end,
-		      end = insert_end,
-		      sides = 6,
-		      sides_angle = self.sides_angle_a,
-		      flags = "f")
+		    print("Missing code for hex insert")
+		    #part.hole("Hex Insert:" + self.comment_s,
+		    #  self.hex_nut_tip_width_l, end, insert_end, 6, self.sides_angle_a, "f")
 
 	if trace >= 0:
 	    print("{0}<=Fastener.drill({1}, select='{2}')".
