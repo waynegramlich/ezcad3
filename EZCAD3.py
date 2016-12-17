@@ -1178,7 +1178,7 @@ class Bend:
 	# down to the X/Y plane.  This value is computed by the *_project*() routine.
 	bend._projected_point = None	# Projected point:
 
-	# These fields are computed as a side-effect  by *_smallest_inner_radius_compute*():
+	# These fields are computed as a side-effect by *_smallest_inner_radius_compute*():
 	bend._is_inside = None		# *True* if *bend* is an inside bend; otherwise *False*
 	bend._bearing_change = None	# Set to be the bearing change angle.
 
@@ -1204,6 +1204,24 @@ class Bend:
 	""" *Bend*: Return the radius center for *Bend* object (i.e. *self*). """
 
 	return self._center
+
+    def _copy(self):
+        """ *Bend*: Return a copy of the *Bend* object (i.e. *self*). """
+
+	# Start the copy
+	bend = Bend(self._name, self._point, self._radius)
+
+	# Copy the remaining fields:
+	bend._projected_point = self._projected_point
+        bend._is_inside = self._is_inside
+        bend._bearing_change = self._bearing_change
+        bend._center = self._center
+        bend._incoming_tangent_angle = self._incoming_tangent_angle
+        bend._incoming_tangent_direction = self._incoming_tangent_direction
+        bend._outgoing_tangent_angle = self._outgoing_tangent_angle
+        bend._outgoing_tangent_direction = self._outgoing_tangent_direction
+
+	return bend
 
     def _incoming_tangent_angle_get(self):
 	""" *Bend*: Return the incoming tangent angle for *Bend* object (i.e. *self*)
@@ -2728,10 +2746,11 @@ class Contour:
 
 	# Load up the *Contour* object (i.e. *self*):
 	self._bends = []		# List of *Bend* objects used by by *Contour* object
+	self._inside_bends_identified = False	# *True* if all inside bends have been identified
 	self._is_clockwise = False	# *True* if the contour is clockwise; and *False* otherwise
 	self._is_projected = False	# *True* if all of the *Bend* objects have been projected
 	self._name = name		# The name of the contour
-	self._inside_bends_identified = False	# *True* if all inside bends have been identified
+	self._project_transform = Transform()	# The projection *Transform*
 
     def __format__(self, format):
 	""" *Contour*: Format the *Contour* object (i.e. *self*) as a string and return it. """
@@ -2774,6 +2793,27 @@ class Contour:
 	for bend in bends:
 	    point = bend._point_get()
 	    bounding_box.point_expand(point)
+
+    def _copy(self, name):
+        """ *Contour*: Return a copy of the *Contour* object (i.e. *self*)
+	    with a new name of *name*.
+	"""
+
+	# Make a copy of the bends:
+	new_bends = []
+	for bend in self._bends:
+	    new_bends.append(bend._copy())
+
+	# Make a new *contour* object and fill it in:
+	contour = Contour(name)
+	contour._bends = new_bends
+        contour._inside_bends_identify = self._inside_bends_identify
+        contour._is_clockwise = self._is_clockwise
+        contour._is_isprojected = self._is_projected
+        contour._name = self._name
+	contour._project_transform = self._project_transform
+	
+	return contour
 
     def _inside_bends_identify(self, tracing):
 	""" *Contour*: Sweep through each *Bend* object in the *Contour* object (i.e. *self*)
@@ -2900,6 +2940,7 @@ class Contour:
 	      "{0}<=Contour._inside_bends_identify('{1}') clockwise={2} insides={3} outsides={4}".
 	      format(indent, self._name, is_clockwise, inside_bends, outside_bends))
 
+
     def _is_clockwise_get(self):
 	""" *Contour*: Return *True* if the *Contour* object (i.e. *self*) is a clockwise
 	    contour or *False* for a counter-clockwise contour.
@@ -2912,7 +2953,7 @@ class Contour:
 
 	return self._name
 
-    def _project(self, transform, tracing):
+    def _project(self, transform, tracing = -1000000):
 	""" *Contour*: Sweep through the *Contour* object (i.e. *self*) and compute the
 	    X/Y coordinates of *Bend* object on an X/Y plane using *transform* each point
 	    in the contour prior prior to being projected down to the X/Y plane.
@@ -2920,29 +2961,33 @@ class Contour:
 
 	# Verify argument types:
 	assert isinstance(transform, Transform)
+	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
-	#tracing = 0
 	tracing_detail = -1
 	if tracing >= 0:
-	    tracing_detail = 3
 	    indent = ' ' * tracing
+	    tracing_detail = 3
 	    print("{0}=>Contour._project('{1}', {2:s})".format(indent, self._name, transform))
 
 	# For each *bend* in bends, perform the project from 3D down to 2D:
 	zero = L()
 	for bend in self._bends:
 	    # Grab the X/Y/Z coordinates for *point*:
+	    name = bend._name_get()
 	    point = bend._point_get()
 	    transformed_point = transform * point
 	    projected_point = P(transformed_point.x, transformed_point.y, zero)
 	    bend._projected_point_set(projected_point)
 	    if tracing_detail >= 2:
-		print("{0}point={1:m} projected_point={2:m} transform={3:s}".
-		  format(indent, point, projected_point, transform))
+		print("{0}name='{1}' point={2:m} projected_point={3:m} transform={4:s}".
+		  format(indent, name, point, projected_point, transform))
 
 	# Remember that we have performed the projection:
 	self._is_projected = True
+
+	# Hang onto the projection *transform* so we can eventually unproject:
+	self._project_transform = transform        
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -2972,7 +3017,7 @@ class Contour:
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Contour._radius_center_and_tangents_compute('{1}')".
-	      format(' ' * tracing, self._name))
+	      format(indent, self._name))
 
     def _scad_lines_polygon_append(self, scad_lines, pad, box_enclose, tracing = -1000000):
 	""" *Contour*: """
@@ -3192,27 +3237,239 @@ class Contour:
 
 	return smallest_inner_radius
 
-    def _unproject(self):
+    def _unproject(self, tracing = -1000000):
 	""" *Contour*: Unproject the adjusted bend points in the *Contour* to be back
 	    in the along the original projection axis. """
 
-	#print("=>Contour.project(axis={0}".format(axis))
+	# Verify argument types:
+        assert isinstance(tracing, int)
 
-	unprojection_matrix = self._unprojection_matrix
+	# Make sure that the *Contour* object (i.e. *self*) was previously projected:
+	assert self._is_projected
 
-	# For each *bend* in bends, perform the project from 2D back up 3D:
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = " " * tracing
+	    print("{0}=>Contour._unproject()".format(indent))
+
+	# For each *bend* in *bends*, apply the *unproject_transform*:
+	unproject_transform = self._project_transform.reverse()
 	for bend in self._bends:
-	    # Grab the X/Y/Z coordinates for *point*:
-	    px = self._px
-	    py = self._py
-	    pz = self._pz
+	    projected_point = bend._projected_point
+	    assert isinstance(projected_point, P)
+	    bend._point	= unproject_transform * bend._projected_point
 
-	    projected_point = P(L(mm=px), L(mm=py), L(mm=pz))
-	    unprojected_point = unprojection_matrix.point_multiply(projected_point)
+	# Wrap any tracing:
+	if tracing >= 0:
+	    print("{0}<=Contour._unproject()".format(indent))
 
-	    bend._unprojected_point = unprojected_point
+    def adjust(self, name, delta, start, end, maximum_radius, minimum_radius, tracing = -1000000):
+	""" *Contour*: """
 
-	#print("<=Contour.project(axis={0}".format(axis))
+	# Verify argument types:
+	assert isinstance(name, str)
+	assert isinstance(delta, L)
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+	assert isinstance(maximum_radius, L)
+	assert isinstance(minimum_radius, L)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = " " * tracing
+	    print("{0}=>Contour.adjust('{1}', {2}, {3}, {4}, {5}, {6})".
+              format(indent, name, delta, start, end, maximum_radius, minimum_radius))
+
+	# The process is to loop around *bend* and adjust segment in or out
+	# by *delta* depending upon when the the sign of *delta* is negative
+	# or positive.  The following steps occur:
+	#
+	# 1. Take a pair of Bends in sequence to get the end-points of
+	#    a line.  Compute the direction vector and a perpendicular
+	#    vector.  Move each end-point by *delta* along the perpendicular.
+	#
+	# 2. Find the intersections of each of the adjusted line segments.
+	#    This is done via the determanent method describe at
+	#
+	#        http://mathworld.wolfram.com/Line-LineIntersection.html
+	#
+	# 3. Adjust the bend radius up or down appropriately.
+
+	adjusted_contour = self._copy(name)
+
+	degrees0 = Angle(deg=0.0)
+	top_surface_transform = Transform.top_surface("top", start, end, degrees0, tracing + 1);
+	adjusted_contour._project(top_surface_transform, tracing + 1)
+
+	bends = self._bends
+	bends_size = len(bends)
+	for bends_index in range(bends_size):
+	    # The intersection computation is easier to transcribe if we
+	    # use the same notation as used in mathwolrd.com description.
+	    # The first line goes through points (x1, y1) and (x2, y2) and
+	    # the second line goes through points (x3, y3) and (x4, y4).
+	    # We will use (*ox1*, *oy1*), (*ox2*, *oy2*), (*ox3*, *oy3*)
+	    # and (*ox4*, *oy4*) to represent the [o]iginal points.
+	    # We will use (*ax1*, *ay1*), (*ax2*, *ay2*), (*ax3*, *ay3*)
+	    # and (*ax4*, *ay4*) to represent the [a]djusted points.
+            # Note that using this notation, (*ox2*, *oy2*) is the same
+	    # as (*ox3*, *oy3*), but (*ax2*, *ay2*) is not the same as
+	    # (*ax3*, *ay3):
+
+	    # *bend1* occurs *bend2* occurs before *bend3*:
+	    bend1 = bends[(bends_index - 1) % bends_size]
+	    bend2 = bends[bends_index]
+	    bend3 = bends[(bends_index + 1) % bends_size]
+	    if tracing >= 0:
+		print("{0}bends_index={1}".format(indent, bends_index))
+	    
+	    # Get the [o]riginal X/Y values:
+	    ox1 = bend1._point.x._mm
+	    oy1 = bend1._point.y._mm
+	    ox2 = bend2._point.x._mm
+	    oy2 = bend2._point.y._mm
+	    ox3 = bend2._point.x._mm
+	    oy3 = bend2._point.y._mm
+	    ox4 = bend3._point.x._mm
+	    oy4 = bend3._point.y._mm
+	    if tracing >= 0:
+		print("{0}[{1}]:o1=({2},{3}) o2=({4},{5}) o3=({6},{7}) o4=({8},{9})".
+		  format(indent, bends_index, ox1, oy1, ox2, oy2, ox3, oy3, ox4, oy4))
+
+	    # Compute vector (*odx12*, *ody12*) from (*ox1*, *oy1*) to
+	    # (*ox2*, *oy2*):
+	    odx12 = ox2 - ox1
+	    ody12 = oy2 - oy1
+
+	    # Compute the vector (*odx34*, *ody34*) from (*ox3*, *oy3*) to
+	    # (*ox4*, *oy4*):
+	    odx34 = ox4 - ox3
+	    ody34 = oy4 - oy3
+	    if tracing >= 0:
+		print("{0}[{1}]:od12=({2},{3}) od34=({4},{5})".
+		  format(indent, bends_index, odx12, ody12, odx34, ody34))
+
+	    # Compute the lengths of (*dx12*, *dy12*) and (*dx34*, *dy34*):
+	    length12 = math.sqrt(odx12 * odx12 + ody12 * ody12)
+	    length34 = math.sqrt(odx34 * odx34 + ody34 * ody34)
+	    if tracing >= 0:
+		print("{0}[{1}]:len12={2} len34={3}".
+		  format(indent, bends_index, length12, length34))
+
+	    # Due to constraint propagation, sometimes we get some points
+	    # that land on top of one another.  Just fake it for now:
+	    if length12 <= 0.0:
+		length12 = 0.1
+	    if length34 <= 0.0:
+		length34 = 0.1
+
+	    # Compute perpendicular normal (*ndx12*, *ndy12*) from
+	    # (*dx12*, *dy12*) and normal (*ndx34*, *ndy34*) from
+	    # (*dx34*, *dy34*):
+	    ndx12 =  ody12 / length12
+	    ndy12 = -odx12 / length12
+	    ndx34 =  ody34 / length34
+	    ndy34 = -odx34 / length34
+	    if tracing >= 0:
+		print("{0}[{1}]:n12=({2},{3}) n34=({4},{5})".
+		  format(indent, bends_index, ndx12, ndy12, ndx34, ndy34))
+
+	    # Compute [a]djusted bend points (*ax1*, *ay1*), (*ax2*, *ay2*),
+	    # (*ax3*, *ay3*), and (*ax4*, *ay4*):
+	    d = delta._mm
+	    ax1 = ox1 + d * ndx12
+	    ay1 = oy1 + d * ndy12
+	    ax2 = ox2 + d * ndx12
+	    ay2 = oy2 + d * ndy12
+	    ax3 = ox3 + d * ndx34
+	    ay3 = oy3 + d * ndy34
+	    ax4 = ox4 + d * ndx34
+	    ay4 = oy4 + d * ndy34
+	    if tracing >= 0:
+		print("{0}[{1}]:a1=({2},{3}) a2=({4},{5}) a3=({6},{7}) a4=({8},{9})".
+		  format(indent, bends_index, ax1, ay1, ax2, ay2, ax3, ay3, ax4, ay4))
+
+	    # Now find the intersection of (*x1a*, *y1a*) - (*x2a*, *y2a*)
+	    # and (*x2b*, *y2b*) - (*x3b*, *y3b*).  The computed formulas
+	    # are taken from:
+	    #
+	    #    http://mathworld.wolfram.com/Line-LineIntersection.html
+	    #
+	    #
+	    #        | |x1 y1|        |        | |x1 y1|        |
+	    #        | |     |  x1-x2 |        | |     |  y1-y2 |
+	    #        | |x2 y2|        |        | |x2 y2|        |
+	    #        |                |        |                |
+	    #        | |x3 y3|        |        | |x3 y3|        |
+	    #        | |     |  x3-x4 |        | |     |  y3-y4 |
+	    #        | |y4 y4|        |        | |y4 y4|        |
+	    #    x = ------------------    y = ------------------
+	    #        |  x1-x2   y1-y2 |        |  x1-x2   y1-y2 |
+	    #        |  x3-x4   y3-y4 |        |  x3-x4   y3-y4 |
+	    #
+	    
+	    # Compute *det12* and *det34*:
+	    det12 = ax1 * ay2 - ax2 * ay1	# = det2(x1, y1, x2, y2)
+	    det34 = ax3 * ay4 - ax4 * ay3	# = det2(x3, y3, x4, y4)
+	    # Compute x numerator = det2(det12, x1 - x2, det34, x3 - x4):
+	    x_numerator = det12 * (ax3 - ax4) - det34 * (ax1 - ax2)
+	    # Compute y numerator = det2(det12, y1 - y2, det34, y3 - y4):
+	    y_numerator = det12 * (ay3 - ay4) - det34 * (ay1 - ay2)
+	    # Compute denomonator = det2(x1 - x2, y1 - y2, x3 - x4, y3 - y4):
+	    denominator = (ax1 - ax2) * (ay3 - ay4) - (ax3 - ax4) * (ay1 - ay2)
+	    # Sometimes constraint propagation causes a *denominator* of 0.
+	    # Set it to non-zero to fake it:
+	    if denominator == 0.0:
+		denominator = 0.01
+	    # Compute final [i]ntersection location (*ix*, *iy):
+	    ix = x_numerator / denominator
+	    iy = y_numerator / denominator
+	    if tracing >= 0:
+		print("{0}[{1}]:det12={2} det34={3}".
+		  format(indent, bends_index, det12, det34))
+		print("{0}[{1}]:x_num={2} y_num={3} denom={4}".
+		  format(indent, bends_index, x_numerator, y_numerator, denominator))
+		print("{0}[{1}]:ix={2} iy={3}".format(indent, bends_index, ix, iy))
+
+	    # Now we get to adjust the radius.  When *delta* < 0 we are
+	    # making the contour smaller.  The direction of the turn is
+	    # what we use to tell the difference:
+	    bearing12 = math.atan2(ody12, odx12)
+	    bearing34 = math.atan2(ody34, ody34)
+	    delta_bearing = bearing34 - bearing12
+	    pi = math.pi
+	    if delta_bearing < pi:
+		delta_bearing += 2.0 * pi
+	    elif delta_bearing > pi:
+		delta_bearing -= 2.0 * pi
+
+	    new_radius = bend2._radius._mm
+	    if delta_bearing < 0.0:
+		# Turn clockwise:
+		new_radius += delta._mm
+	    else:
+		# Turn counter-clockwise:
+		new_radius -= delta._mm
+
+	    if new_radius < minimum_radius._mm:
+		new_radius = minimum_radius._mm
+	    elif new_radius > maximum_radius._mm:
+		new_radius = maximum_radius._mm
+
+	    zero = L()
+	    adjusted_contour_bend2 = adjusted_contour._bends[bends_index]
+	    adjusted_contour_bend2._radius = L(mm=new_radius)
+	    adjusted_contour_bend2._projected_point = P(L(mm=ix), L(mm=iy), zero)
+
+	# Now map the bend points back to where they should be:
+	adjusted_contour._unproject(tracing + 1)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Contour.adjust('{1}', {2}, {3}, {4}, {5}, {6})".
+              format(indent, name, delta, start, end, maximum_radius, minimum_radius))
+	return adjusted_contour
 
     def bend_append(self, name, point, radius):
 	""" *Contour*: Create a *Bend* object containing *name*, *point*, and *radius* and
@@ -4080,7 +4337,7 @@ class Operation_Drill(Operation):
 	else:
 	    hole_kind = drill_hole_kind
 	    if hole_kind == HOLE_KIND_THROUGH:
-		took_kind = tool.kind
+		tool_kind = tool.kind
 		assert tool_kind == TOOL_KIND_DRILL
 		tool_drill = tool.drill
 		point_angle = tool_drill.point_angle
@@ -4370,11 +4627,16 @@ class Operation_Round_Pocket(Operation):
 
 	    # Deal with through holes:
 	    is_through = False
-	    if hole_kind == HOLE_KIND_THROUGH:
+	    #print("operation.comment='{0}'".format(self._comment))
+	    x = mapped_start.x
+	    y = mapped_start.y
+	    z_start = mapped_start.z
+	    z_stop = mapped_stop.z
+	    if hole_kind == Part.HOLE_THROUGH:
 		is_through = True
-		z_stop = z_stop - L(inch=0.025)
+		z_stop -= L(inch=0.025)
 
-	    code.line_comment(
+	    code._comment(
 	      "z_start={0} z_stop={1}".format(z_start, z_stop))
 	    
 	    z_depth = (start - stop).length()
@@ -4387,14 +4649,14 @@ class Operation_Round_Pocket(Operation):
 	    #  f@(z_depth) % f@(passes) / f@(depth_per_pass))
 
 	    # Move to position:
-	    code.line_comment(comment)
+	    code._comment(comment)
 	    code._z_safe_assert("round_pocket_pocket", comment)
-	    code.xy_rapid(x, y)
+	    code._xy_rapid(x, y)
 
 	    z_feed = f / 4.0
 	    shave = L(inch=0.005)
 	    for depth_pass in range(passes):
-		code.line_comment(
+		code._comment(
 		  "{0} round_pocket pocket [pass {1} of {2}]".
 		  format(comment, depth_pass + 1, passes))
 		
@@ -4402,36 +4664,34 @@ class Operation_Round_Pocket(Operation):
 		#call line_comment@(code,
 		#  read_only_copy@(form@("x=%i% y=%i% x_value=%i% y_value=%i%")%
 		#    f@(x) % f@(y) % f@(x_value@(code)) / f@(y_value@(code))))
-		code.xy_feed(f, s, x, y)
+		code._xy_feed(f, s, x, y)
 		z = z_start - depth_per_pass * float(depth_pass + 1)
-		code.z_feed(z_feed, s, z, "round_pocket_pocket")
+		code._z_feed(z_feed, s, z, "round_pocket_pocket")
 
 		radius_remove = radius - shave - tool_radius
 		if is_through:
-		    code.ccw_circle(radius_remove, f, s, x, y)
+		    code._xy_ccw_feed(f, s, radius_remove, x, y)
 		else:
 		    # We have to mow out all the invening space:
 		    radius_passes = int(radius_remove /  half_tool_radius) + 1
 		    pass_remove = radius_remove / float(radius_passes)
 
 		    for radius_index in range(radius_passes):
-			code.ccw_circle(
-			  pass_remove * float(radius_index + 1), f, s, x, y)
+			code._xy_ccw_circle(f, s, pass_remove * float(radius_index + 1), x, y)
 
 	    # Do a "spring pass" to make everybody happy:
-	    code.line_comment(code,
-	      "{0} round_pocket pocket 'spring' pass".foramt(comment))
+	    code._comment("{0} round_pocket pocket 'spring' pass".format(comment))
 	    path_radius = radius - tool_radius
 	    half_path_radius = path_radius / 2
-	    code.xy_feed(f, s, x, y)
-	    code.xy_ccw_feed(f, half_path_radius, s,
+	    code._xy_feed(f, s, x, y)
+	    code._xy_ccw_feed(f, s, half_path_radius,
 	      x + half_path_radius, y + half_path_radius)
-	    code.xy_ccw_feed(f, half_path_radius, s, x, y + path_radius)
-	    code.ccw_circle(radius - tool_radius, f, s, x, y)
-	    code.xy_ccw_feed(f, half_path_radius, s,
+	    code._xy_ccw_feed(f, s, half_path_radius, x, y + path_radius)
+	    code._xy_ccw_feed(f, s, radius - tool_radius, x, y)
+	    code._xy_ccw_feed(f, s, half_path_radius,
 	      x - half_path_radius, y + half_path_radius)
-	    code.xy_ccw_feed(f, half_path_radius, s, x, y)
-	    code.z_safe_retract(z_feed, s)
+	    code._xy_ccw_feed(f, s, half_path_radius, x, y)
+	    code._z_safe_retract(z_feed, s)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -7621,7 +7881,7 @@ class Part:
 	self._dxf_scad_lines = scad_lines
 
     def extrude(self, comment, material, color,
-      contours, start, start_extra, end, end_extra,rotate, tracing = -1000000):
+      contours, start, start_extra, end, end_extra, rotate, tracing = -1000000):
 	""" *Part*: Create an extrusion long the axis from *start* to *end* out of *material*
 	    (with a render color of *color*.   *contours* is a list of *Contour* objects
 	    where the first (required) *Contour* object specifies the outer contour and
@@ -8194,30 +8454,13 @@ class Part:
 	# Remember that we have adjusted the position:
 	part._position_count += 1
 
-    def virtual_box(self, comment = "no comment",
-      corner1 = None, corner2 = None,
-      center = None, axis = None, rotate = None, translate = None):
-	""" {Part} vertual_box: Create a virtual box at {corner1} and
-	    {corner2}. """
-
-	# Deal with argument defaults:
-	none_type = type(None)
-
-	if type(corner1) == none_type:
-	    zero = L(0.0)
-	    corner1 = P(zero, zero, zero)
-	if type(corner2) == none_type:
-	    one = L.mm(1.0)
-	    corner2 = P(one, one, one)
+    def virtual_box(self, comment, corner1, corner2):
+	""" *Part*: """
 
 	# Check argument types:
 	assert isinstance(comment, str)
 	assert isinstance(corner1, P)
 	assert isinstance(corner2, P)
-	assert type(center) == none_type or isinstance(center, P)
-	assert type(axis) == none_type or isinstance(axis, P)
-	assert type(rotate) == none_type or isinstance(rotate, Angle)
-	assert type(translate) == none_type or isinstance(translate, P)
 
 	# Make sure that the corners are diagonal from bottom south west
 	# to top north east:
@@ -8230,37 +8473,9 @@ class Part:
 	#print("Part.box:{0:m}:{1:m},{2:m}:{3:m},{4:m}:{5:m}". \
 	#  format(x1, x2, y1, y2, z1, z2))
 
-	place = Place(part = None, name = comment, center = center,
-	  axis = axis, rotate = rotate, translate = translate)
-	forward_matrix = place._forward_matrix
-
-	tne = P(x2, y2, z2)
-	bsw = P(x1, y1, z1)
-	tsw = P(x1, y1, z2)
-	bnw = P(x1, y2, z1)
-	tnw = P(x1, y2, z2)
-	bse = P(x2, y1, z1)
-	tse = P(x2, y1, z2)
-	bne = P(x2, y2, z1)
-
-	#print("before box={0:m}".format(box))
-	self._box_point_update(comment + "[TNE]",
-	  forward_matrix.point_multiply(tne))
-	self._box_point_update(comment + "[TNW]",
-	  forward_matrix.point_multiply(tnw))
-	self._box_point_update(comment + "[TSE]",
-	  forward_matrix.point_multiply(tse))
-	self._box_point_update(comment + "[TSW]",
-	  forward_matrix.point_multiply(tsw))
-	self._box_point_update(comment + "[BNE]",
-	  forward_matrix.point_multiply(bne))
-	self._box_point_update(comment + "[BNW]",
-	  forward_matrix.point_multiply(bnw))
-	self._box_point_update(comment + "[BSE]",
-	  forward_matrix.point_multiply(bse))
-	self._box_point_update(comment + "[BSW]",
-	  forward_matrix.point_multiply(bsw))
-	#print("after box={0:m}".format(box))
+	bounding_box = self._bounding_box
+        bounding_box.point_expand(P(x1, y1, z1))
+        bounding_box.point_expand(P(x2, y2, z2))
 
     def _wrl_write(self,
       wrl_file, wrl_indent = 0, parts_table = {}, file_name = "", tracing = -1000000):
@@ -8940,8 +9155,8 @@ class Part:
 	    print("{0}<=Part.contour('{1}, '{2}', '{3:i}', {4:i}', {5:i}, '{6}')".
 	     format(' ' * tracing, part._name, comment, start_point, end_point, extra, flags))
 
-    def countersink_hole(self, comment,
-      hole_diameter, countersink_diameter, start, end, flags, tracing = -1000000):
+    def countersink_hole(self, comment, hole_diameter, countersink_diameter,
+      start, end, flags, sides = -1, sides_angle=Angle(), tracing = -1000000):
 	""" *Part*: Put a *hole_diameter* hole into the *Part* object (i.e. *self*) starting
 	    at *start* to an end depth of *end*.  If *countersink_diameter* is non-zero,
 	    the part will be have a 90 degree countersink of *countersink_diameter* at *start*.
@@ -8956,6 +9171,8 @@ class Part:
 	assert isinstance(start, P)
 	assert isinstance(end, P)
 	assert isinstance(flags, str)
+	assert isinstance(sides, int)
+	assert isinstance(sides_angle, Angle)
 	assert isinstance(tracing, int)
 
 	# Use *part* instead of *self*:
@@ -8979,6 +9196,7 @@ class Part:
 	countersink_radius = countersink_diameter/2
 
 	# Compute *is_tip_hole*, *is_flat_hole* and *is_through_hole* from *flags*:
+	is_through_hole = False
 	is_tip_hole = flags.find('p') >= 0
 	is_flat_hole = flags.find('f') >= 0
 	if not (is_tip_hole or is_flat_hole):
@@ -9002,6 +9220,7 @@ class Part:
 	mode = ezcad._mode_get()
     	if mode == EZCAD3.CNC_MODE:
 	    spot_operation = None
+	    try_flat = False
 	    if is_through_hole or is_tip_hole:
 		# Spot drill and countersink the hole at the same time:
 		z_countersink = start.z - countersink_radius
@@ -9032,7 +9251,7 @@ class Part:
 		      x, y, z_start, z_stop, False)
 		else:
 		    try_flat = True
-	    elif hole_kind == Part.HOLE_FLATH:
+	    elif hole_kind == Part.HOLE_FLAT:
 		try_flat = True
     
 	    # See if we should try to mill the hole:
@@ -9074,7 +9293,7 @@ class Part:
 	    drill_end = end + drill_direction * drill_end_extra
 	    
 	    part._scad_cylinder(comment + " drill", Color("black"), hole_diameter, hole_diameter,
-	      drill_start, drill_end, lines, pad, -1, degrees0, tracing + 1)
+	      drill_start, drill_end, lines, pad, sides, sides_angle, tracing + 1)
 
 	    # Peform any requested countersink with a cone:
 	    if is_countersink:
@@ -9383,7 +9602,8 @@ class Part:
 	      format(color, self.transparency, material))
 	    xml_stream.write(' Comment="{0}"/>\n'.format(self.name))
 
-    def hole(self, comment, diameter, start, stop, flags, tracing = -1000000):
+    def hole(self, comment, diameter, start, stop, flags,
+      sides=-1, sides_angle=Angle(), tracing = -1000000):
 	""" *Part*:  Put a *diameter* hole long the axis from *start* down to *stop*
 	    into the *Part* object (i.e. *self*).  *comment* will show up in any
 	    generated RS-274 code or error messages:
@@ -9395,6 +9615,8 @@ class Part:
 	assert isinstance(start, P)
 	assert isinstance(stop, P)
 	assert isinstance(flags, str)
+	assert isinstance(sides, int)
+	assert isinstance(sides_angle, Angle)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -9407,8 +9629,8 @@ class Part:
 
 	# Perform the hole using the richer countesink hole operation:
 	zero = L()
-	self.countersink_hole(comment,
-	  diameter, zero, start, stop, flags, tracing + 1)
+	self.countersink_hole(comment, diameter, zero, start, stop, flags,
+          sides=sides, sides_angle=sides_angle, tracing=tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -10420,9 +10642,12 @@ class Part:
 	z2 = max(corner1.z, corner2.z)
 
 	# Verify that we have properly ordered coordinates:
-	assert x1 < x2, "x1={0} should be less than x2={1}".format(x1, x2)
-	assert y1 < y2, "y1={0} should be less than y2={1}".format(y1, y2)
-	assert z1 < z2, "z1={0} should be less than z2={1}".format(z1, z2)
+	if x1 >= x2:
+            print("Part.simple_pocket:x1={0} should be less than x2={1}".format(x1, x2))
+	if y1 >= y2:
+	    print("Part.simple_pocket:y1={0} should be less than y2={1}".format(y1, y2))
+	if z1 >= z2:
+            print("Part.simple_pocket:z1={0} should be less than z2={1}".format(z1, z2))
 
 	# Create the *bsw_corner* and *tne_corner* points:
 	bsw_corner = P(x1, y1, z1)
@@ -11602,9 +11827,9 @@ class Fastener(Part):
 		    #  format(end, start, direction, direction_len, nut_hght))
 		    #print("insert_end = {0}".format(insert_end))
 
-		    print("Missing code for hex insert")
-		    #part.hole("Hex Insert:" + self.comment_s,
-		    #  self.hex_nut_tip_width_l, end, insert_end, 6, self.sides_angle_a, "f")
+		    part.hole("Hex Insert:" + self.comment_s,
+		      self.hex_nut_tip_width_l, end, insert_end, "f",
+                      sides=6, sides_angle=self.sides_angle_a)
 
 	if trace >= 0:
 	    print("{0}<=Fastener.drill({1}, select='{2}')".
@@ -11984,7 +12209,7 @@ class Code:
 	self._dxf_append("{0}\n{1:d}\n".format(group_code, value), "dxf_angle_append")
     
     def _dxf_append(self, text, from_routine):
-	""" *Code*: Aappend *text* to the DXF component the *Code* object (i.e. *self*).
+	""" *Code*: Append *text* to the DXF component the *Code* object (i.e. *self*).
 	    *from_routine* is used for debugging only.
 	"""
     
@@ -11993,7 +12218,7 @@ class Code:
 	assert isinstance(from_routine, str)
 
 	# Append *text* to *dxf_lines*:
-	assert self._is_laser
+	#assert self._is_laser
 	self._dxf_lines.append(text)
     
     
@@ -15209,7 +15434,7 @@ class Transform:
 	assert isinstance(axis, P)
 	assert isinstance(angle, Angle)
 
-	# Perform any requested *tracing*
+	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Transform.rotate('{1}', {2:m}, {3:d})".format(indent, comment, axis, angle))
@@ -15407,7 +15632,6 @@ class Transform:
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
-	    indent = ' ' * tracing
 	    print("{0}<=Transform.top_surface('{1}', {2:i}, {3:i}, {4:d})=>{5:s}".
 	      format(indent, comment, start, end, rotate, transform))
 
