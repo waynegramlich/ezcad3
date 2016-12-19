@@ -642,7 +642,8 @@ class P:
 	zero = L()
 	if length == 0.0:
             normalized = self
-	    print("P.normailize() was passed all zeros.")
+	    if EZCAD3.update_count_get() == 0:
+		print("P.normailize() was passed all zeros.")
         else:
             normalized = P(L(mm = x / length), L(mm = y / length), L(mm = z / length))
 
@@ -3613,6 +3614,17 @@ class EZCAD3:
 	assert isinstance(part, Part)
 	part.process(self)
 
+    @staticmethod
+    def update_count_get():
+	update_count = 123456789
+	try:
+	    ezcad = EZCAD3.ezcad
+	    if ezcad._mode != EZCAD3.DIMENSIONS_MODE:
+		update_count = ezcad._update_count
+        except:
+            assert False
+	return update_count
+
 class Operation:
     """ *Operation* is a class that represents a manufacturing operation.
     """
@@ -4952,7 +4964,7 @@ class Operation_Simple_Pocket(Operation):
 
 	return self._corner_radius
 
-    def _cnc_generate(self, tracing):
+    def _cnc_generate(self, tracing = -1000000):
 	""" *Operation_Simple_Pocket*: Generate the CNC G-code for a
 	    *Operation_Simple_Pocket* object (i.e. *self*).
 	"""
@@ -6145,6 +6157,8 @@ class Part:
 	# Use *part* instead of *self*:
 	part = self
 	part_name = part._name
+	if part_name[:15] == "Gear_Box_Bottom":
+	    tracing = 0
 
 	if tracing >= 0:
 	    indent = ' ' * tracing
@@ -6507,7 +6521,6 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*:
-	#tracing = 0
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._manufacture:('{1}', *)".format(indent, self._name))
@@ -6564,7 +6577,6 @@ class Part:
 	# Now generate any CNC files:
 	if mode == EZCAD3.CNC_MODE:
 	    # Flush out all of the pending CNC operations:
-
 	    # Set *cnc_debug* to *True* to trace CNC:
 	    if tracing < 0:
 		tracing = part._tracing
@@ -7682,6 +7694,9 @@ class Part:
 	part._color = color
 	part._material = material
 
+	# Some constants:
+        zero = L()
+
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
@@ -7689,6 +7704,23 @@ class Part:
 	      " {7:i}, {8:i}, {9}, {10:d}, '{11}', '{12}')").
 	      format(indent, self._name, comment, material, color, start_diameter, end_diameter,
 	      start, end, sides, sides_angle, welds, flags))
+
+	# Compute the *maximum_radius*:
+	maximum_diameter = start_diameter
+        if end_diameter > maximum_diameter:
+	    maximum_diameter = end_diameter
+	maximum_radius = maximum_diameter / 2
+
+	# Expand the *bounding_box* with 8 points that bracket the maximal cylinder corners:
+	thickness = (start - end).length()
+	top_transform = Transform.top_surface("top surface", start, end, Angle())
+	reverse_transform = top_transform.reverse()
+	bounding_box = self._bounding_box
+	for x in [-maximum_diameter, maximum_diameter]:
+	    for y in [-maximum_diameter, maximum_diameter]:
+		for z in [zero, -thickness]:
+		    point = reverse_transform * P(x, y, z)
+		    bounding_box.point_expand(point)
 
 	if self._ezcad._mode_get() == EZCAD3.STL_MODE:
 	    # Output some openscad stuff:
@@ -8165,7 +8197,7 @@ class Part:
 
         # For debugging, set *debug* to *True*:
 	debug = False
-	debug = True
+	#debug = True
 	if debug:
 	    print("=>Part.process('{0}')".format(part._name))
 
@@ -9627,7 +9659,7 @@ class Part:
 	    print("{0}=>hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
 	      format(indent, self._name, comment, diameter, start, stop, flags))
 
-	# Perform the hole using the richer countesink hole operation:
+	# Perform the hole using the richer *countesink_hole* operation:
 	zero = L()
 	self.countersink_hole(comment, diameter, zero, start, stop, flags,
           sides=sides, sides_angle=sides_angle, tracing=tracing + 1)
@@ -10642,11 +10674,11 @@ class Part:
 	z2 = max(corner1.z, corner2.z)
 
 	# Verify that we have properly ordered coordinates:
-	if x1 >= x2:
+	if x1 >= x2 and EZCAD3.update_count_get() == 0:
             print("Part.simple_pocket:x1={0} should be less than x2={1}".format(x1, x2))
-	if y1 >= y2:
+	if y1 >= y2 and EZCAD3.update_count_get() == 0:
 	    print("Part.simple_pocket:y1={0} should be less than y2={1}".format(y1, y2))
-	if z1 >= z2:
+	if z1 >= z2 and EZCAD3.update_count_get() == 0:
             print("Part.simple_pocket:z1={0} should be less than z2={1}".format(z1, z2))
 
 	# Create the *bsw_corner* and *tne_corner* points:
@@ -10664,7 +10696,9 @@ class Part:
 	#adjust = ezcad._adjust
 
 	if ezcad._mode == EZCAD3.STL_MODE:
-	    #print("bsw_corner={0:m} tne_corner={1:m}".format(bsw_corner, tne_corner))
+	    if tracing >= 0:
+                print("{0}STL_MODE".format(indent))
+                #print("bsw_corner={0:m} tne_corner={1:m}".format(bsw_corner, tne_corner))
 
 	    # Compute the center points:
 	    x_center = (x1 + x2) / 2
@@ -10683,13 +10717,13 @@ class Part:
 		end =   P(x_center, y1, z_center)
 	    elif pocket_top == "s":
 		start = P(x_center, y1, z_center)
-		end =   P(x_center, y2,   z_center)
+		end =   P(x_center, y2, z_center)
 	    elif pocket_top == "e":
 		start = P(x2, y_center, z_center)
-		end =   P(x1,   y_center, z_center)
+		end =   P(x1, y_center, z_center)
 	    elif pocket_top == "w":
 		start = P(x1, y_center, z_center)
-		end =   P(x2,   y_center, z_center)
+		end =   P(x2, y_center, z_center)
 	    else:
 		assert False, \
 		  "pocket_top = '{0}' instead of 't', 'b', 'n', 's', 'e', or 'w'". \
@@ -10734,15 +10768,78 @@ class Part:
 	    #difference_lines.append(
 	    #  "{0}//transformed_tne_corner={1:m}".format(pad, transformed_tne_corner))
 
-	    # Get lower the cube so that its 
-	    difference_lines.append(
-	      "{0}translate([0, 0, {1:m}])".format(pad, -(z2 - z1)/2))
+	    # Translate the forthcoming polygon:
+	    difference_lines.append("{0}translate([0, 0, {1:m}])".
+	      format(pad, -(z2 - z1) + start_extra))
+
+	    # Linear extrude the forthcoming polygon:
+	    difference_lines.append("{0}linear_extrude(height = {1:m}, center = false)".
+              format(pad, z2 - z1))
+
+	    # Output a polygon that represents the pocket.
+
+	    # First put together a list *bend_points* which are the four pocket corners
+            # moved inwards by *radius*:
+	    bend_points = [
+ 	      P(x1 + radius, y1 + radius, zero),
+ 	      P(x1 + radius, y2 - radius, zero),
+ 	      P(x2 - radius, y2 - radius, zero),
+ 	      P(x2 - radius, y1 + radius, zero)
+            ]
+
+	    # This is where the compute the various angles need to have *corner_sides* sides
+            # in each pocket corner:
+	    corner_sides = 4
+	    degrees90 = Angle(deg=90)
+	    angle_delta = degrees90/corner_sides
+
+	    # Assemble *polygon_points* which are the points which are the outline of the pocket:
+	    polygon_points = []
+	    # The first corner has a *start_angle* that points downward:
+	    start_angle = -degrees90
+
+	    # Now iterate through each *bend_point* output the the *corner_sides* + 1 points
+            # that make up the pocket bend:
+	    for bend_point in bend_points:
+		angle = start_angle
+		for index in range(corner_sides + 1):
+		    adjust = P.polar(angle, radius)
+		    corner_point = bend_point + adjust
+		    #print("bend_point={0} adjust={1}".format(bend_point, adjust))
+		    polygon_points.append(corner_point)
+		    angle -= angle_delta
+                start_angle -= degrees90
+
+	    # Now create a list of fragments that will be joined together to form the
+            # *polygon_command*:
+	    polygon_command_parts = []
+	    polygon_command_parts.append("{0}polygon(points = [".format(pad))
+	    prefix = ""
+	    for polygon_point in polygon_points:
+		polygon_command_parts.append(
+		  "{0}[{1:m}, {2:m}]".format(prefix, polygon_point.x, polygon_point.y))
+                prefix = ", "
+	    polygon_command_parts.append("], paths = [{0}], convexity = 8);".
+              format(range(len(polygon_points))))
+
+	    # Convert *polygon_command_parts* into *polygon_command* and append
+            #it to *difference_lines*:
+	    polygon_command = "".join(polygon_command_parts)
+	    difference_lines.append(polygon_command)
+
+	    # Lower the cube so that it cuts out the pocket.
+	    #difference_lines.append(
+	    #  "{0}translate([0, 0, {1:m}])".format(pad, -(z2 - z1)/2))
 
 	    # Finally, we can output the cube:
-	    difference_lines.append(
-	      "{0}cube([{1:m}, {2:m}, {3:m}], center=true);".format(pad, x2 - x1, y2 - y1, z2 - z1))
+	    #difference_lines.append(
+	    #  "{0}cube([{1:m}, {2:m}, {3:m}], center=true);".
+	    #  format(pad, x2 - x1, y2 - y1, z2 - z1))
 
 	if ezcad._mode == EZCAD3.CNC_MODE:
+	    if tracing >= 0:
+                print("{0}Part.simple_pocket: CNC_MODE started".format(indent))
+
 	    # Deal with *pocket_top* argument:
 	    if pocket_top == "t":
 		start = P(zero, zero, z2)
@@ -10816,6 +10913,8 @@ class Part:
 	      t_corner1, t_corner2, radius, end_mill_radius, Operation.POCKET_KIND_FLAT)
 	    self._operation_append(operation_simple_pocket)
 
+	    if tracing >= 0:
+                print("{0}Part.simple_pocket: CNC_MODE done".format(indent))
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}', {7:d}, '{8}')".
@@ -11794,7 +11893,7 @@ class Fastener(Part):
 		b = flat_head_point_angle / 2
 		h = w * ((Angle(deg = 90) - b).sine() / b.sine())
 		direction = (start - end)
-		if direction.length() <= zero:
+		if direction.length() <= zero and EZCAD3.update_count_get() == 0:
 		    print("Fastener.drill: part={0}: zero length screw head".
 		      format(part))
 		else:
@@ -11816,7 +11915,7 @@ class Fastener(Part):
 	    if self.hex_insert_b:
 		direction = end - start
 		direction_length = direction.length()
-		if direction_length <= zero:
+		if direction_length <= zero and EZCAD3.update_count_get() == 0:
 		    print("Fastener.drill(): part={0}: zero length screw".
 		      format(part))
 		else:
@@ -15143,7 +15242,10 @@ class Tool_End_Mill(Tool):
 		print("{0}=>Tool_End_Mill.match('{1}', {2:i}, {3:i}, '{4}')".
 		  format(indent, tool._name, maximum_diameter, maximum_z_depth, from_routine))
 
-	    diameter_ok = maximum_diameter < zero or tool_diameter <= maximum_diameter
+	    # Somehow, the type *bool_* (from numpy) occasionally gets returned. The cast
+            # using bool() works around the problem.  This is just weird:
+	    diameter_ok = bool(maximum_diameter < zero) or bool(tool_diameter <= maximum_diameter)
+	    assert isinstance(diameter_ok, bool)
 	    tool._search_results_append(diameter_ok,
 	      "Diameter {0:i} < 0 or Diameter {0:i} <= Max Diameter {1:i}".format(
 	      tool_diameter, maximum_diameter))
