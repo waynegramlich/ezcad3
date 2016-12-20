@@ -1734,6 +1734,7 @@ class Bend:
 
 	return self._radius
 
+
 class Hertz:
     def __init__(self, frequency=0.0, rpm=0.0, rps=0.0):
 	""" *Hertz*: Initialize the *Hertz* object (i.e. *self*) to be the sum of
@@ -1798,7 +1799,7 @@ class Hertz:
 	return hertz1._frequency != hertz2._frequency
 
     def frequency(self):
-	""" *Hertz*: Return the frequence of the * """
+	""" *Hertz*: Return the frequency of the *Hertz* object (i.e. *self*). """
 	return self._frequency
 
 class Material:
@@ -2290,7 +2291,7 @@ class Speed:
     def __eq__(speed1, speed2):
 	""" *Speed*: Return true if the *speed1* is equal to *speed2. """
 
-	return speed1._mm_per_sec > speed2._mm_per_sec
+	return speed1._mm_per_sec == speed2._mm_per_sec
 
     def __gt__(speed1, speed2):
 	""" *Speed*: Return true if the *speed1* is greater than *speed2. """
@@ -2360,6 +2361,8 @@ class Speed:
 	    # Millimeters per second:
 	    scale = 1.0
 	    format_text = format_text[:-1]
+	else:
+            assert False, "Missing format '{0}'".format_text
 	
 	# Format the value as a string and return it:
 	value = self._mm_per_sec / scale
@@ -3005,8 +3008,9 @@ class Contour:
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
+	    indent = ' ' * tracing
 	    print("{0}=>Contour._radius_center_and_tangents_compute('{1}')".
-	      format(' ' * tracing, self._name))
+	      format(indent, self._name))
 
 	bends = self._bends
 	bends_size = len(bends)
@@ -3683,8 +3687,8 @@ class Operation:
 	self._name = name
 	self._kind = kind
 	self._part = part
-	self._feed_speed = Speed()
-	self._spindle_speed = Hertz()
+	self._feed_speed = feed_speed
+	self._spindle_speed = spindle_speed
 	self._comment = comment
 	self._follows = follows
 	self._index = -1
@@ -3894,7 +3898,7 @@ class Operation_Contour(Operation):
 	assert isinstance(contour, Contour)
 	assert isinstance(offset, L)
 	assert isinstance(effective_tool_radius, L)
-	assert isinstance(passes, int)
+	assert isinstance(passes, int) and passes > 0
 	assert isinstance(tracing, int)
 
 	if tracing >= 1:
@@ -3927,27 +3931,30 @@ class Operation_Contour(Operation):
 	      format(indent, feed_speed, spindle_speed, z_start, z_stop,
 	      contour._name_get(), offset, effective_tool_radius, passes))
 
-    def _cnc_generate(self, tracing):
-	""" *Operation_Contour*: Ggenerate the CNC code for *self*.
+    def _cnc_generate(self, tracing=-1000000):
+	""" *Operation_Contour*: Generate the CNC code for the *Operation_Contour* object
+	    (i.e. *self*).
 	"""
-
-	# Verify argument types:
-	assert isinstance(tracing, int)
-
-	if tracing >= 0:
-	    print("{0}=>Operation_Contour._cnc_generate".format(' ' * tracing))
 
 	# Use *operaton* instead of *self*:
 	operation = self
 
+	# Verify argument types:
+	assert isinstance(tracing, int)
+
 	# Grab some values from *contour*:
-	part = self._part
+	part = operation._part
 	shop = part._shop_get()
 	code = shop._code_get()
 	tool = operation._tool
+	comment = operation._comment
+
+	# Perform an requested *tracing*:
+	if tracing >= 0:
+	    indent = " " * tracing
+	    print("{0}=>Operation_Contour._cnc_generate".format(indent))
 
 	# Record *comment* into *code*:
-	comment = operation._comment
 	code._line_comment(comment)
 
 	# Mark whether *tool* is a laser or not:
@@ -3955,8 +3962,8 @@ class Operation_Contour(Operation):
 	code._is_laser_set(is_laser)
 
 	# Grab some values from *tool*:
-	s = operation._spindle_speed
-	f = operation._feed_speed
+	s = operation._spindle_speed_get()
+	f = operation._feed_speed_get()
 	tool_diameter = tool._diameter_get()
 	z_feed = f / 2
 
@@ -3968,6 +3975,7 @@ class Operation_Contour(Operation):
 	offset = operation._offset
 	radius = operation._effective_tool_radius
 
+	# Do the setup step for doing the contour:
 	contour._radius_center_and_tangents_compute(tracing + 1)
 
 	z_depth = z_start - z_stop
@@ -3982,6 +3990,8 @@ class Operation_Contour(Operation):
 	#call d@("plunge_offset temporary set to zero\n")
 	zero = L()
 
+	if tracing >= 0:
+            print("{0}passes={1}".format(indent, passes))
 	for index in range(passes):
 	    code._line_comment("Pass {0} of {1}".format(index + 1, passes))
 
@@ -3997,7 +4007,7 @@ class Operation_Contour(Operation):
 	code._z_safe_retract(z_feed, s)
 
 	if tracing >= 0:
-	    print("{0}<=Operation_Contour._cnc_generate".format(' ' * tracing))
+	    print("{0}<=Operation_Contour._cnc_generate".format(indent))
 
     def compare(self, contour2):
 	""" *Operation_Contour* will return -1, 0, 1 depending upon whether
@@ -4076,6 +4086,8 @@ class Operation_Dowel_Pin(Operation):
 	assert isinstance(plunge_y, L)
 	assert isinstance(tip_depth, L)
 	assert isinstance(z_stop, L)
+
+	assert feed_speed != Speed()
 
 	# Initialize super class:
 	Operation.__init__(self, "Dowel_Pin", Operation.KIND_DOWEL_PIN,
@@ -4989,6 +5001,30 @@ class Operation_Simple_Pocket(Operation):
 	corner_radius = pocket._corner_radius
 	pocket_kind = pocket._pocket_kind
 	comment = pocket._comment
+	
+	# Extract the X/Y/Z coordinates from *corner1* and *corner2*:
+	x1 = corner1.x
+	y1 = corner1.y
+	z1 = corner1.z
+	x2 = corner2.x
+	y2 = corner2.y
+	z2 = corner2.z
+
+	# Determine *z_top* and *zbottom Z*:
+        z_top = z1.maximum(z2)
+        z_bottom = z1.minimum(z2)
+
+	# Now create *start_point* and *end_point*:
+	start_point = P(x1, y1, z_top)
+	end_point = P(x1, y1, z_bottom)
+
+	# Now we can create *top_surface_transform* from *start_point* and *end_point*:
+	degrees0 = Angle()
+	top_surface_transform = \
+	  Transform.top_surface("simple_pocket", start_point, end_point, degrees0, tracing + 1)
+
+	transformed_corner1 = top_surface_transform * corner1
+	transformed_corner2 = top_surface_transform * corner1
 
 	# Unpack from the corners:
 	x1 = corner1.x
@@ -5031,6 +5067,8 @@ class Operation_Simple_Pocket(Operation):
 
 	# Emit the preparatory G-Code:
 	is_laser = tool._is_laser_get()
+	if tracing >= 0:
+            print("{0}is_laser={1}".format(indent, is_laser))
 
 	# Compute the number of depth passes required:
 	maximum_operation_depth = tool_radius / 2
@@ -5040,7 +5078,7 @@ class Operation_Simple_Pocket(Operation):
 	total_cut = z_start - z_stop + z_extra
 	if tracing >= 0:
 	    print("{0}z_start={1:i} z_stop={2:i} z_extra={3:i}".
-	     format(indent, z_start, z_stop, z_extra))
+	      format(indent, z_start, z_stop, z_extra))
 	passes = int(total_cut / maximum_operation_depth)
 	while maximum_operation_depth* float(passes) < total_cut:
 	    passes = passes + 1
@@ -5083,7 +5121,6 @@ class Operation_Simple_Pocket(Operation):
 	code._z_safe_assert("simple_pocket", comment)
 
 	is_laser = isinstance(tool, Tool_End_Mill) and tool._is_laser_get()
-
 	if is_laser:
 	    code._simple_pocket_helper(pocket, zero, s, f, zero, True)
 	else:
@@ -6157,9 +6194,8 @@ class Part:
 	# Use *part* instead of *self*:
 	part = self
 	part_name = part._name
-	if part_name[:15] == "Gear_Box_Bottom":
-	    tracing = 0
 
+	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._flush('{1}', prog_no={2})".
@@ -6278,7 +6314,7 @@ class Part:
 	    print("{0}<=Part._flush('{1}', prog_no={2}) =>{3}".
 	      format(indent, part_name, program_number, new_program_number))
 
-	return program_number
+	return new_program_number
 
     def _flush_helper(self, operations, ngc_program_number, tracing):
 	""" *Part*: Output the G-code for *operations* to a "On.ngc" file where,
@@ -6297,16 +6333,18 @@ class Part:
 	part_name = part._name
 
 	# Perform any requested *tracing*:
+	indent = ""
+	debug = False
 	if tracing >= 0:
+	    indent = ' ' * tracing
+	    debug = True
 	    print("{0}=>Part._flush_helper(part='{1}', len(ops)={2}, ngc_no={3}".
-	      format(' ' * tracing, part_name, len(operations), ngc_program_number))
+	      format(indent, part_name, len(operations), ngc_program_number))
 
 	# Set *debug* to True to trace this routine:
-	debug = False
-	#debug = True
 	if debug:
-	    print("=>Part._flush_helper('{0}', *, {1}, *)".
-	      format(part_name, ngc_program_number))
+	    print("{0}=>Part._flush_helper('{1}', *, {2}, *)".
+	      format(indent, part_name, ngc_program_number))
 	    print("operations=", operations)
 
 	zero = L()
@@ -6342,6 +6380,8 @@ class Part:
 	    if not isinstance(operation, Operation_Drill):
 		all_operations_are_drills = False
 		break
+	if tracing >= 0:
+            print("{0}all_operations_are_drills={1}".format(indent, all_operations_are_drills))
 
 	# FIXME: Move this code to *Operaton_Drill* class!!!
 	# Reorder the drill operations to minimize traverses:
@@ -6371,8 +6411,8 @@ class Part:
 		# in operations:
 		if match_index >= 0:
 		    if debug:
-			print("minimum_distance[{0}]={1}\n".
-			  format(index, minimum_distance))
+			print("{0}minimum_distance[{1}]={0}\n".
+			  format(indent, index, minimum_distance))
 
 			# Swap the two drill operations:
 			match_operation = operations[match_index]
@@ -6383,7 +6423,8 @@ class Part:
 	code = None
 	for operation in operations:
 	    if debug:
-		print("operation name:{0}".format(operation._name_get()))
+		print("{0}operation name:{1} tool={2}".format(indent,
+		  operation._name_get(), operation._tool_get()._name_get()))
 	    # Grab the *spindle_speed*:
 	    spindle_speed = operation._spindle_speed_get()
 
@@ -6418,7 +6459,7 @@ class Part:
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Part._flush_helper(part='{1}', len(ops)={2}, ngc_no={3}".
-	      format(' ' * tracing, part_name, len(operations), ngc_program_number))
+	      format(indent, part_name, len(operations), ngc_program_number))
 
     ## @brief Formats *self* into a string and returns it.
     #  @param format is the format control string (currently ignored).
@@ -6596,7 +6637,7 @@ class Part:
 	    remainder = program_number % 10
 	    if remainder != 0:
 		program_number += 10 - remainder
-	    shop.program_base = program_number
+	    shop._program_base_set(program_number)
 
 	    # See if we have a .dxf file to write:
 	    if code._dxf_content_avaiable():
@@ -7327,8 +7368,6 @@ class Part:
 
 		    # Select the *surface_speed* for *tool_material*:
 		    tool._priority = priority
-		    tool._spindle_speed = Hertz()
-		    tool._feed_speed = Speed()
 		    tool_material = tool._material_get()
 		    surface_speed = None
 		    if tool._flutes_count_get() > 0:
@@ -8954,6 +8993,7 @@ class Part:
 	stl_mode = (ezcad._mode == EZCAD3.STL_MODE)
 
 	if stl_mode:
+	    # Compute the *top_surface_transform*:
 	    degrees0 = Angle(deg=0.0)
 	    top_surface_transform = \
 	      Transform.top_surface("extrude", start_point, end_point, degrees0, tracing + 1)
@@ -8983,9 +9023,17 @@ class Part:
 
 	# Do any requested CNC generation:
 	if cnc_mode:
+	    # Grab the previously computed *top_surface_transform* that reorients the
+            # material properly for the CNC machine:
+	    top_surface_transform = part._top_surface_transform
+
+	    # Perform all of the *contour* massaging:
+	    contour._project(top_surface_transform, tracing + 1)
+	    contour._inside_bends_identify(tracing + 1)
+	    contour._radius_center_and_tangents_compute(tracing + 1)
+
 	    # Project all of the points in *contour* onto a plane normal to *projection_axis*
 	    # and then rotate that plane to be the X/Y plane:
-	    top_surface_transform = part._top_surface_transform
 	    contour._project(top_surface_transform, tracing + 1)
 
 	    # The returned value from *_smallest_inner_diameter_compute*() will be either
@@ -8997,11 +9045,14 @@ class Part:
 	    smallest_inner_radius = contour._smallest_inner_radius_compute(tracing + 1)
 	    smallest_inner_diameter = smallest_inner_radius * 2
 
+	    transformed_start_point = top_surface_transform * start_point
+	    transformed_end_point = top_surface_transform * end_point
+
 	    # Find a *Tool* to use for edge milling.  For non-through contours, we should use
 	    # a mill drill in preference to an end-mill because that way we can overlap
 	    # with any top chamfering hole countersinking (i.e. one fewer tool change).
 	    # Otherwise use an end mill:
-	    z_stop = start_point.z - end_point.z
+	    z_stop = transformed_start_point.z - transformed_end_point.z
 	    if tracing >= 0:
 		print("{0}z_stop={1:i}".format(indent, z_stop))
 	    mill_drill_tool = \
@@ -9100,10 +9151,13 @@ class Part:
 
 		# Figure out how many *passes* using *depth_maximum*, *z_start*, *z_stop*,
 		# and *z_extra:
-		z_start = start_point.z
-		z_end = end_point.z
+		z_start = transformed_start_point.z
+		z_end = transformed_end_point.z
 		z_extra = zero
-		z_depth = z_start - z_end + z_extra
+		z_depth = (z_start - z_end).absolute() + z_extra
+
+		if tracing >= 0:
+		    print("{0}z_depth={1} depth_maximum={2}".format(indent, z_depth, depth_maximum))
 		passes = int(z_depth / depth_maximum) + 1
 
 		if tracing >= 0:
@@ -10665,6 +10719,9 @@ class Part:
 	      format(indent, self._name,
 	      comment, corner1, corner2, radius, pocket_top, rotate, flags))
 
+	# Use *part* instead of *self:
+        part = self
+
 	# Make sure that the corners are diagonal from bottom south west to top north east:
 	x1 = min(corner1.x, corner2.x)
 	x2 = max(corner1.x, corner2.x)
@@ -10674,11 +10731,12 @@ class Part:
 	z2 = max(corner1.z, corner2.z)
 
 	# Verify that we have properly ordered coordinates:
-	if x1 >= x2 and EZCAD3.update_count_get() == 0:
+	update_count = EZCAD3.update_count_get()
+	if x1 >= x2 and update_count == 0:
             print("Part.simple_pocket:x1={0} should be less than x2={1}".format(x1, x2))
-	if y1 >= y2 and EZCAD3.update_count_get() == 0:
+	if y1 >= y2 and update_count == 0:
 	    print("Part.simple_pocket:y1={0} should be less than y2={1}".format(y1, y2))
-	if z1 >= z2 and EZCAD3.update_count_get() == 0:
+	if z1 >= z2 and update_count == 0:
             print("Part.simple_pocket:z1={0} should be less than z2={1}".format(z1, z2))
 
 	# Create the *bsw_corner* and *tne_corner* points:
@@ -10729,20 +10787,12 @@ class Part:
 		  "pocket_top = '{0}' instead of 't', 'b', 'n', 's', 'e', or 'w'". \
 		  format(pocket_top)
 
-	    # Generate the openscad stuff:
-	    difference_lines = self._scad_difference_lines
-	    pad = ' ' * 6
-
 	    # Compute *top_transform* and transform the two corners:
 	    top_transform = Transform.top_surface(comment, start, end, rotate, tracing + 1)
 	    transformed_bsw_corner = top_transform * bsw_corner
 	    transformed_tne_corner = top_transform * tne_corner
 
-            # Output the transform that will put everything in the correct location:
-	    top_transform_reverse = top_transform.reverse()
-	    top_transform_reverse._scad_lines_append(difference_lines, pad)
-
-	    # Now transform the corner coordinates:
+	    # Now extract the X/Y/Z locatons of the corners:
 	    tx1 = transformed_bsw_corner.x
 	    ty1 = transformed_bsw_corner.y
 	    tz1 = transformed_bsw_corner.z
@@ -10757,6 +10807,14 @@ class Part:
 	    x2 = max(tx1, tx2)
 	    y2 = max(ty1, ty2)
 	    z2 = max(tz1, tz2) + start_extra
+
+	    # Generate the openscad stuff:
+	    difference_lines = self._scad_difference_lines
+	    pad = ' ' * 6
+
+            # Output the transform that will put everything in the correct location:
+	    top_transform_reverse = top_transform.reverse()
+	    top_transform_reverse._scad_lines_append(difference_lines, pad)
 
 	    difference_lines.append(
 	      "{0}// Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}', {7:d}, '{8}')".
@@ -10840,58 +10898,34 @@ class Part:
 	    if tracing >= 0:
                 print("{0}Part.simple_pocket: CNC_MODE started".format(indent))
 
-	    # Deal with *pocket_top* argument:
-	    if pocket_top == "t":
-		start = P(zero, zero, z2)
-		end =   P(zero, zero, z1)
-	    elif pocket_top == "b":
-		start = P(zero, zero, z1)
-		end =   P(zero, zero, z2)
-	    elif pocket_top == "n":
-		start = P(zero, y2, zero)
-		end =   P(zero, y1, zero)
-	    elif pocket_top == "s":
-		start = P(zero, y1, zero)
-		end =   P(zero, y2, zero)
-	    elif pocket_top == "e":
-		start = P(x2, zero, zero)
-		end =   P(x1, zero, zero)
-	    elif pocket_top == "w":
-		start = P(x1, zero, zero)
-		end =   P(x2, zero, zero)
-	    else:
-		assert False, \
-		  "pocket_top = '{0}' instead of 't', 'b', 'n', 's', 'e', or 'w'". \
-		  format(pocket_top)
-	    #print("SP:start={0:m} end={0:m}".format(start, end))
+	    # Grab the *top_surface_transform* from *part* that has been previously
+            # set to orient the material properly for the CNC machine:
+	    top_surface_transform = part._top_surface_transform
 
-	    # Compute *top_transform* and transform the two corners:
-	    top_surface_transform = self._top_surface_transform
+	    # Transform the corners
+	    transformed_corner1 = top_surface_transform * corner1
+	    transformed_corner2 = top_surface_transform * corner2
 
-	    #top_transform = Transform.top_surface(comment, start, end, rotate, tracing + 1)
-	    transformed_bsw_corner = top_surface_transform * bsw_corner
-	    transformed_tne_corner = top_surface_transform * tne_corner
-	    dz = (transformed_tne_corner.z - transformed_bsw_corner.z).absolute()
-	    #print("tbsw={0:m} ttne={1:m}".format(transformed_bsw_corner, transformed_tne_corner))
+	    # Extract the X/Y/Z coordinates from *transformed_corner1* and *transformed_corner2*:
+	    transformed_x1 = transformed_corner1.x
+	    transformed_y1 = transformed_corner1.y
+	    transformed_z1 = transformed_corner1.z
+	    transformed_x2 = transformed_corner2.x
+	    transformed_y2 = transformed_corner2.y
+	    transformed_z2 = transformed_corner2.z
 
-	    # Now transform the corner coordinates:
-	    tx1 = transformed_bsw_corner.x
-	    ty1 = transformed_bsw_corner.y
-	    tz1 = transformed_bsw_corner.z
-	    tx2 = transformed_tne_corner.x
-	    ty2 = transformed_tne_corner.y
-	    tz2 = transformed_tne_corner.z
+	    # Figure out the new corner coordinates:
+	    new_x1 = transformed_x1.minimum(transformed_x2)
+	    new_x2 = transformed_x1.maximum(transformed_x2)
+	    new_y1 = transformed_y1.minimum(transformed_y2)
+	    new_y2 = transformed_y1.maximum(transformed_y2)
+	    new_z1 = transformed_z1.minimum(transformed_z2)
+	    new_z2 = transformed_z1.maximum(transformed_z2)
 
-	    # Now compute the minimum and maximum coordinates:
-	    x1 = min(tx1, tx2)
-	    y1 = min(ty1, ty2)
-	    z1 = min(tz1, tz2)
-	    x2 = max(tx1, tx2)
-	    y2 = max(ty1, ty2)
-	    z2 = max(tz1, tz2)
-
-	    t_corner1 = P(x1, y1, z1)
-	    t_corner2 = P(x2, y2, z2)
+	    # Now build the 2 new corners:
+	    new_corner1 = P(new_x1, new_y1, new_z1)
+	    new_corner2 = P(new_x2, new_y2, new_z2)
+	    dz = new_z2 - new_z1
 
 	    # Search for a matching *end_mill_tool*:
 	    maximum_diameter = 2 * radius
@@ -10910,7 +10944,7 @@ class Part:
 	    operation_order = Operation.ORDER_END_MILL_SIMPLE_POCKET
 	    operation_simple_pocket = Operation_Simple_Pocket(self, comment, 0,
 	      end_mill_tool, operation_order, None, end_mill_feed_speed, end_mill_spindle_speed,
-	      t_corner1, t_corner2, radius, end_mill_radius, Operation.POCKET_KIND_FLAT)
+	      new_corner1, new_corner2, radius, end_mill_radius, Operation.POCKET_KIND_FLAT)
 	    self._operation_append(operation_simple_pocket)
 
 	    if tracing >= 0:
@@ -12123,6 +12157,8 @@ class Code:
 	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(tracing, int)
 
+	assert feed_speed != Speed()
+
 	# Use *code* instead of *self*:
 	code = self
 
@@ -12893,7 +12929,7 @@ class Code:
 	elif field_name == "Z":
 	    if self._z != value:
 		self._z = value
-		achanged = True
+		changed = True
 	elif field_name == "Z1":
 	    if self._z1 != value:
 		self._z1 = value
@@ -12925,7 +12961,7 @@ class Code:
 
     def _mode_motion(self, g1_value):
 	""" *Code*: This routine will issue a G*g1_value* motion command to the *Code* object
-	    (i.e. *self)*.
+	    (i.e. *self*).
 	"""
 
 	# Verify arguement types:
@@ -13216,6 +13252,7 @@ class Code:
 	square_bracket = False
 	changed = False
 	if field_name == "F":
+	    assert value != Speed()
 	    if self._f != value:
 		self._f = value
 		changed = True
@@ -13398,7 +13435,7 @@ class Code:
 		previous_value = 0x12345
 
 	assert matched, "Unrecognized field name {0}".format(field_name)
-	if previous_value != value:
+	if previous_value != value or field_name == "G1":
 	    self._command_chunks.append("{0}{1}".format(field_name[0], value))
 
     def _vice_xy_set(self, vice_x, vice_y):
@@ -14618,7 +14655,9 @@ class Shop:
 	# and return the *tool*:
 	tool_dowel_pin = Tool_Dowel_Pin(name,
 	  number, material, diameter, maximum_z_depth, tip_depth)
+	tool_dowel_pin._feed_speed_set(Speed(in_per_sec = 1.000))
 	self._tool_append(tool_dowel_pin)
+	print("tool_dowel_pin=", tool_dowel_pin)
 	return tool_dowel_pin
 
     def _drill_append(self,
@@ -14712,6 +14751,13 @@ class Shop:
 	"""
 
 	return self._program_base
+
+    def _program_base_set(self, program_base):
+	""" *Shop*: Set program base number associated with the *Shop* object
+	    (i.e. *self*) to *program_base*.
+	"""
+
+	self._program_base = program_base
 
     def _vice_get(self):
 	""" *Shop*: Return the *Vice* object associated with the *Shop* object (i.e. *self*.) """
@@ -14895,6 +14941,7 @@ class Tool:
 	# Verify argument types:
 	assert isinstance(feed_speed, Speed)
 
+	assert feed_speed != Speed()
 	self._feed_speed = feed_speed
 
     def _flutes_count_get(self):
@@ -15068,6 +15115,8 @@ class Tool_Dowel_Pin(Tool):
 	# Initialize super class:
 	Tool.__init__(self,
 	  name, number, Tool.KIND_DOWEL_PIN, material, diameter, 0, maximum_z_depth)
+
+	self._feed_speed_set(Speed(in_per_sec=1.0))
 
 	# Load up *self*:
 	self._tip_depth = tip_depth		# Tip portion that is not vertical
