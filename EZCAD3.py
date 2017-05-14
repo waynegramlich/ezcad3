@@ -6157,7 +6157,7 @@ class Part:
 	    operation_group.append(operation)
 	#print("operation_groups=", operation_groups)
 
-	# Open the top-level *part_ngc_stream* file that lists bot the tool table and
+	# Open the top-level *part_ngc_file* that lists both the tool table and
         # calls each tool operation from a single top level .ngc file:
 	
 	ezcad = self._ezcad_get()
@@ -6170,16 +6170,17 @@ class Part:
 	part_ngc_file.write("( Part: {0})".format(part._name_get()))
 	part_ngc_file.write("( Tooling table: )\n")
 
-	# Open the top-level *part_wrl_stream* file that outputs each visual tool path.
+	# Open the top-level *part_wrl_file* file that outputs each visual tool path.
         # Note that these file names ene in .wrl and are written into the .../ngc sub-directory:
 	part_wrl_file_name = os.path.join(ngc_directory, "O{0}.wrl".format(program_number))
 	part_wrl_file = open(part_wrl_file_name, "w")
 
 	# Output the preceeding VRML code to group group the children shapes:
-        part_wrl_file.write("#VRML 2.0 utf8\n")
-        part_wrl_file.write("Viewpoint {description \"Initial view\" position 0 0 150\n")
-	part_wrl_file.write("NavigationInfo { type \"Examine\" }\n")
-	part_wrl_file.write("Def x{0} Group {1}\n".format(part_name, "{"))
+        part_wrl_file.write("#VRML V2.0 utf8\n")
+        #part_wrl_file.write("Viewpoint {description \"Initial view\" position 0 0 150\n")
+	#part_wrl_file.write("NavigationInfo { type \"Examine\" }\n")
+	#part_wrl_file.write("Def x{0} Group {1}\n".format(part_name, "{"))
+	part_wrl_file.write("Group {\n")
 	part_wrl_file.write(" children [\n".format(part_name))
 
 	# Now visit each *operation_group* in *operation_groups*:
@@ -12093,6 +12094,9 @@ class Fastener(Part):
 # *Code* class:
 
 class Code:
+    """ *Code*: The *Code* class outputs G-codes, DXF-files, and VRML based tool paths.
+	Most of the focus is on G-codes though.
+    """
 
     def __init__(self):
 	""" *Code*: Initialize the new *Code* object (i.e. *self*).
@@ -12118,12 +12122,6 @@ class Code:
 	code._vice_y = zero
 	code._z_rapid = zero		# Z above which Z rapids are allowed
 	code._z_safe = zero		# Z above XY rapids are safe
-
-	code.vrml_colors = [ 1.0, 0.0, 0.0 ]
-	code.vrml_color_indexes = []
-	code.vrml_lines = []
-	code.vrml_points = []
-	code.vrml_file = None
 
 	# Construct the *g1_table*:
 	g1_values_list = (0, 1, 2, 3, 33, 38, 73, 76, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89)
@@ -12166,6 +12164,8 @@ class Code:
 	code._z_safe_pending = False	# {true}=>need to do z safe move
 	code._z_safe_s = Hertz()	# Speed to perform z safe operation at
 
+	# Reset VRML fields here.  Note: routine acessses some of the G-code variable,
+        # so it must be called last:
 	code._vrml_reset()
 
     def _command_begin(self):
@@ -12748,49 +12748,77 @@ class Code:
 
 	# Write out headers to *vrml_file*:
 	vrml_file = code._vrml_file
-	vrml_file.write("#VRML V2.0 utf8\n")
-	vrml_file.write("Shape {\n")
-	vrml_file.write(" geometry IndexedLineSet {\n")
-	vrml_file.write("  colorPerVertex FALSE\n")
+	part_wrl_file = code._part_wrl_file
+
+	vrml_file.write(    "#VRML V2.0 utf8\n")
+	part_wrl_file.write("  #VRML V2.0 utf8\n")
+	vrml_file.write(    "Shape {\n")
+	part_wrl_file.write("  Shape {\n")
+	vrml_file.write(    " geometry IndexedLineSet {\n")
+	part_wrl_file.write("   geometry IndexedLineSet {\n")
+	vrml_file.write(    "  colorPerVertex FALSE\n")
+	part_wrl_file.write("    colorPerVertex FALSE\n")
 
 	# Output the colors:
-	vrml_file.write("  color Color {\n")
-	vrml_file.write("   color [\n")
-	vrml_file.write("     0.0 0.0 1.0 # blue\n")
-	vrml_file.write("     1.0 0.0 0.0 # red\n")
-	vrml_file.write("     0.0 1.0 0.0 # green\n")
-	vrml_file.write("   ]\n")
-	vrml_file.write("  }\n")
+	vrml_file.write(    "  color Color {\n")
+	part_wrl_file.write("    color Color {\n")
+	vrml_file.write(    "   color [\n")
+	part_wrl_file.write("     color [\n")
+	vrml_file.write(    "     0.0 0.0 1.0 # blue\n")
+	part_wrl_file.write("       0.0 0.0 1.0 # blue\n")
+	vrml_file.write(    "     1.0 0.0 0.0 # red\n")
+	part_wrl_file.write("       1.0 0.0 0.0 # red\n")
+	vrml_file.write(    "     0.0 1.0 0.0 # green\n")
+	part_wrl_file.write("       0.0 1.0 0.0 # green\n")
+	vrml_file.write(    "   ]\n")
+	part_wrl_file.write("     ]\n")
+	vrml_file.write(    "  }\n")
+	part_wrl_file.write("    }\n")
 
 	# Write out points:
-	vrml_file.write("  coord Coordinate {\n")
-	vrml_file.write("   point [\n")
+	vrml_file.write(    "  coord Coordinate {\n")
+	part_wrl_file.write("    coord Coordinate {\n")
+	vrml_file.write(    "   point [\n")
+	part_wrl_file.write("     point [\n")
 	for point in code._vrml_points:
-	    vrml_file.write("    {0} {1} {2}\n".format(point[0], point[1], point[2]))
-	vrml_file.write("   ]\n")
-	vrml_file.write("  }\n")
+	    vrml_file.write(    "    {0} {1} {2}\n".format(point[0], point[1], point[2]))
+	    part_wrl_file.write("      {0} {1} {2}\n".format(point[0], point[1], point[2]))
+	vrml_file.write(    "   ]\n")
+	part_wrl_file.write("     ]\n")
+	vrml_file.write(    "  }\n")
+	part_wrl_file.write("    }\n")
 		
 	# Write out coordinate index:
-	vrml_file.write("  coordIndex [\n")
+	vrml_file.write(    "  coordIndex [\n")
+	part_wrl_file.write("    coordIndex [\n")
 	vrml_point_indices = code._vrml_point_indices
-	vrml_file.write("  ");
+	vrml_file.write(    "  ");
+	part_wrl_file.write("    ");
 	for index in vrml_point_indices:
-	    vrml_file.write(" {0}".format(index))
+	    vrml_file.write(    " {0}".format(index))
+	    part_wrl_file.write("   {0}".format(index))
 	    if index < 0:
-		vrml_file.write("\n  ")
-	vrml_file.write("]\n")
+		vrml_file.write     ("\n  ")
+		part_wrl_file.write("\n    ")
+	vrml_file.write(     "]\n")
+	part_wrl_file.write("  ]\n")
 
 	# Write out the color indices:
-	vrml_file.write("  colorIndex [\n")
+	vrml_file.write(    "  colorIndex [\n")
+	part_wrl_file.write("    colorIndex [\n")
 	for color_index in code._vrml_color_indices:
-	    vrml_file.write("    {0}\n".format(color_index))
+	    vrml_file.write(    "    {0}\n".format(color_index))
+	    part_wrl_file.write("      {0}\n".format(color_index))
 	vrml_file.write("  ]\n")
+	part_wrl_file.write("    ]\n")
 
 	# Close out the shape and geometry clauses:
-	vrml_file.write(" }\n")
-	vrml_file.write("}\n")
+	vrml_file.write(    " }\n")
+	part_wrl_file.write("   }\n")
+	vrml_file.write(    "}\n")
+	part_wrl_file.write("  }\n")
 
-	# Close *vrml_file*:
+	# Close *vrml_file* but leave *part_wrl_file* open:
 	vrml_file.close()
 
 	# Now reset all the VRML values:
@@ -13247,7 +13275,6 @@ class Code:
 	# Open new *code_stream*:
 	ezcad = part._ezcad_get()
 	ngc_directory = ezcad._ngc_directory_get()
-	print("Code._start(): ngc_directory='{0}'".format(ngc_directory))
 	code_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(ngc_program_number))
 	code_stream = open(code_file_name, "w")
 	assert code_stream != None, "Could not open '{0}' for writing".format(code_file_name)
@@ -13915,7 +13942,9 @@ class Code:
 	# Use *code* instead of *self*:
 	code = self
 
+	# Reset the VRML data structures of *code*:
 	code._vrml_color_indices = []
+	code._vrml_file = None
 	code._vrml_motion = -1
 	code._vrml_point_indices = []
 	code._vrml_points = []
@@ -13924,7 +13953,6 @@ class Code:
 	code._vrml_start_x = code._x
 	code._vrml_start_y = code._y
 	code._vrml_start_z = code._z
-	code._vrml_file = None
 
     def _x_value(self):
 	""" *Code*: Return the current value of X offset by the vice X for the *Code* object
