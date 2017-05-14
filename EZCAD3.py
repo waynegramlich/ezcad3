@@ -5593,6 +5593,7 @@ class Part:
 	self._bounding_box = Bounding_Box()
 	self._color = None
 	self._center = P()
+	self._cnc_suppress = False
 	self._dowel_x = zero
 	self._dowel_y = zero
 	self._dx_original = zero
@@ -6035,6 +6036,11 @@ class Part:
 	if trace:
 	    print("<=Part._box_recompute({0}, {1})".format(self._name, label))
 
+    def _cnc_suppress_set(self):
+        """ *Part*: Suppress CNC generation for the *Part* object (i.e. *self**):"""
+
+	part = self
+        part._cnc_suppress = True
 
     def _color_material_update(self, color, material):
 	""" *Part*: Update *color* and *material* for *self*. """
@@ -6057,6 +6063,285 @@ class Part:
 
 	#print("<=Part._color_material_update({0}, {1}): c={2} m={3}".
 	#  format(color, material, self._color, self._material))
+
+    def _cnc_flush(self, program_number, tracing):
+	""" *Part*: Flush out the CNC code for the *Part* object (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(program_number, int)
+	assert isinstance(self, Part)
+	assert isinstance(tracing, int)
+
+	# Use *part* instead of *self*:
+	part = self
+	part_name = part._name
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part._flush('{1}', prog_no={2})".
+	      format(indent, part_name, program_number))
+
+	#call d@(form@("=>flush@Part(%v%, %d%)\n\") %
+	#  f@(part.name) / f@(program_number))
+	original_program_number = program_number
+
+	#call show@(part, "before flush")
+	shop = part._shop_get()
+	assert isinstance(shop, Shop)
+	vice = shop._vice_get()
+	jaw_width = vice._jaw_width_get()
+
+	# Compute (*plunge_x*, *plunge_y*) which is the vertical axis over
+	# which is to the left of the the part or the vice:
+	dowel_x = part._dowel_x_get()
+	dowel_y = part._dowel_y_get()
+	vice_x = part._vice_x_get()
+	vice_y = part._vice_y_get()
+	assert isinstance(vice_x, L)
+	plunge_x = vice_x
+	if plunge_x > dowel_x:
+	    plunge_x = dowel_x
+	assert isinstance(jaw_width, L)
+	assert isinstance(plunge_x, L)
+	if plunge_x > jaw_width:
+	    plunge_x = plunge_x - L(inch=0.7)
+	part._plunge_xy_set(plunge_x, dowel_y)
+    
+	code = shop._code_get()
+	assert isinstance(code, Code)
+	code._z_safe_set(part._z_safe_get())
+	code._z_rapid_set(part._z_rapid_get())
+	operations = part._operations_get()
+	size = len(operations)
+
+	#call show@(part, "before sort", 1t)
+
+	# FIXME move the sort into *operations_regroup*:
+	# Sort *operations* to group similar operations together:
+	operations.sort(cmp=Operation._compare)
+
+	#print("len(operations)={0}".format(len(operations)))
+	#for operation in operations:
+	#    print("operation name:{0}".format(operation._name_get()))
+
+	#call show@(part, "after sort", 1t)
+
+	# Do we need to user regroups instead *operations*:
+	part._operations_regroup()
+
+	#if regroups != 0
+	#	call show@(part, "after_regroup", 0f)
+
+	# FIXME: The code below should replace all the index stuff:
+	current_tool = None
+	operation_group = None
+	operation_groups = []
+	for operation in operations:
+	    # Grab the *tool* from *operation*:
+	    tool = operation._tool_get()
+	    assert isinstance(tool, Tool)
+
+	    # Start a new *operation_group* if the *tool* is different:
+	    if current_tool != tool:
+		# This code is always exectuted the first time through:
+		current_tool = tool
+		operation_group = []
+		operation_groups.append(operation_group)
+
+	    # Tack *operation* onto *operation_group*:
+	    assert isinstance(operation_group, list)
+	    operation_group.append(operation)
+	#print("operation_groups=", operation_groups)
+
+	# Open the top-level *part_ngc_stream* file that outputs each tool operation
+	# in a separate .ngc file:
+	
+	ezcad = self._ezcad
+	ngc_directory = ezcad._ngc_directory_get()
+	part_ngc_stream_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
+	part_ngc_stream = open(part_ngc_stream_file_name, "w")
+	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_stream_file_name)
+
+	# Output some heading lines for *part_ngc_stream*:
+	part_ngc_stream.write("( Part: {0})".format(part._name_get()))
+	part_ngc_stream.write("( Tooling table: )\n")
+
+	# Now visit each *operation_group* in *operation_groups*:
+	for index, operation_group in enumerate(operation_groups):
+	    # Output a couple of lines *part_ngc_write*:
+	    ngc_program_number = program_number + 1 + index
+	    tool_number = tool._number_get()
+	    tool_name = tool._name_get()
+	    part_ngc_stream.write("( T{0} {1} )\n".format(tool_number, tool_name))
+	    part_ngc_stream.write("O{0} call\n".format(ngc_program_number))
+
+	    # Sweep through the *operation_group*:
+	    part._cnc_flush_helper(operation_group, ngc_program_number, tracing + 1)
+
+	# Write out the final lines to *part_ngc_stream*:
+	part_ngc_stream.write("G53 Y0.0 ( Move the work to the front )\n")
+	part_ngc_stream.write("M2\n")
+	part_ngc_stream.close()
+
+	# Empty out *operations* :
+	del operations[:]
+
+	# Compute the next *program number* to be a the next multiple of 10 and return it:
+	new_program_number = program_number + len(operation_groups) + 1
+	new_program_number = (new_program_number + 9) / 10 * 10
+
+	if tracing >= 0:
+	    print("{0}<=Part._flush('{1}', prog_no={2}) =>{3}".
+	      format(indent, part_name, program_number, new_program_number))
+
+	return new_program_number
+
+    def _cnc_flush_helper(self, operations, ngc_program_number, tracing):
+	""" *Part*: Output the G-code for *operations* to a "On.ngc" file where,
+	    N is the *ngc_program_number* using the *Part* object (i.e. *self*).
+	"""
+
+	# Verify argument types:
+	assert isinstance(operations, list) and len(operations) > 0
+	for operation in operations:
+	    assert isinstance(operation, Operation)
+	assert isinstance(ngc_program_number, int)
+	assert isinstance(tracing, int)
+
+	# Use *part* instead of *self*:
+	part = self
+	part_name = part._name
+
+	# Perform any requested *tracing*:
+	indent = ""
+	debug = False
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    debug = True
+	    print("{0}=>Part._flush_helper(part='{1}', len(ops)={2}, ngc_no={3}".
+	      format(indent, part_name, len(operations), ngc_program_number))
+
+	# Set *debug* to True to trace this routine:
+	if debug:
+	    print("{0}=>Part._flush_helper('{1}', *, {2}, *)".
+	      format(indent, part_name, ngc_program_number))
+	    print("operations=", operations)
+
+	zero = L()
+
+	# Grab some values from *part*:
+	shop = part._shop_get()
+
+	# Grab the first *operation*:
+	operation = operations[0]
+	vice_x = operation._vice_x_get()
+	vice_y = operation._vice_y_get()
+	tool = operation._tool_get()
+
+	# Get the *feed_speed* and *spindle_speed*:
+	feed_speed = tool._feed_speed_get()
+	spindle_speed = tool._spindle_speed_get()
+
+	assert tool != None
+
+	# FIXME: The code below should be methodized!!!
+	#block = Block(part, tool, vice_x, vice_y)
+	#block._spindle_set(s)
+	#block._comment_set(operation._comment_get())
+	#block._text_set(block._text_get())
+
+	#commands = code._commands
+	#blocks = code._blocks
+	#print("before len(blocks)={0} len(commands)={1}".format(len(blocks), len(commands)))
+
+	# Figure out if *all_operations_are_drills*:
+	all_operations_are_drills = True
+	for operation in operations:
+	    if not isinstance(operation, Operation_Drill):
+		all_operations_are_drills = False
+		break
+	if tracing >= 0:
+            print("{0}all_operations_are_drills={1}".format(indent, all_operations_are_drills))
+
+	# FIXME: Move this code to *Operaton_Drill* class!!!
+	# Reorder the drill operations to minimize traverses:
+	if all_operations_are_drills:
+	    for index in range(first_index, last_index + 1):
+		current_operation = operations[index]
+		assert isinstance(current_operation, Operation_Drill)
+		current_drill = current_operation
+
+		current_x = current_drill.x
+		current_y = current_drill.y	
+
+		minimum_distance = L(mm=123456789.0)
+		match_index = -1
+		for search_index in range(index + 1, last_index + 1):
+		    search_drill = operations[search_index]
+		    assert isinstance(search_drill, Operation_Drill)
+		    search_x = search_drill.x
+		    search_y = search_drill.y
+		    search_distance = \
+		      (search_x - current_x).diagonal_2d(search_y - current_y)
+                    if search_distance < minimum_distance:
+			minimum_distance = search_distance
+			match_index = search_index
+
+		# Move the matching operation to be next after {operation}
+		# in operations:
+		if match_index >= 0:
+		    if debug:
+			print("{0}minimum_distance[{1}]={0}\n".
+			  format(indent, index, minimum_distance))
+
+			# Swap the two drill operations:
+			match_operation = operations[match_index]
+			operations[match_index] = operations[index + 1]
+			operations[index + 1] = match_operation
+
+	# Now do a cnc generate for each *operaton* in *operations*:
+	code = None
+	for operation in operations:
+	    if debug:
+		print("{0}operation name:{1} tool={2}".format(indent,
+		  operation._name_get(), operation._tool_get()._name_get()))
+	    # Grab the *spindle_speed*:
+	    spindle_speed = operation._spindle_speed_get()
+
+	    # Initialize the *code* object:
+	    if code == None:
+		# Grab the *code* object and start the code generation:
+		code = shop._code_get()
+		code._start(part, tool, ngc_program_number, spindle_speed)
+		code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
+		code._z_rapid_set(part._z_rapid_get())
+		code._z_safe_set(part._z_safe_get())
+		code._z_set(part._z_safe_get())
+		code._vice_xy_set(operation._vice_x_get(), operation._vice_y_get())
+		comment = operation._comment_get()
+		code._z_safe_assert("flush_helper1", comment)
+
+		# FIXME: Do we really need to do the stuff below?
+		# Each block is set to these two values beforehand:
+		#code._z_set(part._z_safe_get())
+		#code._s_set(s)
+		#code._g1_set(0)
+		#code._block_append(block)
+
+	    # Perform the CNC generation step for *operation*:
+	    operation._cnc_generate(tracing + 1)
+
+	if code != None:
+	    code._z_safe_retract_actual()
+	    code._dxf_xy_offset_set(zero, zero)
+	    code._finish()
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part._flush_helper(part='{1}', len(ops)={2}, ngc_no={3}".
+	      format(indent, part_name, len(operations), ngc_program_number))
 
     def _dimensions_update(self, ezcad, tracing):
 	""" *Part*: Update the dimensions of the *Part* object (i.e. *self*)
@@ -6259,285 +6544,6 @@ class Part:
 
 	return self._ezcad
 
-    def _flush(self, program_number, tracing):
-	""" *Part*: Flush out the CNC code for the *Part* object (i.e. *self*).
-	"""
-
-	# Verify argument types:
-	assert isinstance(program_number, int)
-	assert isinstance(self, Part)
-	assert isinstance(tracing, int)
-
-	# Use *part* instead of *self*:
-	part = self
-	part_name = part._name
-
-	# Perform any requested *tracing*:
-	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print("{0}=>Part._flush('{1}', prog_no={2})".
-	      format(indent, part_name, program_number))
-
-	#call d@(form@("=>flush@Part(%v%, %d%)\n\") %
-	#  f@(part.name) / f@(program_number))
-	original_program_number = program_number
-
-	#call show@(part, "before flush")
-	shop = part._shop_get()
-	assert isinstance(shop, Shop)
-	vice = shop._vice_get()
-	jaw_width = vice._jaw_width_get()
-
-	# Compute (*plunge_x*, *plunge_y*) which is the vertical axis over
-	# which is to the left of the the part or the vice:
-	dowel_x = part._dowel_x_get()
-	dowel_y = part._dowel_y_get()
-	vice_x = part._vice_x_get()
-	vice_y = part._vice_y_get()
-	assert isinstance(vice_x, L)
-	plunge_x = vice_x
-	if plunge_x > dowel_x:
-	    plunge_x = dowel_x
-	assert isinstance(jaw_width, L)
-	assert isinstance(plunge_x, L)
-	if plunge_x > jaw_width:
-	    plunge_x = plunge_x - L(inch=0.7)
-	part._plunge_xy_set(plunge_x, dowel_y)
-    
-	code = shop._code_get()
-	assert isinstance(code, Code)
-	code._z_safe_set(part._z_safe_get())
-	code._z_rapid_set(part._z_rapid_get())
-	operations = part._operations_get()
-	size = len(operations)
-
-	#call show@(part, "before sort", 1t)
-
-	# FIXME move the sort into *operations_regroup*:
-	# Sort *operations* to group similar operations together:
-	operations.sort(cmp=Operation._compare)
-
-	#print("len(operations)={0}".format(len(operations)))
-	#for operation in operations:
-	#    print("operation name:{0}".format(operation._name_get()))
-
-	#call show@(part, "after sort", 1t)
-
-	# Do we need to user regroups instead *operations*:
-	part._operations_regroup()
-
-	#if regroups != 0
-	#	call show@(part, "after_regroup", 0f)
-
-	# FIXME: The code below should replace all the index stuff:
-	current_tool = None
-	operation_group = None
-	operation_groups = []
-	for operation in operations:
-	    # Grab the *tool* from *operation*:
-	    tool = operation._tool_get()
-	    assert isinstance(tool, Tool)
-
-	    # Start a new *operation_group* if the *tool* is different:
-	    if current_tool != tool:
-		# This code is always exectuted the first time through:
-		current_tool = tool
-		operation_group = []
-		operation_groups.append(operation_group)
-
-	    # Tack *operation* onto *operation_group*:
-	    assert isinstance(operation_group, list)
-	    operation_group.append(operation)
-	#print("operation_groups=", operation_groups)
-
-	# Open the top-level *part_ngc_stream* file that invokes each tool operation
-	# in a separate .ngc file:
-	
-	ezcad = self._ezcad
-	ngc_directory = ezcad._ngc_directory_get()
-	part_ngc_stream_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
-	part_ngc_stream = open(part_ngc_stream_file_name, "w")
-	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_stream_file_name)
-
-	# Output some heading lines for *part_ngc_stream*:
-	part_ngc_stream.write("( Part: {0})".format(part._name_get()))
-	part_ngc_stream.write("( Tooling table: )\n")
-
-	# Now vist each *operation_group* in *operation_groups*:
-	for index, operation_group in enumerate(operation_groups):
-	    # Output a couple of lines *part_ngc_write*:
-	    ngc_program_number = program_number + 1 + index
-	    tool_number = tool._number_get()
-	    tool_name = tool._name_get()
-	    part_ngc_stream.write("( T{0} {1} )\n".format(tool_number, tool_name))
-	    part_ngc_stream.write("O{0} call\n".format(ngc_program_number))
-
-	    # Sweep through the *operation_group*:
-	    part._flush_helper(operation_group, ngc_program_number, tracing + 1)
-
-	# Write out the final lines to *part_ngc_stream*:
-	part_ngc_stream.write("G53 Y0.0 ( Move the work to the front )\n")
-	part_ngc_stream.write("M2\n")
-	part_ngc_stream.close()
-
-	# Empty out *operations* :
-	del operations[:]
-
-	# Compute the next *program number* to be a the next multiple of 10 and return it:
-	new_program_number = program_number + len(operation_groups) + 1
-	new_program_number = (new_program_number + 9) / 10 * 10
-
-	if tracing >= 0:
-	    print("{0}<=Part._flush('{1}', prog_no={2}) =>{3}".
-	      format(indent, part_name, program_number, new_program_number))
-
-	return new_program_number
-
-    def _flush_helper(self, operations, ngc_program_number, tracing):
-	""" *Part*: Output the G-code for *operations* to a "On.ngc" file where,
-	    N is the *ngc_program_number* using the *Part* object (i.e. *self*).
-	"""
-
-	# Verify argument types:
-	assert isinstance(operations, list) and len(operations) > 0
-	for operation in operations:
-	    assert isinstance(operation, Operation)
-	assert isinstance(ngc_program_number, int)
-	assert isinstance(tracing, int)
-
-	# Use *part* instead of *self*:
-	part = self
-	part_name = part._name
-
-	# Perform any requested *tracing*:
-	indent = ""
-	debug = False
-	if tracing >= 0:
-	    indent = ' ' * tracing
-	    debug = True
-	    print("{0}=>Part._flush_helper(part='{1}', len(ops)={2}, ngc_no={3}".
-	      format(indent, part_name, len(operations), ngc_program_number))
-
-	# Set *debug* to True to trace this routine:
-	if debug:
-	    print("{0}=>Part._flush_helper('{1}', *, {2}, *)".
-	      format(indent, part_name, ngc_program_number))
-	    print("operations=", operations)
-
-	zero = L()
-
-	# Grab some values from *part*:
-	shop = part._shop_get()
-
-	# Grab the first *operation*:
-	operation = operations[0]
-	vice_x = operation._vice_x_get()
-	vice_y = operation._vice_y_get()
-	tool = operation._tool_get()
-
-	# Get the *feed_speed* and *spindle_speed*:
-	feed_speed = tool._feed_speed_get()
-	spindle_speed = tool._spindle_speed_get()
-
-	assert tool != None
-
-	# FIXME: The code below should be methodized!!!
-	#block = Block(part, tool, vice_x, vice_y)
-	#block._spindle_set(s)
-	#block._comment_set(operation._comment_get())
-	#block._text_set(block._text_get())
-
-	#commands = code._commands
-	#blocks = code._blocks
-	#print("before len(blocks)={0} len(commands)={1}".format(len(blocks), len(commands)))
-
-	# Figure out if *all_operations_are_drills*:
-	all_operations_are_drills = True
-	for operation in operations:
-	    if not isinstance(operation, Operation_Drill):
-		all_operations_are_drills = False
-		break
-	if tracing >= 0:
-            print("{0}all_operations_are_drills={1}".format(indent, all_operations_are_drills))
-
-	# FIXME: Move this code to *Operaton_Drill* class!!!
-	# Reorder the drill operations to minimize traverses:
-	if all_operations_are_drills:
-	    for index in range(first_index, last_index + 1):
-		current_operation = operations[index]
-		assert isinstance(current_operation, Operation_Drill)
-		current_drill = current_operation
-
-		current_x = current_drill.x
-		current_y = current_drill.y	
-
-		minimum_distance = L(mm=123456789.0)
-		match_index = -1
-		for search_index in range(index + 1, last_index + 1):
-		    search_drill = operations[search_index]
-		    assert isinstance(search_drill, Operation_Drill)
-		    search_x = search_drill.x
-		    search_y = search_drill.y
-		    search_distance = \
-		      (search_x - current_x).diagonal_2d(search_y - current_y)
-                    if search_distance < minimum_distance:
-			minimum_distance = search_distance
-			match_index = search_index
-
-		# Move the matching operation to be next after {operation}
-		# in operations:
-		if match_index >= 0:
-		    if debug:
-			print("{0}minimum_distance[{1}]={0}\n".
-			  format(indent, index, minimum_distance))
-
-			# Swap the two drill operations:
-			match_operation = operations[match_index]
-			operations[match_index] = operations[index + 1]
-			operations[index + 1] = match_operation
-
-	# Now do a cnc generate for each *operaton* in *operations*:
-	code = None
-	for operation in operations:
-	    if debug:
-		print("{0}operation name:{1} tool={2}".format(indent,
-		  operation._name_get(), operation._tool_get()._name_get()))
-	    # Grab the *spindle_speed*:
-	    spindle_speed = operation._spindle_speed_get()
-
-	    # Initialize the *code* object:
-	    if code == None:
-		# Grab the *code* object and start the code generation:
-		code = shop._code_get()
-		code._start(part, tool, ngc_program_number, spindle_speed)
-		code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
-		code._z_rapid_set(part._z_rapid_get())
-		code._z_safe_set(part._z_safe_get())
-		code._z_set(part._z_safe_get())
-		code._vice_xy_set(operation._vice_x_get(), operation._vice_y_get())
-		comment = operation._comment_get()
-		code._z_safe_assert("flush_helper1", comment)
-
-		# FXIME: Do we really need to do the stuff below?
-		# Each block is set to these two values beforehand:
-		#code._z_set(part._z_safe_get())
-		#code._s_set(s)
-		#code._g1_set(0)
-		#code._block_append(block)
-
-	    # Perform the CNC generation step for *operation*:
-	    operation._cnc_generate(tracing + 1)
-
-	if code != None:
-	    code._z_safe_retract_actual()
-	    code._dxf_xy_offset_set(zero, zero)
-	    code._finish()
-
-	# Perform any requested *tracing*:
-	if tracing >= 0:
-	    print("{0}<=Part._flush_helper(part='{1}', len(ops)={2}, ngc_no={3}".
-	      format(indent, part_name, len(operations), ngc_program_number))
-
     ## @brief Formats *self* into a string and returns it.
     #  @param format is the format control string (currently ignored).
     #  @returns a string representation of *self*.
@@ -6693,7 +6699,7 @@ class Part:
 	    wrl_file.close()
 
 	# Now generate any CNC files:
-	if mode == EZCAD3.CNC_MODE:
+	if mode == EZCAD3.CNC_MODE and not part._cnc_suppress:
 	    # Flush out all of the pending CNC operations:
 	    # Set *cnc_debug* to *True* to trace CNC:
 	    if tracing < 0:
@@ -6708,7 +6714,7 @@ class Part:
 
 	    shop = ezcad._shop
 	    program_base = shop._program_base_get()
-	    program_number = part._flush(program_base, cnc_tracing + 1)
+	    program_number = part._cnc_flush(program_base, cnc_tracing + 1)
 
 	    # We want the program base number to start with a mulitple of 10.
 	    remainder = program_number % 10
@@ -11650,6 +11656,9 @@ class Fastener(Part):
 
 	# Initialize the *Part* super class:
 	Part.__init__(self, up, name)
+	
+	# Disable CNC generation:
+	self._cnc_suppress_set()
 
 	zero = L()
 	self.comment_s = name
@@ -12742,7 +12751,13 @@ class Code:
 	    if remainder != 0:
 		program_number += 10 - remainder
 	    ngc_directory = ezcad._ngc_directory_get()
-	    file_name = os.path.join(ngc_directory, "{0}.ngc".format(program_number))
+	    ngc_file_name = os.path.join(ngc_directory, "{0}.ngc".format(program_number))
+	    print("ngc_file_name='{0}'".format(ngc_file_name))
+	    wrl_directory = ezcad._wrl_directory_get()
+	    wrl_file_name = os.path.join(ngc_directory, "O{0}.wrl".format(program_number))
+	    print("wrl_file_name='{0}'".format(wrl_file_name))
+	    wrl_file = open(wrl_file_name, "wa")
+	    assert isinstance(wrl_file, file)
 
 	    # Assign program numbers:
 	    for index in range(size):
@@ -12752,11 +12767,11 @@ class Code:
 		block.program_number = program_number
 		program_number += 1
 
-	    # Open *file_name* for writing:
-	    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>code_stream_open: '{0}'".format(file_name))
-	    code_stream = open(file_name, "wa")
+	    # Open *ngc_file_name* for writing:
+	    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>code_stream_open: '{0}'".format(ngc_file_name))
+	    code_stream = open(ngc_file_name, "wa")
 	    assert isinstance(code_stream, file), \
-	      "Could not open '{0}' for writing".format(file_name)
+	      "Could not open '{0}' for writing".format(ngc_file_name)
 
 	    # Output the tool table:
 	    code_stream.write("({0}: {0})\n".format(part._name_get(), block0._comment_get()))
@@ -12780,7 +12795,7 @@ class Code:
 	    code_stream.write("G53 Y0.0 (Move the work to the front)\n")
 	    code_stream.write("M2\n")
 	    code_stream.close()
-	    print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<code_stream_open: '{0}'".format(file_name))
+	    print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<code_stream_open: '{0}'".format(ngc_file_name))
 
 	    # Now output the blocks:
 	    for block in blocks:
@@ -12795,7 +12810,7 @@ class Code:
 		    dxf_file_name = os.path.join(dxf_directory, "{0}.dxf".format(program_number))
 		    dxf_stream = open(dxf_file_name, "wa")
 		    assert isinstance(dxf_stream, file), \
-		      "Unable to open file '{0}'".format(file_name)
+		      "Unable to open file '{0}'".format(dxf_file_name)
 
 		    #dxf_stream.write("0\n\SECTION\n\2\n\HEADER\n")
 		    #dxf_stream.write("9\n\$DIMAUNITS\n\70\n\1\n")
@@ -12909,6 +12924,11 @@ class Code:
 		    code_stream.write("%\n")
 		    code_stream.close()
 		    print("<<<<<<<<<<<<<<<<code_stream_open: '{0}'".format(file_name))
+
+		# Now output the VRML code for *block*:
+                
+	    # Close out the *wrl_file*:
+	    wrl_file.close()
 
 	    # Output the shut-down code:
 	    #call put@("(*************************************)\n", code_stream)
