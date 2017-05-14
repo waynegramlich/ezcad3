@@ -2362,7 +2362,7 @@ class Speed:
 	    scale = 1.0
 	    format_text = format_text[:-1]
 	else:
-            assert False, "Missing format '{0}'".format_text
+            assert False, "Missing Speed format '{0}'".format(format_text)
 	
 	# Format the value as a string and return it:
 	value = self._mm_per_sec / scale
@@ -3595,8 +3595,39 @@ class EZCAD3:
 	  "w":   Bounding_Box.w_get,
 	}
 
+	# Make sure various output directories exist:
+	self._directory      = directory
+	self._dxf_directory  = self._directory_create("dxf", True)
+	self._ngc_directory  = self._directory_create("ngc", True)
+	self._scad_directory = self._directory_create("scad", False)
+	self._stl_directory  = self._directory_create("stl", False)
+	self._wrl_directory  = self._directory_create("wrl", True)
 
 	EZCAD3.ezcad = self
+
+    def _directory_create(self, sub_directory, clear):
+        """ *EZCAD3*: Force directory named *directory*/*sub_directory* into existence, where
+	    *directory* comes for the *EZCAD3* object (i.e. *self.*)  If *clear* is *True*,
+	    the directory is cleared.  The resulting directory path is returned. """
+
+	# Create the *full_directory_path*:
+	ezcad3 = self
+	directory = ezcad3._directory
+	full_directory_path = os.path.join(directory, sub_directory)
+
+        # See whether or not the directory already exists:
+	if os.path.exists(full_directory_path):
+	    # Directory exists:
+	    if clear:
+		# Clear out  each individual file in the directory using glob style
+   		# file matching expression (e.g. `/tmp/wrl/*`):
+		for file_name in glob.glob(os.path.join(full_directory_path, "*")):
+		    os.remove(file_name)
+	else:
+	    # Directory does not exist, so create it:
+            os.makedirs(full_directory_path)
+
+	return full_directory_path
 
     def _directory_get(self):
 	""" *EZCAD3*: Return the directory to read/write files from/into from the *EZCAD3* object
@@ -3604,6 +3635,41 @@ class EZCAD3:
         """
 
 	return self._directory
+
+    def _dxf_directory_get(self):
+	""" *EZCAD3*: Return the directory to read/write DXF files from/into from the *EZCAD3*
+	    object (i.e. *self*).
+        """
+
+	return self._dxf_directory
+
+    def _ngc_directory_get(self):
+	""" *EZCAD3*: Return the directory to read/write NGC files from/into from the *EZCAD3*
+	    object (i.e. *self*).
+        """
+
+	return self._ngc_directory
+
+    def _scad_directory_get(self):
+	""" *EZCAD3*: Return the directory to read/write SCAD files from/into from the *EZCAD3*
+	    object (i.e. *self*).
+        """
+
+	return self._scad_directory
+
+    def _stl_directory_get(self):
+	""" *EZCAD3*: Return the directory to read/write STL files from/into from the *EZCAD3*
+	    object (i.e. *self*).
+        """
+
+	return self._stl_directory
+
+    def _wrl_directory_get(self):
+	""" *EZCAD3*: Return the directory to read/write WRL files from/into from the *EZCAD3*
+	    object (i.e. *self*).
+        """
+
+	return self._wrl_directory
 
     def _mode_get(self):
 	""" *EZCAD3*: Return the mode of the *EZCAD3* object (i.e. *self*). """
@@ -4557,15 +4623,16 @@ class Operation_Round_Pocket(Operation):
 	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(tracing, int)
 	assert isinstance(top_surface_transform, Transform)
+	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print(("{0}=>Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
-	      " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12}, {13:rpm}, {14:s})").format(indent,
-	      "Round_Pocket", part._name_get(), comment, sub_priority, tool, order, diameter,
-	      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
-	      top_surface_transform))
+	      " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, {14:s}, {15})").
+	      format(indent, "Round_Pocket", part._name_get(), comment, sub_priority, tool,
+	        order, diameter, countersink_diameter, hole_kind, start, stop, feed_speed,
+	        spindle_speed, top_surface_transform, tracing))
 
 	# Initialize superclass:
 	Operation.__init__(self, "Round_Pocket", Operation.KIND_ROUND_POCKET,
@@ -4577,14 +4644,15 @@ class Operation_Round_Pocket(Operation):
 	self.hole_kind = hole_kind
 	self._start = start
 	self._stop = stop
-	self._tracing = tracing
+	self._tracing = -1000000
+	#self._tracing = tracing
 	self._top_surface_transform = top_surface_transform
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print(("{0}<=Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
-	      " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12}, {13:rpm}, {14:s})").format(indent,
+	      " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, {14:s})").format(indent,
 	      "Round_Pocket", part._name_get(), comment, sub_priority, tool, order, diameter,
 	      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
 	      top_surface_transform))
@@ -4615,6 +4683,7 @@ class Operation_Round_Pocket(Operation):
 	stop = round_pocket._stop
 	tool = round_pocket._tool
 
+	# The *top_surface_transform* has been previously set orient the material correctly for CNC:
 	top_surface_transform = round_pocket._top_surface_transform
 	mapped_start = top_surface_transform * start
 	mapped_stop = top_surface_transform * stop
@@ -4679,42 +4748,55 @@ class Operation_Round_Pocket(Operation):
 
 	    z_feed = f / 4.0
 	    shave = L(inch=0.005)
+	    radius_remove = radius - shave - tool_radius
 	    for depth_pass in range(passes):
 		code._comment(
 		  "{0} round_pocket pocket [pass {1} of {2}]".
 		  format(comment, depth_pass + 1, passes))
 		
 		# Get to proper depth:
-		#call line_comment@(code,
-		#  read_only_copy@(form@("x=%i% y=%i% x_value=%i% y_value=%i%")%
-		#    f@(x) % f@(y) % f@(x_value@(code)) / f@(y_value@(code))))
-		code._xy_feed(f, s, x, y)
 		z = z_start - depth_per_pass * float(depth_pass + 1)
-		code._z_feed(z_feed, s, z, "round_pocket_pocket")
 
-		radius_remove = radius - shave - tool_radius
 		if is_through:
-		    code._xy_ccw_feed(f, s, radius_remove, x, y)
+		    code._xy_feed(f, s, x, y + radius_remove)
+		    code._z_feed(z_feed, s, z, "round_pocket_pocket")
+		    code._xy_ccw_feed(f, s, radius_remove, x, y - radius_remove)
+		    code._xy_ccw_feed(f, s, radius_remove, x, y + radius_remove)
 		else:
-		    # We have to mow out all the invening space:
+ 		    # We have to mow out all the intervening space:
 		    radius_passes = int(radius_remove /  half_tool_radius) + 1
-		    pass_remove = radius_remove / float(radius_passes)
+		    pass_remove_delta = radius_remove / float(radius_passes)
 
 		    for radius_index in range(radius_passes):
-			code._xy_ccw_circle(f, s, pass_remove * float(radius_index + 1), x, y)
+			pass_remove = pass_remove_delta * float(radius_index + 1)
+			code._xy_feed(f, s, x, y + pass_remove)
+			code._z_feed(z_feed, s, z, "round_pocket_pocket")
+			code._xy_ccw_circle(f, s, pass_remove, x, y - pass_remove)
+			code._xy_ccw_circle(f, s, pass_remove, x, y + pass_remove)
 
 	    # Do a "spring pass" to make everybody happy:
 	    code._comment("{0} round_pocket pocket 'spring' pass".format(comment))
 	    path_radius = radius - tool_radius
 	    half_path_radius = path_radius / 2
 	    code._xy_feed(f, s, x, y)
-	    code._xy_ccw_feed(f, s, half_path_radius,
-	      x + half_path_radius, y + half_path_radius)
-	    code._xy_ccw_feed(f, s, half_path_radius, x, y + path_radius)
-	    code._xy_ccw_feed(f, s, radius - tool_radius, x, y)
-	    code._xy_ccw_feed(f, s, half_path_radius,
-	      x - half_path_radius, y + half_path_radius)
+
+	    # Carefully feed the tool to the edge:
+	    code._comment("Carefully feed tool to the edge of the hole")
+	    code._xy_ccw_feed(f, s, half_path_radius, x + half_path_radius, y + half_path_radius)
+	    code._xy_ccw_feed(f, s, half_path_radius, x,                    y + path_radius)
+
+	    # Peform the entire spring cut:
+	    code._comment("Peform the entire spring cut")
+	    code._xy_ccw_feed(f, s, path_radius, x, y - path_radius)
+	    code._xy_ccw_feed(f, s, path_radius, x, y + path_radius)
+
+	    # Carefully remove the tool back to the center:
+	    code._comment("Carefully remove the tool back to the center")
+	    code._xy_ccw_feed(f, s, half_path_radius, x - half_path_radius, y + half_path_radius)
 	    code._xy_ccw_feed(f, s, half_path_radius, x, y)
+
+	    # Safely retract to z safe:
+	    code._comment("Safely retract to z safe")
 	    code._z_safe_retract(z_feed, s)
 
 	# Wrap up any requested *tracing*:
@@ -5551,11 +5633,6 @@ class Part:
 	self._z_safe = L(inch=0.5)
 	self.up = up
 
-	# Make sure directory exists:
-	directory = ezcad._directory_get()
-	if not os.path.exists(directory):
-	    os.makdirs(directory)
-
 	#print("<=Part.__init__(*, '{0}', *, place={1})".format(name, place))
 
     def ___bounding_box_check(self, indent):
@@ -6056,7 +6133,7 @@ class Part:
 
 	# Peform dimension updating for *part*:
 	
-	part._tracing = tracing + 1
+	#part._tracing = tracing + 1
 	part.construct()
 
 	# See if anything changed:
@@ -6277,8 +6354,8 @@ class Part:
 	# in a separate .ngc file:
 	
 	ezcad = self._ezcad
-	directory = ezcad._directory_get()
-	part_ngc_stream_file_name = os.path.join(directory, "O{0}.ngc".format(program_number))
+	ngc_directory = ezcad._ngc_directory_get()
+	part_ngc_stream_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
 	part_ngc_stream = open(part_ngc_stream_file_name, "w")
 	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_stream_file_name)
 
@@ -6609,8 +6686,8 @@ class Part:
 	# Do the visualization steps:
 	if mode == EZCAD3.VISUALIZATION_MODE:
 	    ezcad = part._ezcad_get()
-	    directory = ezcad._directory_get()
-	    wrl_file_name = os.path.join(directory, "{0}.wrl".format(part._name))
+	    wrl_directory = ezcad._wrl_directory_get()
+	    wrl_file_name = os.path.join(wrl_directory, "{0}.wrl".format(part._name))
 	    wrl_file = open(wrl_file_name, "w")
 	    part._wrl_write(wrl_file, file_name = wrl_file_name, tracing = tracing + 1)
 	    wrl_file.close()
@@ -6626,8 +6703,8 @@ class Part:
 		print("{0}==>Part._manufacture('{1}'):CNC".format(indent, part._name))
 
 	    # This is where we can disable *cnc_tracing*:
-	    #cnc_tracing = -1000000
-	    cnc_tracing = tracing + 1
+	    cnc_tracing = -1000000
+	    #cnc_tracing = tracing + 1
 
 	    shop = ezcad._shop
 	    program_base = shop._program_base_get()
@@ -6642,8 +6719,8 @@ class Part:
 	    # See if we have a .dxf file to write:
 	    if code._dxf_content_avaiable():
 		# We do have a .dxf file to write.  Open *dxf_file*:
-		directory = ezcad._directory_get()
-		dxf_file_name = os.path.join(directory, "{0}.dxf".format(part._name))
+		dxf_directory = ezcad._dxf_directory_get()
+		dxf_file_name = os.path.join(dxf_directory, "{0}.dxf".format(part._name))
 		dxf_file = open(dxf_file_name, "w")
 
 		# Output the .dxf file headers:
@@ -6748,8 +6825,9 @@ class Part:
 
 		# Now we see whether we need to write out the file and
 		# run it through openscad:
-		directory = ezcad._directory_get()
-		stl_file_name = os.path.join(directory, "{0}_{1}.stl".format(name, signature_hash))
+		stl_directory = ezcad._stl_directory_get()
+		stl_file_name = os.path.join(stl_directory,
+		  "{0}_{1}.stl".format(name, signature_hash))
 		if os.path.isfile(stl_file_name):
 		    # Since the .stl file already exists, we must have already
 		    # written out the .scad file.  Thus, there is nothing
@@ -6809,8 +6887,8 @@ class Part:
 		    lines.append("")
 
 		    # Write out *scad_file*:
-		    directory = ezcad._directory_get()
-		    scad_file_name = os.path.join(directory, "{0}.scad".format(name))
+		    scad_directory = ezcad._scad_directory_get()
+		    scad_file_name = os.path.join(scad_directory, "{0}.scad".format(name))
 		    scad_file = open(scad_file_name, "w")
 		    scad_file.write("\n".join(lines))
 		    scad_file.close()
@@ -6818,8 +6896,8 @@ class Part:
 			print("{0}'{1} written".format(indent, scad_file_name))
 
 		    # Delete any previous *.stl files:
-		    directory = ezcad._directory_get()
-		    glob_pattern = os.path.join(directory, "{0}_*.stl".format(name))
+		    stl_directory = ezcad._stl_directory_get()
+		    glob_pattern = os.path.join(stl_directory, "{0}_*.stl".format(name))
 		    previous_stl_files = glob.glob(glob_pattern)
 		    for previous_stl_file in previous_stl_files:
 			os.remove(previous_stl_file)
@@ -6832,7 +6910,8 @@ class Part:
 			print("{0}is_part={1}".format(indent, self._is_part))
 		    if self._is_part:
 			ignore_file = open("/dev/null", "w")
-			scad_file_name = os.path.join(directory, "{0}.scad".format(name))
+			scad_directory = ezcad._scad_directory_get()
+			scad_file_name = os.path.join(scad_directory, "{0}.scad".format(name))
 			command = [ "openscad", "-o", stl_file_name,  scad_file_name ]
 			if tracing_detail >= 2:
 			    print("{0}command='{1}".format(indent, command))
@@ -6842,8 +6921,9 @@ class Part:
 		    # Write out DXF file:
 		    dxf_scad_lines = self._dxf_scad_lines
 		    if len(dxf_scad_lines) > 0:
-			directory = ezcad._directory_get()
-			dxf_scad_file_name = os.path.join(directory, "{0}_Dxf.scad".format(name))
+			scad_directory = ezcad._scad_directory_get()
+			dxf_scad_file_name = os.path.join(scad_directory,
+			  "{0}_Dxf.scad".format(name))
 			dxf_scad_file = open(dxf_scad_file_name, "wa")
 			dxf_scad_file.write("use <{0}.scad>;\n".format(name))
 			for dxf_scad_line in dxf_scad_lines:
@@ -7296,7 +7376,7 @@ class Part:
 	# Perform any requested *tracing*:
 	tracing_detail = -1
 	if tracing >= 0:
-	    tracing_detail = 0
+	    tracing_detail = 3
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_search('{1}', *, {2:i}, {3:i}, '{4}')".
 	      format(indent, part._name, parameter1, parameter2, from_routine))
@@ -7981,8 +8061,8 @@ class Part:
 	# Perform any requested *tracing*
 	#if part._ezcad._mode == EZCAD3.STL_MODE:
 	#    tracing = 0
-	if tracing == -1000000:
-	    tracing = part._tracing
+	#if tracing == -1000000:
+	#    tracing = part._tracing
 	tracing_detail = -1
 	if tracing >= 0:
 	    tracing_detail = 1
@@ -8259,6 +8339,7 @@ class Part:
 	ezcad._mode = EZCAD3.CNC_MODE
 	shop = ezcad._shop
 	shop._cnc_generate_set(True)
+	#part._manufacture(ezcad, 0)
 	part._manufacture(ezcad, -1000000)
 	shop._cnc_generate_set(False)
 	ezcad._update_count += 1
@@ -8580,7 +8661,7 @@ class Part:
 	name = self._name
 	spaces = ' ' * wrl_indent
 
-	#print("{0}=>Part.wrl_write({1}, {2}, {3}, {4}):enter".
+
 	#  format(spaces, name, indent, parts_table.keys(), file_name))
 
 	# Figure out whether to generate USE or DEF:
@@ -8596,9 +8677,9 @@ class Part:
 		    # Read in the .stl file that was generated by OpenSCAD:
 		    name = self._name
 		    ezcad = self._ezcad_get()
-		    directory = ezcad._directory_get()
+		    stl_directory = ezcad._stl_directory_get()
 		    stl_file_name = os.path.join(
-		      directory, "{0}_{1}.stl".format(name, self._signature_hash))
+		      stl_directory, "{0}_{1}.stl".format(name, self._signature_hash))
 		    stl_file = open(stl_file_name, "r")
 		    stl_lines = stl_file.readlines()
 		    stl_file.close()
@@ -8974,13 +9055,13 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*:
-	if tracing == -1000000:
-	    tracing = part._tracing
+	#if tracing == -1000000:
+	#    tracing = part._tracing
 	tracing_detail = -1
 	if tracing >= 0:
 	    #tracing_detail = 0
 	    indent = ' ' * tracing
-	    print("{0}=>Part.contour('{1}, '{2}', '{3:i}', {4:i}', {5:i}, '{6}')".
+	    print("{0}=>Part.contour('{1}, '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
 	     format(indent, part._name, comment, start_point, end_point, extra, flags))
 
 	# Before we do anything else, we need to update the bounding box for *part*:
@@ -9269,8 +9350,10 @@ class Part:
 	degrees0 = Angle(deg=0.0)
 
 	# Perform an requested *tracing*:
-	if tracing == -1000000:
-	    tracing = part._tracing
+	#if self._name[:-1] == "Gear_Box_Shelf" and comment == "Bearing Hole":
+	#    tracing = 0
+	#if tracing == -1000000:
+	#    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.countersink_hole('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
@@ -9291,6 +9374,9 @@ class Part:
 		is_flat_hole = True
 		is_through_hole = False
 	is_countersink = countersink_diameter > hole_diameter
+	if tracing >= 0:
+            print("{0}is_through_hole={1} is_tip_hole={2} is_flat_hole={3} is_countersink={4}".
+	      format(indent, is_through_hole, is_tip_hole, is_flat_hole, is_countersink))
 
 	# Compute *hole_kind*:
 	if is_tip_hole:
@@ -9301,9 +9387,13 @@ class Part:
 	    hole_kind = Part.HOLE_THROUGH
 	else:
 	    assert False, "No hole kind specified"
+	if tracing >= 0:
+            print("{0}hole_kind={1}".format(indent, hole_kind))
         
 	ezcad = part._ezcad
 	mode = ezcad._mode_get()
+	if tracing >= 0:
+            print("{0}mode == {1}".format(indent, mode))
     	if mode == EZCAD3.CNC_MODE:
 	    spot_operation = None
 	    try_flat = False
@@ -9339,6 +9429,8 @@ class Part:
 		    try_flat = True
 	    elif hole_kind == Part.HOLE_FLAT:
 		try_flat = True
+	    if tracing >= 0:
+                print("{0}try_flat={1}".format(indent, try_flat))
     
 	    # See if we should try to mill the hole:
 	    if try_flat:
@@ -9706,8 +9798,8 @@ class Part:
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
-	if tracing == -1000000:
-	    tracing = self._tracing
+	#if tracing == -1000000:
+	#    tracing = self._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
@@ -12377,7 +12469,7 @@ class Code:
 	#tracing = 0
 	detail_level = -1
 	if tracing >= 0:
-	    detail_level = 3
+	    #detail_level = 3
 	    indent = ' ' * tracing
 	    print("{0}=>Code._dxf_arc_append@(cw={1}, end_x={2:i}, end_y={3:i}, radius={4:i})".
 	      format(indent, clockwise, end_x, end_y, radius))
@@ -12649,8 +12741,8 @@ class Code:
 	    remainder = program_number % 10
 	    if remainder != 0:
 		program_number += 10 - remainder
-	    directory = ezcad._directory_get()
-	    file_name = os.path.join(directory, "{0}.ngc".format(program_number))
+	    ngc_directory = ezcad._ngc_directory_get()
+	    file_name = os.path.join(ngc_directory, "{0}.ngc".format(program_number))
 
 	    # Assign program numbers:
 	    for index in range(size):
@@ -12699,8 +12791,8 @@ class Code:
 		is_laser = tool._is_laser_get()
 		if is_laser:
 		    # We have a laser; generate a .dxf file:
-		    directory = ezcad._directory_get()
-		    dxf_file_name = os.path.join(directory, "{0}.dxf".format(program_number))
+		    dxf_directory = ezcad._dxf_directory_get()
+		    dxf_file_name = os.path.join(dxf_directory, "{0}.dxf".format(program_number))
 		    dxf_stream = open(dxf_file_name, "wa")
 		    assert isinstance(dxf_stream, file), \
 		      "Unable to open file '{0}'".format(file_name)
@@ -12737,8 +12829,8 @@ class Code:
 		else:
 		    # We have a mill; generate a .ngc file:
 		    program_number = block.program_number
-		    directory = ezcad._directory_get()
-		    ngc_file_name = os.path.join(directory, "{0}.ngc".format(program_number))
+		    ngc_directory = ezcad._ngc_directory_get()
+		    ngc_file_name = os.path.join(ngc_directory, "{0}.ngc".format(program_number))
 		    code_stream = open(ngc_file_name, "wa")
 		    print(">>>>>>>>>>>>>>>>code_stream_open: '{0}'".format(file_name))
 		    assert isinstance(code_stream, file), \
@@ -13032,8 +13124,8 @@ class Code:
 
 	# Open new *code_stream*:
 	ezcad = part._ezcad_get()
-	directory = ezcad._directory_get()
-	code_file_name = os.path.join(directory, "O{0}.ngc".format(ngc_program_number))
+	ngc_directory = ezcad._ngc_directory_get()
+	code_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(ngc_program_number))
 	code_stream = open(code_file_name, "w")
 	assert code_stream != None, "Could not open '{0}' for writing".format(code_file_name)
 	self._code_stream = code_stream
@@ -13064,8 +13156,8 @@ class Code:
 	    code_stream.write("M9 (Coolant off)\n")
 
 	# Open new *vrml_stream*:
-	directory = ezcad._directory_get()
-	vrml_file_name = os.path.join(directory, "O{0}.wrl".format(ngc_program_number))
+	ngc_directory = ezcad._ngc_directory_get()
+	vrml_file_name = os.path.join(ngc_directory, "O{0}.wrl".format(ngc_program_number))
 	vrml_stream = open(vrml_file_name, "w")
 	assert vrml_stream != None, "Could not open '{0}' for writing".format(vrml_file_name)
 	self._vrml_stream = vrml_stream
@@ -13345,8 +13437,8 @@ class Code:
 
 	# Open the top-level *part_ngc_stream* file that invokes each tool operation
 	# in a separate .ngc file:
-	directory = ezcad._directory_get()
-	part_ngc_stream_file_name = os.path.join(directory, "O{0}.ngc".format(program_number))
+	ngc_directory = ezcad._ngc_directory_get()
+	part_ngc_stream_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
 	part_ngc_stream = open(part_ngc_stream_file_name, "w")
 	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_stream_file_name)
 
@@ -15380,7 +15472,7 @@ class Tool_Mill_Drill(Tool):		# A mill-drill bit
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("=>{0}Tool_Mill_Drill._mill_drill_side_match('{1}', {2:i}, {3:i}, '{4}')".
-	      format(indent, maximum_diameter, maximum_z_depth, from_routine))
+	      format(indent, tool._name, maximum_diameter, maximum_z_depth, from_routine))
 
 	priority = -1.0
 	if isinstance(tool, Tool_Mill_Drill):
@@ -15394,7 +15486,7 @@ class Tool_Mill_Drill(Tool):		# A mill-drill bit
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("<={0}Tool_Mill_Drill._mill_drill_side_match('{1}', {2:i}, {3:i}, '{4}')=>{5}".
-	      format(indent, maximum_diameter, maximum_z_depth, from_routine, priority))
+	      format(indent, tool._name, maximum_diameter, maximum_z_depth, from_routine, priority))
 
 	return priority
 
