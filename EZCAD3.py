@@ -6068,22 +6068,24 @@ class Part:
 	""" *Part*: Flush out the CNC code for the *Part* object (i.e. *self*).
 	"""
 
+	# Use *part* instead of *self*:
+	part = self
+
 	# Verify argument types:
 	assert isinstance(program_number, int)
 	assert isinstance(self, Part)
 	assert isinstance(tracing, int)
 
-	# Use *part* instead of *self*:
-	part = self
+	# *part_name* is used in tracing and other places:
 	part_name = part._name
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Part._flush('{1}', prog_no={2})".
+	    print("{0}=>Part._cnc_flush('{1}', prog_numbe={2})".
 	      format(indent, part_name, program_number))
 
-	#call d@(form@("=>flush@Part(%v%, %d%)\n\") %
+	#call d@(form@("=>Part._cnc_flush@Part(%v%, %d%)\n\") %
 	#  f@(part.name) / f@(program_number))
 	original_program_number = program_number
 
@@ -6155,35 +6157,52 @@ class Part:
 	    operation_group.append(operation)
 	#print("operation_groups=", operation_groups)
 
-	# Open the top-level *part_ngc_stream* file that outputs each tool operation
-	# in a separate .ngc file:
+	# Open the top-level *part_ngc_stream* file that lists bot the tool table and
+        # calls each tool operation from a single top level .ngc file:
 	
-	ezcad = self._ezcad
+	ezcad = self._ezcad_get()
 	ngc_directory = ezcad._ngc_directory_get()
-	part_ngc_stream_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
-	part_ngc_stream = open(part_ngc_stream_file_name, "w")
-	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_stream_file_name)
+	part_ngc_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
+	part_ngc_file = open(part_ngc_file_name, "w")
+	assert part_ngc_file != None, "Unable to open {0}".format(part_ngc_file_name)
 
-	# Output some heading lines for *part_ngc_stream*:
-	part_ngc_stream.write("( Part: {0})".format(part._name_get()))
-	part_ngc_stream.write("( Tooling table: )\n")
+	# Output some heading lines for *part_ngc_file*:
+	part_ngc_file.write("( Part: {0})".format(part._name_get()))
+	part_ngc_file.write("( Tooling table: )\n")
+
+	# Open the top-level *part_wrl_stream* file that outputs each visual tool path.
+        # Note that these file names ene in .wrl and are written into the .../ngc sub-directory:
+	part_wrl_file_name = os.path.join(ngc_directory, "O{0}.wrl".format(program_number))
+	part_wrl_file = open(part_wrl_file_name, "w")
+
+	# Output the preceeding VRML code to group group the children shapes:
+        part_wrl_file.write("#VRML 2.0 utf8\n")
+        part_wrl_file.write("Viewpoint {description \"Initial view\" position 0 0 150\n")
+	part_wrl_file.write("NavigationInfo { type \"Examine\" }\n")
+	part_wrl_file.write("Def x{0} Group {1}\n".format(part_name, "{"))
+	part_wrl_file.write(" children [\n".format(part_name))
 
 	# Now visit each *operation_group* in *operation_groups*:
 	for index, operation_group in enumerate(operation_groups):
-	    # Output a couple of lines *part_ngc_write*:
+	    # Output a couple of G-code lines *part_ngc_file*:
 	    ngc_program_number = program_number + 1 + index
 	    tool_number = tool._number_get()
 	    tool_name = tool._name_get()
-	    part_ngc_stream.write("( T{0} {1} )\n".format(tool_number, tool_name))
-	    part_ngc_stream.write("O{0} call\n".format(ngc_program_number))
+	    part_ngc_file.write("( T{0} {1} )\n".format(tool_number, tool_name))
+	    part_ngc_file.write("O{0} call\n".format(ngc_program_number))
 
 	    # Sweep through the *operation_group*:
-	    part._cnc_flush_helper(operation_group, ngc_program_number, tracing + 1)
+	    part._cnc_flush_helper(operation_group, ngc_program_number, part_wrl_file, tracing + 1)
 
-	# Write out the final lines to *part_ngc_stream*:
-	part_ngc_stream.write("G53 Y0.0 ( Move the work to the front )\n")
-	part_ngc_stream.write("M2\n")
-	part_ngc_stream.close()
+	# Write out the final G-code lines to *part_ngc_file*:
+	part_ngc_file.write("G53 Y0.0 ( Move the work to the front )\n")
+	part_ngc_file.write("M2\n")
+	part_ngc_file.close()
+
+	# Close out the VRML for *part_wrl_file* and then close it:
+	part_wrl_file.write(" ]\n")
+	part_wrl_file.write("}\n")
+	part_wrl_file.close()
 
 	# Empty out *operations* :
 	del operations[:]
@@ -6193,12 +6212,12 @@ class Part:
 	new_program_number = (new_program_number + 9) / 10 * 10
 
 	if tracing >= 0:
-	    print("{0}<=Part._flush('{1}', prog_no={2}) =>{3}".
+	    print("{0}<=Part._cnc__flush('{1}', prog_no={2}) =>{3}".
 	      format(indent, part_name, program_number, new_program_number))
 
 	return new_program_number
 
-    def _cnc_flush_helper(self, operations, ngc_program_number, tracing):
+    def _cnc_flush_helper(self, operations, ngc_program_number, part_wrl_file, tracing):
 	""" *Part*: Output the G-code for *operations* to a "On.ngc" file where,
 	    N is the *ngc_program_number* using the *Part* object (i.e. *self*).
 	"""
@@ -6208,6 +6227,7 @@ class Part:
 	for operation in operations:
 	    assert isinstance(operation, Operation)
 	assert isinstance(ngc_program_number, int)
+	assert isinstance(part_wrl_file, file)
 	assert isinstance(tracing, int)
 
 	# Use *part* instead of *self*:
@@ -6314,7 +6334,7 @@ class Part:
 	    if code == None:
 		# Grab the *code* object and start the code generation:
 		code = shop._code_get()
-		code._start(part, tool, ngc_program_number, spindle_speed)
+		code._start(part, tool, ngc_program_number, spindle_speed, part_wrl_file)
 		code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
 		code._z_rapid_set(part._z_rapid_get())
 		code._z_safe_set(part._z_safe_get())
@@ -12072,112 +12092,121 @@ class Fastener(Part):
 
 # *Code* class:
 
-# Used be called called *Code* in EZCAD.
-
 class Code:
 
     def __init__(self):
-	""" *Code*:
+	""" *Code*: Initialize the new *Code* object (i.e. *self*).
 	"""
+
+	# Use *code instead of *self*:
+	code = self
 
 	zero = L()
 
 	# Load up *self*:
-	self._code_stream = None	# Code stream to write G-codes to
-	self._command_started = False	# At begining of RS274 command line
-	self._command_chunks = []	# RS274 line broken into space separated chunks
-	self._comment_chunks = []	# RS274 comment broken into space separated chunks
-	self._dxf = ""			# Text for dxf file
-	self._dxf_lines = []		# List of lines to write out to .dxf file
-	self._dxf_x_offset = zero	# DXF X offset
-	self._dxf_y_offset = zero	# DXF Y offset
-	self._is_laser = False		# True if tool is a laser
-	self._vice_x = zero
-	self._vice_y = zero
-	self._z_rapid = zero		# Z above which Z rapids are allowed
-	self._z_safe = zero		# Z above XY rapids are safe
+	code._code_stream = None	# Code stream to write G-codes to
+	code._command_started = False	# At begining of RS274 command line
+	code._command_chunks = []	# RS274 line broken into space separated chunks
+	code._comment_chunks = []	# RS274 comment broken into space separated chunks
+	code._dxf = ""			# Text for dxf file
+	code._dxf_lines = []		# List of lines to write out to .dxf file
+	code._dxf_x_offset = zero	# DXF X offset
+	code._dxf_y_offset = zero	# DXF Y offset
+	code._is_laser = False		# True if tool is a laser
+	code._part_wrl_file = None	# Place to write unified part path .wrl file
+	code._vice_x = zero
+	code._vice_y = zero
+	code._z_rapid = zero		# Z above which Z rapids are allowed
+	code._z_safe = zero		# Z above XY rapids are safe
 
-	self.vrml_colors = [ 1.0, 0.0, 0.0 ]
-	self.vrml_color_indexes = []
-	self.vrml_lines = []
-	self.vrml_points = []
+	code.vrml_colors = [ 1.0, 0.0, 0.0 ]
+	code.vrml_color_indexes = []
+	code.vrml_lines = []
+	code.vrml_points = []
+	code.vrml_file = None
 
 	# Construct the *g1_table*:
 	g1_values_list = (0, 1, 2, 3, 33, 38, 73, 76, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89)
 	g1_table = {}
 	for g1_value in g1_values_list:
 	    g1_table[g1_value] = g1_value
-	self._g1_table = g1_table
+	code._g1_table = g1_table
 
 	# The stuff below is RS-274 mode variables:
-	self._f = Speed()		# Feedrate
-	self._g1 = 0			# (G0-3, 33, 38.x, 73, 76, 80-89)
-	self._g2 = 0			# (G17-19)
-	self._g3 = 0			# (G7-8)
-	self._g4 = 0			# (G90-91)
-	self._g5 = 0			# (G93-94)
-	self._g6 = 0			# (G20-21)
-	self._g7 = 0			# (G40-42)
-	self._g8 = 0			# (G43, 49)
-	self._g9 = 0			# (G98-99)
-	self._g10 = 0			# (G54-59)
-	self._g11 = 0			# (G4)
-	self._h = zero			# H tool offset index
-	self._i = zero			# I coordinate
-	self._j = zero			# J coordinate
-	self._m1 = 0			# (M0-2, 30, 60)
-	self._m2 = 0			# (M6)
-	self._m3 = 0			# (M3-5)
-	self._m4 = 0			# (M7-9)
-	self._m5 = 0			# (M48-49)
-	self._p = Time()		# G4
-	self._q = zero			# Peck depth
-	self._r0 = zero			# Radius cycle R
-	self._r1 = zero			# Drill cycle R
-	self._s = Hertz()		# Spindle revolutions
-	self._x = zero			# X coordinate
-	self._y = zero			# Y coordinate
-	self._z = zero			# Z coordinate
-	self._z1 = zero 		# Z coordinate
-	self._z_safe_f = Speed()	# Feed to perform z safe operation at
-	self._z_safe_pending = False	# {true}=>need to do z safe move
-	self._z_safe_s = Hertz()	# Speed to perform z safe operation at
+	code._f = Speed()		# Feedrate
+	code._g1 = 0			# (G0-3, 33, 38.x, 73, 76, 80-89)
+	code._g2 = 0			# (G17-19)
+	code._g3 = 0			# (G7-8)
+	code._g4 = 0			# (G90-91)
+	code._g5 = 0			# (G93-94)
+	code._g6 = 0			# (G20-21)
+	code._g7 = 0			# (G40-42)
+	code._g8 = 0			# (G43, 49)
+	code._g9 = 0			# (G98-99)
+	code._g10 = 0			# (G54-59)
+	code._g11 = 0			# (G4)
+	code._h = zero			# H tool offset index
+	code._i = zero			# I coordinate
+	code._j = zero			# J coordinate
+	code._m1 = 0			# (M0-2, 30, 60)
+	code._m2 = 0			# (M6)
+	code._m3 = 0			# (M3-5)
+	code._m4 = 0			# (M7-9)
+	code._m5 = 0			# (M48-49)
+	code._p = Time()		# G4
+	code._q = zero			# Peck depth
+	code._r0 = zero			# Radius cycle R
+	code._r1 = zero			# Drill cycle R
+	code._s = Hertz()		# Spindle revolutions
+	code._x = zero			# X coordinate
+	code._y = zero			# Y coordinate
+	code._z = zero			# Z coordinate
+	code._z1 = zero 		# Z coordinate
+	code._z_safe_f = Speed()	# Feed to perform z safe operation at
+	code._z_safe_pending = False	# {true}=>need to do z safe move
+	code._z_safe_s = Hertz()	# Speed to perform z safe operation at
 
-	self._vrml_reset()
+	code._vrml_reset()
 
     def _command_begin(self):
 	""" *Code*: Start a new RS274 command in the *Code* object (i.e. *self*). """
 
-	assert not self._command_started, "Previous RS274 command was not ended."
-	self._command_started = True
+	# Use *code* instead of *self*:
+	code = self
+
+	assert not code._command_started, "Previous RS274 command was not ended."
+	code._command_started = True
 
 	# Remember some values for VRML line path drawing:
-	self._vrml_start_r0 = self._r0
-	self._vrml_start_x = self._x_value()
-	self._vrml_start_y = self._y_value()
-	self._vrml_start_z = self._z
-	self._vrml_motion = -1
+	code._vrml_start_r0 = code._r0
+	code._vrml_start_x = code._x_value()
+	code._vrml_start_y = code._y_value()
+	code._vrml_start_z = code._z
+	code._vrml_motion = -1
 
     def _command_end(self):
 	""" *Code*: End the current RS274 in the *Code* object (i.e. *self*). """
 
+	# Use *code* instead of *self*:
+        code = self
+
 	# Make sure we have started a command:
-	assert self._command_started, "Not currently in a RS274 command"
+	assert code._command_started, "Not currently in a RS274 command"
 
 	# Grab out both the *command_chunks* and the *comment_chunks*:
-	command_chunks = self._command_chunks
-	comment_chunks = self._comment_chunks
+	command_chunks = code._command_chunks
+	comment_chunks = code._comment_chunks
 
 	# If we have any *comment_chunks*, tack the onto the end of *command_chunks*:
 	if len(comment_chunks):
 	    command_chunks += ["("] + comment_chunks + [")"]
 
 	# Construct a space separated *command*:
-	command = " ".join(self._command_chunks)
+	command = " ".join(code._command_chunks)
 	#print("command='{0}'".format(command))
 
 	# Write *comand* to *code_stream*:
-	code_stream = self._code_stream
+	code_stream = code._code_stream
 	code_stream.write(command)
 	code_stream.write("\n")
 
@@ -12186,27 +12215,30 @@ class Code:
 	del comment_chunks[:]
 
 	# Mark that we ended the current command:
-	self._command_started = False
+	code._command_started = False
 
 	color_index = -1
-	if self._vrml_motion == 0:
+	if code._vrml_motion == 0:
 	    color_index = 0
-	elif self._vrml_motion == 1:
+	elif code._vrml_motion == 1:
 	    color_index = 1
 
 	if color_index >= 0:
 	    start_index = \
-	      self._vrml_point(self._vrml_start_x, self._vrml_start_y, self._vrml_start_z)
-	    end_index = self._vrml_point(self._x_value(), self._y_value(), self._z)
-	    self._vrml_point_indices.append(start_index)
-	    self._vrml_point_indices.append(end_index)
-	    self._vrml_point_indices.append(-1)
-	    self._vrml_color_indices.append(color_index)
+	      code._vrml_point(code._vrml_start_x, code._vrml_start_y, code._vrml_start_z)
+	    end_index = code._vrml_point(code._x_value(), code._y_value(), code._z)
+	    code._vrml_point_indices.append(start_index)
+	    code._vrml_point_indices.append(end_index)
+	    code._vrml_point_indices.append(-1)
+	    code._vrml_color_indices.append(color_index)
 
     def _comment(self, comment):
 	""" *Code*: Output *comment* to the *Code* object (i.e. *self*). Any parentheses
 	    in *comment* are converted to square brackets.
 	"""
+
+	# Use *code* instead of *self*:
+        code = self
 
 	# Verify argument types:
 	assert isinstance(comment, str)
@@ -12215,14 +12247,15 @@ class Code:
 	comment = comment.replace('(', '[').replace(')', ']')
 
 	# Add it on to the comment
-	self._comment_chunks.append(comment)
-
-
+	code._comment_chunks.append(comment)
 
     def _configure(self, tool, vice_x, vice_y):
 	""" *Code*: Configure the *Code* object (i.e. *self*) to use
 	    *tool*, *vice_x*, and *vice_y*.
 	"""
+
+	# Use *code* instead of *self*:
+	code = self
 
 	# Verify argument types:
 	assert isinstance(tool, Tool)
@@ -12230,10 +12263,10 @@ class Code:
 	assert isinstance(vice_y, L)
 
 	# Initialize *code*:
-	self._tool = tool
-	self._is_laser = tool._is_laser_get()
-	self._vice_x = vice_x
-	self._vice_y = vice_y
+	code._tool = tool
+	code._is_laser = tool._is_laser_get()
+	code._vice_x = vice_x
+	code._vice_y = vice_y
 
     def _contour(self, contour,
       plunge_offset, contour_offset, tool_radius, clockwise, z, feed_speed, spindle_speed, tracing):
@@ -12245,6 +12278,9 @@ class Code:
 	    *z* specifies the depth.  *feed_speed* specifies the feedrate and *spindle_speed*
 	    specifies the spindle speed.
 	"""
+
+	# Use *code* instead of *self*:
+        code = self
 
 	# Verify argument types:
 	zero = L()
@@ -12259,9 +12295,6 @@ class Code:
 	assert isinstance(tracing, int)
 
 	assert feed_speed != Speed()
-
-	# Use *code* instead of *self*:
-	code = self
 
 	# Start performing any *tracing*:
 	tracing_detail = -1
@@ -12438,25 +12471,30 @@ class Code:
 	    *Code* object (i.e. *self*).
 	"""
     
+	# Use *code* instead of *self*:
+        code = self
+
 	# Verify argument types:
 	assert isinstance(group_code, int) and int >= 0
 	assert isinstance(value, Angle)
 
-	self._dxf_append("{0}\n{1:d}\n".format(group_code, value), "dxf_angle_append")
+	code._dxf_append("{0}\n{1:d}\n".format(group_code, value), "dxf_angle_append")
     
     def _dxf_append(self, text, from_routine):
 	""" *Code*: Append *text* to the DXF component the *Code* object (i.e. *self*).
 	    *from_routine* is used for debugging only.
 	"""
     
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(text, str)
 	assert isinstance(from_routine, str)
 
 	# Append *text* to *dxf_lines*:
-	#assert self._is_laser
-	self._dxf_lines.append(text)
-    
+	#assert code._is_laser
+	code._dxf_lines.append(text)
     
     def _dxf_arc_append(self, clockwise, end_x, end_y, radius):
 	""" *Code*: Generate a DXF arc entity that draws an arc from the current X/Y location
@@ -12464,14 +12502,14 @@ class Code:
 	    The arc is drawn clockwise if *clockwise* is *True* and counter-clockwise otherwise.
 	"""
     
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(clockwise, bool)
 	assert isinstance(end_x, L)
 	assert isinstance(end_y, L)
 	assert isinstance(radius, L)
-
-	# Use *code* instead of *self*:
-	code = self
 
 	# Perform any requested *tracing*:
 	tracing = -1000000
@@ -12490,8 +12528,8 @@ class Code:
 	degrees360 = Angle(deg=360.0)
     
 	# Grab the start position ({x1}, {y1}):
-	start_x = self._x_value()
-	start_y = self._y_value()
+	start_x = code._x_value()
+	start_y = code._y_value()
     
 	# What we are going to do here is fit a circle to S=(*start_x*,*start_y) and
 	# E=(*end_x*,*end_y*).  We need to find the center of the circle
@@ -12553,12 +12591,12 @@ class Code:
 	code._dxf_xy_append(0, center_x, center_y, "_dxf_arc_append")
 	code._dxf_length_append(40, radius)
 	if clockwise:
-	    self._dxf_angle_append(50, end_angle)
-	    self._dxf_angle_append(51, start_angle)
+	    code._dxf_angle_append(50, end_angle)
+	    code._dxf_angle_append(51, start_angle)
 	else:
-	    self._dxf_angle_append(50, start_angle)
-	    self._dxf_angle_append(51, end_angle)
-	self._dxf_entity_stop()
+	    code._dxf_angle_append(50, start_angle)
+	    code._dxf_angle_append(51, end_angle)
+	code._dxf_entity_stop()
     
 	if tracing >= 0:
 	    print("{0}<=Code._dxf_arc_append@(cw={1}, end_x={2:i}, end_y={3:i}, radius={4:i})".
@@ -12569,28 +12607,37 @@ class Code:
 	    with a center of (*x*,*y*) and a radius of *radius*.
 	"""
     
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(x, L)
 	assert isinstance(y, L)
 	assert isinstance(radius, L)
 
-	self._dxf_entity_start("CIRCLE")
-	self._dxf_xy_append(0, x, y, "_dxf_circle")
-	self._dxf_length_append(40, radius)
-	self._dxf_entity_stop()
+	code._dxf_entity_start("CIRCLE")
+	code._dxf_xy_append(0, x, y, "_dxf_circle")
+	code._dxf_length_append(40, radius)
+	code._dxf_entity_stop()
     
     def _dxf_entity_start(self, name):
 	""" *Code*: Start a DXF entity named *name* with the *Code* object (i.e. *self*).  """
 
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(name, str)
     
-	self._dxf_append("0\n{0}\n".format(name), "_dxf_entity_start")
-	self._dxf_integer_append(8, 2)
-	self._dxf_integer_append(62, 0)
+	code._dxf_append("0\n{0}\n".format(name), "_dxf_entity_start")
+	code._dxf_integer_append(8, 2)
+	code._dxf_integer_append(62, 0)
     
     def _dxf_entity_stop(self):
 	""" *Code* Terminate the current DXF entity in the *Code* object (i.e. *self*). """
+
+	# Use *code* instead of *self*:
+	code = self
 
 	# Nothing to do right now:
 	pass
@@ -12599,44 +12646,59 @@ class Code:
     def _dxf_content_avaiable(self):
 	""" *Code*: Return *True* if the *Code* object (i.e. *self*) has any DXF file content. """
 
-	return len(self._dxf_lines) > 0
+	# Use *code* instead of *self*:
+	code = self
+
+	return len(code._dxf_lines) > 0
 
     def _dxf_integer_append(self, group_code, value):
 	""" *Code*: Append *group_code* and *value* to the current DXF entity the *Code* object
 	    (i.e. *self*).
 	"""
     
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(group_code, int) and group_code >= 0
 	assert isinstance(value, int)
 
-	self._dxf_append("{0}\n{1}\n".format(group_code, value), "_dxf_integer_append")
+	code._dxf_append("{0}\n{1}\n".format(group_code, value), "_dxf_integer_append")
     
     def _dxf_length_append(self, group_code, value):
 	""" *Code*: Append *group_code* and *value* to the current DXF entity in the
 	    *Code* object (i.e. *self*).
 	"""
     
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(group_code, int) and group_code >= 0
 	assert isinstance(value, L)
 
-	self._dxf_append("{0}\n{1:m}\n".format(group_code, value), "_dxf_length_append")
+	code._dxf_append("{0}\n{1:m}\n".format(group_code, value), "_dxf_length_append")
     
     def _dxf_write(self, dxf_file):
 	""" *Code*: Write the DXF file lines associated with the *Code* object (i.e. *self*)
 	    to *dxf_file*.
 	"""
 
-	for dxf_line in self._dxf_lines:
+	# Use *code* instead of *self*:
+	code = self
+
+	for dxf_line in code._dxf_lines:
 	    dxf_file.write(dxf_line)
-	self._dxf_lines = []
+	code._dxf_lines = []
 	
     def _dxf_xy_append(self, offset, x, y, from_routine):
 	""" *Code*: Append (*x*,*y*) values to the DXF entity of the *Code* object (i.e. *self*),
 	    where *offset* specfies the increment added to the 10, 20, 30 record fields.
 	"""
     
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(offset, int) and offset >= 0
 	assert isinstance(x, L)
@@ -12646,84 +12708,95 @@ class Code:
 	#call d@(form@("dxf_xy_append@(off=%d%, x+%i%, y=%i%, from=%v%)\n\") %
 	#  f@(offset) % f@(x) % f@(y) / f@(from))
     
-	self._dxf_length_append(10 + offset, x + self._dxf_x_offset)
-	self._dxf_length_append(20 + offset, y + self._dxf_y_offset)
-	self._dxf_length_append(30 + offset, L())
+	code._dxf_length_append(10 + offset, x + code._dxf_x_offset)
+	code._dxf_length_append(20 + offset, y + code._dxf_y_offset)
+	code._dxf_length_append(30 + offset, L())
     
     def _dxf_xy_offset_set(self, dxf_x_offset, dxf_y_offset):
 	""" *Code*: Set the DXF offset X field of the *RS724* object (i.e. *self*) """
 
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(dxf_x_offset, L)
 	assert isinstance(dxf_y_offset, L)
-	self._dxf_x_offset = dxf_x_offset
-	self._dxf_y_offset = dxf_y_offset
+	code._dxf_x_offset = dxf_x_offset
+	code._dxf_y_offset = dxf_y_offset
 
     def _dxf_y_offset_get(self):
 	""" *Code*: Return the DXF offset Y field of the *Code* object (i.e. *self*) """
 
-	return self._dxf_y_offset
+	# Use *code* instead of *self*:
+	code = self
+
+	return code._dxf_y_offset
 
     def _finish(self):
-	""" *Code*: Finish off the current block of G code. """
+	""" *Code*: Finish off the current block of G code (i.e. *self*.) """
 
-	code_stream = self._code_stream
+	# Use *code* instead of *self*:
+	code = self
+
+	# Close *code_stream*:
+	code_stream = code._code_stream
 	assert isinstance(code_stream, file)
 	code_stream.close()
-	self._code_stream = None
+	code._code_stream = None
 
 	# Random comment: the view3dscene can view the resulting .wrl file:
 
-	# Write out headers to *vrml_stream*:
-	vrml_stream = self._vrml_stream
-	vrml_stream.write("#VRML V2.0 utf8\n")
-	vrml_stream.write("Shape {\n")
-	vrml_stream.write(" geometry IndexedLineSet {\n")
-	vrml_stream.write("  colorPerVertex FALSE\n")
+	# Write out headers to *vrml_file*:
+	vrml_file = code._vrml_file
+	vrml_file.write("#VRML V2.0 utf8\n")
+	vrml_file.write("Shape {\n")
+	vrml_file.write(" geometry IndexedLineSet {\n")
+	vrml_file.write("  colorPerVertex FALSE\n")
 
 	# Output the colors:
-	vrml_stream.write("  color Color {\n")
-	vrml_stream.write("   color [\n")
-	vrml_stream.write("     0.0 0.0 1.0 # blue\n")
-	vrml_stream.write("     1.0 0.0 0.0 # red\n")
-	vrml_stream.write("     0.0 1.0 0.0 # green\n")
-	vrml_stream.write("   ]\n")
-	vrml_stream.write("  }\n")
+	vrml_file.write("  color Color {\n")
+	vrml_file.write("   color [\n")
+	vrml_file.write("     0.0 0.0 1.0 # blue\n")
+	vrml_file.write("     1.0 0.0 0.0 # red\n")
+	vrml_file.write("     0.0 1.0 0.0 # green\n")
+	vrml_file.write("   ]\n")
+	vrml_file.write("  }\n")
 
 	# Write out points:
-	vrml_stream.write("  coord Coordinate {\n")
-	vrml_stream.write("   point [\n")
-	for point in self._vrml_points:
-	    vrml_stream.write("    {0} {1} {2}\n".format(point[0], point[1], point[2]))
-	vrml_stream.write("   ]\n")
-	vrml_stream.write("  }\n")
+	vrml_file.write("  coord Coordinate {\n")
+	vrml_file.write("   point [\n")
+	for point in code._vrml_points:
+	    vrml_file.write("    {0} {1} {2}\n".format(point[0], point[1], point[2]))
+	vrml_file.write("   ]\n")
+	vrml_file.write("  }\n")
 		
 	# Write out coordinate index:
-	vrml_stream.write("  coordIndex [\n")
-	vrml_point_indices = self._vrml_point_indices
-	vrml_stream.write("  ");
+	vrml_file.write("  coordIndex [\n")
+	vrml_point_indices = code._vrml_point_indices
+	vrml_file.write("  ");
 	for index in vrml_point_indices:
-	    vrml_stream.write(" {0}".format(index))
+	    vrml_file.write(" {0}".format(index))
 	    if index < 0:
-		vrml_stream.write("\n  ")
-	vrml_stream.write("]\n")
+		vrml_file.write("\n  ")
+	vrml_file.write("]\n")
 
 	# Write out the color indices:
-	vrml_stream.write("  colorIndex [\n")
-	for color_index in self._vrml_color_indices:
-	    vrml_stream.write("    {0}\n".format(color_index))
-	vrml_stream.write("  ]\n")
+	vrml_file.write("  colorIndex [\n")
+	for color_index in code._vrml_color_indices:
+	    vrml_file.write("    {0}\n".format(color_index))
+	vrml_file.write("  ]\n")
 
 	# Close out the shape and geometry clauses:
-	vrml_stream.write(" }\n")
-	vrml_stream.write("}\n")
+	vrml_file.write(" }\n")
+	vrml_file.write("}\n")
 
-	# Close *vrml_stream*:
-	vrml_stream.close()
+	# Close *vrml_file*:
+	vrml_file.close()
 
 	# Now reset all the VRML values:
-	self._vrml_reset()
+	code._vrml_reset()
 
+    #FIXME: This routine appears to be no longer used!!!
     def _flush(self, program_number):
 	""" *Code*: Generate CNC code starting at *program_number* for
 	    the first CNC file name.
@@ -12739,7 +12812,7 @@ class Code:
 	#original_program_number :@= program_number
 
 	# Output all of the *blocks*:
-	blocks = self._blocks
+	blocks = code._blocks
 	size = len(blocks)
 	print("size=", size)
 	if size != 0:
@@ -12960,16 +13033,22 @@ class Code:
     def _g1_set(self, g1):
 	""" *Code*: Set the G1 field of the *Code* object (i.e. *self*) to *g1*. """
 
+	# Use *code* instead *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(g1, int)
 
 	# Set the G1 field of the *Code* object (i.e. *self*) to *g1*:
-	self._g1 = g1
+	code._g1 = g1
 
     def _hertz(self, field_name, value):
 	""" *Code*: Output *value* for *field_name* in the current command of the *Code* object 
 	    (i.e. *self*).
 	"""
+
+	# Use *code* instead of *self*:
+	code = self
 
 	# Verify argument types:
 	assert isinstance(field_name, str)
@@ -12978,8 +13057,8 @@ class Code:
 	square_bracket = False
 	changed = False
 	if field_name == "S":
-	    if self._s != value:
-		self._s = value
+	    if code._s != value:
+		code._s = value
 		changed = True
 	elif field_name == "[]":
 	    changed = True
@@ -12992,16 +13071,26 @@ class Code:
 		chunk = "[{0:rpm}]".format(value)
 	    else:
 		chunk = "{0}{1:rpm}".format(field_name[0], value)
-	    self._command_chunks.append(chunk)
+	    code._command_chunks.append(chunk)
 
     def _is_laser_set(self, is_laser):
 	""" *Code*: Set the is_laser field of the *Code* object (i.e. *self*) to *is_laser*. """
 
-	self._is_laser = is_laser
+	# Use *code* instead of *self*:
+	code = self
+
+	# Verify argument types:
+        assert isinstance(is_laser, bool)
+
+	code._is_laser = is_laser
 
     def _length(self, field_name, value):
 	""" *Code*: Output *value* for *field_name* to the *Code* object (i.e. *self*.) """
 
+	# Use *code* instead of *self*:
+        code = self
+
+	# Verify argument tyeps:
 	assert isinstance(field_name, str)
 	assert isinstance(value, L)
 
@@ -13009,42 +13098,42 @@ class Code:
 	offset = L()
 	changed = False
 	if field_name == "Q":
-	    if self._q != value:
-		self._q = value
+	    if code._q != value:
+		code._q = value
 		changed = True
 	elif field_name == "I":
-	    if self._i != value:
-		self._i = value
+	    if code._i != value:
+		code._i = value
 		changed = True
 	elif field_name == "J":
-	    if self._j != value:
-		self._j = value
+	    if code._j != value:
+		code._j = value
 		changed = True
 	elif field_name == "R0":
-	    if self._r0 != value:
-		self._r0 = value
+	    if code._r0 != value:
+		code._r0 = value
 		changed = True
  	elif field_name == "R1":
-	    if self._r1 != value:
-		self._r1 = value
+	    if code._r1 != value:
+		coe._r1 = value
 		changed = True
 	elif field_name == "X":
-	    offset = self._vice_x
-	    if self._x != value - offset:
-		self._x = value - offset
+	    offset = code._vice_x
+	    if code._x != value - offset:
+		code._x = value - offset
 		changed = True
 	elif field_name == "Y":
-	    offset = self._vice_y
-	    if self._y != value - offset:
-		self._y = value - offset
+	    offset = code._vice_y
+	    if code._y != value - offset:
+		code._y = value - offset
 		changed = True
 	elif field_name == "Z":
-	    if self._z != value:
-		self._z = value
+	    if code._z != value:
+		code._z = value
 		changed = True
 	elif field_name == "Z1":
-	    if self._z1 != value:
-		self._z1 = value
+	    if code._z1 != value:
+		code._z1 = value
 		changed = True
 	elif field_name == "[]":
 	    changed = True
@@ -13058,81 +13147,94 @@ class Code:
 		chunk = "[{0:i}]".format(value - offset)
 	    else:
 		chunk = "{0}{1:i}".format(field_name[0], value - offset)
-	    self._command_chunks.append(chunk)
+	    code._command_chunks.append(chunk)
 
     def _line_comment(self, comment):
 	""" *Code*: Emit *comment* to the *Code* object (i.e. *self*). """
+
+	# Use *code* instead of *self*:
+	code = self
 
 	# Verify argument types:
 	assert isinstance(comment, str)
 
 	# This routine will add a line containg *comment* to the *Code* object (i.e. *self).:
-	self._command_begin()
-	self._comment(comment)
-	self._command_end()
+	code._command_begin()
+	code._comment(comment)
+	code._command_end()
 
     def _mode_motion(self, g1_value):
 	""" *Code*: This routine will issue a G*g1_value* motion command to the *Code* object
 	    (i.e. *self*).
 	"""
 
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify arguement types:
-	assert isinstance(g1_value, int) and g1_value in self._g1_table
+	assert isinstance(g1_value, int) and g1_value in code._g1_table
 
 	# Add a G1 field to the command:
-	self._unsigned("G1", g1_value)
+	code._unsigned("G1", g1_value)
 
-	self._vrml_motion = g1_value
+	code._vrml_motion = g1_value
 
 
     def _reset(self):
 	""" *Code*: Reset the contents of the *Code* object (i.e. *self*) """
+
+	# Use *code* instead of *self:
 
 	zero = L()
 	large = L(inch=123456789.0)
 	huge = 0x7fffffff
 	big = L(inch=123456789)
 
-	self._begin = True
-	self._f = Speed(mm_per_sec=huge)
-	self._g1 = huge
-	self._g2 = huge
-	self._g3 = huge
-	self._g4 = huge
-	self._g5 = huge
-	self._g6 = huge
-	self._g7 = huge
-	self._g8 = huge
-	self._g9 = huge
-	self._g10 = huge
-	self._g11 = huge
-	self._h = huge
-	self._i = big
-	self._j = big
-	self._m1 = huge
-	self._m2 = huge
-	self._m3 = huge
-	self._m4 = huge
-	self._m5 = huge
-	self._p = Time(sec=-1.0)
-	self._q = big
-	self._r0 = big
-	self._r1 = big
-	self._s = Hertz(rps=123456789.0)
-	self._x = big
-	self._y = big
-	self._z = big
-	self._z1 = big
+	# Reset the *code* object:
+	code._begin = True
+	code._f = Speed(mm_per_sec=huge)
+	code._g1 = huge
+	code._g2 = huge
+	code._g3 = huge
+	code._g4 = huge
+	code._g5 = huge
+	code._g6 = huge
+	code._g7 = huge
+	code._g8 = huge
+	code._g9 = huge
+	code._g10 = huge
+	code._g11 = huge
+	code._h = huge
+	code._i = big
+	code._j = big
+	code._m1 = huge
+	code._m2 = huge
+	code._m3 = huge
+	code._m4 = huge
+	code._m5 = huge
+	code._p = Time(sec=-1.0)
+	code._q = big
+	code._r0 = big
+	code._r1 = big
+	code._s = Hertz(rps=123456789.0)
+	code._x = big
+	code._y = big
+	code._z = big
+	code._z1 = big
 
-    def _start(self, part, tool, ngc_program_number, spindle_speed):
+    def _start(self, part, tool, ngc_program_number, spindle_speed, part_wrl_file):
 	""" *Code*: Start writing out the G-code for *tool* (
 	"""
+
+	# Use *code* instead of *self*:
+	code = self
 
 	# Verify argument types:
 	assert isinstance(part, Part)
 	assert isinstance(tool, Tool)
 	assert isinstance(ngc_program_number, int) and ngc_program_number > 0
 	assert isinstance(spindle_speed, Hertz)
+	assert isinstance(part_wrl_file, file)
 
 	# Grab some values from *part* and *tool*:
 	part_name = part._name_get()
@@ -13140,15 +13242,16 @@ class Code:
 	tool_number = tool._number_get()
 
 	# Make sure that closed off any previous *code_stream*:
-	assert self._code_stream == None
+	assert code._code_stream == None
 
 	# Open new *code_stream*:
 	ezcad = part._ezcad_get()
 	ngc_directory = ezcad._ngc_directory_get()
+	print("Code._start(): ngc_directory='{0}'".format(ngc_directory))
 	code_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(ngc_program_number))
 	code_stream = open(code_file_name, "w")
 	assert code_stream != None, "Could not open '{0}' for writing".format(code_file_name)
-	self._code_stream = code_stream
+	code._code_stream = code_stream
 
 	# Output a descriptive header comment:
 	code_stream.write("( Part {0}: Tool {1} Program: {2} )\n".
@@ -13175,14 +13278,19 @@ class Code:
 	else:
 	    code_stream.write("M9 (Coolant off)\n")
 
-	# Open new *vrml_stream*:
+	# Open new *vrml_file*:
 	ngc_directory = ezcad._ngc_directory_get()
 	vrml_file_name = os.path.join(ngc_directory, "O{0}.wrl".format(ngc_program_number))
-	vrml_stream = open(vrml_file_name, "w")
-	assert vrml_stream != None, "Could not open '{0}' for writing".format(vrml_file_name)
-	self._vrml_stream = vrml_stream
+	vrml_file = open(vrml_file_name, "w")
+	assert vrml_file != None, "Could not open '{0}' for writing".format(vrml_file_name)
+	code._vrml_file = vrml_file
+	code._part_wrl_file = part_wrl_file
 
+    #FIXME: This is no longer used!!!
     def _foo(self):
+	# Use *code instead of *self*:
+        code = self
+
 	# Get moving to tool change location:
 	plunge_x = part._plunge_x_get()
 	plunge_y = part._plunge_y_get()
@@ -13215,11 +13323,14 @@ class Code:
     def _s_set(self, s):
 	""" *Code*: Set the S field of the *Code* object (i.e. *self*) to *s*. """
 
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(s, Hertz)
 
 	# Set the S field of the *Code* object (i.e. *self*) to *s*:
-	self._s = s
+	code._s = s
 
     def _simple_pocket_helper(self, pocket, offset, s, f, z, rapid_move):
 	""" *Code*: Perform one rectangular or rounded rectangular path of the currently
@@ -13232,6 +13343,9 @@ class Code:
 	    speed and *f* is the feedrate to use.
 	"""
     
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(pocket, Operation_Simple_Pocket)
 	assert isinstance(offset, L)
@@ -13259,7 +13373,7 @@ class Code:
 	z2 = max(cz1, cz2)
 
 	corner_radius = pocket._corner_radius_get()
-	self._line_comment(
+	code._line_comment(
 	  "x1={0:i} y1={1:i} x2={2:i} y2={3:i} cr={4:i}".format(x1, y1, x2, y2, corner_radius))
     
 	# Set *debug* to *True* to turn on tracing:
@@ -13278,7 +13392,7 @@ class Code:
 	rx2 = x2 - corner_radius
 	ry1 = y1 + corner_radius
 	ry2 = y2 - corner_radius
-	self._line_comment("rx1={0:i} ry1={1:i} rx2={2:i} ry2={3:i}".format(rx1, ry1, rx2, ry2))
+	code._line_comment("rx1={0:i} ry1={1:i} rx2={2:i} ry2={3:i}".format(rx1, ry1, rx2, ry2))
 	if debug:
 	    print("rx1={0:i} ry1={1:i} rx2={2:i} ry2={3:i}".format(rx1, ry1, rx2, ry2))
 
@@ -13287,7 +13401,7 @@ class Code:
 	px2 = x2 - offset
 	py1 = y1 + offset
 	py2 = y2 - offset
-	self._line_comment(
+	code._line_comment(
 	  "offset={0:i} px1={1:i} py1={2:i} px2={3:i} py2={4:i}".format(offset, px1, py1, px2,py2))
     
 	# Determine the starting location for this path:	
@@ -13299,12 +13413,12 @@ class Code:
     
 	# Move to (*start_x*, *start_y*) as specified by *linear_move* argument:
 	if rapid_move:
-	    self._xy_rapid(start_x, start_y)
+	    code._xy_rapid(start_x, start_y)
 	else:
-	    self._xy_feed(f, s, start_x, start_y)
+	    code._xy_feed(f, s, start_x, start_y)
     
 	# Make sure we are at the depth *z*:
-	self._z_feed(f/2, s, z, "simple_pocket_helper")
+	code._z_feed(f/2, s, z, "simple_pocket_helper")
     
 	# Mill out either a square or rounded corners
 	if offset < corner_radius:
@@ -13314,48 +13428,51 @@ class Code:
 	    r = corner_radius - offset
     
 	    # Bottom horizontal line from (rx1,py1) to (rx2,py1):
-	    self._xy_feed(f, s, rx2, py1)
+	    code._xy_feed(f, s, rx2, py1)
     
 	    # Lower right arc (rx2,py1) to (px2,ry1):
-	    self._xy_ccw_feed(f, s, r, px2, ry1, rx=rx2, ry=ry1)
+	    code._xy_ccw_feed(f, s, r, px2, ry1, rx=rx2, ry=ry1)
     
 	    # Right vertical line (px2,ry1) to (px2,ry2):
-	    self._xy_feed(f, s, px2, ry2)
+	    code._xy_feed(f, s, px2, ry2)
     
 	    # Upper right arc (px2,ry2) to (rx2, py2):
-	    self._xy_ccw_feed(f, s, r, rx2, py2, rx=rx2, ry=ry2)
+	    code._xy_ccw_feed(f, s, r, rx2, py2, rx=rx2, ry=ry2)
     
 	    # Top horizontal line (rx2, py2) to (rx1, py2):
-	    self._xy_feed(f, s, rx1, py2)
+	    code._xy_feed(f, s, rx1, py2)
     
 	    # Upper left arc (rx1, py2) to (px1, ry2):
-	    self._xy_ccw_feed(f, s, r, px1, ry2, rx=rx1, ry=ry2)
+	    code._xy_ccw_feed(f, s, r, px1, ry2, rx=rx1, ry=ry2)
     
 	    # Left vertical line (px1, ry2) to (px1, ry1):
-	    self._xy_feed(f, s, px1, ry1)
+	    code._xy_feed(f, s, px1, ry1)
     
 	    # Lower left arc (px1, ry1) to (rx1, py1):
-	    self._xy_ccw_feed(f, s, r, rx1, py1, rx=rx1, ry=ry1)
+	    code._xy_ccw_feed(f, s, r, rx1, py1, rx=rx1, ry=ry1)
 	else:
 	    # Mill out a rectangle with "square" corners in a counter
 	    # clockwise direction to force a climb cut:
     
 	    # Bottom horizontal line from (px1, py1) to (px2, py1):
-	    self._xy_feed(f, s, px2, py1)
+	    code._xy_feed(f, s, px2, py1)
     
 	    # Right vertical line from (px2, py1) to (px2, py2):
-	    self._xy_feed(f, s, px2, py2)
+	    code._xy_feed(f, s, px2, py2)
     
 	    # Top horizontal line from (px2, py2) to (px1, py2):
-	    self._xy_feed(f, s, px1, py2)
+	    code._xy_feed(f, s, px1, py2)
     
 	    # Left vertical line from (px1, py2) to (px1, py1):
-	    self._xy_feed(f, s, px1, py1)
+	    code._xy_feed(f, s, px1, py1)
 
     def _speed(self, field_name, value):
 	""" *Code*: Set the speed for *field_name* to *value in the the current command of the
 	    *Code* object (i.e. *self*).
 	"""
+
+	# Use *code* instead of *self*:
+	code = self
 
 	# Verify argument types:
 	assert isinstance(field_name, str)
@@ -13365,8 +13482,8 @@ class Code:
 	changed = False
 	if field_name == "F":
 	    assert value != Speed()
-	    if self._f != value:
-		self._f = value
+	    if code._f != value:
+		code._f = value
 		changed = True
 	elif field_name == "[]":
 	    square_bracket = True
@@ -13379,8 +13496,9 @@ class Code:
 		chunk = "[{0:i}]".format(value)
 	    else:
 		chunk = "{0}{1:i}".format(field_name[0], value)
-	    self._command_chunks.append(chunk)
+	    code._command_chunks.append(chunk)
 
+    #FIXME: This is old code!!!
     def _old_code(self):
 
 	self._reset()
@@ -13458,19 +13576,22 @@ class Code:
 	# Open the top-level *part_ngc_stream* file that invokes each tool operation
 	# in a separate .ngc file:
 	ngc_directory = ezcad._ngc_directory_get()
-	part_ngc_stream_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
-	part_ngc_stream = open(part_ngc_stream_file_name, "w")
-	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_stream_file_name)
+	part_ngc_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
+	part_ngc_stream = open(part_ngc_file_name, "w")
+	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_file_name)
 
     def _unsigned(self, field_name, value):
 	""" *Code*: This routine will format {value} for {field_name} to {code}.
 	"""
 
-	#FIXME: This should probably be done using a Python dictionary:
+	# Use *code* instead of *self*:
+	code = self
 
 	# Verify argument types:
 	assert isinstance(field_name, str)
 	assert isinstance(value, int) and value >= 0
+
+	#FIXME: This should probably be done using a Python dictionary:
 
 	previous_value = 0xffffffff
 	matched = False
@@ -13479,9 +13600,9 @@ class Code:
 	    matched = True
 	    letter = field_name[0]
 	    if letter == 'H':
-		previous_value = self._h
+		previous_value = code._h
 		if previous_value != value:
-		    self._h = value
+		    code._h = value
 	    elif letter == 'M':
 		pass
 	    elif letter == 'O':
@@ -13496,50 +13617,50 @@ class Code:
 		matched = True
 		g_digit = field_name[1]
 		if g_digit == '1':
-		    previous_value = self._g1
+		    previous_value = code._g1
 		    if previous_value != value:
-			self._g1 = value
+			code._g1 = value
 		elif g_digit == '2':
-		    previous_value = self._g2
+		    previous_value = code._g2
 		    if previous_value != value:
-			self._g2 = value
+			code._g2 = value
 		elif g_digit == '3':
-		    previous_value = self._g3
+		    previous_value = code._g3
 		    if previous_value != value:
-			self._g3 = value
+			code._g3 = value
 		elif g_digit == '4':
-		    previous_value = self._g4
+		    previous_value = code._g4
 		    if previous_value != value:
-			self._g4 = value
+			code._g4 = value
 		elif g_digit == '5':
-		    previous_value = self._g5
+		    previous_value = code._g5
 		    if previous_value != value:
-			self._g5 = value
+			code._g5 = value
 		elif g_digit == '6':
-		    previous_value = self._g6
+		    previous_value = code._g6
 		    if previous_value != value:
-			self._g6 = value
+			code._g6 = value
 		elif g_digit == '7':
-		    previous_value = self._g7
+		    previous_value = code._g7
 		    if previous_value != value:
-			self._g7 = value
+			code._g7 = value
 		elif g_digit == '8':
-		    previous_value = self._g8
+		    previous_value = code._g8
 		    if previous_value != value:
-			self._g8 = value
+			code._g8 = value
 		elif g_digit == '9':
-		    previous_value = self._g9
+		    previous_value = code._g9
 		    if previous_value != value:
-			self._g9 = value
+			code._g9 = value
 		else:
 		    # We did not match:
 		    matched = False
 	elif size == 2:
 	    if field_name == "G10":
 		matched = True
-		previous_value = self.g10
+		previous_value = code.g10
 		if previous_value != value:
-		    self._g10 = value
+		    code._g10 = value
 	    elif field_name == "G11":
 		# Always output G4 when requested:
 
@@ -13548,26 +13669,32 @@ class Code:
 
 	assert matched, "Unrecognized field name {0}".format(field_name)
 	if previous_value != value or field_name == "G1":
-	    self._command_chunks.append("{0}{1}".format(field_name[0], value))
+	    code._command_chunks.append("{0}{1}".format(field_name[0], value))
 
     def _vice_xy_set(self, vice_x, vice_y):
 	""" *Code*: Set the vice X/Y fields of the *Code* object (i.e. *self*)
 	    to *vice_x* and *vice_y*.
 	"""
 
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(vice_x, L)
 	assert isinstance(vice_y, L)
 
 	# Set the vice X/Y fields of the *Code* object (i.e. *self*) to *vice_x* and *vice_y*:
-	self._vice_x = vice_x
-	self._vice_y = vice_y
+	code._vice_x = vice_x
+	code._vice_y = vice_y
 
     def _vrml_arc_draw(self, ax, ay, bx, by, radius, z, clockwise, radius_x=None, radius_y=None):
 	""" *Code*: Draw an arc from (*ax*, *ay*, *z) to (*bx*, *by*, *bz*) with an
 	    arc radius of *radius*.  The arc is drawn in a clockwise direction if
 	    *clockwise* is *True* and a counter-clockwise direction otherwise. """
     
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(ax, L)
 	assert isinstance(ay, L)
@@ -13736,8 +13863,8 @@ class Code:
 	step_angle = arb_angle / float(steps)
 
 	# Lay down A=(*ax*,*ay*,*az*):
-	vrml_point_indices = self._vrml_point_indices
-	a_index = self._vrml_point(ax, ay, az)
+	vrml_point_indices = code._vrml_point_indices
+	a_index = code._vrml_point(ax, ay, az)
 	vrml_point_indices.append(a_index)
 
 	# Lay down the intermediate points along the arc:
@@ -13746,23 +13873,26 @@ class Code:
 	    segment_x = rx + radius.cosine(segment_angle)
 	    segment_y = ry +   radius.sine(segment_angle)
 	    segment_z = az
-	    segment_index = self._vrml_point(segment_x, segment_y, segment_z)
+	    segment_index = code._vrml_point(segment_x, segment_y, segment_z)
 	    vrml_point_indices.append(segment_index)
 
 	# Lay down B=(*bx*,*by*,*bz):
-	b_index = self._vrml_point(bx, by, bz)
+	b_index = code._vrml_point(bx, by, bz)
 	vrml_point_indices.append(b_index)
 
 	# Terminate the polyline:
 	vrml_point_indices.append(-1)
 
 	# Set the color for the polyline:
-	self._vrml_color_indices.append(1)
+	code._vrml_color_indices.append(1)
 
     def _vrml_point(self, x, y, z):
 	""" *Code*: Return the VRML point index for point (*x*, *y*, *z*) using the
 	    *Code* object (i.e. *self*).
 	"""
+
+	# Use *code* instead of *self*:
+	code = self
 
 	# Verify argument types:
 	assert isinstance(x, L)
@@ -13770,11 +13900,11 @@ class Code:
 	assert isinstance(z, L)
 
 	point = (x.millimeters(), y.millimeters(), z.millimeters())
-	vrml_points_table = self._vrml_points_table
+	vrml_points_table = code._vrml_points_table
 	if point in vrml_points_table:
 	    index = vrml_points_table[index]
 	else:
-	    vrml_points = self._vrml_points
+	    vrml_points = code._vrml_points
 	    index = len(vrml_points)
 	    vrml_points.append(point)
 	return index
@@ -13782,29 +13912,38 @@ class Code:
     def _vrml_reset(self):
 	""" *Code*: Reset the VRML sub-system of the *Code* object (i.e. *self*). """
 
-	self._vrml_color_indices = []
-	self._vrml_motion = -1
-	self._vrml_point_indices = []
-	self._vrml_points = []
-	self._vrml_points_table = []
-	self._vrml_start_r0 = self._r0
-	self._vrml_start_x = self._x
-	self._vrml_start_y = self._y
-	self._vrml_start_z = self._z
-	self._vrml_stream = None
+	# Use *code* instead of *self*:
+	code = self
+
+	code._vrml_color_indices = []
+	code._vrml_motion = -1
+	code._vrml_point_indices = []
+	code._vrml_points = []
+	code._vrml_points_table = []
+	code._vrml_start_r0 = code._r0
+	code._vrml_start_x = code._x
+	code._vrml_start_y = code._y
+	code._vrml_start_z = code._z
+	code._vrml_file = None
 
     def _x_value(self):
 	""" *Code*: Return the current value of X offset by the vice X for the *Code* object
 	    (i.e. *self*).
 	"""
 
-	return self._x + self._vice_x
+	# Use *code* instead of *self*:
+	code = self
+
+	return code._x + code._vice_x
 
     def _xy_cw_feed(self, f, s, r, x, y, rx=None, ry=None):
 	""" *Code*: Feed to location (*x*, *y*) with a radius *r* clockwise  circle with a
 	    feedrate of *f* and spindle speed of *s* using the *Code* object (i.e. *self*):
 	"""
     
+	# Use *code* instead of *self*:
+        code = self
+
 	# Verify routine arguments:
 	assert isinstance(f, Speed)
 	assert isinstance(s, Hertz)
@@ -13814,37 +13953,40 @@ class Code:
 	assert isinstance(rx, L) or rx == None
 	assert isinstance(ry, L) or ry == None
     
-	x1 = self._x_value()
-	y1 = self._y_value()
-	z1 = self._z
+	x1 = code._x_value()
+	y1 = code._y_value()
+	z1 = code._z
 	x2 = x
 	y2 = y
-	self._vrml_arc_draw(x1, y1, x2, y2, r, z1, False, rx, ry)
+	code._vrml_arc_draw(x1, y1, x2, y2, r, z1, False, rx, ry)
 
-	x_value = self._x_value()
-	y_value = self._y_value()
+	x_value = code._x_value()
+	y_value = code._y_value()
 	if x_value != x or y_value != y:
 	    # Do the laser code first:
-	    if self._is_laser:
-	    	self._dxf_arc_append(True, x, y, r)
+	    if code._is_laser:
+	    	code._dxf_arc_append(True, x, y, r)
 
-	    # Now do the RS274 self and get F, R0, S, X, and Y updated:
-	    self._z_safe_retract_actual()
-	    self._r0 = L(inch=-100.0)	# Forget R
-	    self._command_begin()
-	    self._mode_motion(2)
-	    self._speed("F", f)
-	    self._length("R0", r)
-	    self._hertz("S", s)
-	    self._length("X", x)
-	    self._length("Y", y)
-	    self._command_end()
+	    # Now do the RS274 code and get F, R0, S, X, and Y updated:
+	    code._z_safe_retract_actual()
+	    code._r0 = L(inch=-100.0)	# Forget R
+	    code._command_begin()
+	    code._mode_motion(2)
+	    code._speed("F", f)
+	    code._length("R0", r)
+	    code._hertz("S", s)
+	    code._length("X", x)
+	    code._length("Y", y)
+	    code._command_end()
     
     def _xy_ccw_feed(self, f, s, r, x, y, rx=None, ry=None):
 	""" *Code*: Feed to location (*x*, *y*) as a radius *r* counter clockwise  circle with a
 	    feedrate of *f* and spindle speed of *s* using the *Code* object (i.e. *self*):
 	"""
     
+	# Use *code* instead of *self*:
+        code = self
+
 	# Verify routine arguments:
 	assert isinstance(f, Speed)
 	assert isinstance(s, Hertz)
@@ -13854,91 +13996,103 @@ class Code:
 	assert isinstance(rx, L) or rx == None
 	assert isinstance(ry, L) or ry == None
     
-	x1 = self._x_value()
-	y1 = self._y_value()
-	z1 = self._z
+	x1 = code._x_value()
+	y1 = code._y_value()
+	z1 = code._z
 	x2 = x
 	y2 = y
-	self._vrml_arc_draw(x1, y1, x2, y2, r, z1, True, rx, ry)
+	code._vrml_arc_draw(x1, y1, x2, y2, r, z1, True, rx, ry)
 
 	if x1 != x or y1 != y:
 	    # Do the laser code first:
-	    if self._is_laser:
-	    	self._dxf_arc_append(False, x, y, r)
+	    if code._is_laser:
+	    	code._dxf_arc_append(False, x, y, r)
     
-	    # Now do the RS274 self and get F, R0, S, X, and Y updated:
-	    self._z_safe_retract_actual()
-	    self._r0 = L(inch=-100.00)	# Forget R
-	    self._command_begin()
-	    self._mode_motion(3)
-	    self._speed("F", f)
-	    self._length("R0", r)
-	    self._hertz("S", s)
-	    self._length("X", x)
-	    self._length("Y", y)
-	    self._command_end()
+	    # Now do the RS274 code and get F, R0, S, X, and Y updated:
+	    code._z_safe_retract_actual()
+	    code._r0 = L(inch=-100.00)	# Forget R
+	    code._command_begin()
+	    code._mode_motion(3)
+	    code._speed("F", f)
+	    code._length("R0", r)
+	    code._hertz("S", s)
+	    code._length("X", x)
+	    code._length("Y", y)
+	    code._command_end()
 
     def _xy_feed(self, f, s, x, y):
 	""" *Code*: Feed to location (*x*, *y*) with a feedrate of *f*
 	    and spindle speed of *s* using the *Code* object (i.e. *self*).
 	"""
     
+	# Use *code* instead of *self*:
+        code = self
+
 	# Verify argment types:
 	assert isinstance(f, Speed)
 	assert isinstance(s, Hertz)
 	assert isinstance(x, L)
 	assert isinstance(y, L)
 
-	x_before = self._x_value()
-	y_before = self._y_value()
+	x_before = code._x_value()
+	y_before = code._y_value()
 	if x_before != x or y_before != y:
 	    # Do any laser code first:
-	    if self._is_laser:
-	    	self._dxf_entity_start("LINE")
-	    	self._dxf_xy_append(0, x_before, y_before, "xy_feed before")
-	    	self._dxf_xy_append(1, x, y, "xy_feed after")
-	    	self._dxf_entity_stop()
+	    if code._is_laser:
+	    	code._dxf_entity_start("LINE")
+	    	code._dxf_xy_append(0, x_before, y_before, "xy_feed before")
+	    	code._dxf_xy_append(1, x, y, "xy_feed after")
+	    	code._dxf_entity_stop()
     
 	    # Now do the RS274 code and get the F, S, X, and Y values updated:
-	    self._z_safe_retract_actual()
-	    self._command_begin()
-	    self._mode_motion(1)
-	    self._speed("F", f)
-	    self._hertz("S", s)
-	    self._length("X", x)
-	    self._length("Y", y)
-	    self._command_end()
+	    code._z_safe_retract_actual()
+	    code._command_begin()
+	    code._mode_motion(1)
+	    code._speed("F", f)
+	    code._hertz("S", s)
+	    code._length("X", x)
+	    code._length("Y", y)
+	    code._command_end()
 
     def _xy_rapid(self, x, y):
 	""" *Code*: Perform a rapid move to (X, Y) using the *Code* object (i.e. *self*). """
+
+	# Use *code* instead of *self:
+	code = self
 
 	# Verify argument types:
 	assert isinstance(x, L)
 	assert isinstance(y, L)
 
 	# Only perform the rapid if we are not already there:
-	if self._x_value() != x or self._y_value() != y:
+	if code._x_value() != x or code._y_value() != y:
 	    # Make sure we are at a safe Z height prior to performing the rapid:
-	    self._z_safe_retract_actual()
+	    code._z_safe_retract_actual()
 
 	    # Output a X/Y rapid command:
-	    self._command_begin()
-	    self._mode_motion(0)
-	    self._length("X", x)
-	    self._length("Y", y)
-	    self._command_end()
+	    code._command_begin()
+	    code._mode_motion(0)
+	    code._length("X", x)
+	    code._length("Y", y)
+	    code._command_end()
 
     def _y_value(self):
 	""" *Code*: Return the current value of Y offset by the vice Y for the *Code* object
 	    (i.e. *self*).
 	"""
 
-	return self._y + self._vice_y
+	# Use *code* instead of *self*:
+	code = self
+
+	return code._y + code._vice_y
 
     def _z_feed(self, f, s, z, from_routine):
 	""" *Code*: Feed to an altitude of *z* using the *Code* object (i.e. *self*)
 	    at a feed of *f* and a speed *s*.
 	"""
+
+	# Use *code* instead of *self*:
+	code = self
 
 	# Verify argument types:
 	assert isinstance(f, Speed)
@@ -13951,11 +14105,11 @@ class Code:
 	# If *z_safe_pending* is set, but we are doing another Z feed before
 	# it is cleared, we must not need to do a Z safe move operation after all.
 	# Hence, we can just clear *z_safe_pending*:
-	self._z_safe_pending = False
+	code._z_safe_pending = False
 
-	z_safe = self._z_safe
-	z_rapid = self._z_rapid
-	z_current = self._z
+	z_safe = code._z_safe
+	z_rapid = code._z_rapid
+	z_current = code._z
 
 	# Move up if we are too low:
 	while z_current < z:
@@ -13967,19 +14121,19 @@ class Code:
 		    z_target = z_rapid
 
 		# We do a G1 feed to get to {z_target}:
-		self._command_begin()
-		self._mode_motion(1)
-		self._speed("F", f)
-		self._hertz("S", s)
-		self._length("Z", z_target)
-		self._command_end()
+		code._command_begin()
+		code._mode_motion(1)
+		code._speed("F", f)
+		code._hertz("S", s)
+		code._length("Z", z_target)
+		code._command_end()
 		z_current = z_target
 	    else:
 		# We are at or above {z_rapid}, so we can G0 rapid to a higher Z:
-		self._command_begin()
-		self._mode_motion(0)
-		self._length("Z", z)
-		self._command_end()
+		code._command_begin()
+		code._mode_motion(0)
+		code._length("Z", z)
+		code._command_end()
 		z_current = z
 
 	# Move down if we are too high:
@@ -13992,29 +14146,32 @@ class Code:
 		    z_target = z_rapid
 	
 		# We are at
-		self._command_begin()
-		self._mode_motion(0)
-		self._length("Z", z_target)
-		self._command_end()
+		code._command_begin()
+		code._mode_motion(0)
+		code._length("Z", z_target)
+		code._command_end()
 		z_current = z_target
 	    else:
 		# We are are at or below {z_rapid} and need to G1 feed down:
-		self._command_begin()
-		self._mode_motion(1)
-		self._speed("F", f)
-		self._hertz("S", s)
-		self._length("Z", z)
-		self._command_end()
+		code._command_begin()
+		code._mode_motion(1)
+		code._speed("F", f)
+		code._hertz("S", s)
+		code._length("Z", z)
+		code._command_end()
 		z_current = z
 
     def _z_rapid_set(self, z_rapid):
 	""" *Code*: Set the Z rapid field of the *Code* object (i.e. *self*) to *z_rapid*. """
 
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(z_rapid, L)
 
 	# Set the Z field of the *Code* object (i.e. *self*) to *z*:
-	self._z_rapid = z_rapid
+	code._z_rapid = z_rapid
     
 
     def _z_safe_assert(self, text, comment):
@@ -14022,22 +14179,27 @@ class Code:
 	    If not, the failing message will contain {text}.
 	"""
 
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument_types:
 	assert isinstance(text, str)
 	assert isinstance(comment, str)
 
-
-	assert self._z_safe_pending or self._z == self._z_safe, \
+	assert code._z_safe_pending or code._z == code._z_safe, \
 	  "Z safe failure: {0} ({1}) [z={2}]".format(text, comment, code._z)
 
     def _z_safe_set(self, z_safe):
 	""" *Code*: Set the Z safe field of the *Code* object (i.e. *self*). """
 
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(z_safe, L)
 
 	# Set the Z safe field of the *Code* object (i.e. *self*) to *z_safe*:
-	self._z_safe = z_safe
+	code._z_safe = z_safe
 
     def _z_safe_retract(self, f, s):
 	""" *Code*: Ensure that the tool is at the "Z safe" altitude for next command RS274
@@ -14045,36 +14207,45 @@ class Code:
 	    and a speed of *s* if needed.
 	"""
 
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(f, Speed)
 	assert isinstance(s, Hertz)
 
 	# Mark that a "Z safe" operation is pending if needed:
-	if self._z != self._z_safe:
-	    self._z_safe_pending = True
-	    self._z_safe_s = s
-	    self._z_safe_f = f
+	if code._z != code._z_safe:
+	    code._z_safe_pending = True
+	    code._z_safe_s = s
+	    code._z_safe_f = f
 
     def _z_safe_retract_actual(self):
 	""" *Code*  Ensure that the tool is at the "Z safe" altitude in the *Code* object
 	    (i.e. *self*) and get there using the internal F and S fields.
 	"""
 
-	# If we have a pending "z_safe" scheduled, this code will make it happen:
-	if self._z_safe_pending:
-	    self._z_safe_pending = False
-	    self._z_feed(self._z_safe_f, self._z_safe_s, self._z_safe, "z_safe_retract_actual")
+	# Use *code* instead of *self*:
+	code = self
 
-	#assert self._z == self._z_safe, "Did not get to Z safe"
+	# If we have a pending "z_safe" scheduled, this code will make it happen:
+	if code._z_safe_pending:
+	    code._z_safe_pending = False
+	    code._z_feed(code._z_safe_f, code._z_safe_s, code._z_safe, "z_safe_retract_actual")
+
+	#assert code._z == code._z_safe, "Did not get to Z safe"
 
     def _z_set(self, z):
 	""" *Code*: Set the Z field of the *Code* object (i.e. *self*). """
 
+	# Use *code* instead of *self*:
+	code = self
+
 	# Verify argument types:
 	assert isinstance(z, L)
 
-	# Set the Z field of the *Code* object (i.e. *self*) to *z*:
-	self._z = z
+	# Set the Z field of the *Code* object to *z*:
+	code._z = z
 
 ## @brief *Place* specifies where another *Part* is to be placed.
 #
