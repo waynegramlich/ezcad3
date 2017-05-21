@@ -714,6 +714,15 @@ class P:
 	y = distance.sine(angle)
 	return P(x, y, L())
 
+    def triple(self):
+        """ *P*: Return the *P* object (i.e. *self*) as an immutable tuple of 3 floats
+	    reprecented in millimeters.
+	"""
+	
+	p = self
+	return (p.x._mm, p.y._mm, p.z._mm)
+
+
     def twice(self):
 	""" P dimensions: Return {self} * 2. """
 
@@ -2375,12 +2384,12 @@ class Speed:
 	    scale = 1.0
 	    format_text = format_text[:-1]
 	else:
-            assert False, "Missing Speed format '{0}'".format(format_text)
+            assert False, "Unrecognized Speed format '{0}'".format(format_text)
 	
 	# Format the value as a string and return it:
 	value = self._mm_per_sec / scale
 	speed_format_text = "{0:" + format_text + "f}"
-	#print("base={0} format_text={1} scaled={0} text='{1}'".
+	#print("base={0} format_text='{1}' scaled={2} speed_format_text='{3}'".
 	#  format(self._mm_per_sec, format_text, value, speed_format_text))
 	return speed_format_text.format(value)
 
@@ -4138,7 +4147,7 @@ class Operation_Dowel_Pin(Operation):
 
     def __init__(self,
       part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed,
-      diameter, dowel_point, plunge_point, top_surface_z, xy_rapid_safe_z):
+      diameter, dowel_point, plunge_point, top_surface_z, xy_rapid_safe_z, tracing=-1000000):
 	""" *Operation_Dowel_Pin*: Initialize an *Operation_Dowel_Pin* object (i.e. *self*)
 	    to contain *part*, *comment*, *sub_priority*, *tool*, *order*, *follows*,
 	    *feed_speed*, *spindle_speed*, *diameter*, *dowel_point*, *plunge_point*,
@@ -4153,8 +4162,6 @@ class Operation_Dowel_Pin(Operation):
 	assert isinstance(comment, str)
 	assert isinstance(sub_priority, int)
 	assert isinstance(tool, Tool)
-
-	assert isinstance(sub_priority, int)
 	assert isinstance(follows, Operation) or follows == None
 	assert isinstance(feed_speed, Speed) and feed_speed != Speed()
 	assert isinstance(spindle_speed, Hertz)
@@ -4163,6 +4170,20 @@ class Operation_Dowel_Pin(Operation):
 	assert isinstance(plunge_point, P)
 	assert isinstance(top_surface_z, L)
 	assert isinstance(xy_rapid_safe_z, L)
+
+	# Perform any requested tracing:
+        if tracing >= 0:
+	    pad = ' ' * tracing
+	    follows_name = 'None'
+	    if isinstance(follows, Operation):
+		follows_name = follows._name_get()
+	    part_name = part._name_get()
+
+            print(("{0}=>Operation_Dowel_Pin.__init__('{1}', '{2}', {3}, '{4}', '{5}', " +
+	      "{6:i}, {7:rpm}, {8:i}, dp={9:i}, pp={10:i}, tz={11:i}, rz={12:i}) ").format(
+	      pad, part_name, comment, sub_priority, tool._name_get(), follows_name,
+	      feed_speed, spindle_speed, diameter, dowel_point, plunge_point, top_surface_z,
+	      xy_rapid_safe_z))
 
 	# Initialize super class:
 	Operation.__init__(operation_dowel_pin, "Dowel_Pin", Operation.KIND_DOWEL_PIN,
@@ -4175,6 +4196,14 @@ class Operation_Dowel_Pin(Operation):
 	operation_dowel_pin._top_surface_z = top_surface_z
 	operation_dowel_pin._xy_rapid_safe_z = xy_rapid_safe_z
 	assert isinstance(operation_dowel_pin._top_surface_z, L)
+
+	# Wrap up any *tracing*:
+        if tracing >= 0:
+            print(("{0}<=Operation_Dowel_Pin.__init__('{1}', '{2}', {3}, '{4}', '{5}', " +
+	      "{6:i}, {7:rpm}, {8:i}, dp={9:i}, pp={10:i}, tz={11:i}, rz={12:i}) ").format(
+	      pad, part_name, comment, sub_priority, tool._name_get(), follows_name,
+	      feed_speed, spindle_speed, diameter, dowel_point, plunge_point, top_surface_z,
+	      xy_rapid_safe_z))
 
     def _cnc_generate(self, tracing):
 	""" *Operation_Dowel_Pin*: Generate the CNC G-code for a an
@@ -4189,7 +4218,7 @@ class Operation_Dowel_Pin(Operation):
 
 	# Perform any *tracing*:
 	if tracing >= 0:
-	    print("{0}=>Operation_Dowel_Pin()".format(' ' * tracing))
+	    print("{0}=>Operation_Dowel_Pin._cnc_generate()".format(' ' * tracing))
 
 	# Grab the *part*, *shop*, *code*, *vice*, and *jaw_volume* from *operation_dowel_pin*:
 	part = operation_dowel_pin._part_get()
@@ -4258,7 +4287,7 @@ class Operation_Dowel_Pin(Operation):
 
 	# Wrap-up any *tracing*:
 	if tracing >= 0:
-	    print("{0}=>Operation_Dowel_Pin()".format(' ' * tracing))
+	    print("{0}<=Operation_Dowel_Pin._cnc_generate()".format(' ' * tracing))
 
     def compare(self, dowel_pin2):
 	""" *Operation_Dowel_Pin*: Return -1, 0, or 1 depending upon whether
@@ -5659,6 +5688,7 @@ class Part:
 	part._scad_difference_lines = []
 	part._scad_union_lines = []
 	part._signature_hash = None
+	part._stl_file_name = None
 	part._top_surface_transform = Transform()
 	part._top_surface_set = False		# Scheduled to go away
 	part._tool_preferred = ""
@@ -6226,6 +6256,57 @@ class Part:
 	part_wrl_file.write("Group {\n")
 	part_wrl_file.write(" children [\n".format(part_name))
 
+	# Output a coordinate axis to *part_wrl_file*:
+	part_wrl_file.write("  #VRM V2.0 utf8\n")
+        part_wrl_file.write("  Shape {\n")
+	part_wrl_file.write("   geometry IndexedLineSet {\n")
+	part_wrl_file.write("    colorPerVertex FALSE\n")
+	part_wrl_file.write("    color Color {\n")
+	part_wrl_file.write("     color [\n")
+	part_wrl_file.write("      1.0 0.0 0.0 # red\n")
+	part_wrl_file.write("      0.0 1.0 0.0 # green\n")
+	part_wrl_file.write("      0.0 0.0 1.0 # bule\n")
+	part_wrl_file.write("     ]\n")
+	part_wrl_file.write("    }\n")
+	part_wrl_file.write("    coord Coordinate {\n")
+	part_wrl_file.write("     point [\n")
+	part_wrl_file.write("      0.0 0.0 0.0\n")	# [0]: Origin
+	part_wrl_file.write("      25.4 0.0 0.0\n")	# [1]: X axis end-point
+	part_wrl_file.write("      0.0 25.4 0.0\n")	# [2]: Y axis end-pont
+	part_wrl_file.write("      0.0 0.0 25.4\n")	# [3]: Z axis end-pont
+	part_wrl_file.write("      23.0 0.0 2.0\n")	# [4]: X axis arrow head
+	part_wrl_file.write("      23.0 0.0 -2.0\n")	# [5]: X axis arrow head
+	part_wrl_file.write("      0.0 23.0 2.0\n")	# [6]: Y axis arrow head
+	part_wrl_file.write("      0.0 23.0 -2.0\n")	# [7]: Y axis arrow head
+	part_wrl_file.write("      2.0 0.0 23.0\n")	# [6]: Z axis arrow head
+	part_wrl_file.write("      -2.0 0.0 23.0\n")	# [7]: Z axis arrow head
+	part_wrl_file.write("     ]\n")
+	part_wrl_file.write("    }\n")
+	part_wrl_file.write("    coordIndex [\n")
+	part_wrl_file.write("     0 1 -1\n")		# X Axis
+	part_wrl_file.write("     1 4 -1\n")		# X Axis Arrow Head
+	part_wrl_file.write("     1 5 -1\n")		# X Axis Arrow Head
+	part_wrl_file.write("     0 2 -1\n")		# Y Axis
+	part_wrl_file.write("     2 6 -1\n")		# Y Axis Arrow Head
+	part_wrl_file.write("     2 7 -1\n")		# Y Axis Arrow Head
+	part_wrl_file.write("     0 3 -1\n")		# Z Axis
+	part_wrl_file.write("     3 8 -1\n")		# Z Axis Arrow Head
+	part_wrl_file.write("     3 9 -1\n")		# Z Axis Arrow Head
+	part_wrl_file.write("    ]\n")
+	part_wrl_file.write("    colorIndex [\n")
+	part_wrl_file.write("     0\n")			# X Axis
+	part_wrl_file.write("     0\n")			# X Axis Arrow Head
+	part_wrl_file.write("     0\n")			# X Axis Arrow Head
+	part_wrl_file.write("     1\n")			# Y Axis
+	part_wrl_file.write("     1\n")			# Y Axis Arrow Head
+	part_wrl_file.write("     1\n")			# Y Axis Arrow Head
+	part_wrl_file.write("     2\n")			# Z Axis
+	part_wrl_file.write("     2\n")			# Z Axis Arrow Head
+	part_wrl_file.write("     2\n")			# Z Axis Arrow Head
+	part_wrl_file.write("    ]\n")
+	part_wrl_file.write("   }\n")
+        part_wrl_file.write("  }\n")
+
 	# Now visit each *operation_group* in *operation_groups*:
 	for index, operation_group in enumerate(operation_groups):
 	    # Output a couple of G-code lines *part_ngc_file*:
@@ -6242,6 +6323,10 @@ class Part:
 	part_ngc_file.write("G53 Y0.0 ( Move the work to the front )\n")
 	part_ngc_file.write("M2\n")
 	part_ngc_file.close()
+
+	# Write the part out to the *part_wrl_file*:
+	part._wrl_write(part_wrl_file, Transform(), 2,
+	  file_name=part._stl_file_name, tracing=tracing + 1)
 
 	# Close out the VRML for *part_wrl_file* and then close it:
 	part_wrl_file.write(" ]\n")
@@ -6285,14 +6370,14 @@ class Part:
 	    tracing_detail = 1
 	    indent = ' ' * tracing
 	    debug = True
-	    print("{0}=>Part._flush_helper(part='{1}', len(ops)={2}, ngc_no={3}".
+	    print("{0}=>Part._cnc_flush_helper(part='{1}', len(ops)={2}, ngc_no={3}, *)".
 	      format(indent, part_name, len(operations), ngc_program_number))
 
 	# Set *debug* to True to trace this routine:
 	if tracing_detail > 0:
 	    print("{0}=>Part._flush_helper('{1}', *, {2}, *)".
 	      format(indent, part_name, ngc_program_number))
-	    print("operations=", operations)
+	    #print("operations=", operations)
 
 	zero = L()
 
@@ -6423,7 +6508,7 @@ class Part:
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Part._flush_helper(part='{1}', len(ops)={2}, ngc_no={3}".
+	    print("{0}<=Part._cnc_flush_helper(part='{1}', len(ops)={2}, ngc_no={3}, *)".
 	      format(indent, part_name, len(operations), ngc_program_number))
 
     def _dimensions_update(self, ezcad, tracing):
@@ -6728,6 +6813,8 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*:
+	if part._tracing >= 0:
+            tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._manufacture:('{1}', *)".format(indent, self._name))
@@ -6738,7 +6825,7 @@ class Part:
 	shop = part._shop_get()
 	code = shop._code_get()
 
-	# Figure out the mode name:
+	# Figure out the *mode_name* and do any requested *tracing*::
 	mode = ezcad._mode
 	mode_name = "?mode?"
 	if mode == EZCAD3.VISUALIZATION_MODE:
@@ -6747,12 +6834,8 @@ class Part:
 	    mode_name = "STL"
 	elif mode == EZCAD3.CNC_MODE:
 	    mode_name = "CNC"
-
-	# Set *debug* to *True* for debugging:
 	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print("{0}mode={1}".
-	      format(indent, mode_name))
+	    print("{0}mode='{1}'".format(indent, mode_name))
 
 	# First manufacture any child *Part*'s:
 	for attribute_name in dir(part):
@@ -6778,7 +6861,8 @@ class Part:
 	    wrl_directory = ezcad._wrl_directory_get()
 	    wrl_file_name = os.path.join(wrl_directory, "{0}.wrl".format(part._name))
 	    wrl_file = open(wrl_file_name, "w")
-	    part._wrl_write(wrl_file, file_name = wrl_file_name, tracing = tracing + 1)
+	    transform = Transform()
+	    part._wrl_write(wrl_file, transform, file_name = wrl_file_name, tracing = tracing + 1)
 	    wrl_file.close()
 
 	# Now generate any CNC files:
@@ -6794,8 +6878,8 @@ class Part:
 		print("{0}==>Part._manufacture('{1}'):CNC".format(indent, part._name))
 
 	    # This is where we can disable *cnc_tracing*:
-	    cnc_tracing = -1000000
-	    #cnc_tracing = tracing + 1
+	    #cnc_tracing = -1000000
+	    cnc_tracing = tracing + 1
 
 	    shop = ezcad._shop
 	    program_base = shop._program_base_get()
@@ -6919,6 +7003,7 @@ class Part:
 		stl_directory = ezcad._stl_directory_get()
 		stl_file_name = os.path.join(stl_directory,
 		  "{0}_{1}.stl".format(name, signature_hash))
+		part._stl_file_name = stl_file_name
 		if os.path.isfile(stl_file_name):
 		    # Since the .stl file already exists, we must have already
 		    # written out the .scad file.  Thus, there is nothing
@@ -7933,7 +8018,7 @@ class Part:
 	      format(indent, self._name, comment, material, color, start_diameter, end_diameter,
 	      start, end, sides, sides_angle, welds, flags))
 
-    def dowel_pin(self, comment):
+    def dowel_pin(self, comment, tracing=-1000000):
 	""" *Part*: Request that a dowel pin be used to align the *Part* object (i.e. *self*)
 	    in the vice with a comment of *comment*.
 	"""
@@ -7945,7 +8030,7 @@ class Part:
 	assert isinstance(comment, str)
 
 	# Perform any requested *tracing*:
-	tracing = part._tracing
+	#tracing = part._tracing
 	tracing_detail = -1
 	if tracing >= 0:
 	    tracing_detail = 1
@@ -8032,7 +8117,7 @@ class Part:
 	    dowel_pin_order = Operation.ORDER_DOWEL_PIN
 	    operation = Operation_Dowel_Pin(part,
 	      comment, 0, tool_dowel_pin, dowel_pin_order, None, feed_speed, spindle_speed,
-	      diameter, dowel_point, plunge_point, top_surface_z, xy_rapid_safe_z)
+	      diameter, dowel_point, plunge_point, top_surface_z, xy_rapid_safe_z, tracing + 1)
 	    self._operation_append(operation)
 
 	    if tracing_detail > 0:
@@ -8409,15 +8494,6 @@ class Part:
 
 	print("*************Part:{0} bounding_box={1}".format(self._name, self._bounding_box))
 
-	# Now visit *part* and all of its children in CNC mode:
-	ezcad._mode = EZCAD3.CNC_MODE
-	shop = ezcad._shop
-	shop._cnc_generate_set(True)
-	#part._manufacture(ezcad, 0)
-	part._manufacture(ezcad, -1000000)
-	shop._cnc_generate_set(False)
-	ezcad._update_count += 1
-
 	# Now visit *part* and all of its children in STL mode:
 	ezcad._mode = EZCAD3.STL_MODE
 	part._manufacture(ezcad, -1000000)
@@ -8426,6 +8502,15 @@ class Part:
 	# Now visit *part* and all of its children in visualization mode:
 	ezcad._mode = EZCAD3.VISUALIZATION_MODE
 	part._manufacture(ezcad, -1000000)
+	ezcad._update_count += 1
+
+	# Now visit *part* and all of its children in CNC mode:
+	ezcad._mode = EZCAD3.CNC_MODE
+	shop = ezcad._shop
+	shop._cnc_generate_set(True)
+	#part._manufacture(ezcad, 0)
+	part._manufacture(ezcad, -1000000)
+	shop._cnc_generate_set(False)
 	ezcad._update_count += 1
 
 	if debug:
@@ -8704,11 +8789,12 @@ class Part:
         bounding_box.point_expand(P(x2, y2, z2))
 
     def _wrl_write(self,
-      wrl_file, wrl_indent = 0, parts_table = {}, file_name = "", tracing = -1000000):
+      wrl_file, transform, wrl_indent = 0, parts_table = {}, file_name = "", tracing = -1000000):
 	""" *Part*: Write *self* to *wrl_file*. """
 
 	# Check argument types:
 	assert isinstance(wrl_file, file)
+	assert isinstance(transform, Transform)
 	assert isinstance(wrl_indent, int)
 	assert isinstance(parts_table, dict)
 	assert isinstance(file_name, str)
@@ -8720,7 +8806,7 @@ class Part:
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Part.wrl_write('{1}, file_name='{2}')".
+	    print("{0}=>Part.wrl_write('{1}', file_name='{2}')".
 	      format(indent, part._name, file_name))
 
 	# Make sure the top level starts with an empty *parts_table*:
@@ -8767,16 +8853,25 @@ class Part:
 		    assert stl_lines[0][:5] == "solid"
 		    index = 1
 		    while index + 4 < size:
-			# Extract *vertex1*, *vertex2*, and *vertex3*:
-			xlist = stl_lines[index + 2].split()
-			vertex1 = \
-			  (float(xlist[1]), float(xlist[2]), float(xlist[3]))
-			xlist = stl_lines[index + 3].split()
-			vertex2 = \
-			  (float(xlist[1]), float(xlist[2]), float(xlist[3]))
-			xlist = stl_lines[index + 4].split()
-			vertex3 = \
-			  (float(xlist[1]), float(xlist[2]), float(xlist[3]))
+			#  Extract *point1*, *point2*, and *point3* from *stl_lines*:
+			xlist1 = stl_lines[index + 2].split()
+			point1 = P(L(float(xlist1[1])), L(float(xlist1[2])), L(float(xlist1[3])))
+			xlist2 = stl_lines[index + 3].split()
+			point2 = P(L(float(xlist2[1])), L(float(xlist2[2])), L(float(xlist2[3])))
+			xlist3 = stl_lines[index + 4].split()
+			point3 = P(L(float(xlist3[1])), L(float(xlist3[2])), L(float(xlist3[3])))
+
+			# Transform *point1*, *point2*, and *point3*:
+			point1 = transform * point1
+			point2 = transform * point2
+			point3 = transform * point3
+
+			# Now convert the transformed *point1*, *point2*, and *point3*, back
+			# back into immutable Python tuples that  can be used to index into
+                        # a Python dictionary:
+			vertex1 = point1.triple()
+			vertex2 = point2.triple()
+			vertex3 = point3.triple()
     
 			# Get *offset1* for *vertex1*:
 			if vertex1 in vertices:
@@ -8904,7 +8999,7 @@ class Part:
 			    # We have neither a rotation nor a translation;
 			    # so we output *part* without a "Transform..."
 			    sub_part._wrl_write(wrl_file,
-			      wrl_indent + 2, parts_table, file_name)
+			      transform, wrl_indent + 2, parts_table, file_name)
 			else:
 			    # We have either a rotation and/or a translation;
 			    # So we need to wrap *part* in a "Transform ...":
@@ -8933,7 +9028,7 @@ class Part:
 			    # "children [...]":
 			    wrl_file.write(
 			      "{0}   children [\n".format(spaces))
-			    sub_part._wrl_write(wrl_file,
+			    sub_part._wrl_write(wrl_file, transform,
 			      wrl_indent + 4, parts_table, file_name)
 			    wrl_file.write(
 			      "{0}   ]\n".format(spaces))
@@ -8955,7 +9050,7 @@ class Part:
 	    #  format(spaces, name, indent, parts_table.keys(), file_name))
 
 	if tracing >= 0:
-	    print("{0}<=Part.wrl_write('{1}, file_name='{2}')".
+	    print("{0}<=Part.wrl_write('{1}', file_name='{2}')".
 	      format(indent, part._name, file_name))
     
     # ===================================
@@ -11605,7 +11700,8 @@ class Part:
 	    xml_stream.write(' Flags="{0}" Comment="{1}"/>\n'. \
 	      format(flags, comment))
 
-    def vice_mount_with_extra(self, comment, top_surface, jaw_surface, extra_dx, extra_dy):
+    def vice_mount_with_extra(self,
+      comment, top_surface, jaw_surface, extra_dx, extra_dy, tracing=-100000):
 	""" *Part*: Cause the *Part* object (i.e. *self*) to be mounted in a vice with
 	    *top_surface* facing upwards and *jaw_surface* mounted towards the rear vice jaw.
 	    *comment* is the attached to any generated G-code.  *extra_dx* and *extra_dy*
@@ -11624,15 +11720,17 @@ class Part:
 	assert isinstance(jaw_surface, str) and len(jaw_surface) == 1 and jaw_surface in "tbnsew"
 	assert isinstance(extra_dx, L) and extra_dx >= zero
 	assert isinstance(extra_dy, L) and extra_dy >= zero
+	assert isinstance
 
 	part_name = part._name
 
 	# Start any *tracing*:
+	if tracing < 0:
+ 	    tracing = part._tracing
 	trace_detail = 0
-	tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}<=Part.vice_position_with_extra('{1}', '{2}', '{3}', '{4}', {5:i}, {6:i}".
+	    print("{0}=>Part.vice_mount_with_extra('{1}', '{2}', '{3}', '{4}', {5:i}, {6:i})".
 	      format(indent, part_name, comment, top_surface, jaw_surface, extra_dx, extra_dy))
 
 	# The *x_axis*, *y_axis*, and *z_axis* are needed for rotations:
@@ -11864,7 +11962,7 @@ class Part:
 
 	if shop._cnc_generate_get():
 	    # Find the *tool_dowel_pin* to use:
-	    tool_dowel_pin = part._tools_dowel_pin_search(tracing)
+	    tool_dowel_pin = part._tools_dowel_pin_search(tracing + 1)
 	    assert isinstance(tool_dowel_pin, Tool_Dowel_Pin), "No dowel pin tool found"
 
 	    # Immediately grab the *feed_speed* and *spindle_speed* that were computed
@@ -11876,7 +11974,7 @@ class Part:
 	    order = Operation.ORDER_DOWEL_PIN
 	    operation_dowel_pin = Operation_Dowel_Pin(part, "dowel_pin", 0, tool_dowel_pin, order,
 	      None, feed_speed, spindle_speed, diameter, cnc_dowel_point, cnc_plunge_point,
-	      cnc_top_surface_z, cnc_xy_rapid_safe_z)
+	      cnc_top_surface_z, cnc_xy_rapid_safe_z, tracing + 1)
 	    part._operation_append(operation_dowel_pin)
 
 	# Perform dowel pin operations:
@@ -11949,7 +12047,7 @@ class Part:
 	# Wrap up any *tracing*:
 
 	if tracing >= 0:
-	    print("{0}<=Part.vice_position_with_extra('{1}', '{2}', '{3}', '{4}', {5:i}, {6:i}".
+	    print("{0}<=Part.vice_mount_with_extra('{1}', '{2}', '{3}', '{4}', {5:i}, {6:i})".
 	      format(indent, part_name, comment, top_surface, jaw_surface, extra_dx, extra_dy))
 
 class Fastener(Part):
@@ -12551,8 +12649,6 @@ class Code:
 	    code._vrml_point_indices.append(end_index)
 	    code._vrml_point_indices.append(-1)
 	    code._vrml_color_indices.append(color_index)
-	    if color_index == 2:
-		print("GOT RETRACT")
 
     def _comment(self, comment):
 	""" *Code*: Output *comment* to the *Code* object (i.e. *self*). Any parentheses
@@ -13535,8 +13631,6 @@ class Code:
 	# Add a G1 field to the command:
 	code._unsigned("G1", g1_value)
 	code._vrml_motion_color = motion_color_index
-	if motion_color_index == 2:
-	    print("got retract")
 
     def _reset(self):
 	""" *Code*: Reset the contents of the *Code* object (i.e. *self*) """
@@ -14042,7 +14136,7 @@ class Code:
 	if previous_value != value or field_name == "G1":
 	    code._command_chunks.append("{0}{1}".format(field_name[0], value))
 
-    def _vice_xy_set(self, vice_x, vice_y):
+    def old__vice_xy_set(self, vice_x, vice_y):
 	""" *Code*: Set the vice X/Y fields of the *Code* object (i.e. *self*)
 	    to *vice_x* and *vice_y*.
 	"""
