@@ -60,7 +60,7 @@ class L:
     # the sum of *mm*, *cm*, *inch*, and *ft*.  Usually, only one of these
     # values is specfied.  The argment values must be either an *int* or
     # *float*.  The *inch* parameter can also be specified as a string
-    # of the form "W-N/D" where is a whole number, N is a numerator, and
+    # of the form "W-N/D" where W is a whole number, N is a numerator, and
     # D is a denumerator.  In this case, the result is computed as
     # float(W)+float(N)/float(D).
     def __init__(self, mm=0.0, cm=0.0, inch=0.0, ft=0.0):
@@ -2141,6 +2141,11 @@ class Bounding_Box:
 	return P(self._west, self._north.average(self._south), self._top)
 
 
+    def volume_get(self):
+	""" *Bounding_Box*: Return the volume of the *Bounding_Box* object (i.e. *self*.) """
+
+	return P(self._east - self._west, self._north - self._south, self._top - self._bottom)
+
     def matrix_apply(self, matrix):
 	""" *Bounding_Box*: Return a new *Bounding_Box* object that bounds
 	    the current *Bounding_Box* object (i.e. self) after each corner
@@ -3588,33 +3593,34 @@ class EZCAD3:
 	self._bases_table = {}
 
 	self._bounding_box_dispatch = {
-	  "b":   Bounding_Box.b_get,
-	  "be":  Bounding_Box.be_get,
-	  "bn":  Bounding_Box.bn_get,
-	  "bne": Bounding_Box.bne_get,
-	  "bnw": Bounding_Box.bnw_get,
-	  "bs":  Bounding_Box.bs_get,
-	  "bse": Bounding_Box.bse_get,
-	  "bsw": Bounding_Box.bsw_get,
-	  "bw":  Bounding_Box.bw_get,
-	  "c":   Bounding_Box.c_get,
-	  "e":   Bounding_Box.e_get,
-	  "n":   Bounding_Box.n_get,
-	  "ne":  Bounding_Box.ne_get,
-	  "nw":  Bounding_Box.nw_get,
-	  "s":   Bounding_Box.s_get,
-	  "se":  Bounding_Box.se_get,
-	  "sw":  Bounding_Box.sw_get,
-	  "t":   Bounding_Box.t_get,
-	  "te":  Bounding_Box.te_get,
-	  "tn":  Bounding_Box.tn_get,
-	  "tne": Bounding_Box.tne_get,
-	  "tnw": Bounding_Box.tnw_get,
-	  "ts":  Bounding_Box.ts_get,
-	  "tse": Bounding_Box.tse_get,
-	  "tsw": Bounding_Box.tsw_get,
-	  "tw":  Bounding_Box.tw_get,
-	  "w":   Bounding_Box.w_get,
+	  "b":      Bounding_Box.b_get,
+	  "be":     Bounding_Box.be_get,
+	  "bn":     Bounding_Box.bn_get,
+	  "bne":    Bounding_Box.bne_get,
+	  "bnw":    Bounding_Box.bnw_get,
+	  "bs":     Bounding_Box.bs_get,
+	  "bse":    Bounding_Box.bse_get,
+	  "bsw":    Bounding_Box.bsw_get,
+	  "bw":     Bounding_Box.bw_get,
+	  "c":      Bounding_Box.c_get,
+	  "e":      Bounding_Box.e_get,
+	  "n":      Bounding_Box.n_get,
+	  "ne":     Bounding_Box.ne_get,
+	  "nw":     Bounding_Box.nw_get,
+	  "s":      Bounding_Box.s_get,
+	  "se":     Bounding_Box.se_get,
+	  "sw":     Bounding_Box.sw_get,
+	  "t":      Bounding_Box.t_get,
+	  "te":     Bounding_Box.te_get,
+	  "tn":     Bounding_Box.tn_get,
+	  "tne":    Bounding_Box.tne_get,
+	  "tnw":    Bounding_Box.tnw_get,
+	  "ts":     Bounding_Box.ts_get,
+	  "tse":    Bounding_Box.tse_get,
+	  "tsw":    Bounding_Box.tsw_get,
+	  "tw":     Bounding_Box.tw_get,
+	  "volume": Bounding_Box.volume_get,
+	  "w":      Bounding_Box.w_get,
 	}
 
 	# Make sure various output directories exist:
@@ -5631,9 +5637,48 @@ class Operation_Vertical_Lathe(Operation):
 
 	return result
 
+class Parallels:
+    """ *Parallels*: A *Parallels* object specifies a set of parallels for use with a *Vice*."""
+
+    def __init__(self, length, thickness, heights):
+	""" *Parallels*:  """
+
+	# Use *parallels* instead of *self*:
+	parallels = self
+
+        # Verify argument types:
+	assert isinstance(length, L)
+	assert isinstance(thickness, L)
+	assert isinstance(heights, tuple) or isinstance(heights, list)
+	zero = L()
+	for height in heights:
+	    assert isinstance(height, L) and height > zero 
+
+        # Stuff values into *parallels*:
+        parallels._length = length
+        parallels._thickness = thickness
+        parallels._heights = tuple(heights)
+
+    def _length_get(self):
+        """ *Parallels: Return the length of each paralle associated with 
+	    *Parallels* object (i.e. *self*.) """
+
+	return self._length
+
+    def _heights_get(self):
+        """ *Parallels: Return the tuple of heights of the for all the parallels
+	    associated with the *Parallels* object (i.e. *self*.) """
+
+	return self._heights
+
+    def _thickness_get(self):
+        """ *Parallels: Return the thickness of each parallel associated with the
+	    *Parallels* object (i.e. *self*.) """
+
+	return self._heights
+
 class Part:
-    """ A {Part} specifies either an assembly of parts or a single
-	physical part. """
+    """ A *Part* specifies either an assembly of parts or a single physical part. """
 
     HOLE_THROUGH = 1
     HOLE_TIP = 2
@@ -5661,6 +5706,7 @@ class Part:
 	part._color = None
 	part._center = P()
 	part._cnc_suppress = False
+	part._cnc_transform = None		# Orientation and translate transfrom for CNC vice
 	part._dowel_x = zero
 	part._dowel_y = zero
 	part._dx_original = zero
@@ -6325,7 +6371,8 @@ class Part:
 	part_ngc_file.close()
 
 	# Write the part out to the *part_wrl_file*:
-	part._wrl_write(part_wrl_file, Transform(), 2,
+	cnc_transform = part._cnc_transform
+	part._wrl_write(part_wrl_file, part._cnc_transform, 2,
 	  file_name=part._stl_file_name, tracing=tracing + 1)
 
 	# Close out the VRML for *part_wrl_file* and then close it:
@@ -6805,15 +6852,15 @@ class Part:
 	    and perform any manufacturing steps.
 	"""
 
+	# Use *part* instead of *self*:
+	part = self
+
 	# Verify argument types:
 	assert isinstance(ezcad, EZCAD3)
 	assert isinstance(tracing, int)
 
-	# Use *part* instead of *self*:
-	part = self
-
 	# Perform any requested *tracing*:
-	if part._tracing >= 0:
+	if tracing < 0 and part._tracing >= 0:
             tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
@@ -6849,8 +6896,6 @@ class Part:
 	# Now run construct this *part*
 	if tracing >= 0:
 	    print("{0}==>Part.construct('{1}')".format(indent, part_name))
-	#part._tracing = -1000000
-	part._tracing = tracing + 1
 	part.construct()
 	if tracing >= 0:
 	    print("{0}<==Part.construct('{1}')".format(indent, part_name))
@@ -6870,20 +6915,12 @@ class Part:
 	    print("Part '{0}' is suppressing CNC".format(part._name))
 	if mode == EZCAD3.CNC_MODE and not part._cnc_suppress:
 	    # Flush out all of the pending CNC operations:
-	    # Set *cnc_debug* to *True* to trace CNC:
-	    if tracing < 0:
-		tracing = part._tracing
 	    if tracing >= 0:
-		indent = ' ' * tracing
 		print("{0}==>Part._manufacture('{1}'):CNC".format(indent, part._name))
-
-	    # This is where we can disable *cnc_tracing*:
-	    #cnc_tracing = -1000000
-	    cnc_tracing = tracing + 1
 
 	    shop = ezcad._shop
 	    program_base = shop._program_base_get()
-	    program_number = part._cnc_flush(program_base, cnc_tracing + 1)
+	    program_number = part._cnc_flush(program_base, tracing + 1)
 
 	    # We want the program base number to start with a mulitple of 10.
 	    remainder = program_number % 10
@@ -11720,267 +11757,322 @@ class Part:
 	assert isinstance(jaw_surface, str) and len(jaw_surface) == 1 and jaw_surface in "tbnsew"
 	assert isinstance(extra_dx, L) and extra_dx >= zero
 	assert isinstance(extra_dy, L) and extra_dy >= zero
-	assert isinstance
 
 	part_name = part._name
 
 	# Start any *tracing*:
+	trace_detail = -1
 	if tracing < 0:
  	    tracing = part._tracing
-	trace_detail = 0
 	if tracing >= 0:
 	    indent = ' ' * tracing
+	    trace_detail = 1
 	    print("{0}=>Part.vice_mount_with_extra('{1}', '{2}', '{3}', '{4}', {5:i}, {6:i})".
 	      format(indent, part_name, comment, top_surface, jaw_surface, extra_dx, extra_dy))
 
-	# The *x_axis*, *y_axis*, and *z_axis* are needed for rotations:
-	one = L(mm=1.0)
-	x_axis = P(one, zero, zero)
-	y_axis = P(zero, one, zero)
-	z_axis = P(zero, zero, one)
-
-	# These are the two rotation constants used to reorient the 
-	degrees90 = Angle(deg=90.0)
-	degrees180 = Angle(deg=180.0)
-
-	# Grab the 6 possible center surface points of the *bounding_box* for use below:
-	bounding_box = part._bounding_box
-	t = bounding_box.t_get()
-	b = bounding_box.b_get()
-	n = bounding_box.n_get()
-	s = bounding_box.s_get()
-	e = bounding_box.e_get()
-	w = bounding_box.w_get()
-
-	# *top_axis* and *top_rotate* are used to rotate the desired bounding box surface
-        # facing up in the vice.  Leaving as *top_rotate_angle* as *None* means no top
-        # rotation is needed.  *top_point* matches *top_surface*:
-	top_point = None
-	top_axis = None
-	top_rotate_angle = None
-
-	# *jaw_axis* and *jaw_rotate* are used to rotate the desired bounding box surface
-        # facing towards the rear vice jaw.  Leaving as *jaw_rotate_angle * as *None* means no
-        # jaw rotaton needed.  *jaw_point* matches *jaw_surface*:
-	jaw_point = None
-	jaw_axis = z_axis
-	jaw_rotate_angle = None
-
-	# *left_dowel_point* specifies the *bounding_box* center surface point to the "left"
-	# of the bounding box center when mounted in the vice.  This is used for the
-	# left dowel pin operation.   If a right dowel pin is needed, it can be computed.
-	left_dowel_point = None
-
-	# Do a 24 (=6 surfaces and 4 jaw orientations) dispatch:
-        if 't' in top_surface:
-	    # Top surface of *bounding_box* facing up from vice:
-	    top_point = t
-	    if 'n' in jaw_surface:
-		# No rotation needed
-		jaw_point = n
-		left_dowel_point = w
-	    elif 's' in jaw_surface:
-		jaw_point = s
-		jaw_rotate_angle = degrees180
-		left_dowel_point = e
-	    elif 'e' in jaw_surface:
-		jaw_point = e
-		jaw_rotate_angle = degrees90
-		left_dowel_point = n
-	    elif 'w' in jaw_surface:
-		jaw_point = w
-		jaw_rotate_angle = -degrees90
-		left_dowel_point = s
-	    else:
-                assert False
-	elif 'b' in top_surface:
-	    # Bottom surface of *bounding_box* facing up from vice:
-	    top_point = t
-	    top_axis = x_axis
-	    top_rotate_angle = degrees180
-	    if 'n' in jaw_surface:
-		jaw_point = n
-		jaw_rotate_angle = degrees180
-		left_dowel_point = e
-	    elif 's' in jaw_surface:
-		jaw_point = s
-		jaw_rotate_angle = None
-		left_dowel_point = w
-	    elif 'e' in jaw_surface:
-		jaw_point = e
-		jaw_rotate_angle = degrees90
-		left_dowel_point = s
-	    elif 'w' in jaw_surface:
-		jaw_point = w
-		jaw_rotate_angle = -degrees90
-		left_dowel_point = n
-	    else:
-                assert False
-	elif 'n' in top_surface:
-	    # North surface of *bounding_box* facing up from vice:
-	    top_point = n
-	    top_axis = x_axis
-	    top_rotate_angle = degrees90
-	    if 't' in jaw_surface:
-		jaw_point = t
-		jaw_rotate_angle = -degrees180
-		left_dowel_point = e
-	    elif 'b' in jaw_surface:
-		jaw_point = b
-		jaw_rotate_angle = None
-		left_dowel_point = w
-	    elif 'e' in jaw_surface:
-		jaw_point = e
-		jaw_rotate_angle = degrees90
-		left_dowel_point = b
-	    elif 'w' in jaw_surface:
-		jaw_point = w
-		jaw_rotate_angle = -degrees90
-		left_dowel_point = t
-	    else:
-                assert False
-	elif 's' in top_surface:
-	    # South surface of *bounding_box* facing up from vice:
-	    top_point = s
-	    top_axis = x_axis
-	    top_angle = -degrees90
-	    if 't' in jaw_surface:
-		jaw_point = t
-		jaw_rotate_angle = None
-		left_dowel_point = w
-	    elif 'b' in jaw_surface:
-		jaw_point = b
-		jaw_rotate_angle = degrees180
-		left_dowel_point = e
-	    elif 'e' in jaw_surface:
-		jaw_point = e
-		jaw_rotate_angle = degrees90
-		left_dowel_point = t
-	    elif 'w' in jaw_surface:
-		jaw_point = w
-		jaw_rotate_angle = -degrees90
-		left_dowel_point = b
-	    else:
-                assert False
-	elif 'e' in top_surface:
-	    # East surface of *bounding_box* facing up from vice:
-	    top_point = e
-	    top_axis = y_axis
-	    top_angle = -degrees90
-	    if 't' in jaw_surface:
-		jaw_point = t
-		jaw_rotate_angle = -degrees90
-		left_dowel_point = s
-	    elif 'b' in jaw_surface:
-		jaw_point = b
-		jaw_rotate_angle = degrees90
-		left_dowel_point = n
-	    elif 'n' in jaw_surface:
-		jaw_point = n
-		jaw_rotate_angle = None
-		left_dowel_point = t
-	    elif 's' in jaw_surface:
-		jaw_point = s
-		jaw_rotate_angle = -degrees180
-		left_dowel_point = b
-	    else:
-                assert False
-	elif 'w' in top_surface:
-	    # West surface of *bounding_box* facing up from vice:
-	    top_point = w
-	    top_axis = y_axis
-	    top_angle = degrees90
-	    if 't' in jaw_surface:
-		jaw_point = t
-		jaw_rotate_angle = -degree90
-		left_dowel_point = n
-	    elif 'b' in jaw_surface:
-		jaw_point = b
-		jaw_rotate_angle = -degrees90
-		left_dowel_point = s
-	    elif 'n' in jaw_surface:
-		jaw_point = n
-		jaw_rotate_angle = None
-		left_dowel_point = b
-	    elif 's' in jaw_surface:
-		jaw_point = s
-		jaw_rotate_angle = degrees180
-		left_dowel_point = t
-	    else:
-                assert False
-	else:
-            assert False
-
-	# Create the *cnc_transform* to rotate the *bounding_box* to the correct orientation
-	cnc_transform = Transform()
-        cnc_transform = cnc_transform.translate("move to origin", -top_point)
-	if isinstance(top_rotate_angle, Angle):
-            cnc_transform = cnc_transform.rotate("vice surface to top", top_axis, top_rotate_angle)
-	if isinstance(jaw_rotate_angle, Angle):
-            cnc_transform = cnc_transform.rotate("jaw surface north", jw_axis, jaw_rotate_angle)
-	# At this point, the part bounding box has the origin centered in the center of the
-	# selected top surface.  The part has been twisted to so that the selected surface
-	# points to the left.  Next, we need to come up with one more translation to
-	# *cnc_transform* that will force the part to be properly located in the vice.
-	
-	center_point = bounding_box.c_get()
-	cnc_center_point =     cnc_transform * center_point
-	cnc_top_point =        cnc_transform * top_point
-        cnc_jaw_point =        cnc_transform * jaw_point
-	cnc_left_dowel_point = cnc_transform * left_dowel_point
-
-	half_part_dx = cnc_left_dowel_point.distance(cnc_center_point) + extra_dx/2
-	half_part_dy = cnc_left_dowel_point.distance(cnc_jaw_point)    + extra_dy/2
-	half_part_dz = cnc_left_dowel_point.distance(cnc_top_point)
-	part_dx = 2 * half_part_dx
-	part_dy = 2 * half_part_dy
-	part_dz = 2 * half_part_dz
-
+	# We only do work if we are in CNC mode:
 	shop = part._shop_get()
-        vice = shop._vice_get()
-        vice_jaw_volume = vice._jaw_volume_get()
-	vice_dx = vice_jaw_volume.x
-	vice_dy = vice_jaw_volume.y
-	vice_dz = vice_jaw_volume.z
-
-	# Kludge for now:
-	cnc_top_surface_z = vice_dz
-	cnc_xy_rapid_safe_z = cnc_top_surface_z + L(inch=0.500)
-
-	if part_dx > vice_dx:
-	    # The *part* is longer in X axis than vice jaw; center the part in the vice:
-	    vice_translate_point = P(vice_dx/2, half_part_dy, cnc_top_surface_z)
-	    cnc_dowel_point = P(vice_dx/2, half_part_dy, cnc_top_surface_z - 2 * part_dz)
-	else:
-	    # The *part* is shorter in the X axis than the vice jaw:
-	    vice_translate_point = P(half_part_dx, half_part_dy, cnc_top_surface_z)
-	    cnc_dowel_point = P(half_part_dx, half_part_dy, cnc_top_surface_z - 2 * part_dz)
-	cnc_plunge_point = cnc_dowel_point - P(L(inch=1.000), zero, zero)
-
-	# Now compute the final *cnc_transform*:
-	cnc_transform = cnc_transform * vice_translate_point
-
 	if shop._cnc_generate_get():
-	    # Find the *tool_dowel_pin* to use:
+	    # The *x_axis*, *y_axis*, and *z_axis* are needed for rotations:
+	    one = L(mm=1.0)
+	    x_axis = P(one, zero, zero)
+	    y_axis = P(zero, one, zero)
+	    z_axis = P(zero, zero, one)
+
+	    # These are the two rotation constants used to reorient the 
+	    degrees90 = Angle(deg=90.0)
+	    degrees180 = Angle(deg=180.0)
+
+	    # Grab the 6 possible center surface points (and *center_point*) of the *bounding_box*
+	    # for use below:
+	    bounding_box = part._bounding_box
+	    center_point = bounding_box.c_get()
+	    t = bounding_box.t_get()
+	    b = bounding_box.b_get()
+	    n = bounding_box.n_get()
+	    s = bounding_box.s_get()
+	    e = bounding_box.e_get()
+	    w = bounding_box.w_get()
+
+	    # *top_axis* and *top_rotate* are used to rotate the desired bounding box surface
+	    # facing up in the vice.  Leaving as *top_rotate_angle* as *None* means no top
+	    # rotation is needed.  *top_point* matches *top_surface*:
+	    top_point = None
+	    top_axis = None
+	    top_rotate_angle = None
+
+	    # *jaw_axis* and *jaw_rotate* are used to rotate the desired bounding box surface
+	    # facing towards the rear vice jaw.  Leaving as *jaw_rotate_angle * as *None* means no
+	    # jaw rotaton needed.  *jaw_point* matches *jaw_surface*:
+	    jaw_point = None
+	    jaw_axis = z_axis
+	    jaw_rotate_angle = None
+
+	    # *left_dowel_point* specifies the *bounding_box* center surface point to the "left"
+	    # of the bounding box center when mounted in the vice.  This is used for the
+	    # left dowel pin operation.   If a right dowel pin is needed, it can be computed.
+	    left_dowel_point = None
+
+	    # Do a 24 (=6 surfaces x 4 jaw orientations) dispatch on *top_surface* and *jaw_suface*:
+	    if 't' in top_surface:
+		# Top surface of *bounding_box* facing up from vice:
+		top_point = t
+		if 'n' in jaw_surface:
+		    # No rotation needed
+		    jaw_point = n
+		    left_dowel_point = w
+		elif 's' in jaw_surface:
+		    jaw_point = s
+		    jaw_rotate_angle = degrees180
+		    left_dowel_point = e
+		elif 'e' in jaw_surface:
+		    jaw_point = e
+		    jaw_rotate_angle = degrees90
+		    left_dowel_point = n
+		elif 'w' in jaw_surface:
+		    jaw_point = w
+		    jaw_rotate_angle = -degrees90
+		    left_dowel_point = s
+		else:
+		    assert False
+	    elif 'b' in top_surface:
+		# Bottom surface of *bounding_box* facing up from vice:
+		top_point = t
+		top_axis = x_axis
+		top_rotate_angle = degrees180
+		if 'n' in jaw_surface:
+		    jaw_point = n
+		    jaw_rotate_angle = degrees180
+		    left_dowel_point = e
+		elif 's' in jaw_surface:
+		    jaw_point = s
+		    jaw_rotate_angle = None
+		    left_dowel_point = w
+		elif 'e' in jaw_surface:
+		    jaw_point = e
+		    jaw_rotate_angle = degrees90
+		    left_dowel_point = s
+		elif 'w' in jaw_surface:
+		    jaw_point = w
+		    jaw_rotate_angle = -degrees90
+		    left_dowel_point = n
+		else:
+		    assert False
+	    elif 'n' in top_surface:
+		# North surface of *bounding_box* facing up from vice:
+		top_point = n
+		top_axis = x_axis
+		top_rotate_angle = degrees90
+		if 't' in jaw_surface:
+		    jaw_point = t
+		    jaw_rotate_angle = -degrees180
+		    left_dowel_point = e
+		elif 'b' in jaw_surface:
+		    jaw_point = b
+		    jaw_rotate_angle = None
+		    left_dowel_point = w
+		elif 'e' in jaw_surface:
+		    jaw_point = e
+		    jaw_rotate_angle = degrees90
+		    left_dowel_point = b
+		elif 'w' in jaw_surface:
+		    jaw_point = w
+		    jaw_rotate_angle = -degrees90
+		    left_dowel_point = t
+		else:
+		    assert False
+	    elif 's' in top_surface:
+		# South surface of *bounding_box* facing up from vice:
+		top_point = s
+		top_axis = x_axis
+		top_angle = -degrees90
+		if 't' in jaw_surface:
+		    jaw_point = t
+		    jaw_rotate_angle = None
+		    left_dowel_point = w
+		elif 'b' in jaw_surface:
+		    jaw_point = b
+		    jaw_rotate_angle = degrees180
+		    left_dowel_point = e
+		elif 'e' in jaw_surface:
+		    jaw_point = e
+		    jaw_rotate_angle = degrees90
+		    left_dowel_point = t
+		elif 'w' in jaw_surface:
+		    jaw_point = w
+		    jaw_rotate_angle = -degrees90
+		    left_dowel_point = b
+		else:
+		    assert False
+	    elif 'e' in top_surface:
+		# East surface of *bounding_box* facing up from vice:
+		top_point = e
+		top_axis = y_axis
+		top_angle = -degrees90
+		if 't' in jaw_surface:
+		    jaw_point = t
+		    jaw_rotate_angle = -degrees90
+		    left_dowel_point = s
+		elif 'b' in jaw_surface:
+		    jaw_point = b
+		    jaw_rotate_angle = degrees90
+		    left_dowel_point = n
+		elif 'n' in jaw_surface:
+		    jaw_point = n
+		    jaw_rotate_angle = None
+		    left_dowel_point = t
+		elif 's' in jaw_surface:
+		    jaw_point = s
+		    jaw_rotate_angle = -degrees180
+		    left_dowel_point = b
+		else:
+		    assert False
+	    elif 'w' in top_surface:
+		# West surface of *bounding_box* facing up from vice:
+		top_point = w
+		top_axis = y_axis
+		top_angle = degrees90
+		if 't' in jaw_surface:
+		    jaw_point = t
+		    jaw_rotate_angle = -degree90
+		    left_dowel_point = n
+		elif 'b' in jaw_surface:
+		    jaw_point = b
+		    jaw_rotate_angle = -degrees90
+		    left_dowel_point = s
+		elif 'n' in jaw_surface:
+		    jaw_point = n
+		    jaw_rotate_angle = None
+		    left_dowel_point = b
+		elif 's' in jaw_surface:
+		    jaw_point = s
+		    jaw_rotate_angle = degrees180
+		    left_dowel_point = t
+		else:
+		    assert False
+	    else:
+		assert False
+
+	    # Perform any requested *tracing*:
+	    if trace_detail >= 2:
+		print("{0}center_point={1:i} top_point={2:i} jaw_point={3:i} dowel_point={4:i}".
+		  format(indent, center_point, top_point, jaw_point, left_dowel_point))
+
+	    # Grab the *vice* and its associated *vice_jaw volume*:
+	    vice = shop._vice_get()
+	    vice_jaw_volume = vice._jaw_volume_get()
+	    vice_jaw_dx = vice_jaw_volume.x
+	    vice_jaw_dy = vice_jaw_volume.y
+	    vice_jaw_dz = vice_jaw_volume.z
+
+	    # Grab the *parallels* and associated *parallels_height*:	
+	    parallels = vice._parallels_get()
+            parallels_heights = parallels._heights_get()
+
+	    # Figure out both the *smallest_parallel_height* and the *largest_parallel_height*:
+	    smallest_parallel_height = L(inch=12345.0)
+	    largest_parallel_height = L()
+            for parallel_height in parallels_heights:
+		smallest_parallel_height = smallest_parallel_height.minimum(parallel_height)
+		largest_parallel_height  =  largest_parallel_height.maximum(parallel_height)
+
+	    # Now compute the *half_part_dx*, *half_part_dy*, and *half_part_dz* as
+	    # augmented by *extra_dx* and *extra_dy*:
+	    half_part_dx = center_point.distance(left_dowel_point) + extra_dx / 2
+	    half_part_dy = center_point.distance(jaw_point)        + extra_dy / 2
+	    half_part_dz = center_point.distance(top_point)
+
+	    # Compute *part_dx*, *part_dy*, and *part_dz* and perform any requested *tracing*:
+	    part_dx = 2 * half_part_dx
+	    part_dy = 2 * half_part_dy
+	    part_dz = 2 * half_part_dz
+	    if trace_detail >= 2:
+		print("{0}part_dimensions: dx={1:i} dy={2:i} dz={3:i} volume={4:i}".
+		  format(indent, part_dx, part_dy, part_dz, bounding_box.volume_get()))
+
+	    # Now figure out *top_surface_z*, which the distance from the vice origin to the
+            # center of the top surface of the *part*.  We want to mount such that the top surface
+	    # is as near to the top jaw edge as possible.  However, sometimes the parallels will
+	    # not let us get that low:
+	    selected_parallel_height = smallest_parallel_height
+	    for parallel_height in parallels_heights:
+		if parallel_height > selected_parallel_height and \
+ 		  parallel_height + part_dz <= vice_jaw_dz:
+                    selected_parallel_height = parallel_height
+
+	    # Now we can compute *cnc_top_surface_z* and *cnc_xy_rapid_safe_z*:
+	    cnc_top_surface_z = selected_parallel_height + part_dz
+	    cnc_xy_rapid_safe_z = cnc_top_surface_z + L(inch=0.5)
+
+	    # Now we can figure out how we are going to position the part in the vice in Y axis.
+            # This allows us to compute *cnc_vice_translate_point*:
+	    if part_dx > vice_jaw_dx:
+		# The *part* is longer in X axis than vice jaw; center the part in the vice:
+		vice_translate_point = P(vice_jaw_dx/2, -half_part_dy, cnc_top_surface_z)
+	    else:
+		# The *part* is shorter in the X axis than the vice jaw, position part to left
+                # edge of vice:
+		cnc_vice_translate_point = P(half_part_dx, -half_part_dy, cnc_top_surface_z)
+
+	    # Now we can compute the *cnc_transform*, which rotates the *part* bounding box
+	    # so that it is oriented correctly in the vice with the top surface located at
+            # *cnc_top_surface_z*:
+	    cnc_transform = Transform()
+	    cnc_transform = cnc_transform.translate("move to vice origin", -top_point)
+	    if isinstance(top_rotate_angle, Angle):
+		cnc_transform = cnc_transform.rotate(
+		  "vice surface to top", top_axis, top_rotate_angle)
+	    if isinstance(jaw_rotate_angle, Angle):
+		cnc_transform = cnc_transform.rotate(
+		  "rotate jaw surface north", jaw_axis, jaw_rotate_angle)
+	    cnc_transform = cnc_transform.translate("position in vice", cnc_vice_translate_point)
+
+	    # Remember *cnc*_transform* in *part* so the rest of the CNC system can use it:
+	    part._cnc_transform = cnc_transform
+
+	    # Find the *tool_dowel_pin* and grab some values out of it:
 	    tool_dowel_pin = part._tools_dowel_pin_search(tracing + 1)
 	    assert isinstance(tool_dowel_pin, Tool_Dowel_Pin), "No dowel pin tool found"
-
-	    # Immediately grab the *feed_speed* and *spindle_speed* that were computed
-	    # for *tool_dowel_pin*:
+	    tip_depth = tool_dowel_pin._tip_depth_get()
+	    maximum_z_depth = tool_dowel_pin._maximum_z_depth_get()
 	    feed_speed = tool_dowel_pin._feed_speed_get()
 	    spindle_speed = tool_dowel_pin._spindle_speed_get()
 	    diameter = tool_dowel_pin._diameter_get()
+	    if trace_detail >= 2:
+                print("{0}diameter={1:i} maximum_z_depth={2:i} tip_depth={3:i}".format(
+		  indent, diameter, maximum_z_depth, tip_depth))
 
+	    # Now we figure out *cnc_dowel_point* which is the location in CNC space where
+	    # the tip of the dowel pin is moved to:
+	    cnc_dowel_point_x = cnc_vice_translate_point.x - half_part_dx - diameter/2
+	    cnc_dowel_point_y = cnc_vice_translate_point.y
+	    if part_dz >= maximum_z_depth:
+		cnc_dowel_point_z = cnc_top_surface_z - maximum_z_depth
+	    else:
+		cnc_dowel_point_z = cnc_top_surface_z - part_dz - tip_depth
+	    cnc_dowel_point = P(cnc_dowel_point_x, cnc_dowel_point_y, cnc_dowel_point_z)
+	    if trace_detail >= 2:
+		print("{0}vtp.x={1:i} - hpx={2:i} - rad={3:i} cdpx={4:i}".format(
+		  indent, cnc_vice_translate_point.x, half_part_dx, diameter/2, cnc_dowel_point_x))
+
+	    # *cnc_plunge_point* is where the dowel pin initially comes down.:
+	    cnc_plunge_point = cnc_dowel_point - P(L(inch=1.000), zero, zero)
+	    if trace_detail >= 2:
+                print("{0}cnc_dowel_point={1:i} cnc_plunge_point={2:i}".format(
+		  indent, cnc_dowel_point, cnc_plunge_point))
+
+	    # Create the *operation_dowel_pin* *Operation* and load in into *part*:
 	    order = Operation.ORDER_DOWEL_PIN
 	    operation_dowel_pin = Operation_Dowel_Pin(part, "dowel_pin", 0, tool_dowel_pin, order,
 	      None, feed_speed, spindle_speed, diameter, cnc_dowel_point, cnc_plunge_point,
 	      cnc_top_surface_z, cnc_xy_rapid_safe_z, tracing + 1)
 	    part._operation_append(operation_dowel_pin)
 
-	# Perform dowel pin operations:
-	#part.dowel_pin(comment, left_dowel_point)
+	if tracing >= 0:
+	    print("{0}<=Part.vice_mount_with_extra('{1}', '{2}', '{3}', '{4}', {5:i}, {6:i})".
+	      format(indent, part_name, comment, top_surface, jaw_surface, extra_dx, extra_dy))
 
-	# Some old code
+	# This is the old code that is no longer used in this routine
 	##FIXME: What does this do?!!!
 	## Before we get too far, flush any pending screw holes from the previous mounting:
 	##if part._top_surface_set:
@@ -12045,10 +12137,6 @@ class Part:
 	#code = shop._code_get()
 	#code._cnc_transform_set(cnc_transform)
 	# Wrap up any *tracing*:
-
-	if tracing >= 0:
-	    print("{0}<=Part.vice_mount_with_extra('{1}', '{2}', '{3}', '{4}', {5:i}, {6:i})".
-	      format(indent, part_name, comment, top_surface, jaw_surface, extra_dx, extra_dy))
 
 class Fastener(Part):
     """ *Fastener*: """
@@ -15168,6 +15256,19 @@ class Shop:
 	tooling_plate = Tooling_Plate(L(inch=6.0), L(inch=6.0), L(inch=.250), 11, 11,
 	  no4_close_fit_diameter, no4_75_percent_thread_diameter, no4_50_percent_thread_diameter)
 
+	# Vice to use:
+	parallels = Parallels(L(inch=6.0), L(inch="1/8"), [
+	  L(inch="1/2"),
+	  L(inch="5/8"),
+	  L(inch="3/4"),
+	  L(inch="7/8"),
+	  L(inch=1.000),
+	  L(inch="1-1/8"),
+	  L(inch="1-1/4"),
+	  L(inch="1/2"),
+	  L(inch="1-1/2") ] )
+	vice = Vice(vice_volume, parallels)
+
 	# Initialize *shop*:
 	shop._assemblies = []		# Viewable assemblies
 	shop._base_name = ""		# Base name for current operations
@@ -15189,7 +15290,7 @@ class Shop:
 	shop._surface_speeds_table = {}	# [Part_Material, Tool_Material]
 	shop._tools = tools		# Tools in shop
 	shop._tooling_plage = tooling_plate
-	shop._vice = Vice(vice_volume)	# Vice to use
+	shop._vice = vice
 	#aught80 Thread			# 0-80 thread
 	#two56 Thread			# 2-56 thread
 	#four40 Thread			# 4-40 thread
@@ -15451,7 +15552,7 @@ class Shop:
 	  number, material, diameter, maximum_z_depth, tip_depth)
 	tool_dowel_pin._feed_speed_set(Speed(in_per_sec = 1.000))
 	self._tool_append(tool_dowel_pin)
-	print("tool_dowel_pin=", tool_dowel_pin)
+	#print("tool_dowel_pin=", tool_dowel_pin)
 	return tool_dowel_pin
 
     def _drill_append(self,
@@ -15902,7 +16003,11 @@ class Tool_Dowel_Pin(Tool):
 
     def __init__(self, name, number, material, diameter, maximum_z_depth, tip_depth):
 	""" *Tool_Dowel_Pin*: Initialize *Tool_Dowel_Pin* object (i.e. *self*) with *name*,
-	    *number*, *material*, *diameter*, *flutes_count*, *maximum_z_depth*, and *tip_depth*.
+	    *number*, *material*, *diameter*, *maximum_z_depth*, and *tip_depth*.  *material*
+	    is the tool material (e.g. HSS, carbide, ...), *diameter* is the dowel pin diameter,
+	    *maximum_z_depth* is the maximum distance the entire dowel pin can go down below
+	    the part top surface, and *tip_depth* is the amount of the dowel pin at the tip
+	    that is not *diameter* round.  (Dowel pins can have a flat, round or conical tip.)
 	"""
 
 	# Verify argument types:
@@ -15950,7 +16055,8 @@ class Tool_Dowel_Pin(Tool):
 	return priority
 
     def _tip_depth_get(self):
-	""" *Tool_Dowel_Pin: Return the tip depth of the *Tool_Dowel_Pin* object (i.e.*self* """
+	""" *Tool_Dowel_Pin: Return the tip depth of the *Tool_Dowel_Pin* object (i.e. *self*.)
+	"""
 
 	return self._tip_depth
 
@@ -17285,9 +17391,10 @@ class Matrix:
 
 class Vice:
 
-    def __init__(self, volume):
-	""" *Vice*: Initialize the *Vice* object (i.e. *self*) to contain *volume*
-	    which is the volume swept out by the vice jaw.
+    def __init__(self, volume, parallels):
+	""" *Vice*: Initialize the *Vice* object (i.e. *self*) to contain *volume*,
+	    "parallels_thickness", and "parallels.  *volume* is a point (i.e. *P*)
+	    that specifies the vice volume dimensions between the vice jaws.
 	"""
 
 	# Use *vice* instead of *self*:
@@ -17295,15 +17402,23 @@ class Vice:
 
 	# Verify argument types:
 	assert isinstance(volume, P)
+	assert isinstance(parallels, Parallels)
 
 	# Load up the *Vice* object (i.e. *self*):
 	vice._volume = volume
+	vice._parallels = parallels
 
     def _jaw_volume_get(self):
 	""" *Vice*: Return the jaw volume of the *Vice* object (i.e. *self*).
 	"""
 
 	return self._volume
+
+    def _parallels_get(self):
+	""" *Vice*: Return the *Parallels* object for the *Vice* object (i.e. *self*).
+	"""
+
+	return self._parallels
 
 
 
