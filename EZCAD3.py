@@ -3648,7 +3648,7 @@ class EZCAD3:
 	    # Directory exists:
 	    if clear:
 		# Clear out  each individual file in the directory using glob style
-   		# file matching expression (e.g. `/tmp/wrl/*`):
+   		# file matching expression (e.g. `.../wrl/*`):
 		for file_name in glob.glob(os.path.join(full_directory_path, "*")):
 		    os.remove(file_name)
 	else:
@@ -3743,8 +3743,9 @@ class Operation:
     ORDER_MILL_DOVE_TAIL_CHAMFER = 	11
     ORDER_DOUBLE_ANGLE_V_GROOVE =	12
     ORDER_DOUBLE_ANGLE_CHAMFER =	13
-    ORDER_VERTICAL_LATHE =		14
-    ORDER_LAST =			15
+    ORDER_DRILL =                       14
+    ORDER_VERTICAL_LATHE =		15
+    ORDER_LAST =			16
 
     # These constants identify what order to do operations in:
     KIND_CONTOUR = 0
@@ -3765,6 +3766,9 @@ class Operation:
 	    *order*, *follows*, *feed_speed*, and *spindle_speed*.
 	"""
 
+	# Use *operation* instead of *self*:
+	operation = self
+
 	# Verify argument types:
 	assert isinstance(name, str)
 	assert isinstance(kind, int)
@@ -3777,33 +3781,31 @@ class Operation:
 	assert isinstance(feed_speed, Speed)
 	assert isinstance(spindle_speed, Hertz)
 
-	# Load up *self*:
-	self._name = name
-	self._kind = kind
-	self._part = part
-	self._feed_speed = feed_speed
-	self._spindle_speed = spindle_speed
-	self._comment = comment
-	self._follows = follows
-	self._index = -1
-	self._position = 0 # part.position_count
-	self._order = order
-	self._priority = part._priority_get()
-	self._sub_priority = sub_priority
-	self._tool = tool
-	self._vice_x = part._vice_x_get()
-	self._vice_y = part._vice_y_get()
+	# Load up *operation*:
+	operation._name = name
+	operation._kind = kind
+	operation._part = part
+	operation._comment = comment
+	operation._follows = follows
+	operation._index = -1
+	operation._position = 0 # part.position_count
+	operation._order = order
+	operation._priority = part._priority_get()
+	operation._sub_priority = sub_priority
+	operation._tool = tool
+	operation._feed_speed = feed_speed
+	operation._spindle_speed = spindle_speed
 
     def _compare(self, operation2):
 	""" *Operation*: Return -1, 0, or 1 depending upon whether *operation1*
 	    (i.e. *self*) should sort before, at, or after *operation2*.
 	"""
 
-	# Verify argument types:
-	assert isinstance(operation2, Operation)
-
 	# Use *operation1* instead of *self*:
 	operation1 = self
+
+	# Verify argument types:
+	assert isinstance(operation2, Operation)
 
 	# Sort by *priority* first:
 	result = int_compare(operation1._priority, operation2._priority)
@@ -3831,14 +3833,14 @@ class Operation:
 	    return result
 
 	# Sort by *vice_x* sixth:
-	result = operation1._vice_x.compare(operation2._vice_x)
-	if result != 0:
-	    return result
+	#result = operation1._vice_x.compare(operation2._vice_x)
+	#if result != 0:
+	#    return result
 
 	# Sort by *vice_y* seventh:
-	result = operation1._vice_y.compare(operation2._vice_y)
-	if result != 0:
-	    return result
+	#result = operation1._vice_y.compare(operation2._vice_y)
+	#if result != 0:
+	#    return result
 
 	# If we reach this point, we need to compare at the sub-class
 	# level.  Since this routine is called from the sub-class
@@ -3887,15 +3889,15 @@ class Operation:
 
 	return self._tool
 
-    def _vice_x_get(self):
-	""" *Operation*: Return vice Z coordinate for the *Operation* object (i.e. *self*). """
-
-	return self._vice_x
-
-    def _vice_y_get(self):
-	""" *Operation*: Return vice Z coordinate for the *Operation* object (i.e. *self*). """
-
-	return self._vice_y
+#    def _vice_x_get(self):
+#	""" *Operation*: Return vice Z coordinate for the *Operation* object (i.e. *self*). """
+#
+#	return self._vice_x
+#
+#    def _vice_y_get(self):
+#	""" *Operation*: Return vice Z coordinate for the *Operation* object (i.e. *self*). """
+#
+#	return self._vice_y
 
 class Operation_Contour(Operation):
     """ *Operation_Contour* is a class that represents a contour operation.
@@ -4442,189 +4444,200 @@ class Operation_Drill(Operation):
 	assert isinstance(sub_priority, int)
 	assert isinstance(tool, Tool)
 	assert isinstance(order, int)
-	assert isinstance(follows, Operation)
+	assert isinstance(follows, Operation) or follows == None
 	assert isinstance(diameter, L)
-	assert isinstance(hole_kind, Hole_Kind)
-	assert isinstance(x, L)
-	assert isinstance(y, L)
-	assert isinstance(z_start, L)
-	assert isinstance(z_stop, L)
+	assert isinstance(hole_kind, int)
+	assert isinstance(start, P)
+	assert isinstance(stop, P)
 	assert isinstance(is_countersink, bool)
 
 	# Initialize the super class:
-	Operation.__init__(self, "Drill", KIND_DRILL,
-	  part, comment, sub_priority, tool, order, follows)
+	Operation.__init__(self, "Drill", Operation.KIND_DRILL, part, comment, sub_priority,
+	  tool, order, follows, tool._feed_speed_get(), tool._spindle_speed_get())
 
 	# Load up *self*:
-	self.diameter = diameter
-	self.hole_kind = hole_kind
-	self.x = x
-	self.y = y
-	self.z_start = z_start
-	self.z_stop = z_stop
-	self.is_countersink = is_countersink
+	self._diameter = diameter
+	self._hole_kind = hole_kind
+	self._start = start
+	self._stop = stop
+	self._is_countersink = is_countersink
 
     def _cnc_generate(self, tracing):
 	""" *Operation_Drill*: Generate the CNC G-code for an
 	    *Operation_Drill* object (i.e. *self*).
 	"""
-	# Verify argument types:
-	#assert isinstance(is_last, bool)
-	assert isinstance(tracing, int)
 
 	# Use *drill* instead of *self*:
-	drill = self
+	operation_drill = self
 
-	part = drill.part
-	shop = part._shop
-	code = shop.code
-	comment = operation.comment
-	tool = operation.tool
-	f = tool.feed
-	s = tool.spindle
+	# Verify argument types:
+	assert isinstance(tracing, int)
 
-	diameter = drill.diameter
-	x = drill.x
-	y = drill.y
-	z_start = drill.z_start
-	z_stop = drill.z_stop
+	# Grab some values from *operation_drill*:
+	comment = operation_drill._comment
+	diameter = operation_drill._diameter
+	feed_speed = operation_drill._feed_speed
+	hole_kind = operation_drill._hole_kind
+	kind = operation_drill._kind
+	part = operation_drill._part
+	spindle_speed = operation_drill._spindle_speed
+	start = operation_drill._start
+	stop = operation_drill._stop
+	tool = operation_drill._tool
+
+	# Get *shop* and *code*:
+	cnc_transform = part._cnc_transform_get()
+	shop = part._shop_get()
+
+	code = shop._code_get()
+
 	radius = diameter / 2
 	half_radius = radius / 2
 
-	is_laser = tool.is_laser()
+	cnc_start = cnc_transform * start
+	cnc_stop = cnc_transform * stop
+
+
+	is_laser = tool._is_laser_get()
 	if is_laser:
 	    code._dxf_circle(x, y, diameter)
 	else:
-	    hole_kind = drill_hole_kind
-	    if hole_kind == HOLE_KIND_THROUGH:
-		tool_kind = tool.kind
-		assert tool_kind == TOOL_KIND_DRILL
-		tool_drill = tool.drill
-		point_angle = tool_drill.point_angle
-		tip_depth = tool.tip_depth(point_angle)
+	    z_start = cnc_start.z
+	    z_stop = cnc_stop.z
+	    if hole_kind == Part.HOLE_THROUGH:
+		assert kind == Operation.KIND_DRILL
+		tool_drill = tool
+		point_angle = tool_drill._point_angle_get()
+		tip_depth = tool_drill._tip_depth_get()
 		#call line_comment@(code,
 		#  form@("z_stop=%i% diameter=%i% tip_depth=%i%") %
 		#  f@(z_stop) % f@(diameter) / f@(tip_depth))
-		z_stop = z_stop - tip_depth - L(inch=0.040)
+		z_stop -= tip_depth + L(inch=0.040)
 	    elif hole_kind == HOLE_KIND_TIP:
-		pass
+		z_stop = cnc_stop.z
 	    elif hole_kind == HOLE_KIND_FLAT:
 		assert False, "Flat holes can't be done with point drills"
 	    else:
 		assert False, "Unknown hole kind"
 
-	    code._z_safe_assert("drill", comment)
+	    # Force the tool to be start from a safe location:
+	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
+	    code._xy_rapid(cnc_start.x, cnc_start.y)
+	    code._z_feed(feed_speed, spindle_speed, z_stop, "drill")
+	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 
-	    diameter_divisor = 3.0
-	    material = part.material
+	    #diameter_divisor = 3.0
+	    #material = part._material_get()
 	    #switch material.named_material
 	    #  case plastic
 	    #	# Plastic can really clog up the drill flutes, try to short the
 	    #	# the drill spirals:
 	    #	diameter_divisor = 0.5    
 
-	    depth = z_start - z_stop
-	    trip_depth = diameter / diameter_divisor
-	    if depth > trip_depth:
-		# "Deep" hole:
+	    
+	
+	    #depth = z_start - z_stop
+	    #trip_depth = diameter / diameter_divisor
+	    #if depth > trip_depth:
+	    #	# "Deep" hole:
 
-		# Output G73 G98 F# Q# R# S# X# Y# Z# (comment):
-		# Output G83 G98 F# Q# R# S# X# Y# Z# (comment):
-		# Output O900 [x] [y] [z_safe] [z_start] [z_stop] [z_step]
-		#    [z_back] [feed] [speed] (comment):
-		# Output O910 [x] [y] [z_safe] [z_start] [z_stop] [z_step]
-		#    [z_back] [feed] [speed] (comment):
+	    #	# Output G73 G98 F# Q# R# S# X# Y# Z# (comment):
+	    #	# Output G83 G98 F# Q# R# S# X# Y# Z# (comment):
+	    #	# Output O900 [x] [y] [z_safe] [z_start] [z_stop] [z_step]
+	    #	#    [z_back] [feed] [speed] (comment):
+	    #	# Output O910 [x] [y] [z_safe] [z_start] [z_stop] [z_step]
+	    #	#    [z_back] [feed] [speed] (comment):
 
-		z_rapid = part.z_rapid
-		depth = z_rapid - z_stop
-		pecks = int(depth / trip_depth) + 1
-		# Add just a little to make sure {pecks} * {q} > {depth};
-		# The drill will *never* go below the Z value:
-		q = (depth / float(pecks)) + L(inch=.005)
+	    #	z_rapid = part.z_rapid
+	    #	depth = z_rapid - z_stop
+	    #	pecks = int(depth / trip_depth) + 1
+	    #	# Add just a little to make sure {pecks} * {q} > {depth};
+	    #	# The drill will *never* go below the Z value:
+	    #	q = (depth / float(pecks)) + L(inch=.005)
 
-		subroutine_code = 900
-		if diameter <= L(inch="3/32"):
-		    # Use full retract pecking:
-		    subroutine_code = 910
+	    #	subroutine_code = 900
+	    #	if diameter <= L(inch="3/32"):
+	    #	    # Use full retract pecking:
+	    #	    subroutine_code = 910
 
-		code.begin()
-		code.subroutine_call(subroutine_code)
-		code.length("[]", x - code.vice_x)
-		code.length("[]", y - code.vice_y)
-		code.length("[]", part.z_safe)
-		code.length("[]", z_start)
-		code.length("[]", z_stop)
-		code.length("[]", radius)
-		code.length("[]", half_radius)
-		code.speed("[]", f)
-		code.hertz("[]", s)
-		code.comment(comment)
-		code.end()
+	    #	code._command_begin()
+	    #	code._subroutine_call(subroutine_code)
+	    #	code._length("[]", x - code.vice_x)
+	    #	code._length("[]", y - code.vice_y)
+	    #	code._length("[]", part.z_safe)
+	    #	code._length("[]", z_start)
+	    #	code._length("[]", z_stop)
+	    #	code._length("[]", radius)
+	    #	code._length("[]", half_radius)
+	    #	code._speed("[]", f)
+	    #	code._hertz("[]", s)
+	    #	code._command_comment(comment)
+	    #	code._command_end()
 
-		#call begin@(code)
-		#call mode_motion@(code, 73)
-		#call mode_motion@(code, 83)
-		#call mode_canned_cycle_return@(code, 98)
-		#call speed@(code, "F", f)
-		#call length@(code, "Q", code_length@(q))
-		#call length@(code, "R1", z_rapid)
-		#call hertz@(code, "S", s)
-		#call length@(code, "X", code_length@(x))
-		#call length@(code, "Y", code_length@(y))
-		#call length@(code, "Z1", code_length@(z_stop))
-		#call comment@(code, comment)
-		#call end@(code)
-	    else:	
-		# Regular hole:
+	    #	#call begin@(code)
+	    #	#call mode_motion@(code, 73)
+	    #	#call mode_motion@(code, 83)
+	    #	#call mode_canned_cycle_return@(code, 98)
+	    #	#call speed@(code, "F", f)
+	    #	#call length@(code, "Q", code_length@(q))
+	    #	#call length@(code, "R1", z_rapid)
+	    #	#call hertz@(code, "S", s)
+	    #	#call length@(code, "X", code_length@(x))
+	    #	#call length@(code, "Y", code_length@(y))
+	    #	#call length@(code, "Z1", code_length@(z_stop))
+	    #	#call comment@(code, comment)
+	    #	#call end@(code)
+	    #else:	
+	    #	# Regular hole:
 
-		# Output G81 G98 F# R# S# X# Y# Z# (comment):
+	    #	# Output G81 G98 F# R# S# X# Y# Z# (comment):
 
-		code.begin()
-		code.mode_motion(81)
-		code.mode_canned_cycle_return(98)
-		code.speed("F", f)
-		code.length("R1", part.z_rapid)
-		code.hertz("S", s)
-		code.length("X", x)
-		code.length("Y", y)
-		code.length("Z1", z_stop)
-		code.comment(comment)
-		code.end()
+	    #	code._command_begin()
+	    #	code._mode_motion(81)
+	    #	code._mode_canned_cycle_return(98, )
+	    #	code._speed("F", f)
+	    #	code._length("R1", part.z_rapid)
+	    #	code._hertz("S", s)
+	    #	code._length("X", x)
+	    #	code._length("Y", y)
+	    #	code._length("Z1", z_stop)
+	    #	code._comment(comment)
+	    #	code._command_end()
 
-	    if is_last:
-		# Output a G80 to exit canned cycle mode:
-		code.begin()
-		code.mode_motion(80)
-		code.comment("End canned cycle")
-		code.end()
+	    #if is_last:
+	    #	# Output a G80 to exit canned cycle mode:
+	    #	code._command_begin()
+	    #	code._mode_motion(80)
+	    #	code._comment("End canned cycle")
+	    #	code._commend_end()
 
-		# Forget the G98 or G99 code:
-		code.g2 = -1
+	    #	# Forget the G98 or G99 code:
+	    #	code.g2 = -1
 
 	    # Do any dwell:
-	    cnc_drill_count = part.cnc_drill_count + 1
-	    part.cnc_drill_count = cnc_drill_count
-	    if not drill.is_countersink and \
-	      cnc_drill_count % part.cnc_drill_pause == 0:
-		# Perform a Spindle Stop, Pause, Spindle_Start, Pause:
-		code.begin()
-		code.unsigned("M", 5)
-		code.end()
+	    #cnc_drill_count = part.cnc_drill_count + 1
+	    #part.cnc_drill_count = cnc_drill_count
+	    #if not drill.is_countersink and \
+	    #      cnc_drill_count % part.cnc_drill_pause == 0:
+	    #	# Perform a Spindle Stop, Pause, Spindle_Start, Pause:
+	    #	code._command_begin()
+	    #	code._unsigned("M", 5)
+	    #	code._command_end()
 
-		code.begin()
-		code.unsigned("G11", 4)
-		code.time("P", Code_Time(seconds=3.0))
-		code.end()
+	    #	code._command_begin()
+	    #	code._unsigned("G11", 4)
+	    #	code._time("P", Code_Time(seconds=3.0))
+	    #	code._command_end()
 
-		code.begin()
-		code.unsigned("M", 3)
-		code.hertz("S", s)
-		code.end()
+	    #	code._command_begin()
+	    #	code._unsigned("M", 3)
+	    #	code._hertz("S", s)
+	    #	code._command_end()
 
-		code.begin()
-		code.unsigned("G11", 4)
-		code.time("P", Code_Time(seconds=8.0))
-		code.end()
+	    #	code._command_begin()
+	    #	code._unsigned("G11", 4)
+	    #	code._time("P", Code_Time(seconds=8.0))
+	    #	code._command_end()
 
     def compare(self, drill2):
 	""" *Operation_Drill*: Return -1, 0, 1 if *drill1* (i.e. *self*)
@@ -6158,6 +6171,11 @@ class Part:
 	# Mark *part* for CNC suppression:
         part._cnc_suppress = True
 
+    def _cnc_transform_get(self):
+        """ *Part*: Return the CNC transform associated with the *Part* object (i.e. *self*.) """
+
+	return self._cnc_transform
+
     def _color_material_update(self, color, material):
 	""" *Part*: Update *color* and *material* for *self*. """
 
@@ -6195,46 +6213,19 @@ class Part:
 	part_name = part._name
 
 	# Perform any requested *tracing*:
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._cnc_flush('{1}', prog_number={2})".
 	      format(indent, part_name, program_number))
+	    trace_detail = 1
 
-	#call d@(form@("=>Part._cnc_flush@Part(%v%, %d%)\n\") %
-	#  f@(part.name) / f@(program_number))
 	original_program_number = program_number
 
 	#call show@(part, "before flush")
 	shop = part._shop_get()
 	assert isinstance(shop, Shop)
 
-	# All of this tool dowel pin stuff belongs in the dowel pin operaton:
-	#vice = shop._vice_get()
-	#vice_jaw_volume = vice._jaw_volume_get()
-	#vice_jaw_dx = vice_jaw_volume.x
-	#
-	## Compute (*plunge_x*, *plunge_y*) which is the vertical axis over
-	## which is to the left of the the part or the vice:
-	#dowel_x = part._dowel_x_get()
-	#dowel_y = part._dowel_y_get()
-	#vice_x = part._vice_x_get()
-	#vice_y = part._vice_y_get()
-	#assert isinstance(vice_x, L)
-	#plunge_x = vice_x
-	#if plunge_x > dowel_x:
-	#    plunge_x = dowel_x
-	#assert isinstance(jaw_width, L)
-	#assert isinstance(plunge_x, L)
-	#if plunge_x > jaw_width:
-	#    plunge_x = plunge_x - L(inch=0.7)
-	#part._plunge_xy_set(plunge_x, dowel_y)
-	#
-	# Start generating the *code* for *operations*:
-	#code._z_safe_set(part._z_safe_get())
-	#code._z_rapid_set(part._z_rapid_get(), part)
-
-	code = shop._code_get()
-	assert isinstance(code, Code)
 	operations = part._operations_get()
 	size = len(operations)
 
@@ -6244,9 +6235,10 @@ class Part:
 	# Sort *operations* to group similar operations together:
 	operations.sort(cmp=Operation._compare)
 
-	#print("len(operations)={0}".format(len(operations)))
-	#for operation in operations:
-	#    print("operation name:{0}".format(operation._name_get()))
+	if trace_detail >= 2:
+	    print("{0}len(operations)={1}".format(indent, len(operations)))
+	    for operation in operations:
+		print("{0}operation name:{1}".format(indent, operation._name_get()))
 
 	#call show@(part, "after sort", 1t)
 
@@ -6284,6 +6276,8 @@ class Part:
 	part_ngc_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
 	part_ngc_file = open(part_ngc_file_name, "w")
 	assert part_ngc_file != None, "Unable to open {0}".format(part_ngc_file_name)
+	if trace_detail >= 1:
+	    print("{0}part_ngc_file_name='{1}' opened".format(indent, part_ngc_file_name))
 
 	# Output some heading lines for *part_ngc_file*:
 	part_ngc_file.write("( Part: {0})".format(part._name_get()))
@@ -6302,8 +6296,9 @@ class Part:
 	part_wrl_file.write("Group {\n")
 	part_wrl_file.write(" children [\n".format(part_name))
 
+	#FIXME: This code belongs in a private routine:
 	# Output a coordinate axis to *part_wrl_file*:
-	part_wrl_file.write("  #VRM V2.0 utf8\n")
+	part_wrl_file.write("  #VRML V2.0 utf8\n")
         part_wrl_file.write("  Shape {\n")
 	part_wrl_file.write("   geometry IndexedLineSet {\n")
 	part_wrl_file.write("    colorPerVertex FALSE\n")
@@ -6353,10 +6348,35 @@ class Part:
 	part_wrl_file.write("   }\n")
         part_wrl_file.write("  }\n")
 
+	# For now the first operation must always be an *operation_dowel_pin*:
+        assert len(operations) > 0, "No operations present"
+	operation_dowel_pin = operations[0]
+        assert isinstance(operation_dowel_pin, Operation_Dowel_Pin), \
+	  "Got operation '{0}' instead of dowel pin".format(operation.__class__.__name__)
+
+	# Grab some values from *operation_dowel_pin*:
+	comment = operation_dowel_pin._comment_get()
+	top_surface_z = operation_dowel_pin._top_surface_z_get()
+	xy_rapid_safe_z = operation_dowel_pin._xy_rapid_safe_z_get()
+	feed_speed = operation_dowel_pin._feed_speed_get()
+	spindle_speed = operation_dowel_pin._spindle_speed_get()
+
 	# Now visit each *operation_group* in *operation_groups*:
 	for index, operation_group in enumerate(operation_groups):
-	    # Output a couple of G-code lines *part_ngc_file*:
+	    # Compute the *ngc_program_number* for 
 	    ngc_program_number = program_number + 1 + index
+
+	    # Grab the *code* object and start the code generation:
+	    code = shop._code_get()
+	    assert isinstance(code, Code)
+	    code._start(part, tool, ngc_program_number, spindle_speed,
+	      part_wrl_file, part._stl_file_name, tracing + 1)
+	    code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
+	    code._top_surface_z_set(top_surface_z)
+	    code._xy_rapid_safe_z_set(xy_rapid_safe_z)
+	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
+
+	    # Output a couple of G-code lines *part_ngc_file*:
 	    tool_number = tool._number_get()
 	    tool_name = tool._name_get()
 	    part_ngc_file.write("( T{0} {1} )\n".format(tool_number, tool_name))
@@ -6364,6 +6384,9 @@ class Part:
 
 	    # Sweep through the *operation_group*:
 	    part._cnc_flush_helper(operation_group, ngc_program_number, part_wrl_file, tracing + 1)
+
+	    # Close off *code*:
+	    code._finish(tracing + 1)
 
 	# Write out the final G-code lines to *part_ngc_file*:
 	part_ngc_file.write("G53 Y0.0 ( Move the work to the front )\n")
@@ -6379,6 +6402,7 @@ class Part:
 	part_wrl_file.write(" ]\n")
 	part_wrl_file.write("}\n")
 	part_wrl_file.close()
+
 
 	# Empty out *operations* :
 	del operations[:]
@@ -6420,12 +6444,6 @@ class Part:
 	    print("{0}=>Part._cnc_flush_helper(part='{1}', len(ops)={2}, ngc_no={3}, *)".
 	      format(indent, part_name, len(operations), ngc_program_number))
 
-	# Set *debug* to True to trace this routine:
-	if tracing_detail > 0:
-	    print("{0}=>Part._flush_helper('{1}', *, {2}, *)".
-	      format(indent, part_name, ngc_program_number))
-	    #print("operations=", operations)
-
 	zero = L()
 
 	# Grab some values from *part*:
@@ -6433,13 +6451,9 @@ class Part:
 
 	# Grab the first *operation*:
 	operation = operations[0]
-	vice_x = operation._vice_x_get()
-	vice_y = operation._vice_y_get()
+	#vice_x = operation._vice_x_get()
+	#vice_y = operation._vice_y_get()
 	tool = operation._tool_get()
-
-	# Get the *feed_speed* and *spindle_speed*:
-	feed = tool._feed_speed_get()
-	speed = tool._spindle_speed_get()
 
 	assert tool != None
 
@@ -6464,7 +6478,7 @@ class Part:
 
 	# FIXME: Move this code to *Operaton_Drill* class!!!
 	# Reorder the drill operations to minimize traverses:
-	if all_operations_are_drills:
+	if False and all_operations_are_drills:
 	    for index in range(first_index, last_index + 1):
 		current_operation = operations[index]
 		assert isinstance(current_operation, Operation_Drill)
@@ -6510,43 +6524,9 @@ class Part:
 	    spindle_speed = operation._spindle_speed_get()
 	    feed_speed = operation._feed_speed_get()
 
-	    # Initialize the *code* object:
-	    if code == None:
-		# For now the first operation must always be an *operation_dowel_pin*:
-                assert isinstance(operation, Operation_Dowel_Pin)
-		operation_dowel_pin = operation
-
-		# Grab some values from *operation_dowel_pin*:
-		comment = operation_dowel_pin._comment_get()
-		top_surface_z = operation_dowel_pin._top_surface_z_get()
-		xy_rapid_safe_z = operation_dowel_pin._xy_rapid_safe_z_get()
-
-		# Grab the *code* object and start the code generation:
-		code = shop._code_get()
-		code._start(part, tool, ngc_program_number, spindle_speed, part_wrl_file)
-		code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
-
-		# Set the *top_surface_z* and *xy_rapid_safe_z* in *code*:
-		code._top_surface_z_set(top_surface_z)
-                code._xy_rapid_safe_z_set(xy_rapid_safe_z)
-
-		# Force tool to be a *xy_rapid_safe_z* height:
-		code._xy_rapid_safe_z_force(feed, speed)
-
-		#code._z_rapid_set(part._z_rapid_get(), part)
-		#code._z_safe_set(part._z_safe_get())
-		#code._z_set(part._z_safe_get())
-		#code._vice_xy_set(operation._vice_x_get(), operation._vice_y_get())
-
-		# FIXME: Do we really need to do the stuff below?
-		# Each block is set to these two values beforehand:
-		#code._z_set(part._z_safe_get())
-		#code._s_set(s)
-		#code._g1_set(0)
-		#code._block_append(block)
-
 	    # Perform the CNC generation step for *operation*:
 	    operation._cnc_generate(tracing + 1)
+
 
 	if code != None:
 	    code._xy_rapid_safe_z_force(feed, speed)
@@ -6907,7 +6887,7 @@ class Part:
 	    wrl_file_name = os.path.join(wrl_directory, "{0}.wrl".format(part._name))
 	    wrl_file = open(wrl_file_name, "w")
 	    transform = Transform()
-	    part._wrl_write(wrl_file, transform, file_name = wrl_file_name, tracing = tracing + 1)
+	    part._wrl_write(wrl_file, transform, 0, wrl_file_name, tracing = tracing + 1)
 	    wrl_file.close()
 
 	# Now generate any CNC files:
@@ -6920,6 +6900,7 @@ class Part:
 
 	    shop = ezcad._shop
 	    program_base = shop._program_base_get()
+	    assert program_base % 10 == 0
 	    program_number = part._cnc_flush(program_base, tracing + 1)
 
 	    # We want the program base number to start with a mulitple of 10.
@@ -7447,6 +7428,8 @@ class Part:
 	    print("{0}<=Part._tools_drill_search('{1}', {2:i}, {3:i}) => {4}".
 	      format(indent, self._name, diameter, maximum_z_depth, tool_name))
 
+	return drill_tool
+
     def _tools_end_mill_search(self, maximum_diameter, maximum_z_depth, from_routine, tracing):
 	""" *Part*: Search for an end mill with a diameter that is less than or equal to
 	    *maximum_diameter* and can mill to a depth of *maximum_z_depth*.  (*from_routine*
@@ -7589,7 +7572,7 @@ class Part:
 	# Perform any requested *tracing*:
 	tracing_detail = -1
 	if tracing >= 0:
-	    tracing_detail = 3
+	    tracing_detail = 1
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_search('{1}', *, {2:i}, {3:i}, '{4}')".
 	      format(indent, part._name, parameter1, parameter2, from_routine))
@@ -8826,7 +8809,7 @@ class Part:
         bounding_box.point_expand(P(x2, y2, z2))
 
     def _wrl_write(self,
-      wrl_file, transform, wrl_indent = 0, parts_table = {}, file_name = "", tracing = -1000000):
+      wrl_file, transform, wrl_indent, file_name, parts_table = {}, tracing = -1000000):
 	""" *Part*: Write *self* to *wrl_file*. """
 
 	# Check argument types:
@@ -8944,7 +8927,8 @@ class Part:
 		    # Write out "DEF name Shape {":
 		    #wrl_file.write(
 		    #  "{0}DEF x{1} Shape {{\n".format(spaces, name))
-		    wrl_file.write("#VRML V2.0 utf8\n")
+		    wrl_file.write(
+		      "{0}#VRML V2.0 utf8\n".format(spaces))
 		    wrl_file.write(
 		      "{0}Shape {{\n".format(spaces, name))
     
@@ -9529,7 +9513,7 @@ class Part:
 	     format(' ' * tracing, part._name, comment, start_point, end_point, extra, flags))
 
     def countersink_hole(self, comment, hole_diameter, countersink_diameter,
-      start, end, flags, sides = -1, sides_angle=Angle(), tracing = -1000000):
+      start, stop, flags, sides = -1, sides_angle=Angle(), tracing = -1000000):
 	""" *Part*: Put a *hole_diameter* hole into the *Part* object (i.e. *self*) starting
 	    at *start* to an end depth of *end*.  If *countersink_diameter* is non-zero,
 	    the part will be have a 90 degree countersink of *countersink_diameter* at *start*.
@@ -9542,7 +9526,7 @@ class Part:
 	assert isinstance(hole_diameter, L)
 	assert isinstance(countersink_diameter, L)
 	assert isinstance(start, P)
-	assert isinstance(end, P)
+	assert isinstance(stop, P)
 	assert isinstance(flags, str)
 	assert isinstance(sides, int)
 	assert isinstance(sides_angle, Angle)
@@ -9564,7 +9548,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.countersink_hole('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
 	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
-	      start, end, flags))
+	      start, stop, flags))
     
 	# Compute the radii:
 	hole_radius = hole_diameter/2
@@ -9606,7 +9590,7 @@ class Part:
 	    if is_through_hole or is_tip_hole:
 		# Spot drill and countersink the hole at the same time:
 		z_countersink = start.z - countersink_radius
-		z_depth = start.z - end.z
+		z_depth = start.z - stop.z
 
 		tool_mill_drill = None
 		if is_countersink:
@@ -9619,18 +9603,19 @@ class Part:
 		    countersink_comment = "{0} [countersink]".format(comment)
     
 		    # We want to ensure that countersinks occur first:
+		    operation_countersink = None
 		    if is_countersink:
-			sub_priority = 0
-			spot_operation = part.operation_drill_append(
-			  countersink_comment, sub_priority,  tool_mill_drill,
-			  Operation.ORDER_MILL_DRILL_COUNTERSINK, None,
-			  hole_diameter, Part.HOLE_TIP, x, y, z_start, z_countersink, True)
+			operation_countersink = Operation_Drill(part, counter_sink_comment,
+			  sub_priority, tool_mill_drill, Operation.ORDER_MILL_DRILL_COUNTERSINK,
+			  None, hole_diameter, Part.HOLE_TIP, start, stop, True)
+			part._operation_append(operation_countersink)
     
 		    # Now drill the hole:
 		    sub_priority = 1
-		    part.operation_drill_append(comment, sub_priority, tool_drill,
-		      Operation.ORDER_DRILL, spot_operation, hole_diameter, hole_kind,
-		      x, y, z_start, z_stop, False)
+		    operation_drill = Operation_Drill(part, comment, sub_priority, tool_drill,
+		      Operation.ORDER_DRILL, operation_countersink, hole_diameter, hole_kind,
+		      start, stop, False)
+		    part._operation_append(operation_drill)
 		else:
 		    try_flat = True
 	    elif hole_kind == Part.HOLE_FLAT:
@@ -9669,12 +9654,12 @@ class Part:
 	    pad = ' ' * 4
 	    lines.append("{0}// countersink_hole('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
 	      format(pad, part._name, comment, hole_diameter, countersink_diameter,
-	      start, end, flags))
+	      start, stop, flags))
 
 	    # Perform the drill with a cylinder:
-	    drill_direction = (end - start).normalize()
+	    drill_direction = (stop - start).normalize()
 	    drill_start = start - drill_direction * drill_start_extra
-	    drill_end = end + drill_direction * drill_end_extra
+	    drill_end = stop + drill_direction * drill_end_extra
 	    
 	    part._scad_cylinder(comment + " drill", Color("black"), hole_diameter, hole_diameter,
 	      drill_start, drill_end, lines, pad, sides, sides_angle, tracing + 1)
@@ -9694,7 +9679,7 @@ class Part:
 	if tracing >= 0:
 	    print("{0}<=Part.countersink_hole('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
 	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
-	      start, end, flags))
+	      start, stop, flags))
 
     def _scad_cylinder(self, comment, color,
       start_diameter, end_diameter, start, end, lines, pad, sides, sides_angle, tracing = -1000000):
@@ -11450,7 +11435,160 @@ class Part:
 	    #	xml_stream.write('{0}</Tooling_Plate>\n'. \
 	    #	  format(" " *ezcad._xml_indent))
 
-    def tooling_plate_mount(self, comment):
+    def tooling_plate_drill(self, comment, columns, rows, skips, tracing=-1000000):
+        """ *Part*: Force the drilling of 
+	"""
+
+	# Use *part* instead of *self:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(columns, tuple) or isinstance(columns, list)
+	assert isinstance(rows, tuple) or isinstance(rows, list)
+	assert isinstance(skips, tuple) or isinstance(skips, list)
+
+	# Do some more argument verification:
+	for row in rows:
+	    assert isinstance(row, int)
+	for column in columns:
+            assert isinstance(column, int)
+	for skip in skips:
+            assert isinstance(skip, tuple) or isinstance(skip, list)
+	    assert(len(skip) == 2) and isinstance(skip[0], int) and isinstance(skip[1], int)
+
+	# Only do tracing for the CNC branch:
+	tracing_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.tooling_plate_drill('{1}', '{2}', {3}, {4}, {5})".format(
+	      indent, part._name, comment, rows, columns, skips))
+	    tracing_detail = 1
+
+
+	shop = part._shop_get()
+        #if True or shop._cnc_generate_get():
+
+	# Grab the *tooling_plate* from *shop* and some associated values::
+	tooling_plate = shop._tooling_plate_get()
+	tooling_plate_dx = tooling_plate._dx_get()
+	tooling_plate_dy = tooling_plate._dy_get()
+	tooling_plate_dz = tooling_plate._dz_get()
+	tooling_plate_rows = tooling_plate._rows_get()
+	tooling_plate_columns = tooling_plate._columns_get()
+	tooling_plate_drill_diameter =  tooling_plate._drill_diameter_get(part._material)
+	tooling_plate_hole_pitch = tooling_plate._hole_pitch_get()
+
+	# Grab the *vice* from *shop* and some associated values:
+	vice = shop._vice_get()
+	vice_jaw_volume = vice._jaw_volume_get()
+	vice_jaw_volume_dz = vice_jaw_volume.z
+	parallels = vice._parallels_get()
+	    
+	# Figure out which *parallel_height* to use from *parallels* to use to mount
+        # the *tooling_plate*:
+        parallels_heights = sorted(parallels._heights_get())
+	selected_parallel_height = parallels_heights[0]
+	for parallel_height in parallels_heights:
+	    if parallel_height > selected_parallel_height and \
+	      parallel_height + tooling_plate_dz <= vice_jaw_volume_dz:
+		selected_parallel_height = parallel_height
+
+	# Load up *skips_table* with the (row, column) pairs that are not to be drilled:
+	skips_table = {}
+	for skip in skips:
+	    skip = tuple(skip)
+	    skip_column = skip[0]
+	    skip_row = skip[1]
+	    assert skip_row in rows, "Skip row {0} not in rows {1}".format(skip_row, rows)
+	    assert skip_column in columns, \
+	      "Skip column {0} not in columns {1}".format(skip_column, columns)
+	    skips_table[skip] = skip
+
+	# Sort *rows* and *columns*:
+	sorted_rows = sorted(tuple(rows))
+	sorted_columns = sorted(tuple(columns))
+
+	# Grab the minimum and maximum from *rows* and *columns*:
+	minimum_row = sorted_rows[0]
+	maximum_row = sorted_rows[-1]
+	minimum_column = sorted_columns[0]
+	maximum_column = sorted_columns[-1]
+
+	# Make sure that we do not try to use a hole that does not exist:
+	assert minimum_column >= 0, \
+	  "Negative column {0} in {1} not allowed".format(minimum_column, columns)
+	assert maximum_column < tooling_plate_columns, \
+	  "Column {0} in {1} too big".format(maximum_column, columns)
+	assert minimum_row >= 0, \
+	  "Negative row {0} in {1} not allowed".format(minimum_row, rows)
+	assert maximum_row < tooling_plate_rows, \
+	  "Row {0} in {1} too big".format(maximum_row, rows)
+
+	# Compute the *rows_spanned* and *columns_spanned*:
+        rows_spanned = maximum_row - minimum_row
+	columns_spanned = maximum_column - minimum_column
+
+	# What we want is *part_dz* which is the part thickness along the Z axis when
+	# it mounted in a vice.  The *top_surface_transform* reorients and translates
+	# the part in its original 3 sapce orientation such that the center of the
+        # "top" surface is located at the origin (0, 0, 0).  We know that mapping
+        # *center_point* of the origin 3 space bounding box with *top_surface_transform*
+	# will place the mapped point immedately under origin (i.e. (0, 0, -*part_dz*/2) .)
+        # Thus, the following code:
+	top_surface_transform = part._top_surface_transform
+	center_point = top_surface_transform * part._bounding_box.c_get()
+	half_part_dz = -center_point.z
+	part_dz = 2 * half_part_dz
+
+	# Figure out where upper left tooling hole is located:
+	upper_left_x = -((2 * minimum_column + columns_spanned) * tooling_plate_hole_pitch) / 2
+	upper_left_y = -((2 * minimum_row  + rows_spanned) * tooling_plate_hole_pitch) / 2
+	zero = L()
+
+	# Drill the *tooling_plate* holes at the intersections of *rows* and *columns*,
+        # but ommitting any that are in *skips*:
+	reverse_top_surface_transform = top_surface_transform.reverse()
+	for row in rows:
+	    for column in columns:
+		column_row = (column, row)
+		if not column_row in skips_table:
+		    # Figure out the *start* and *stop* points for the drill as if the
+		    # part is centered immediately under the origin (i.e. after
+		    # *top_sufrace_transform* is applied to the entire *part*.):
+		    x = upper_left_x + tooling_plate_hole_pitch * column
+		    y = upper_left_y + tooling_plate_hole_pitch * row
+		    start = P(x, y, zero)
+		    stop = P(x, y, -part_dz)
+
+		    # Drill here:
+		    reversed_start = reverse_top_surface_transform * start
+		    reversed_stop = reverse_top_surface_transform * stop
+		    if tracing_detail >= 1:
+			print(("{0}column={1} row={2} " +
+			  "start={3:i} stop={4:i} rstart={5:i} rstop={6:i}").format(
+			  indent, column, row, start, stop, reversed_start, reversed_stop))
+
+		    # Drill the hole using *reversted_start* and *reverst_stop*:
+		    part.hole("Tooling plate hole ({0}, {1})".format(row, column),
+		      tooling_plate_drill_diameter, reversed_start, reversed_stop, "t",
+		      tracing=tracing+1)
+
+	# Now remember where to mount the part with the tooling plate:
+
+	# Identify the location of (0, 0) *tooling_plate* hole:
+	tooling_plate_columns_dx = tooling_plate_columns * tooling_plate_hole_pitch
+	tooling_plate_rows_dy = tooling_plate_rows * tooling_plate_hole_pitch
+	tooling_plate_edge_dx = (tooling_plate_dx - tooling_plate_columns_dx) / 2
+	tooling_plate_edge_dy = (tooling_plate_dy - tooling_plate_rows_dy) / 2
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=Part.tooling_plate_drill('{1}', '{2}', {3}, {4}, {5})".format(
+	      indent, part._name, comment, rows, columns, skips))
+
+    def xtooling_plate_mount(self, comment):
 	""" *Part*: Cause the mounting plate that holds the *Part* object (i.e. *self*)
 	    to be mounted in the vice using a dowel pin operation. """
 
@@ -12017,15 +12155,18 @@ class Part:
 	    # Now we can compute the *cnc_transform*, which rotates the *part* bounding box
 	    # so that it is oriented correctly in the vice with the top surface located at
             # *cnc_top_surface_z*:
-	    cnc_transform = Transform()
-	    cnc_transform = cnc_transform.translate("move to vice origin", -top_point)
+	    top_surface_transform = Transform()
+	    top_surface_transform = top_surface_transform.translate(
+	      "move to vice origin", -top_point)
 	    if isinstance(top_rotate_angle, Angle):
-		cnc_transform = cnc_transform.rotate(
+		top_surface_transform = top_surface_transform.rotate(
 		  "vice surface to top", top_axis, top_rotate_angle)
 	    if isinstance(jaw_rotate_angle, Angle):
-		cnc_transform = cnc_transform.rotate(
+		top_surface_transform = top_surface_transform.rotate(
 		  "rotate jaw surface north", jaw_axis, jaw_rotate_angle)
-	    cnc_transform = cnc_transform.translate("position in vice", cnc_vice_translate_point)
+	    part._top_surface_transform = top_surface_transform
+	    cnc_transform = top_surface_transform.translate(
+	      "position in vice", cnc_vice_translate_point)
 
 	    # Remember *cnc*_transform* in *part* so the rest of the CNC system can use it:
 	    part._cnc_transform = cnc_transform
@@ -13238,7 +13379,7 @@ class Code:
 
 	return code._dxf_y_offset
 
-    def _finish(self):
+    def _finish(self, tracing=-1000000):
 	""" *Code*: Finish off the current block of G code (i.e. *self*.) """
 
 	# Use *code* instead of *self*:
@@ -13250,6 +13391,11 @@ class Code:
 	code_stream.close()
 	code._code_stream = None
 
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+            indent = ' ' * tracing
+            print("{0}=>Code._finish(*)".format(indent))
+
 	# Reset the *top_surface_z* and *xy_rapid_safe_z*:
 	code._top_surface_z = None
 	code._xy_rapid_safe_z = None
@@ -13260,313 +13406,86 @@ class Code:
 	vrml_file = code._vrml_file
 	part_wrl_file = code._part_wrl_file
 
-	vrml_file.write(    "#VRML V2.0 utf8\n")
+	vrml_file.write(    "  #VRML V2.0 utf8\n")
 	part_wrl_file.write("  #VRML V2.0 utf8\n")
-	vrml_file.write(    "Shape {\n")
+	vrml_file.write(    "  Shape {\n")
 	part_wrl_file.write("  Shape {\n")
-	vrml_file.write(    " geometry IndexedLineSet {\n")
+	vrml_file.write(    "   geometry IndexedLineSet {\n")
 	part_wrl_file.write("   geometry IndexedLineSet {\n")
-	vrml_file.write(    "  colorPerVertex FALSE\n")
+	vrml_file.write(    "    colorPerVertex FALSE\n")
 	part_wrl_file.write("    colorPerVertex FALSE\n")
 
 	# Output the colors:
-	vrml_file.write(    "  color Color {\n")
+	vrml_file.write(    "    color Color {\n")
 	part_wrl_file.write("    color Color {\n")
-	vrml_file.write(    "   color [\n")
+	vrml_file.write(    "     color [\n")
 	part_wrl_file.write("     color [\n")
-	vrml_file.write(    "     0.0 0.0 1.0 # blue\n")
+	vrml_file.write(    "       0.0 0.0 1.0 # blue\n")
 	part_wrl_file.write("       0.0 0.0 1.0 # blue\n")
-	vrml_file.write(    "     1.0 0.0 0.0 # red\n")
+	vrml_file.write(    "       1.0 0.0 0.0 # red\n")
 	part_wrl_file.write("       1.0 0.0 0.0 # red\n")
-	vrml_file.write(    "     0.0 1.0 1.0 # cyan\n")
+	vrml_file.write(    "       0.0 1.0 1.0 # cyan\n")
 	part_wrl_file.write("       0.0 1.0 1.0 # cyan\n")
-	vrml_file.write(    "   ]\n")
+	vrml_file.write(    "     ]\n")
 	part_wrl_file.write("     ]\n")
-	vrml_file.write(    "  }\n")
+	vrml_file.write(    "    }\n")
 	part_wrl_file.write("    }\n")
 
 	# Write out points:
-	vrml_file.write(    "  coord Coordinate {\n")
+	vrml_file.write(    "    coord Coordinate {\n")
 	part_wrl_file.write("    coord Coordinate {\n")
-	vrml_file.write(    "   point [\n")
+	vrml_file.write(    "     point [\n")
 	part_wrl_file.write("     point [\n")
 	for point in code._vrml_points:
-	    vrml_file.write(    "    {0} {1} {2}\n".format(point[0], point[1], point[2]))
+	    vrml_file.write(    "      {0} {1} {2}\n".format(point[0], point[1], point[2]))
 	    part_wrl_file.write("      {0} {1} {2}\n".format(point[0], point[1], point[2]))
-	vrml_file.write(    "   ]\n")
+	vrml_file.write(    "     ]\n")
 	part_wrl_file.write("     ]\n")
-	vrml_file.write(    "  }\n")
+	vrml_file.write(    "    }\n")
 	part_wrl_file.write("    }\n")
 		
 	# Write out coordinate index:
-	vrml_file.write(    "  coordIndex [\n")
+	vrml_file.write(    "    coordIndex [\n")
 	part_wrl_file.write("    coordIndex [\n")
 	vrml_point_indices = code._vrml_point_indices
-	vrml_file.write(    "  ");
+	vrml_file.write(    "    ");
 	part_wrl_file.write("    ");
 	for index in vrml_point_indices:
-	    vrml_file.write(    " {0}".format(index))
+	    vrml_file.write(    "   {0}".format(index))
 	    part_wrl_file.write("   {0}".format(index))
 	    if index < 0:
-		vrml_file.write     ("\n  ")
+		vrml_file.write    ("\n  ")
 		part_wrl_file.write("\n    ")
-	vrml_file.write(     "]\n")
+	vrml_file.write(    "  ]\n")
 	part_wrl_file.write("  ]\n")
 
 	# Write out the color indices:
-	vrml_file.write(    "  colorIndex [\n")
+	vrml_file.write(    "    colorIndex [\n")
 	part_wrl_file.write("    colorIndex [\n")
 	for color_index in code._vrml_color_indices:
-	    vrml_file.write(    "    {0}\n".format(color_index))
+	    vrml_file.write(    "      {0}\n".format(color_index))
 	    part_wrl_file.write("      {0}\n".format(color_index))
-	vrml_file.write("  ]\n")
+	vrml_file.write(    "    ]\n")
 	part_wrl_file.write("    ]\n")
 
 	# Close out the shape and geometry clauses:
-	vrml_file.write(    " }\n")
+	vrml_file.write(    "   }\n")
 	part_wrl_file.write("   }\n")
-	vrml_file.write(    "}\n")
+	vrml_file.write(    "  }\n")
 	part_wrl_file.write("  }\n")
 
 	# Close *vrml_file* but leave *part_wrl_file* open:
+	vrml_file.write(" ]\n")
+	vrml_file.write("}\n")
 	vrml_file.close()
 
 	# Now reset all the VRML values:
 	code._vrml_reset()
 
-    #FIXME: This routine appears to be no longer used!!!
-    def _flush(self, program_number):
-	""" *Code*: Generate CNC code starting at *program_number* for
-	    the first CNC file name.
-	"""
-
-	# Verify argument types:
-	assert isinstance(program_number, int)
-
-	# Use *code* instead of *self*:
-	code = self
-
-	#call d@(form@("=>flush@Code(*, %d%)\n\") / f@(program_number))
-	#original_program_number :@= program_number
-
-	# Output all of the *blocks*:
-	blocks = code._blocks
-	size = len(blocks)
-	print("size=", size)
-	if size != 0:
-	    block0 = blocks[0]
-	    part = block0._part_get()
-	    assert isinstance(part, Part)
-
-	    remainder = program_number % 10
-	    if remainder != 0:
-		program_number += 10 - remainder
-	    ngc_directory = ezcad._ngc_directory_get()
-	    ngc_file_name = os.path.join(ngc_directory, "{0}.ngc".format(program_number))
-	    print("ngc_file_name='{0}'".format(ngc_file_name))
-	    wrl_directory = ezcad._wrl_directory_get()
-	    wrl_file_name = os.path.join(ngc_directory, "O{0}.wrl".format(program_number))
-	    print("wrl_file_name='{0}'".format(wrl_file_name))
-	    wrl_file = open(wrl_file_name, "wa")
-	    assert isinstance(wrl_file, file)
-
-	    # Assign program numbers:
-	    for index in range(size):
-		block = blocks[index]
-		#call d@(form@("Block[%d%] #%d% %d% %v%\n\") % f@(index) %
-		#  f@(block.uid) % f@(block.priority) / f@(block.tool.name))
-		block.program_number = program_number
-		program_number += 1
-
-	    # Open *ngc_file_name* for writing:
-	    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>code_stream_open: '{0}'".format(ngc_file_name))
-	    code_stream = open(ngc_file_name, "wa")
-	    assert isinstance(code_stream, file), \
-	      "Could not open '{0}' for writing".format(ngc_file_name)
-
-	    # Output the tool table:
-	    code_stream.write("({0}: {0})\n".format(part._name_get(), block0._comment_get()))
-	    code_stream.write("(Tooling table:)\n")
-	    for block in blocks:
-		# Fetch {tool}:
-		tool = block._tool_get()
-
-		# Make sure we have assigned a number to the tool:
-		tool_name = tool._name_get()
-		assert tool._number_get() != 0, \
-		  "Tool {0} does not have a number\n".format(tool_name)
-
-		# Output the line in the tool table:
-		code_stream.write("(T{0} {1})\n".format(tool._number_get(), tool_name))
-
-		# Perform the code block:
-		code_stream.write("O{0} call\n".format(block._program_number_get()))
-
-	    # Wrap it up:
-	    code_stream.write("G53 Y0.0 (Move the work to the front)\n")
-	    code_stream.write("M2\n")
-	    code_stream.close()
-	    print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<code_stream_open: '{0}'".format(ngc_file_name))
-
-	    # Now output the blocks:
-	    for block in blocks:
-		# Fetch {block}, {tool} and {name}.
-		tool = block._tool_get()
-		tool_number = tool._number_get()
-
-		is_laser = tool._is_laser_get()
-		if is_laser:
-		    # We have a laser; generate a .dxf file:
-		    dxf_directory = ezcad._dxf_directory_get()
-		    dxf_file_name = os.path.join(dxf_directory, "{0}.dxf".format(program_number))
-		    dxf_stream = open(dxf_file_name, "wa")
-		    assert isinstance(dxf_stream, file), \
-		      "Unable to open file '{0}'".format(dxf_file_name)
-
-		    #dxf_stream.write("0\n\SECTION\n\2\n\HEADER\n")
-		    #dxf_stream.write("9\n\$DIMAUNITS\n\70\n\1\n")
-		    #dxf_stream.write("9\n\$INSUNITS\n\70\n\1\n")
-		    #dxf_stream.write("9\n\$LUNITS\n\70\n\0\n")
-		    #dxf_stream.write("9\n\$MEASUREMENT\n\70\n\0\n")
-		    #dxf_stream.write("0\n\ENDSEC\n")
-
-		    dxf_stream.write("0\n\SECTION\n\2\n\ENTITIES\n")
-
-		    # Output *dxf* to *dxf_stream*:
-		    dxf = code.dxf
-		    dxf_stream.write(dxf)
-
-		    # See if we are aggregating *dxf* into a named DXF file:
-		    dxf_base_name = part.dxf_base_name
-		    if dxf_base_name != "":
-			# Yes, we need to aggregate:
-			shop = part._shop
-			dxf_table = shop.dxf_table
-			dxf_contents = lookup[dxf_base_name]
-			assert isinstance(dxf_contents, str)
-			dxf_contents[dxf_base] = dxf_contents + dxf
-
-		    # Clear *dxf* for the next part:
-		    code.dxf = ""
-
-		    # Wrap up {dxf_stream}:
-		    dxf_stream.write("0\n\ENDSEC\n\0\n\EOF\n")
-		    dxf_stream.close()
-		else:
-		    # We have a mill; generate a .ngc file:
-		    program_number = block.program_number
-		    ngc_directory = ezcad._ngc_directory_get()
-		    ngc_file_name = os.path.join(ngc_directory, "{0}.ngc".format(program_number))
-		    code_stream = open(ngc_file_name, "wa")
-		    print(">>>>>>>>>>>>>>>>code_stream_open: '{0}'".format(file_name))
-		    assert isinstance(code_stream, file), \
-		      "Unable to open '{0}' for output\n".format(ngc_file_name)
-
-		    # Put a visual break into {code_stream}:
-		    part_name = block._part_get()._name_get()
-		    code_stream.write("({0})\n".format(part_name))
-		    code_stream.write("O{0} sub\n".format(program_number))
-		    code_stream.write("G90 G90.1 G20\n")
-
-		    # Output the tool change, get the coolant on,
-		    # and spindle spun up:
-		    code_stream.write("M6 T{0} (Insert {1})\n". 
-	   	      format(tool_number, tool._name_get()))
-		    spindle = block._spindle_get()
-		    if spindle > Hertz():
-			material = part._material_get()
-			if material._needs_coolant():
-			    code_stream.write("M8 (Coolant on)\n")
-			else:
-			    code_stream.write("M9 (Coolant off)\n")
-			code_stream.write("S{0:rpm} M3 (Spindle on)\n".format(spindle))
-
-		    # Get moving to tool change location:
-		    plunge_x = part._plunge_x_get()
-		    plunge_y = part._plunge_y_get()
-		    vice_x = block._vice_x_get()
-		    vice_y = block._vice_y_get()
-		    code._vice_xy_set(vice_x, vice_y)
-
-		    #print("part:{0} code.vice_x={1} code.vice_y={2}\n".
-		    #  format(part.name, code.vice_x, code.vice_y))
-
-		    code_stream.write("G54 G0 X{0} Y{1} (Apply work offset)\n".
-		      format(plunge_x - vice_x, plunge_y - vice_y))
-		    code_stream.write("(Part_Origin_X={0} Part_Origin_Y={1})\n".
-		      format(-vice_x, -vice_y))
-
-		    # Enable tool offset:
-		    z_safe = part._z_safe_get()
-		    code_stream.write("G43 H{0} (Enable tool_offset)\n".
-		      format(tool_number))
-		    code_stream.write(
-		      "G0 Z{0:i} (Go to Z-safe for current tool)\n".
-		      format(z_safe))
-
-		    # These should be done using accessor functions:
-		    code._g8 = 43
-		    code._g1 = 0
-		    code._h = tool_number
-		    code._z = z_safe
-
-		    # Generate the code for {block}:
-		    code._commands_write(code_stream)
-
-		    # Put the tool back into a reasonable position:
-		    code_stream.write("M5 (Spindle off)\n")
-		    code_stream.write("M9 (Coolant off)\n")
-		    code_stream.write(
-		      "G0 X{0} Y{1} (Put spindle to left of vice)\n".
-		      format(0.0, -1.0))
-
-		    # These should be done using accessor functions:
-		    code._x = vice_x - L(inch= 1.0)
-		    code._y = vice_y
-
-		    code_stream.write("G49 (Disable tool offset)\n")
-		    # G53 is not modal, thus we are still in G54 work offset:
-		    code_stream.write(
-		      "G53 G0 Z{0} (Return to machine Z zero)\n".format(1.0))
-		    code.z = L()
-		    code_stream.write("O{0} endsub\n".format(program_number))
-		    code_stream.write("O{0} call\n".format(program_number))
-		    code_stream.write("M2\n")
-		    code_stream.write("%\n")
-		    code_stream.close()
-		    print("<<<<<<<<<<<<<<<<code_stream_open: '{0}'".format(file_name))
-
-		# Now output the VRML code for *block*:
-                
-	    # Close out the *wrl_file*:
-	    wrl_file.close()
-
-	    # Output the shut-down code:
-	    #call put@("(*************************************)\n", code_stream)
-
-	    # Output the subroutine calls:
-	    #index := 0
-	    #while index < size
-	    #    #call put@(form@("O%d% call\n\") /
-	    #    #  f@((index + 1) * 100), code_stream)
-	    #    index := index + 1
-
-	    #call put@(form@("O<%s%> sub\n\") / f@(base_name), code_stream)
-	    #call put@("O[#1 * 100] call\n\", code_stream)
-	    #call put@(form@("O<%s%> endsub\n\") / f@(base_name), code_stream)
-
-	    #call put@("G53 Y0.0 (Move the work to the front)\n", code_stream)
-
-	    #call put@("M2\n\", code_stream)
-    
-	    # Zero {blocks} for the next time:
-	    del blocks[:]
-
-	    #call close@(code_stream)
-
-	#call d@(form@("<=flush@Code(*, %d%) => %d%\n\") %
-	#  f@(original_program_number) / f@(program_number))
-	return program_number
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+            indent = ' ' * tracing
+            print("{0}<=Code._finish(*)".format(indent))
 
     def _g1_set(self, g1):
 	""" *Code*: Set the G1 field of the *Code* object (i.e. *self*) to *g1*. """
@@ -13762,7 +13681,8 @@ class Code:
 	code._z = big
 	code._z1 = big
 
-    def _start(self, part, tool, ngc_program_number, spindle_speed, part_wrl_file):
+    def _start(self,
+      part, tool, ngc_program_number, spindle_speed, part_wrl_file, stl_file_name,tracing=-1000000):
 	""" *Code*: Start writing out the G-code for *tool* (
 	"""
 
@@ -13781,6 +13701,14 @@ class Code:
 	tool_name = tool._name_get()
 	tool_number = tool._number_get()
 
+	# Do any requested *tracing*:
+	tracing_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Code._start('{1}', '{2}', {3}, {4:rpm}, *)".
+	      format(indent, part_name, tool_name, ngc_program_number, spindle_speed))
+	    tracing_detail = 1
+
 	# Make sure that closed off any previous *code_stream*:
 	assert code._code_stream == None
 
@@ -13791,6 +13719,8 @@ class Code:
 	code_stream = open(code_file_name, "w")
 	assert code_stream != None, "Could not open '{0}' for writing".format(code_file_name)
 	code._code_stream = code_stream
+	if tracing_detail >= 1:
+            print("{0}code_file_name='{1}' opened".format(indent, code_file_name))
 
 	# Output a descriptive header comment:
 	code_stream.write("( Part {0}: Tool {1} Program: {2} )\n".
@@ -13822,8 +13752,24 @@ class Code:
 	vrml_file_name = os.path.join(ngc_directory, "O{0}.wrl".format(ngc_program_number))
 	vrml_file = open(vrml_file_name, "w")
 	assert vrml_file != None, "Could not open '{0}' for writing".format(vrml_file_name)
+
+	# Start the top-level group in *vrml_file*:
+	vrml_file.write("#VRML V2.0 utf8\n")
+        vrml_file.write("Group {\n")
+	vrml_file.write(" children [\n")
+
+	# Write out the part visualization:
+	part._wrl_write(vrml_file,
+	  part._cnc_transform, 2, stl_file_name, parts_table={}, tracing=tracing + 1)
+
 	code._vrml_file = vrml_file
 	code._part_wrl_file = part_wrl_file
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Code._start('{1}', '{2}', {3}, {4:rpm}, *)".
+	      format(indent, part_name, tool_name, ngc_program_number, spindle_speed))
+
 
     def _top_surface_z_set(self, top_surface_z):
         """ *Code*: Set the *top_surface_z* into the *Code* object (i.e. *self*.)
@@ -15253,7 +15199,7 @@ class Shop:
 	no4_close_fit_diameter = L(inch=.1160)
 	no4_75_percent_thread_diameter = L(inch=.0890)
 	no4_50_percent_thread_diameter = L(inch=.0960)
-	tooling_plate = Tooling_Plate(L(inch=6.0), L(inch=6.0), L(inch=.250), 11, 11,
+	tooling_plate = Tooling_Plate(L(inch=6.0), L(inch=6.0), L(inch=.250), 11, 11, L(inch=.500),
 	  no4_close_fit_diameter, no4_75_percent_thread_diameter, no4_50_percent_thread_diameter)
 
 	# Vice to use:
@@ -15289,7 +15235,7 @@ class Shop:
 	shop._solids_generate = False	# {true} => do solid modeling
 	shop._surface_speeds_table = {}	# [Part_Material, Tool_Material]
 	shop._tools = tools		# Tools in shop
-	shop._tooling_plage = tooling_plate
+	shop._tooling_plate = tooling_plate
 	shop._vice = vice
 	#aught80 Thread			# 0-80 thread
 	#two56 Thread			# 2-56 thread
@@ -15443,8 +15389,8 @@ class Shop:
 	  21, hss, L(inch=0.0935), 2, L(inch=1.750), degrees118, stub)
 
 	# Laser "tools":
-	laser_007 = shop._end_mill_append("Laser_007",
-	  100, hss, L(inch=0.007), 2, L(inch=0.750), laser)
+	#laser_007 = shop._end_mill_append("Laser_007",
+	#  100, hss, L(inch=0.007), 2, L(inch=0.750), laser)
 	#laser_000 = shop._end_mill_append("Laser_000",
 	#  101, hss, L(), 2, L(inch=0.750), laser)
 
@@ -16069,6 +16015,8 @@ class Tool_Drill(Tool):
 	    *drill_style*.
 	"""
 
+	# 
+
 	# Verify argument types:
 	zero = L()
 	assert isinstance(name, str)
@@ -16084,8 +16032,13 @@ class Tool_Drill(Tool):
 	# Load up the *Tool_Drill* object (i.e. *self*):
 	Tool.__init__(self, name, number, Tool.KIND_DRILL,
 	  material, diameter, flutes_count, maximum_z_depth)
-	self.point_angle = point_angle
-	self.drill_style = Tool.DRILL_STYLE_NONE
+	self._point_angle = point_angle
+	self._drill_style = drill_style
+
+    def _drill_style_get(self):
+	""" *Tool_Drill*: Return the drill style for the *Tool_Drill* object (i.e. *self*). """
+
+	return self._drill_style
 
     @staticmethod
     def _match(tool, desired_diameter, maximum_z_depth, from_routine, tracing):
@@ -16129,6 +16082,22 @@ class Tool_Drill(Tool):
 
 	return priority
 
+    def _point_angle_get(self):
+	""" *Tool_Drill*: Return the point angle for the *Tool_Drill* object (i.e. *self*). """
+
+	return self._point_angle
+
+    def _tip_depth_get(self):
+        """ *Tool_Drill*: Return the tip depth for the *Tool_Drill* object (i.e. *self*). """
+
+	# Use *tool_drill* instead of *self*:
+	tool_drill = self
+        
+	point_angle = tool_drill._point_angle
+	diameter = tool_drill._diameter
+	radius = diameter/2
+	tip_depth = radius * (Angle(deg=90.0) - point_angle/2).tangent()
+	return tip_depth
 
 class Tool_End_Mill(Tool):
     """ A *Tool_End_Mill* represents a flat bottom end mill. """
@@ -16347,8 +16316,8 @@ class Tooling_Plate:
     """ *Tooling_Plate*: A *Tooling_Plate* object represents a flat plate of holes
 	onto which parts can be mounted."""
 
-    def __init__(self,
-      dx, dy, dz, rows, columns, hole_diameter, soft_drill_diameter, steel_drill_diameter):
+    def __init__(self, dx, dy, dz, rows, columns, hole_pitch,
+      hole_diameter, soft_drill_diameter, steel_drill_diameter):
         """ *Tooling_Plate*:  Initialize the *Tooling_Plate* object to contain
 	    *dx*, *dy*, *dz*, *rows*, *columns*, *hole_diameter*, *soft_drill_diameter*,
 	    *steel_drill_diameter*.
@@ -16363,19 +16332,47 @@ class Tooling_Plate:
         assert isinstance(dz, L)
 	assert isinstance(rows, int) and rows > 0
 	assert isinstance(columns, int) and columns > 0
+	assert isinstance(hole_pitch, L)
 	assert isinstance(hole_diameter, L)
 	assert isinstance(soft_drill_diameter, L)
 	assert isinstance(steel_drill_diameter, L)
 
 	# Save everything into *tooling_plate*:
+        tooling_plate._columns = columns
         tooling_plate._dx = dx
         tooling_plate._dy = dy
         tooling_plate._dz = dz
-        tooling_plate._rows = rows
-        tooling_plate._columns = columns
         tooling_plate._hole_diameter = hole_diameter
+	tooling_plate._hole_pitch = hole_pitch
+        tooling_plate._rows = rows
         tooling_plate._soft_drill_diameter = soft_drill_diameter
         tooling_plate._steel_drill_diameter = steel_drill_diameter
+
+    def _columns_get(self):
+        """ *Tooling_Plate*: Return the number of columns of mounting holes for the *Tooling_Plate*
+	    object (i.e. *self*.)
+	"""
+
+	return self._columns
+
+    def _drill_diameter_get(self, material):
+        """ *Tooling_Plate*: Return the diameter of the drill holes to be drilled into *material*
+	    for using the *Tooling_Plate*  object (i.e. *self*.)  These holes are drilled into the
+	    *material* to be held down and supsequently threaded.
+	"""
+
+	# Use *tooling_plate* instead of *self*:
+        tooling_plate = self
+
+	# Verify argument types:
+        assert isinstance(material, Material)
+
+	# Grab the correct drill diameter depending upon *material*.
+	drill_diameter = tooling_plate._soft_drill_diameter
+	if material._is_steel():
+	    drill_diameter = tooling_plate._steel_drill_diameter
+
+	return drill_diameter
 
     def _dx_get(self):
         """ *Tooling_Plate*: Return the dx dimension of the *Tooling_Plate* object (i.e. *self*.)
@@ -16395,27 +16392,6 @@ class Tooling_Plate:
 
 	return self._dz
 
-    def _rows_get(self):
-        """ *Tooling_Plate*: Return the number of rows of mounting holes for the *Tooling_Plate*
-	    object (i.e. *self*.)
-	"""
-
-	return self._rows
-
-    def _columns_get(self):
-        """ *Tooling_Plate*: Return the number of columns of mounting holes for the *Tooling_Plate*
-	    object (i.e. *self*.)
-	"""
-
-	return self._columns
-
-    def _columns_get(self):
-        """ *Tooling_Plate*: Return the number of columns of mounting holes for the *Tooling_Plate*
-	    object (i.e. *self*.)
-	"""
-
-	return self._columns
-
     def _hole_diameter_get(self):
         """ *Tooling_Plate*: Return the diameter of the mounting holes for the *Tooling_Plate*
 	    object (i.e. *self*.)
@@ -16423,24 +16399,19 @@ class Tooling_Plate:
 
 	return self._hole_diameter
 
-    def _drill_diameter_get(self, material):
-        """ *Tooling_Plate*: Return the diameter of the drill holes using for the *Tooling_Plate*
-	    object (i.e. *self*.)  These holes are drilled into the *material* to be held down
-	    and supsequently treaded.  This hole is sized to be threaded.
+    def _hole_pitch_get(self):
+        """ *Tooling_Plate*: Return the number distance between holes in X and Y for the
+	    *Tooling_Plate* object (i.e. *self*.)
 	"""
 
-	# Use *tooling_plate* instead of *self*:
-        tooling_plate = self
+	return self._hole_pitch
 
-	# Verify argument types:
-        assert isinstance(material, Material)
+    def _rows_get(self):
+        """ *Tooling_Plate*: Return the number of rows of mounting holes for the *Tooling_Plate*
+	    object (i.e. *self*.)
+	"""
 
-	# Grab the correct drill diameter depending upon *material*.
-	drill_diameter = tooling_plate.soft_drill_diameter
-	if material.is_steel():
-	    drill_diameter = tooling_plate.steel_drill_diameter
-
-	return drill_diameter
+	return self._rows
 
 class Transform:
 
@@ -17421,4 +17392,238 @@ class Vice:
 	return self._parallels
 
 
+
+#    #FIXME: This Part routine appears to be no longer used!!!
+#    def _flush(self, program_number):
+#	""" *Code*: Generate CNC code starting at *program_number* for
+#	    the first CNC file name.
+#	"""
+#
+#	# Verify argument types:
+#	assert isinstance(program_number, int)
+#
+#	# Use *code* instead of *self*:
+#	code = self
+#
+#	#call d@(form@("=>flush@Code(*, %d%)\n\") / f@(program_number))
+#	#original_program_number :@= program_number
+#
+#	# Output all of the *blocks*:
+#	blocks = code._blocks
+#	size = len(blocks)
+#	print("size=", size)
+#	if size != 0:
+#	    block0 = blocks[0]
+#	    part = block0._part_get()
+#	    assert isinstance(part, Part)
+#
+#	    remainder = program_number % 10
+#	    if remainder != 0:
+#		program_number += 10 - remainder
+#	    ngc_directory = ezcad._ngc_directory_get()
+#	    ngc_file_name = os.path.join(ngc_directory, "{0}.ngc".format(program_number))
+#	    print("ngc_file_name='{0}'".format(ngc_file_name))
+#	    wrl_directory = ezcad._wrl_directory_get()
+#	    wrl_file_name = os.path.join(ngc_directory, "O{0}.wrl".format(program_number))
+#	    print("wrl_file_name='{0}'".format(wrl_file_name))
+#	    wrl_file = open(wrl_file_name, "wa")
+#	    assert isinstance(wrl_file, file)
+#
+#	    # Assign program numbers:
+#	    for index in range(size):
+#		block = blocks[index]
+#		#call d@(form@("Block[%d%] #%d% %d% %v%\n\") % f@(index) %
+#		#  f@(block.uid) % f@(block.priority) / f@(block.tool.name))
+#		block.program_number = program_number
+#		program_number += 1
+#
+#	    # Open *ngc_file_name* for writing:
+#	    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>code_stream_open: '{0}'".format(ngc_file_name))
+#	    code_stream = open(ngc_file_name, "wa")
+#	    assert isinstance(code_stream, file), \
+#	      "Could not open '{0}' for writing".format(ngc_file_name)
+#
+#	    # Output the tool table:
+#	    code_stream.write("({0}: {0})\n".format(part._name_get(), block0._comment_get()))
+#	    code_stream.write("(Tooling table:)\n")
+#	    for block in blocks:
+#		# Fetch {tool}:
+#		tool = block._tool_get()
+#
+#		# Make sure we have assigned a number to the tool:
+#		tool_name = tool._name_get()
+#		assert tool._number_get() != 0, \
+#		  "Tool {0} does not have a number\n".format(tool_name)
+#
+#		# Output the line in the tool table:
+#		code_stream.write("(T{0} {1})\n".format(tool._number_get(), tool_name))
+#
+#		# Perform the code block:
+#		code_stream.write("O{0} call\n".format(block._program_number_get()))
+#
+#	    # Wrap it up:
+#	    code_stream.write("G53 Y0.0 (Move the work to the front)\n")
+#	    code_stream.write("M2\n")
+#	    code_stream.close()
+#	    print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<code_stream_open: '{0}'".format(ngc_file_name))
+#
+#	    # Now output the blocks:
+#	    for block in blocks:
+#		# Fetch {block}, {tool} and {name}.
+#		tool = block._tool_get()
+#		tool_number = tool._number_get()
+#
+#		is_laser = tool._is_laser_get()
+#		if is_laser:
+#		    # We have a laser; generate a .dxf file:
+#		    dxf_directory = ezcad._dxf_directory_get()
+#		    dxf_file_name = os.path.join(dxf_directory, "{0}.dxf".format(program_number))
+#		    dxf_stream = open(dxf_file_name, "wa")
+#		    assert isinstance(dxf_stream, file), \
+#		      "Unable to open file '{0}'".format(dxf_file_name)
+#
+#		    #dxf_stream.write("0\n\SECTION\n\2\n\HEADER\n")
+#		    #dxf_stream.write("9\n\$DIMAUNITS\n\70\n\1\n")
+#		    #dxf_stream.write("9\n\$INSUNITS\n\70\n\1\n")
+#		    #dxf_stream.write("9\n\$LUNITS\n\70\n\0\n")
+#		    #dxf_stream.write("9\n\$MEASUREMENT\n\70\n\0\n")
+#		    #dxf_stream.write("0\n\ENDSEC\n")
+#
+#		    dxf_stream.write("0\n\SECTION\n\2\n\ENTITIES\n")
+#
+#		    # Output *dxf* to *dxf_stream*:
+#		    dxf = code.dxf
+#		    dxf_stream.write(dxf)
+#
+#		    # See if we are aggregating *dxf* into a named DXF file:
+#		    dxf_base_name = part.dxf_base_name
+#		    if dxf_base_name != "":
+#			# Yes, we need to aggregate:
+#			shop = part._shop
+#			dxf_table = shop.dxf_table
+#			dxf_contents = lookup[dxf_base_name]
+#			assert isinstance(dxf_contents, str)
+#			dxf_contents[dxf_base] = dxf_contents + dxf
+#
+#		    # Clear *dxf* for the next part:
+#		    code.dxf = ""
+#
+#		    # Wrap up {dxf_stream}:
+#		    dxf_stream.write("0\n\ENDSEC\n\0\n\EOF\n")
+#		    dxf_stream.close()
+#		else:
+#		    # We have a mill; generate a .ngc file:
+#		    program_number = block.program_number
+#		    ngc_directory = ezcad._ngc_directory_get()
+#		    ngc_file_name = os.path.join(ngc_directory, "{0}.ngc".format(program_number))
+#		    code_stream = open(ngc_file_name, "wa")
+#		    print(">>>>>>>>>>>>>>>>code_stream_open: '{0}'".format(file_name))
+#		    assert isinstance(code_stream, file), \
+#		      "Unable to open '{0}' for output\n".format(ngc_file_name)
+#
+#		    # Put a visual break into {code_stream}:
+#		    part_name = block._part_get()._name_get()
+#		    code_stream.write("({0})\n".format(part_name))
+#		    code_stream.write("O{0} sub\n".format(program_number))
+#		    code_stream.write("G90 G90.1 G20\n")
+#
+#		    # Output the tool change, get the coolant on,
+#		    # and spindle spun up:
+#		    code_stream.write("M6 T{0} (Insert {1})\n". 
+#	   	      format(tool_number, tool._name_get()))
+#		    spindle = block._spindle_get()
+#		    if spindle > Hertz():
+#			material = part._material_get()
+#			if material._needs_coolant():
+#			    code_stream.write("M8 (Coolant on)\n")
+#			else:
+#			    code_stream.write("M9 (Coolant off)\n")
+#			code_stream.write("S{0:rpm} M3 (Spindle on)\n".format(spindle))
+#
+#		    # Get moving to tool change location:
+#		    plunge_x = part._plunge_x_get()
+#		    plunge_y = part._plunge_y_get()
+#		    vice_x = block._vice_x_get()
+#		    vice_y = block._vice_y_get()
+#		    code._vice_xy_set(vice_x, vice_y)
+#
+#		    #print("part:{0} code.vice_x={1} code.vice_y={2}\n".
+#		    #  format(part.name, code.vice_x, code.vice_y))
+#
+#		    code_stream.write("G54 G0 X{0} Y{1} (Apply work offset)\n".
+#		      format(plunge_x - vice_x, plunge_y - vice_y))
+#		    code_stream.write("(Part_Origin_X={0} Part_Origin_Y={1})\n".
+#		      format(-vice_x, -vice_y))
+#
+#		    # Enable tool offset:
+#		    z_safe = part._z_safe_get()
+#		    code_stream.write("G43 H{0} (Enable tool_offset)\n".
+#		      format(tool_number))
+#		    code_stream.write(
+#		      "G0 Z{0:i} (Go to Z-safe for current tool)\n".
+#		      format(z_safe))
+#
+#		    # These should be done using accessor functions:
+#		    code._g8 = 43
+#		    code._g1 = 0
+#		    code._h = tool_number
+#		    code._z = z_safe
+#
+#		    # Generate the code for {block}:
+#		    code._commands_write(code_stream)
+#
+#		    # Put the tool back into a reasonable position:
+#		    code_stream.write("M5 (Spindle off)\n")
+#		    code_stream.write("M9 (Coolant off)\n")
+#		    code_stream.write(
+#		      "G0 X{0} Y{1} (Put spindle to left of vice)\n".
+#		      format(0.0, -1.0))
+#
+#		    # These should be done using accessor functions:
+#		    code._x = vice_x - L(inch= 1.0)
+#		    code._y = vice_y
+#
+#		    code_stream.write("G49 (Disable tool offset)\n")
+#		    # G53 is not modal, thus we are still in G54 work offset:
+#		    code_stream.write(
+#		      "G53 G0 Z{0} (Return to machine Z zero)\n".format(1.0))
+#		    code.z = L()
+#		    code_stream.write("O{0} endsub\n".format(program_number))
+#		    code_stream.write("O{0} call\n".format(program_number))
+#		    code_stream.write("M2\n")
+#		    code_stream.write("%\n")
+#		    code_stream.close()
+#		    print("<<<<<<<<<<<<<<<<code_stream_open: '{0}'".format(file_name))
+#
+#		# Now output the VRML code for *block*:
+#                
+#	    # Close out the *wrl_file*:
+#	    wrl_file.close()
+#
+#	    # Output the shut-down code:
+#	    #call put@("(*************************************)\n", code_stream)
+#
+#	    # Output the subroutine calls:
+#	    #index := 0
+#	    #while index < size
+#	    #    #call put@(form@("O%d% call\n\") /
+#	    #    #  f@((index + 1) * 100), code_stream)
+#	    #    index := index + 1
+#
+#	    #call put@(form@("O<%s%> sub\n\") / f@(base_name), code_stream)
+#	    #call put@("O[#1 * 100] call\n\", code_stream)
+#	    #call put@(form@("O<%s%> endsub\n\") / f@(base_name), code_stream)
+#
+#	    #call put@("G53 Y0.0 (Move the work to the front)\n", code_stream)
+#
+#	    #call put@("M2\n\", code_stream)
+#    
+#	    # Zero {blocks} for the next time:
+#	    del blocks[:]
+#
+#	    #call close@(code_stream)
+#
+#	#call d@(form@("<=flush@Code(*, %d%) => %d%\n\") %
+#	#  f@(original_program_number) / f@(program_number))
+#	return program_number
 
