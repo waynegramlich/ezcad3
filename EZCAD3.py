@@ -1,14 +1,89 @@
-#!/usr/bin/python
+####################################################################################################
+#<-----------------------------------------100 characters----------------------------------------->#
+#
+# EZCAD Coding Standards/Style
+#
+# The overall purpose of the EZCAD Coding standards are to provide legible code that can
+# be maintained and and upgraded.
+#
+# The standards are:
+#
+# * All comments are written Markdown.  This means that references to variables and class names
+#   are marked in *italics* inside all comments.
+# * All variable names are in lower case with adverbs, nouns, and verbs, separated by underscore
+#   `_` characters.  Fully spelled out words are **strongly** encouraged.  Dropping vowels and
+#   and syllables is not done.
+# * All class names are like variable names, but first letter of each word is capitalized.
+#   CamelCase class names are not used.  The only exception is classes that come from imported
+#   Python libraries.  The *L* (i.e. length) and *P* classes (i.e. point) classes are an
+#   exception to the naming convention of using words because these classes are so heavily used.
+# * No lines longer than 100 characters are allowed.  When the code gets too long, is manually
+#   formatted to fit within 100 characters.  No exceptions!
+# * Indentation levels are 4 spaces.  Continuation lines are typically typically indented to
+#   some multipe of 4 with two more spaces.
+# * Strings of multiple characters are enclosed in double quotes (`"`) and single characters are
+#   enclosed in single quotes (`'`).
+# * Classes are listed alpabetically in the code.  The *Angle*, *P* and *L* classes are pulled
+#   forward because they sometimes are needed for default argument types in other routines.
+# * Within a class, routine definitions are listed alphabetically.  A preceeding underscore `_`
+#   is ignored for alphabetical sorting.  An underscore in the middle of the routine definition
+#   is treated as a space.
+# * Each routine definition is followed by a description of what the routine does in standard
+#   Python triple quotes `""" .... """`.  If the routine definition is defined in a class,
+#   the class name is listed first in the triple quotes (e.g. `""" *Class_Name*: ..."""`.)
+#   This helps the user disambiguoate overloaded routine definitions in Python.
+# * For longer routines, the *self* variable gets assigined a more descriptive variable name:
+#         # Used *class_name* instead of *self*:
+#         class_name = self
+# * Routine definition variable names are type checked upon routine entry with assertions:
+#         assert isinstance(argument_1, Type_1)
+#         assert isinstance(argument_2, Type_2)
+#         ...
+#         assert isinstance(argument_n, Type_N)
+# * Routines almost always exit a the end of the routine definition.  `return` statments in
+#   in the middle of a routine are strongly discouraged.
+# * There is an extensive tracing system used through out the EZCAD code.  There is an optional
+#   last argument on most routine definitions of the form `tracing = -1000000`.  Whenever, this
+#   argument is positive it causes nested tracing of routine call/returns to occur.  In many
+#   routines there is an internal additional variable called *trace_detail* that controls
+#   how much additional tracing ocurrs.  *trace_detail* is manually set in the routine.  An
+#   example follows:
+#
+#        # Perform any requested *tracing*:
+#        trace_detail = -1
+#        if tracing >= 0:
+#            indent = ' ' * tracing
+#            print("{0}=>Class_Name.Routine_Name({1}, {2}, ...)").format(indent, arg_1, arg2, ...))
+#            trace_detail = 2
+#
+#   There is another matching trace statement at the end of the routine definition.
+# * Code within a routine is written in "paragraph style", where there is an
+#   English comment that preceeds each chunk of statements.  It should be possible to
+#   read the comments before reading the code to figure out generally what is going on.
+# * No python global variables are used.
+# * Doxygen was tried for while, but was found to be a lot of typing for not much value.
+# * Class routine defintions that start with an `_` are "private/protected" and only meant
+#   to be used interally by routines in EZCAD.  These routines can be renamed/removed
+#   without breaking user code.
+# * Class variable definitions are declared in the *__init__()* routine and almost all of
+#   start with an underscore (`_`).  The preceeding `_` means "private/protected" and these
+#   and their sub-classes may directly access them using "dot notation*".  Accessor functions
+#   are provided to allow other classes to these private/protected class variable definitions.
+#
+####################################################################################################
 
-import glob
-import hashlib
-import math
-import numpy
-import os
-import os.path
-import re
-import subprocess
-import xml.etree.ElementTree as ET
+# Imported libraries:
+import glob				# Used to search directories for stale files
+import hashlib				# Used to create unique hash for `.scad` files
+import math				# Primarily used for trigonmic functions
+import numpy				# Used for 4x4 afine matrix transforms
+import os				# Used for operating system functions
+import os.path				# Used for OS independent file name manipulation
+import re				# FIXME: Is this used any more?!!!
+import subprocess			# Used to run `openscad` program.
+import xml.etree.ElementTree as ET	# FIXME: Is this used any more?!!!
+
+# Some stand-alone routine definitions:
 
 def int_compare(left, right):
     """ *int*: Return -1, 0, or 1 depending upon whether *left* sorts before,
@@ -36,7 +111,7 @@ def float_compare(left, right):
 	return 0
     return 1
 
-#  The L, P, and Angle classes are listed first because Python does not
+# The *L*, *P*, and *Angle* classes are listed first because Python does not
 # have a good mechanism for dealing with forward references to class names.
 
 ## @brief *L* corresponds to a length.  This class solves the issue
@@ -4222,11 +4297,10 @@ class Operation_Dowel_Pin(Operation):
 
     def __init__(self,
       part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed,
-      diameter, dowel_point, plunge_point, top_surface_z, xy_rapid_safe_z, tracing=-1000000):
+      diameter, dowel_point, plunge_point, tracing=-1000000):
 	""" *Operation_Dowel_Pin*: Initialize an *Operation_Dowel_Pin* object (i.e. *self*)
 	    to contain *part*, *comment*, *sub_priority*, *tool*, *order*, *follows*,
-	    *feed_speed*, *spindle_speed*, *diameter*, *dowel_point*, *plunge_point*,
-	    *top_surface_z*, and *xy_rapid_safe_z*.
+	    *feed_speed*, *spindle_speed*, *diameter*, *dowel_point*, and *plunge_point*,
 	"""
 
 	# Use *operation_dowel_pin* instead of *self*:
@@ -4243,8 +4317,6 @@ class Operation_Dowel_Pin(Operation):
 	assert isinstance(diameter, L)
 	assert isinstance(dowel_point, P)
 	assert isinstance(plunge_point, P)
-	assert isinstance(top_surface_z, L)
-	assert isinstance(xy_rapid_safe_z, L)
 
 	# Perform any requested tracing:
         if tracing >= 0:
@@ -4255,10 +4327,9 @@ class Operation_Dowel_Pin(Operation):
 	    part_name = part._name_get()
 
             print(("{0}=>Operation_Dowel_Pin.__init__('{1}', '{2}', {3}, '{4}', '{5}', " +
-	      "{6:i}, {7:rpm}, {8:i}, dp={9:i}, pp={10:i}, tz={11:i}, rz={12:i}) ").format(
+	      "{6:i}, {7:rpm}, {8:i}, dp={9:i}, pp={10:i})").format(
 	      pad, part_name, comment, sub_priority, tool._name_get(), follows_name,
-	      feed_speed, spindle_speed, diameter, dowel_point, plunge_point, top_surface_z,
-	      xy_rapid_safe_z))
+	      feed_speed, spindle_speed, diameter, dowel_point, plunge_point))
 
 	# Initialize super class:
 	Operation.__init__(operation_dowel_pin, "Dowel_Pin", Operation.KIND_DOWEL_PIN,
@@ -4268,17 +4339,13 @@ class Operation_Dowel_Pin(Operation):
 	operation_dowel_pin._diameter = diameter	# Dowel pin diameter
 	operation_dowel_pin._dowel_point = dowel_point	# Location to move dowel to
 	operation_dowel_pin._plunge_point = plunge_point # Location to plunge dowel down at
-	operation_dowel_pin._top_surface_z = top_surface_z
-	operation_dowel_pin._xy_rapid_safe_z = xy_rapid_safe_z
-	assert isinstance(operation_dowel_pin._top_surface_z, L)
 
 	# Wrap up any *tracing*:
         if tracing >= 0:
             print(("{0}<=Operation_Dowel_Pin.__init__('{1}', '{2}', {3}, '{4}', '{5}', " +
-	      "{6:i}, {7:rpm}, {8:i}, dp={9:i}, pp={10:i}, tz={11:i}, rz={12:i}) ").format(
+	      "{6:i}, {7:rpm}, {8:i}, dp={9:i}, pp={10:i})").format(
 	      pad, part_name, comment, sub_priority, tool._name_get(), follows_name,
-	      feed_speed, spindle_speed, diameter, dowel_point, plunge_point, top_surface_z,
-	      xy_rapid_safe_z))
+	      feed_speed, spindle_speed, diameter, dowel_point, plunge_point))
 
     def _cnc_generate(self, tracing):
 	""" *Operation_Dowel_Pin*: Generate the CNC G-code for a an
@@ -4307,8 +4374,8 @@ class Operation_Dowel_Pin(Operation):
 	diameter = operation_dowel_pin._diameter
 	cnc_dowel_point = operation_dowel_pin._dowel_point
 	cnc_plunge_point = operation_dowel_pin._plunge_point
-	cnc_top_surface_z = operation_dowel_pin._top_surface_z
-	cnc_xy_rapid_safe_z = operation_dowel_pin._xy_rapid_safe_z
+	#cnc_top_surface_z = operation_dowel_pin._top_surface_z
+	#cnc_xy_rapid_safe_z = operation_dowel_pin._xy_rapid_safe_z
 
 	# Define the speed and feed for these operations:
 	ipm10 = Speed(in_per_sec=10.0)
@@ -4859,9 +4926,11 @@ class Operation_Mount(Operation):
     """ *Operation_Mount* is a class that indicates that the part mount position has changed.
     """
 
-    def __init__(self, part, comment, top_surface_transform, mount_translate_point):
+    def __init__(self, part, comment,
+      top_surface_transform, mount_translate_point, top_surface_safe_z, xy_rapid_safe_z):
 	""" *Operation_Mount*: Initialize the *Operation_Mount* object to contain
-	    *part, *comment*, *top_surface_transform* and *vice_translate_point*.
+	    *part*, *comment*, *top_surface_transform*, *vice_translate_point*,
+	    *top_surface_z*, *xy_rapid_safe_z*.
 	"""
 
 	# Use *operation_mount* instead of *self*:
@@ -4872,6 +4941,8 @@ class Operation_Mount(Operation):
 	assert isinstance(comment, str)
 	assert isinstance(top_surface_transform, Transform)
 	assert isinstance(mount_translate_point, P)
+	assert isinstance(top_surface_safe_z, L)
+	assert isinstance(xy_rapid_safe_z, L)
 
 	# Initialize the *Operation* super class:
 	sub_priority = 0
@@ -4886,10 +4957,12 @@ class Operation_Mount(Operation):
 	# Compute *cnc_transform*:
         cnc_transform = top_surface_transform.translate("mount_translate", mount_translate_point)
 
-	# Load of the rest of *operation_mount*:
-	operation_mount._top_surface_transform = top_surface_transform
-	operation_mount._mount_translate_point = mount_translate_point
+	# Load up *operation_mount*:
 	operation_mount._cnc_transform = cnc_transform
+	operation_mount._mount_translate_point = mount_translate_point
+	operation_mount._top_surface_transform = top_surface_transform
+	operation_mount._top_surface_safe_z = top_surface_safe_z
+	operation_mount._xy_rapid_safe_z = xy_rapid_safe_z
 
     def _cnc_generate(self, tracing=-1000000):
         """ *Operation_Mount*: Generate the CNC operations for the *Operation_Mount* object
@@ -4932,12 +5005,26 @@ class Operation_Mount(Operation):
 
 	return self._mount_translate_point
 
+    def _xy_rapid_safe_z_get(self):
+        """ *Operation_Mount*: Return the Z at which XY rapids are from the *Operation_Mount*
+	    object (i.e. *self*.)
+	"""
+
+	return self._xy_rapid_safe_z
+
     def _top_surface_transform_get(self):
         """ *Operation_Mount*: Return the top surface transform from the *Operation_Mount* object
 	    (i.e. *self*.)
 	"""
 
 	return self._top_surface_transform
+
+    def _top_surface_safe_z_get(self):
+        """ *Operation_Mount*: Return the top surface safe Z from the *Operation_Mount* object
+	    (i.e. *self*.)
+	"""
+
+	return self._top_surface_safe_z
 
 class Operation_Round_Pocket(Operation):
     """ *Operation_Round_Pocket* is a class that implements a round pocket
@@ -5982,9 +6069,9 @@ class Part:
 	part._color = None
 	part._center = P()
 	part._cnc_suppress = False
-	part._cnc_transform = None		# Orientation and translate transfrom for CNC vice
-	part._dowel_x = zero
-	part._dowel_y = zero
+	part._cnc_transform = None		# Orientation and translate transform for CNC vice
+	#part._dowel_x = zero
+	#part._dowel_y = zero
 	part._dx_original = zero
 	part._dxf_x_offset = zero
 	part._dxf_y_offset = zero
@@ -5996,6 +6083,7 @@ class Part:
 	part._laser_preferred = False
 	part._material = Material("aluminum", "")
 	part._mount = -1			# Number of current mount (starts a 0 for 1st one)
+	part._mount_translate_point = P()	# Place to move top surface point to for a mount
 	part._name = name
 	part._operations = []
 	#part._plunge_x = zero
@@ -6019,7 +6107,6 @@ class Part:
 	part._tracing = -1000000
 	part._translate = None
 	part._visible = True
-	part._vice_transform = Transform()
 	#part._vice_x = None			# Vice X origin relative to part X origin
 	#part._vice_y = None			# Vice Y origin relative to part Y origin
 	#part._z_rapid = None			# Z above which XY rapids are OK
@@ -6565,13 +6652,9 @@ class Part:
 
 	# Grab some values from *operation_mount*:
 	comment = operation_mount._comment_get()
-	#top_surface_transform = operation_mount._top_surface_transform_get()
-
-	mount_translate_point = operation_mount._mount_translate_point_get()
-	top_surface_z = mount_translate_point.z
-	xy_rapid_safe_z = top_surface_z + L(inch = 1.000)
 	tool = operation_mount._tool_get()
-	shop = part._shop_get()
+	top_surface_safe_z = operation_mount._top_surface_safe_z_get()
+	xy_rapid_safe_z = operation_mount._xy_rapid_safe_z_get()
 
 	# Now we can generate the *priority_operations* from *priority_groups*:
 	priority_program_number = mount_program_number
@@ -6584,7 +6667,7 @@ class Part:
 
 	    # Now output all the CNC code needed for *priority_operations*:
 	    priority_program_number = part._cnc_priority_generate(priority_operations,
-	      priority_program_number, mount_wrl_file, top_surface_z, xy_rapid_safe_z,
+	      priority_program_number, mount_wrl_file, top_surface_safe_z, xy_rapid_safe_z,
 	      tracing=tracing + 1)
 
 	# Write out the final G-code lines to *part_ngc_file*:
@@ -6714,8 +6797,8 @@ class Part:
 	      format(indent, part_name, part_program_number, next_program_number))
 	return next_program_number
 
-    def _cnc_priority_generate(self, priority_operations,
-      priority_program_number, mount_wrl_file, top_surface_z, xy_rapid_safe_z, tracing=-1000000):
+    def _cnc_priority_generate(self, priority_operations, priority_program_number,
+      mount_wrl_file, top_surface_safe_z, xy_rapid_safe_z, tracing=-1000000):
         """ *Part*: Generate CNC code for each *Operation* in *priority_operations* for the *Part*
 	    object (i.e. *self*).  Each operation in *priority_operations* must have the same
 	    priority.  *mount_wrl_file* has VRML code added to show all of the CNC paths
@@ -6729,7 +6812,8 @@ class Part:
 	# Verify argument types:
 	assert isinstance(priority_operations, list)
 	assert isinstance(priority_program_number, int)
-	assert isinstance(top_surface_z, L)
+	assert isinstance(mount_wrl_file, file)
+	assert isinstance(top_surface_safe_z, L)
         assert isinstance(xy_rapid_safe_z, L)
 	assert isinstance(tracing, int)
 
@@ -6740,8 +6824,8 @@ class Part:
 	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-            print("{0}=>Part._cnc_priority_generate('{1}', *, {2})".
-	      format(indent, part._name, priority_program_number))
+            print("{0}=>Part._cnc_priority_generate('{1}', *, {2}, *, {3:i}, {4:i})".format(indent,
+	      part._name, priority_program_number, top_surface_safe_z, xy_rapid_safe_z))
 	    trace_detail = 2
 
 	if trace_detail >= 2:
@@ -6836,20 +6920,21 @@ class Part:
 	tool_program_number = priority_program_number
 	for index, tool_operations in enumerate(tool_groups):
 	    assert isinstance(tool_operations, list)
-            tool_program_number = part._cnc_tool_generate(tool_operations,
-	      tool_program_number, mount_wrl_file, top_surface_z, xy_rapid_safe_z, tracing + 1)
+            tool_program_number = part._cnc_tool_generate(tool_operations, tool_program_number,
+	      mount_wrl_file, top_surface_safe_z, xy_rapid_safe_z, tracing + 1)
 
 	# Compute *new_priority_program_number* (no change from *tool_program_number*):
 	new_priority_program_number = tool_program_number
 
 	# Wrap up any requested *tracing* and return *new_priority_program_number*:
 	if tracing >= 0:
-            print("{0}<=Part._cnc_priority_generate('{1}', *, {2})=>{3}".
-	      format(indent, part._name, priority_program_number, new_priority_program_number))
+            print("{0}<=Part._cnc_priority_generate('{1}', *, {2}, *, {3:i}, {4:i})=>{5}".
+	      format(indent, part._name, priority_program_number, top_surface_safe_z,
+	      xy_rapid_safe_z, new_priority_program_number))
 	return new_priority_program_number
 
     def _cnc_tool_generate(self, tool_operations, tool_program_number,
-      mount_wrl_file, top_surface_z, xy_rapid_safe_z, tracing=-1000000):
+      mount_wrl_file, top_surface_safe_z, xy_rapid_safe_z, tracing=-1000000):
         """ *Part*: Generate CNC code for each *operation* in in *tool_operations* using the
 	    *Part* object (i.e. *self*). The generated tool `.ngc` file is numbered with
 	    *tool_program_number*.  The *mount_wrl_file* is updated with path information.  
@@ -6863,7 +6948,7 @@ class Part:
 	assert isinstance(tool_operations, list)
 	assert isinstance(tool_program_number, int)
 	assert isinstance(mount_wrl_file, file)
-	assert isinstance(top_surface_z, L)
+	assert isinstance(top_surface_safe_z, L)
 	assert isinstance(xy_rapid_safe_z, L)
 	assert isinstance(tracing, int)
 
@@ -6873,8 +6958,8 @@ class Part:
 	    tracing = part._tracing
 	if tracing >= 0:
             indent = ' ' * tracing
-            print("{0}=>Part._cnc_tool_generate('{1}', *, {2})".format(
-	      indent, part._name, tool_program_number))
+            print("{0}=>Part._cnc_tool_generate('{1}', *, {2}, *, {3:i}, {4:i})".format(
+	      indent, part._name, tool_program_number, top_surface_safe_z, xy_rapid_safe_z))
 	    trace_detail = 1
 
 	# Grab the *tool* from the first operation:
@@ -6888,11 +6973,9 @@ class Part:
 	shop = part._shop_get()
 	code = shop._code_get()
 	assert isinstance(code, Code)
-	code._start(part, tool, tool_program_number, spindle_speed,
-	  mount_wrl_file, part._stl_file_name, tracing + 1)
+	code._start(part, tool, tool_program_number, spindle_speed, mount_wrl_file,
+	  part._stl_file_name, top_surface_safe_z, xy_rapid_safe_z, tracing=tracing + 1)
 	code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
-	code._top_surface_z_set(top_surface_z)
-	code._xy_rapid_safe_z_set(xy_rapid_safe_z)
 
 	# Perform each *operation* in *tool_operations*:
 	for operation in tool_operations:
@@ -6926,8 +7009,9 @@ class Part:
 
 	# Wrap up any requested *tracing* and return *new_tool_program_number*:
 	if tracing >= 0:
-            print("{0}<=Part._cnc_tool_generate('{1}', *, {2})=>{3}".format(indent,
-	      part._name, tool_program_number, new_tool_program_number))
+            print("{0}=>Part._cnc_tool_generate('{1}', *, {2}, *, {3:i}, {4:i})=>{5}".format(
+	      indent, part._name, tool_program_number, top_surface_safe_z, xy_rapid_safe_z,
+	      new_tool_program_number))
 	return new_tool_program_number
 
     def _dimensions_update(self, ezcad, tracing):
@@ -7544,12 +7628,6 @@ class Part:
 
 	return self._mount
 
-    def _mount_increment(self):
-        """ *Part*: Increment and return the mount number for the *Part* object (i.e. *self*.) """
-
-        self._mount += 1
-	return self._mount
-
     def _mount_translate_point_set(self, mount_translate_point):
 	""" *Part*: Set the mount translate point for the *Part* object (i.e. *self*)
 	    to *mount_translate_point*.
@@ -8156,21 +8234,21 @@ class Part:
 
 	return best_tool
 
-    def _vice_x_get(self):
+    def xxx_vice_x_get(self):
 	""" *Part*: Return the vice X field of the *Part* object (i.e. *self*)
 	"""
 
 	return self._vice_x
 
 
-    def _vice_y_get(self):
+    def xxx_vice_y_get(self):
 	""" *Part*: Return the vice Y field of the *Part* object (i.e. *self*)
 	"""
 
 	return self._vice_y
 
 
-    def _z_safe_get(self):
+    def xxx_z_safe_get(self):
 	""" *Part*: Return the Z safe height for vertical air plunging for *Part* (i.e. *self*.)
 	"""
 	
@@ -8179,7 +8257,7 @@ class Part:
 
 	return part._z_safe
 
-    def _z_rapid_set(self, z_safe):
+    def xxx_z_rapid_set(self, z_safe):
 	""" *Part*: Set the Z safe height for vertical air plunging for *Part*
 	    (i.e. *self*) to *z_save*.
 	"""
@@ -8190,7 +8268,7 @@ class Part:
 	# Load *z_rapid* into the *Part* object (i.e. *self*):
 	self._z_rapid = z_safe
 
-    def _z_rapid_get(self):
+    def xxx_z_rapid_get(self):
 	""" *Part*: Return the Z rapid height for horizontal movement above hold-down tooling
 	    for *Part* (i.e. *self*.)
 	"""
@@ -8204,7 +8282,7 @@ class Part:
 	# Return z_rapid regardless:
 	return z_rapid
 
-    def _z_rapid_set(self, z_rapid):
+    def xxx_z_rapid_set(self, z_rapid):
 	""" *Part*: Set the Z rapid height for horizontal movement above hold-down tooling
 	    for *Part* (i.e. *self*) to *z_rapid*
 	"""
@@ -8473,9 +8551,14 @@ class Part:
 	      format(indent, self._name, comment, material, color, start_diameter, end_diameter,
 	      start, end, sides, sides_angle, welds, flags))
 
-    def dowel_pin(self, comment, tracing=-1000000):
-	""" *Part*: Request that a dowel pin be used to align the *Part* object (i.e. *self*)
-	    in the vice with a comment of *comment*.
+    def dowel_pin(self, comment, plunge_point, dowel_point, tracing=-1000000):
+	""" *Part*: Request that a dowel pin be used to align the *Part* object (i.e. *self*).
+	    The dowel pin will come down at *plunge_point* and move to *dowel_point* and
+	    then back.  Only the x and y values of *plunge_point* and *dowel_point* are used.
+	    *dowel_point* should be aligned with the actual material point to pushed against.
+	    This operation is for experts.  Most people should be using either *vice_mount()*
+	    with either the 'l' or 'r' flag set or *tooling_plate_mount()*.  *comment* will
+	    show up in any generated G code.
 	"""
 
 	# Use *part* instead of *self*:
@@ -8483,15 +8566,20 @@ class Part:
 
 	# Verify argument types
 	assert isinstance(comment, str)
+	assert isinstance(plunge_point, P)
+	assert isinstance(dowel_point, P)
 
 	# Perform any requested *tracing*:
-	#tracing = part._tracing
-	tracing_detail = -1
+	trace_detail = -1
+	if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
 	if tracing >= 0:
-	    tracing_detail = 1
+	    trace_detail = 1
 	    indent = ' ' * tracing
-	    print("=>Part.dowel_pin('{0}', '{1}')".format(part._name, comment))
+	    print("{0}=>Part.dowel_pin('{1}', '{2}', {3}, {4})".
+	      format(indent, part._name, comment, plunge_point, dowel_point))
 
+	# Only generate the operation in CNC generate mode:
 	shop = part._shop
 	assert isinstance(shop, Shop)
 	if shop._cnc_generate_get():
@@ -8499,93 +8587,61 @@ class Part:
 	    tool_dowel_pin = part._tools_dowel_pin_search(tracing)
 	    assert isinstance(tool_dowel_pin, Tool_Dowel_Pin), "No dowel pin tool found"
 
-	    # Immediately grab the *feed_speed* and *spindle_speed* that were computed
-	    # for *tool_dowel_pin*:
-	    feed_speed = tool_dowel_pin._feed_speed_get()
-	    spindle_speed = tool_dowel_pin._spindle_speed_get()
-
-	    if tracing_detail > 0:
-		print("=>Part.dowel_pin('{0}', {1})".
-		  format(part._name, comment))
+	    # Grab some values from *tool_dowel_pin*:
 	    diameter = tool_dowel_pin._diameter_get()
-
-	    # Figure out the new bounding box orientation:
-	    new_bounding_box = part._bounding_box.matrix_apply(part._position)
-
-	    # Compute the Z minimum of the bounding box (negative number):
-	    bounding_box_z_minimum = new_bounding_box.bsw_get().z
-
-	    # Now compute {z_depth}, the desired maximum tool descent
-	    # as a positive number:
-	    tip_depth = tool_dowel_pin._tip_depth_get()
-	    z_depth = tip_depth - bounding_box_z_minimum
-	    if tracing_detail > 0:
-		print("dowel_pin: part={0} bb={1} tip_depth={2}".
-		  format(part._name, new_bounding_box, tip_depth))
-		print("dowel_pin: before z_depth={0}".format(z_depth))
-
-	    # Figure out how deep the dowel pin actually can go:
+	    feed_speed = tool_dowel_pin._feed_speed_get()
 	    maximum_z_depth = tool_dowel_pin._maximum_z_depth_get()
-	    if z_depth > maximum_z_depth:
-		z_depth = maximum_z_depth
-	    if tracing_detail > 0:
-		print("after z_depth={0}".format(z_depth))
+	    spindle_speed = tool_dowel_pin._spindle_speed_get()
+	    tip_depth = tool_dowel_pin._tip_depth_get()
 
-	    if comment == "":
-		comment = "Mount {0} x {1} x {2} piece of {3} in vice". \
-		  format(part._dx_original, part._dy_original,
-		  part._dz_original, _part.material)
+	    # This chunk of code figures how deep the part is in the mount position.
+	    # It relies on the fact that we know where machine origin lands on the top
+	    # surface and where the center of the *part* is from the bounding box:
+	    top_surface_transform = part._top_surface_transform
+	    center_point = part.c
+	    cnc_center_point = top_surface_transform * center_point
+	    half_part_dz = cnc_center_point.length()
+	    part_dz = 2 * half_part_dz
 
-	    if tracing_detail > 0:
-		print("dowel_pin@({0}): ex={1} ey={2} vx={3} vy={4}".
-		  format(part._name, part._dowel_x, part._dowel_y,
-		  part._vice_x, part._vice_y))
+	    # Compute *tip_z* which is how deep down the tip of the dowel pin is allowed to go:
+	    mount_translate_point = part._mount_translate_point
+	    top_surface_z = mount_translate_point.z
+	    tip_z = top_surface_z - part_dz - tip_depth
+	    vice_safe_z = L(inch=0.100)
+	    if tip_z < vice_safe_z:
+                tip_z = vice_safe_z
 
-	    vice = shop._vice_get()
-	    jaw_volume = vice._jaw_volume_get()
-	    jaw_dx = jaw_volume.x
-	    half_jaw_dx = jaw_dx / 2
+	    # Figure out which size of *dowel_point* we are on:
+	    dowel_point_x = dowel_point.x
+	    dowel_point_y = dowel_point.y
+	    plunge_point_x = plunge_point.x
+	    plunge_point_y = plunge_point.y
 	    radius = diameter / 2
+	    if plunge_point_x < dowel_point_x:
+		# *plunge_point* is to the left of *dowel_point*:
+		dowel_point_x += radius / 2
+	    else:
+		# *plunge_point* is to the right of *dowel_point*:
+		dowel_point_x -= radius / 2
 
-	    dowel_x = part._dowel_x - radius
-	    dowel_y = part._dowel_y
-	    plunge_x = dowel_x
+	    # Now create the final *cnc_dowel_point* and *cnc_plunge_point*:
+	    cnc_dowel_point = P(dowel_point_x, dowel_point_y, tip_z)
+	    cnc_plunge_point = P(plunge_point_x, plunge_point_y, tip_z)
+	    if trace_detail > 0:
+		print("{0}dowel_pin('{1}' cnc_dowel_point={2:i} cnc_plunge_point={3:i}".
+		  format(indent, part._name, cnc_dowel_point, cnc_plunge_point))
 
-	    if tracing_detail > 0:
-		print("dowel_pin: {0} jaw_width={1}".
-		  format(part._name, jaw_width))
-
-	    # Make sure we always plunge outside of the vise jaws:
-	    if plunge_x > -half_jaw_dx:
-		plunge_x = -half_jaw_dx
-
-	    # If we are close the jaw edge, move out a little more:
-	    if plunge_x > -half_jaw_dx:
-		plunge_x = plunge_x - L(inch=0.70)
-	    plunge_y = dowel_y
-	    plunge_point = P(plunge_x, plunge_y, plunge_z)
-
-	    if tracing_detail > 0:
-		print("dowel_pin: {0}: plunge_x={1}".
-		  format(part._name, plunge_x))
-
+	    # Create the *operation_dowel* pin and append it to the *part* operations list:
 	    dowel_pin_order = Operation.ORDER_DOWEL_PIN
-	    operation = Operation_Dowel_Pin(part,
+	    operation_dowel_pin = Operation_Dowel_Pin(part,
 	      comment, 0, tool_dowel_pin, dowel_pin_order, None, feed_speed, spindle_speed,
-	      diameter, dowel_point, plunge_point, top_surface_z, xy_rapid_safe_z, tracing + 1)
-	    self._operation_append(operation)
-
-	    if tracing_detail > 0:
-		print("dowel_pin('{0}' dowel_point={1:i} plunge_point={2:i}".
-		  format(part._name, dowel_point, plunge_point))
-	    if tracing_detail > 0:
-		print("<=dowel_pin@Part('{0}', '{1}')".
-		  format(part._name, comment))
+	      diameter, dowel_point, plunge_point, tracing + 1)
+	    self._operation_append(operation_dowel_pin)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print("<=Part.dowel_pin('{0}', '{1}')".format(part._name, comment))
+	    print("{0}=>Part.dowel_pin('{1}', '{2}', {3}, {4})".
+	      format(indent, part._name, comment, plunge_point, dowel_point))
 
     def dowel_position_set(self, dowel_point):
 	""" *Part*: Set the dowel pin contact point for the *Part* object (i.e. *self*)
@@ -8916,6 +8972,55 @@ class Part:
 
 	assert isinstance(invisible, bool)
 	self._visible = not invisible
+
+    def mount(self, comment, top_surface_transform, mount_translate_point,
+      top_surface_safe_z, xy_rapid_safe_z, tracing=-1000000):
+	""" *Part*: Mount the *Part* object (i.e. *self*) so that *top_surface_transform*
+	    will orient the part at the CNC machine origin with the part top surface
+	    abutting the XY plane and *mount_translate_point* translating from there
+	    to final machine mount point.  *top_surface_safe_z* specifies the CNC altitude
+	    above which vertical rapids are safe.  *xy_rapid_safe_z* specifies the CNC altitude
+	    above which rapids in X and Y are safe.  This operation is for experts.  Most people
+	    should be using either *vice_mount()* or *tooling_plate_mount()* instead.
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(top_surface_transform, Transform)
+	assert isinstance(mount_translate_point, P)
+	assert isinstance(top_surface_safe_z, L)
+	assert isinstance(xy_rapid_safe_z, L)
+
+	# Perform any requested *tracing*:
+        if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
+	if tracing >= 0:
+	    indent = ' ' * tracing
+            print("{0}=>Part.mount('{1}', '{2}', *, {3:i})".
+	      format(indent, part._name, comment, mount_translate_point))
+	# Compute *cnc_transform*:
+	cnc_transform = \
+	  top_surface_transform.translate("translate to final mount point", mount_translate_point)
+
+	# Stuff everything into *part*:
+        part._top_surface_transform = top_surface_transform
+	part._mount_translate_point = mount_translate_point
+	part._cnc_transform = cnc_transform
+
+	# Increment the mount number for *part*:
+	part._mount += 1
+
+	# Create *operation_mount* and add it to *part* operations list:
+	operation_mount = Operation_Mount(part, comment,
+	  top_surface_transform, mount_translate_point, top_surface_safe_z, xy_rapid_safe_z)
+	part._operation_append(operation_mount)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+            print("{0}<=Part.mount('{1}', '{2}', *, {3:i})".
+	      format(indent, part._name, comment, mount_translate_point))
 
     def process(self, ezcad):
 	""" *Part*: Perform all the manufacturing processing for a *Part*
@@ -12357,14 +12462,28 @@ class Part:
 	    xml_stream.write(' Flags="{0}" Comment="{1}"/>\n'. \
 	      format(flags, comment))
 
-    def vice_mount_with_extra(self,
-      comment, top_surface, jaw_surface, extra_dx, extra_dy, tracing=-100000):
+    def vice_mount(self, comment, top_surface, jaw_surface, flags,
+      extra_dx=L(), extra_dy=L(), extra_top_dz=L(), extra_bottom_dz=L(), tracing=-100000):
 	""" *Part*: Cause the *Part* object (i.e. *self*) to be mounted in a vice with
 	    *top_surface* facing upwards and *jaw_surface* mounted towards the rear vice jaw.
-	    *comment* is the attached to any generated G-code.  *extra_dx* and *extra_dy*
-	    is added around the *Part* object to allow for contouring and avoiding drilling
-	    holes in to any parallel mounts in the vice under the part.  All transforms are
-	    done with respect to the bounding box of the *Part* object.
+	    *top_surface* and *jaw_surface* must be one of 't'" (top), 'b' (bottom), 'n' (north),
+	    's' (south), 'e' (east) or 'w' (west).  *comment* is the attached to any
+	    generated G-code.  The *Part* dimensions are specified by its bounding box.
+	    This routine has the required *flags* string argument can be left empty.
+
+	    The *flags* argument to support a dowel pin operation.  (See *Part.dowel_pin()*
+	    for more information about a dowel pin operation.)  When *flags* contains 'l',
+	    "l" it generates a left dowel pin operation, and when it contains 'r' it generates
+	    a right dowel pin operation.  The optional *extra_dx*, *extra_dy*, *extra_top_dz*
+	    and *extra_bottom_dz* arguments specify how much padding is added to the physical
+	    object to prior to being latched into the vice.  (Note that *extra_dx*, *extra_dy*,
+	    *extra_top_dz*, extra_bottom_dz* do *NOT* modify the *Part* object bounding_box
+	    dimensions in any way.)  The optional *extra_dx* and *extra_dy* specify that the
+	    physical part placed into the vice has been padded in the dx and dy vice coordinates.
+	    (Half goes on each side.)  Likewise, the optional *extra_top_dz* and *extra_bottom_dz*
+	    arguments indicate that the top and bottom of the physical part placed into the vice
+	    are padded with material on the top and/or bottom (usually to allow for facing
+	    operations.)
 	"""
 
 	# Use *part* instead of self:
@@ -12375,31 +12494,36 @@ class Part:
 	assert isinstance(comment, str)
 	assert isinstance(top_surface, str) and len(top_surface) == 1 and top_surface in "tbnsew"
 	assert isinstance(jaw_surface, str) and len(jaw_surface) == 1 and jaw_surface in "tbnsew"
+	assert isinstance(flags, str)
+	for flag in flags:
+	    assert flag in "lr", "Flag '{0}' is not allowed for flags argument".format(flag)
 	assert isinstance(extra_dx, L) and extra_dx >= zero
 	assert isinstance(extra_dy, L) and extra_dy >= zero
+	assert isinstance(extra_top_dz, L) and extra_top_dz >= zero
+	assert isinstance(extra_bottom_dz, L) and extra_bottom_dz >= zero
 
-	part_name = part._name
-
-	# Start any *tracing*:
+	# Preform any requested *tracing*:
 	trace_detail = -1
 	if tracing < 0 and part._tracing >= 0:
  	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    trace_detail = 1
-	    print("{0}=>Part.vice_mount_with_extra('{1}', '{2}', '{3}', '{4}', {5:i}, {6:i})".
-	      format(indent, part_name, comment, top_surface, jaw_surface, extra_dx, extra_dy))
+	    print(("({0}<=Part.vice_mount('{1}', '{2}', '{3}', '{4}', '{5}, " +
+              "{6:i}, {7:i}, {8:i}, {9:i})").format(indent,
+	      part._name, comment, top_surface, jaw_surface, flags,
+	      extra_dx, extra_dy, extra_top_dz, extra_bottom_dz))
+	    trace_detail = 2
 
 	# We only do work if we are in CNC mode:
 	shop = part._shop_get()
 	if shop._cnc_generate_get():
 	    # The *x_axis*, *y_axis*, and *z_axis* are needed for rotations:
 	    one = L(mm=1.0)
-	    x_axis = P(one, zero, zero)
-	    y_axis = P(zero, one, zero)
-	    z_axis = P(zero, zero, one)
+	    x_axis = P(one, zero, zero).normalize()
+	    y_axis = P(zero, one, zero).normalize()
+	    z_axis = P(zero, zero, one).normalize()
 
-	    # These are the two rotation constants used to reorient the 
+	    # These are the two rotation constants used to reorient the bounding box:
 	    degrees90 = Angle(deg=90.0)
 	    degrees180 = Angle(deg=180.0)
 
@@ -12407,12 +12531,12 @@ class Part:
 	    # for use below:
 	    bounding_box = part._bounding_box
 	    center_point = bounding_box.c_get()
-	    t = bounding_box.t_get()
-	    b = bounding_box.b_get()
-	    n = bounding_box.n_get()
-	    s = bounding_box.s_get()
-	    e = bounding_box.e_get()
-	    w = bounding_box.w_get()
+	    t = part.t
+	    b = part.b
+	    n = part.n
+	    s = part.s
+	    e = part.e
+	    w = part.w
 
 	    # *top_axis* and *top_rotate* are used to rotate the desired bounding box surface
 	    # facing up in the vice.  Leaving as *top_rotate_angle* as *None* means no top
@@ -12429,9 +12553,10 @@ class Part:
 	    jaw_rotate_angle = None
 
 	    # *left_dowel_point* specifies the *bounding_box* center surface point to the "left"
-	    # of the bounding box center when mounted in the vice.  This is used for the
-	    # left dowel pin operation.   If a right dowel pin is needed, it can be computed.
+	    # of the bounding box center when mounted in the vice.  Likewise, for
+            # *right_dowel_point*.  One of these two points is used for a dowel pin operation.
 	    left_dowel_point = None
+	    right_dowel_point = None
 
 	    # Do a 24 (=6 surfaces x 4 jaw orientations) dispatch on *top_surface* and *jaw_suface*:
 	    if 't' in top_surface:
@@ -12441,20 +12566,24 @@ class Part:
 		    # No rotation needed
 		    jaw_point = n
 		    left_dowel_point = w
+		    right_dowel_point = e
 		elif 's' in jaw_surface:
 		    jaw_point = s
 		    jaw_rotate_angle = degrees180
 		    left_dowel_point = e
+		    right_dowel_point = w
 		elif 'e' in jaw_surface:
 		    jaw_point = e
 		    jaw_rotate_angle = degrees90
 		    left_dowel_point = n
+		    right_dowel_point = s
 		elif 'w' in jaw_surface:
 		    jaw_point = w
 		    jaw_rotate_angle = -degrees90
 		    left_dowel_point = s
+		    right_dowel_point = n
 		else:
-		    assert False
+		    assert False, "jaw_surface must be one of 'n', 's', 'e', or 'w'"
 	    elif 'b' in top_surface:
 		# Bottom surface of *bounding_box* facing up from vice:
 		top_point = t
@@ -12464,20 +12593,24 @@ class Part:
 		    jaw_point = n
 		    jaw_rotate_angle = degrees180
 		    left_dowel_point = e
+		    right_dowel_point = w
 		elif 's' in jaw_surface:
 		    jaw_point = s
 		    jaw_rotate_angle = None
 		    left_dowel_point = w
+		    right_dowel_point = e
 		elif 'e' in jaw_surface:
 		    jaw_point = e
 		    jaw_rotate_angle = degrees90
 		    left_dowel_point = s
+		    right_dowel_point = n
 		elif 'w' in jaw_surface:
 		    jaw_point = w
 		    jaw_rotate_angle = -degrees90
 		    left_dowel_point = n
+		    right_dowel_point = s
 		else:
-		    assert False
+		    assert False, "jaw_surface must be one of 'n', 's', 'e', or 'w'"
 	    elif 'n' in top_surface:
 		# North surface of *bounding_box* facing up from vice:
 		top_point = n
@@ -12487,20 +12620,24 @@ class Part:
 		    jaw_point = t
 		    jaw_rotate_angle = -degrees180
 		    left_dowel_point = e
+		    right_dowel_point = w
 		elif 'b' in jaw_surface:
 		    jaw_point = b
 		    jaw_rotate_angle = None
 		    left_dowel_point = w
+		    right_dowel_point = e
 		elif 'e' in jaw_surface:
 		    jaw_point = e
 		    jaw_rotate_angle = degrees90
 		    left_dowel_point = b
+		    right_dowel_point = t
 		elif 'w' in jaw_surface:
 		    jaw_point = w
 		    jaw_rotate_angle = -degrees90
 		    left_dowel_point = t
+		    right_dowel_point = b
 		else:
-		    assert False
+		    assert False, "jaw_surface must be one of 't', 'b', 'e', or 'w'"
 	    elif 's' in top_surface:
 		# South surface of *bounding_box* facing up from vice:
 		top_point = s
@@ -12510,20 +12647,24 @@ class Part:
 		    jaw_point = t
 		    jaw_rotate_angle = None
 		    left_dowel_point = w
+		    right_dowel_point = e
 		elif 'b' in jaw_surface:
 		    jaw_point = b
 		    jaw_rotate_angle = degrees180
 		    left_dowel_point = e
+		    right_dowel_point = w
 		elif 'e' in jaw_surface:
 		    jaw_point = e
 		    jaw_rotate_angle = degrees90
 		    left_dowel_point = t
+		    right_dowel_point = b
 		elif 'w' in jaw_surface:
 		    jaw_point = w
 		    jaw_rotate_angle = -degrees90
 		    left_dowel_point = b
+		    right_dowel_point = t
 		else:
-		    assert False
+		    assert False, "jaw_surface must be one of 't', 'b', 'e', or 'w'"
 	    elif 'e' in top_surface:
 		# East surface of *bounding_box* facing up from vice:
 		top_point = e
@@ -12533,20 +12674,24 @@ class Part:
 		    jaw_point = t
 		    jaw_rotate_angle = -degrees90
 		    left_dowel_point = s
+		    right_dowel_point = n
 		elif 'b' in jaw_surface:
 		    jaw_point = b
 		    jaw_rotate_angle = degrees90
 		    left_dowel_point = n
+		    right_dowel_point = s
 		elif 'n' in jaw_surface:
 		    jaw_point = n
 		    jaw_rotate_angle = None
 		    left_dowel_point = t
+		    right_dowel_point = b
 		elif 's' in jaw_surface:
 		    jaw_point = s
 		    jaw_rotate_angle = -degrees180
 		    left_dowel_point = b
+		    right_dowel_point = t
 		else:
-		    assert False
+		    assert False, "jaw_surface must be one of 't', 'b', 'n', or 's'"
 	    elif 'w' in top_surface:
 		# West surface of *bounding_box* facing up from vice:
 		top_point = w
@@ -12556,50 +12701,65 @@ class Part:
 		    jaw_point = t
 		    jaw_rotate_angle = -degree90
 		    left_dowel_point = n
+		    right_dowel_point = s
 		elif 'b' in jaw_surface:
 		    jaw_point = b
 		    jaw_rotate_angle = -degrees90
 		    left_dowel_point = s
+		    right_dowel_point = n
 		elif 'n' in jaw_surface:
 		    jaw_point = n
 		    jaw_rotate_angle = None
 		    left_dowel_point = b
+		    right_dowel_point = t
 		elif 's' in jaw_surface:
 		    jaw_point = s
 		    jaw_rotate_angle = degrees180
 		    left_dowel_point = t
+		    right_dowel_point = b
 		else:
-		    assert False
+		    assert False, "jaw_surface must be one of 't', 'b', 'n', or 's'"
 	    else:
-		assert False
+		assert False, "top_surface must be one of 't', 'b', 'n', 's', 'e', or 'w'"
 
-	    # Perform any requested *tracing*:
+	    # Perform any requested *trace_detail*:
 	    if trace_detail >= 2:
-		print("{0}center_point={1:i} top_point={2:i} jaw_point={3:i} dowel_point={4:i}".
-		  format(indent, center_point, top_point, jaw_point, left_dowel_point))
+		print("{0}center={1:i} top={2:i} jaw={3:i} left_dowel={4:i} right_dowel={5}".
+		  format(indent, center_point, top_point, jaw_point,
+		  left_dowel_point, right_dowel_point))
 
-	    # Grab the *vice* and its associated *vice_jaw volume*:
+	    # Now we can compute the *top_surface_transform*, which rotates the *part* bounding box
+	    # so that it is oriented correctly for the vice with the top surface located at
+            # *cnc_top_surface_z*:
+	    top_surface_transform = Transform()
+	    top_surface_transform = top_surface_transform.translate(
+	      "move to vice origin", -top_point)
+	    if isinstance(top_rotate_angle, Angle):
+		top_surface_transform = top_surface_transform.rotate(
+		  "rotate top surface to point up in vice", top_axis, top_rotate_angle)
+	    if isinstance(jaw_rotate_angle, Angle):
+		top_surface_transform = top_surface_transform.rotate(
+		  "rotate jaw surface to point north in vice", jaw_axis, jaw_rotate_angle)
+
+	    # Grab some values from the *vice*:
 	    vice = shop._vice_get()
+	    parallels = vice._parallels_get()
 	    vice_jaw_volume = vice._jaw_volume_get()
 	    vice_jaw_dx = vice_jaw_volume.x
 	    vice_jaw_dy = vice_jaw_volume.y
 	    vice_jaw_dz = vice_jaw_volume.z
+	    if trace_detail >= 1:
+		print("{0}vice_jaw_volume={1:i}".format(indent, vice_jaw_volume))
 
-	    # Grab the *parallels* and associated *parallels_height*:	
-	    parallels = vice._parallels_get()
-            parallels_heights = parallels._heights_get()
+	    # Grab the associated *parallels_heights* from *parallels* and get
+	    # *smallest_parallel_height* and *largest_parallel_height*:
+	    parallels_heights = sorted(parallels._heights_get())
+	    smallest_parallel_height = parallels_heights[0]
+	    largest_parallel_height = parallels_heights[-1]
 
-	    # Figure out both the *smallest_parallel_height* and the *largest_parallel_height*:
-	    smallest_parallel_height = L(inch=12345.0)
-	    largest_parallel_height = L()
-            for parallel_height in parallels_heights:
-		smallest_parallel_height = smallest_parallel_height.minimum(parallel_height)
-		largest_parallel_height  =  largest_parallel_height.maximum(parallel_height)
-
-	    # Now compute the *half_part_dx*, *half_part_dy*, and *half_part_dz* as
-	    # augmented by *extra_dx* and *extra_dy*:
-	    half_part_dx = center_point.distance(left_dowel_point) + extra_dx / 2
-	    half_part_dy = center_point.distance(jaw_point)        + extra_dy / 2
+	    # Now compute the *half_part_dx*, *half_part_dy*, and *half_part_dz*:
+	    half_part_dx = center_point.distance(left_dowel_point)
+	    half_part_dy = center_point.distance(jaw_point)
 	    half_part_dz = center_point.distance(top_point)
 
 	    # Compute *part_dx*, *part_dy*, and *part_dz* and perform any requested *tracing*:
@@ -12610,99 +12770,107 @@ class Part:
 		print("{0}part_dimensions: dx={1:i} dy={2:i} dz={3:i} volume={4:i}".
 		  format(indent, part_dx, part_dy, part_dz, bounding_box.volume_get()))
 
-	    # Now figure out *top_surface_z*, which the distance from the vice origin to the
-            # center of the top surface of the *part*.  We want to mount such that the top surface
-	    # is as near to the top jaw edge as possible.  However, sometimes the parallels will
+	    # Now figure out *top_surface_z*, which is the distance from the vice origin to the
+	    # center of the top surface of the *part*.  We want to mount such that the top surface
+	    # as near to the top jaw edge as possible.  However, sometimes the parallels will
 	    # not let us get that low:
 	    selected_parallel_height = smallest_parallel_height
 	    for parallel_height in parallels_heights:
 		if parallel_height > selected_parallel_height and \
- 		  parallel_height + part_dz <= vice_jaw_dz:
+		  parallel_height + part_dz + extra_bottom_dz <= vice_jaw_dz:
                     selected_parallel_height = parallel_height
+	    if trace_detail >= 1:
+		print("{0}selected_parallel_height={1:i}".format(indent, selected_parallel_height))
 
 	    # Now we can compute *cnc_top_surface_z* and *cnc_xy_rapid_safe_z*:
-	    cnc_top_surface_z = selected_parallel_height + part_dz
-	    cnc_xy_rapid_safe_z = cnc_top_surface_z + L(inch=0.5)
+	    cnc_top_surface_z = selected_parallel_height + extra_bottom_dz + part_dz
+	    cnc_top_surface_safe_z = cnc_top_surface_z + extra_top_dz
+	    cnc_xy_rapid_safe_z = cnc_top_surface_safe_z + L(inch=0.5)
+	    if trace_detail >= 1:
+		print(("{0}cnc_top_surface_z={1:i} " +
+		  "cnc_top_surface_safe_z={2:i} cnc_xy_rapid_safe_z={2:i}").
+		  format(indent, cnc_top_surface_z, cnc_top_surface_safe_z, cnc_xy_rapid_safe_z))
 
-	    # Now we can figure out how we are going to position the part in the vice in Y axis.
-            # This allows us to compute *cnc_vice_translate_point*:
-	    if part_dx > vice_jaw_dx:
-		# The *part* is longer in X axis than vice jaw; center the part in the vice:
-		vice_translate_point = P(vice_jaw_dx/2, -half_part_dy, cnc_top_surface_z)
-	    else:
-		# The *part* is shorter in the X axis than the vice jaw, position part to left
-                # edge of vice:
-		cnc_vice_translate_point = P(half_part_dx, -half_part_dy, cnc_top_surface_z)
+	    # Process *flags* to figure out if a dowel pin operation is needed:
+	    dowel_pin_requested = False
+	    is_left_dowel_pin = False
+	    is_right_dowel_pin = False
+	    if 'l' in flags:
+                dowel_pin_requested = True
+                is_left_dowel_pin = True
+	    if 'r' in flags:
+		dowel_pin_requested = True
+                is_right_dowel_pin = True
+	    assert not (is_left_dowel_pin and is_right_dowel_pin), \
+	      "Specifying both 'l' and 'r' in flags argument will not work"
 
-	    # Now we can compute the *cnc_transform*, which rotates the *part* bounding box
-	    # so that it is oriented correctly in the vice with the top surface located at
-            # *cnc_top_surface_z*:
-	    top_surface_transform = Transform()
-	    top_surface_transform = top_surface_transform.translate(
-	      "move to vice origin", -top_point)
-	    if isinstance(top_rotate_angle, Angle):
-		top_surface_transform = top_surface_transform.rotate(
-		  "vice surface to top", top_axis, top_rotate_angle)
-	    if isinstance(jaw_rotate_angle, Angle):
-		top_surface_transform = top_surface_transform.rotate(
-		  "rotate jaw surface north", jaw_axis, jaw_rotate_angle)
-	    part._top_surface_transform = top_surface_transform
-	    cnc_transform = top_surface_transform.translate(
-	      "position in vice", cnc_vice_translate_point)
+	    # Now we can figure out how we are going to position the *part* in the vice in Y axis.
+	    vice_y = -(half_part_dy + extra_dy/2)
 
-	    # Remember *cnc*_transform* in *part* so the rest of the CNC system can use it:
-	    part._cnc_transform = cnc_transform
+	    # Now we figure out where to put the *part* in the vice X axis.  By default, *vice_x*
+	    # is set to the dead center of the vice in X:
+	    vice_x = vice_jaw_dx/2
+	    part_centered_in_vice = True
+	    if dowel_pin_requested and part_dx + extra_dx < vice_jaw_dx:
+		# We can position the part to the left or the right:
+		if is_left_dowel_pin:
+		    vice_x = half_part_dx + extra_dx/2
+		    part_centered_in_vice = False
+		elif is_right_dowel_pin:
+		    vice_x = vice_jaw_dx - half_part_dx - extra_dx/2
+		    part_centered_in_vice = False
+		else:
+		    assert False, "Internal error: Neither left or right dowel pin is specified"
 
-	    # Mark that we have started a new *part* mount.  This must occur *before* the
-            # create of *operation_mount*:
-	    part._mount_increment()
+	    # Now we can compute *mount_translate_point* which tranlates the *part* from the
+	    # machine origin to the correct location in the *vice*:
+	    mount_translate_point = P(vice_x, vice_y, cnc_top_surface_z)
+	    if trace_detail >= 1:
+		print("{0}mount_translate_point={1:i}".format(indent, mount_translate_point))
 
-	    # Create *operation_mount* and add it to *part* operations list:
-	    operation_mount = Operation_Mount(part,
-	      "vice_mount_with_extra", top_surface_transform, cnc_vice_translate_point)
-	    part._operation_append(operation_mount)
+	    # Now we can issue the mount command for the *part*:
+	    cnc_top_surface_safe_z = cnc_top_surface_z + extra_top_dz
+	    cnc_xy_rapid_safe_z = cnc_top_surface_z + L(inch=0.500)
+	    part.mount("Position '{0}' in vice".format(part._name), top_surface_transform,
+	       mount_translate_point, cnc_top_surface_safe_z, cnc_xy_rapid_safe_z, tracing + 1)
 
-	    # Find the *tool_dowel_pin* and grab some values out of it:
-	    tool_dowel_pin = part._tools_dowel_pin_search(tracing + 1)
-	    assert isinstance(tool_dowel_pin, Tool_Dowel_Pin), "No dowel pin tool found"
-	    tip_depth = tool_dowel_pin._tip_depth_get()
-	    maximum_z_depth = tool_dowel_pin._maximum_z_depth_get()
-	    feed_speed = tool_dowel_pin._feed_speed_get()
-	    spindle_speed = tool_dowel_pin._spindle_speed_get()
-	    diameter = tool_dowel_pin._diameter_get()
-	    if trace_detail >= 2:
-                print("{0}diameter={1:i} maximum_z_depth={2:i} tip_depth={3:i}".format(
-		  indent, diameter, maximum_z_depth, tip_depth))
+	    # Generate any needed dowel pin operation:
+	    if dowel_pin_requested:
+		dowel_x = None
+		plunge_x = None
+		dowel_pin_comment = "no dowel pin"
+		plunge_x_offset = L(inch=0.750)
+		if is_left_dowel_pin:
+		    dowel_pin_comment = "Left dowel pin"
+		    if part_centered_in_vice:
+			dowel_x = vice_jaw_dx/2 - (part_dx + extra_dx)
+		    else:
+			dowel_x = zero
+		    plunge_x = dowel_x - plunge_x_offset
+		elif is_right_dowel_pin:
+		    dowel_pin_comment = "Right dowel pin"
+		    if part_centered_in_vice:
+			dowel_x = vice_jaw_dx/2 + part_dx + extra_dx
+		    else:
+			dowel_x = vice_jaw_dx
+		    plunge_x = dowel_x + plunge_x_offset
 
-	    # Now we figure out *cnc_dowel_point* which is the location in CNC space where
-	    # the tip of the dowel pin is moved to:
-	    cnc_dowel_point_x = cnc_vice_translate_point.x - half_part_dx - diameter/2
-	    cnc_dowel_point_y = cnc_vice_translate_point.y
-	    if part_dz >= maximum_z_depth:
-		cnc_dowel_point_z = cnc_top_surface_z - maximum_z_depth
-	    else:
-		cnc_dowel_point_z = cnc_top_surface_z - part_dz - tip_depth
-	    cnc_dowel_point = P(cnc_dowel_point_x, cnc_dowel_point_y, cnc_dowel_point_z)
-	    if trace_detail >= 2:
-		print("{0}vtp.x={1:i} - hpx={2:i} - rad={3:i} cdpx={4:i}".format(
-		  indent, cnc_vice_translate_point.x, half_part_dx, diameter/2, cnc_dowel_point_x))
+		# Create *cnc_plunge_point* and *cnc_dowel_point*:
+		cnc_plunge_point = P(plunge_x, vice_y, zero)
+		cnc_dowel_point = P(dowel_x, vice_y, zero)
+		if trace_detail >= 2:
+		    print("{0}cnc_dowel_point={1:i} cnc_plunge_point={2:i}".format(
+		      indent, cnc_dowel_point, cnc_plunge_point))
 
-	    # *cnc_plunge_point* is where the dowel pin initially comes down.:
-	    cnc_plunge_point = cnc_dowel_point - P(L(inch=1.000), zero, zero)
-	    if trace_detail >= 2:
-                print("{0}cnc_dowel_point={1:i} cnc_plunge_point={2:i}".format(
-		  indent, cnc_dowel_point, cnc_plunge_point))
+		# Perform the dowel pin operation:
+		part.dowel_pin(dowel_pin_comment, cnc_plunge_point, cnc_dowel_point, tracing + 1)
 
-	    # Create the *operation_dowel_pin* *Operation* and load in into *part*:
-	    order = Operation.ORDER_DOWEL_PIN
-	    operation_dowel_pin = Operation_Dowel_Pin(part, "dowel_pin", 0, tool_dowel_pin, order,
-	      None, feed_speed, spindle_speed, diameter, cnc_dowel_point, cnc_plunge_point,
-	      cnc_top_surface_z, cnc_xy_rapid_safe_z, tracing + 1)
-	    part._operation_append(operation_dowel_pin)
-
+	# Perform any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Part.vice_mount_with_extra('{1}', '{2}', '{3}', '{4}', {5:i}, {6:i})".
-	      format(indent, part_name, comment, top_surface, jaw_surface, extra_dx, extra_dy))
+	    print(("({0}<=Part.vice_mount('{1}', '{2}', '{3}', '{4}', '{5}, " +
+              "{6:i}, {7:i}, {8:i}, {9:i})").format(indent,
+	      part._name, comment, top_surface, jaw_surface, flags,
+	      extra_dx, extra_dy, extra_top_dz, extra_bottom_dz))
 
 	# This is the old code that is no longer used in this routine
 	##FIXME: What does this do?!!!
@@ -13242,7 +13410,7 @@ class Code:
 	code._dxf_y_offset = zero	# DXF Y offset
 	code._is_laser = False		# True if tool is a laser
 	code._mount_wrl_file = None	# Place to write unified part path .wrl file
-	code._top_surface_z = None	# Top surface of part in CNC coordinates
+	code._top_surface_safe_z = None	# Top surface of part in CNC coordinates
 	code._xy_rapid_safe_z = None	# CNC Z altitude where XY rapids are allowed
 
 	# Construct the *g1_table*:
@@ -13890,8 +14058,8 @@ class Code:
 	code_stream.close()
 	code._code_stream = None
 
-	# Reset the *top_surface_z* and *xy_rapid_safe_z*:
-	code._top_surface_z = None
+	# Reset the *top_surface_safe_z* and *xy_rapid_safe_z*:
+	code._top_surface_safe_z = None
 	code._xy_rapid_safe_z = None
 
 	# Random comment: the view3dscene program can view the resulting .wrl file:
@@ -14174,8 +14342,8 @@ class Code:
 	code._z = big
 	code._z1 = big
 
-    def _start(self, part, tool, ngc_program_number,
-      spindle_speed, mount_wrl_file, stl_file_name,tracing=-1000000):
+    def _start(self, part, tool, ngc_program_number, spindle_speed, mount_wrl_file,
+      stl_file_name, top_surface_safe_z, xy_rapid_safe_z ,tracing=-1000000):
 	""" *Code*: Start writing out the G-code for *tool* (
 	"""
 
@@ -14188,7 +14356,13 @@ class Code:
 	assert isinstance(ngc_program_number, int)
 	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(mount_wrl_file, file)
-	assert isinstance(mount_wrl_file, file)
+	assert isinstance(stl_file_name, str)
+	assert isinstance(top_surface_safe_z, L)
+	assert isinstance(xy_rapid_safe_z, L)
+
+	# Save *top_surface_safe_z*
+	code._top_surface_safe_z = top_surface_safe_z
+	code._xy_rapid_safe_z = xy_rapid_safe_z
 
 	# Grab some values from *part* and *tool*:
 	part_name = part._name_get()
@@ -14199,8 +14373,9 @@ class Code:
 	tracing_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Code._start('{1}', '{2}', {3}, {4:rpm}, *)".
-	      format(indent, part_name, tool_name, ngc_program_number, spindle_speed))
+	    print("{0}=>Code._start('{1}', '{2}', {3}, {4:rpm}, *, '{5}', {6:i}, {7:i})".
+	      format(indent, part_name, tool_name, ngc_program_number, spindle_speed,
+	      stl_file_name, top_surface_safe_z, xy_rapid_safe_z))
 	    tracing_detail = 1
 
 	# Make sure that closed off any previous *code_stream*:
@@ -14261,23 +14436,10 @@ class Code:
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Code._start('{1}', '{2}', {3}, {4:rpm}, *)".
-	      format(indent, part_name, tool_name, ngc_program_number, spindle_speed))
+	    print("{0}<=Code._start('{1}', '{2}', {3}, {4:rpm}, *, '{5}', {6:i}, {7:i})".
+	      format(indent, part_name, tool_name, ngc_program_number, spindle_speed,
+	      stl_file_name, top_surface_safe_z, xy_rapid_safe_z))
 
-
-    def _top_surface_z_set(self, top_surface_z):
-        """ *Code*: Set the *top_surface_z* into the *Code* object (i.e. *self*.)
-	    Veritical rapid moves are allowed above this distance.
-	"""
-
-	# Use *code* instead of *self*:
-	code = self
-
-	# Verify argument types:
-	assert isinstance(top_surface_z, L)
-
-	# Save *top_surface_z* into *code*:
-	code._top_surface_z = top_surface_z
 
     #FIXME: This is no longer used!!!
     def _foo(self):
@@ -15068,20 +15230,6 @@ class Code:
 	    code._length("Y", y)
 	    code._command_end()
 
-    def _xy_rapid_safe_z_set(self, xy_rapid_safe_z):
-        """ *Code*: Save *xy_rapid_safe_z* into the *Code* object (i.e. *self*).
-	    *xy_rapid_safe_z* is the Z location above which rapid moves can occur in X and Y.
-	"""
-
-	# Use *code* instead of *self*:
-	code = self
-
-	# Verify argument types:
-        assert isinstance(xy_rapid_safe_z, L)
-
-	# Save *xy_rapid_save_z* into *code*:
-	code._xy_rapid_safe_z = xy_rapid_safe_z
-
     def _xy_rapid_safe_z_force(self, feed, speed):
         """ *Code*: Force the tool for the *Code* object (i.e. *self*) to be at the
 	    safe height where rapids in X and Y are allowed.
@@ -15095,6 +15243,7 @@ class Code:
         assert isinstance(speed, Hertz)
 
 	xy_rapid_safe_z = code._xy_rapid_safe_z
+	assert isinstance(xy_rapid_safe_z, L)
 	code._z_feed(feed, speed, code._xy_rapid_safe_z, "xy_rapid_safe_z_force")
 
     def _y_value(self):
@@ -15131,9 +15280,10 @@ class Code:
 	# Hence, we can just clear *z_safe_pending*:
 	code._z_safe_pending = False
 
-	top_surface_z = code._top_surface_z
+	top_surface_safe_z = code._top_surface_safe_z
 	xy_rapid_safe_z = code._xy_rapid_safe_z
-	#print("top_surface_z={0:i} xy_rapid_safe_z={1:i}".format(top_surface_z, xy_rapid_safe_z))
+	#print("top_surface_safe_z={0:i} xy_rapid_safe_z={1:i}".
+        #  format(top_surface_safe_z, xy_rapid_safe_z))
 
 	# Emit G0/G1 commands until we get to *z* (i.e. *z_target*):
 	z_current = code._z
@@ -15141,13 +15291,13 @@ class Code:
 	    z_target = z
 	    #print("---- z_current={0:i} z_target={1:i}".format(z_current, z_target))
 
-	    if top_surface_z <= z_current <= xy_rapid_safe_z:
+	    if top_surface_safe_z <= z_current <= xy_rapid_safe_z:
 		# We are in the retraction portion of the workspace.  G0 rapids
 		# are used to move around here:
 		
-		# Trim *z_target* to be between *top_surface_z* and *xy_rapid_safe_z*:
-                if z_target <= top_surface_z:
-                    z_target = top_surface_z
+		# Trim *z_target* to be between *top_surface_safe_z* and *xy_rapid_safe_z*:
+                if z_target <= top_surface_safe_z:
+                    z_target = top_surface_safe_z
 		elif z_target >= xy_rapid_safe_z:
                     z_target = xy_rapid_safe_z
 		#print("GO trimed z_target={0:i}".format(z_target))
@@ -15162,13 +15312,13 @@ class Code:
 		    z_current = z_target
 
 	    z_target = z
-	    if z_current <= top_surface_z:
+	    if z_current <= top_surface_safe_z:
                 # We are in the cutting portion of the workspace.  G1 motion is
                 # used to move around here:
 
-		# Make sure *z_target* does not get above *top_surface_z*:
-		if z_target >= top_surface_z:
-		    z_target = top_surface_z
+		# Make sure *z_target* does not get above *top_surface_safe_z*:
+		if z_target >= top_surface_safe_z:
+		    z_target = top_surface_safe_z
 		#print("G1 trimed z_target={0:i}".format(z_target))
 
 		# Perform G1 move (if necessary):
