@@ -1,4 +1,4 @@
-####################################################################################################
+###################################################################################################
 #<-----------------------------------------100 characters----------------------------------------->#
 #
 # EZCAD Coding Standards/Style
@@ -73,15 +73,15 @@
 ####################################################################################################
 
 # Imported libraries:
-import glob				# Used to search directories for stale files
+#import glob				# Used to search directories for stale files
 import hashlib				# Used to create unique hash for `.scad` files
 import math				# Primarily used for trigonmic functions
 import numpy				# Used for 4x4 afine matrix transforms
 import os				# Used for operating system functions
-import os.path				# Used for OS independent file name manipulation
+#import os.path				# Used for OS independent file name manipulation
 import re				# FIXME: Is this used any more?!!!
 import subprocess			# Used to run `openscad` program.
-import xml.etree.ElementTree as ET	# FIXME: Is this used any more?!!!
+#import xml.etree.ElementTree as ET	# FIXME: Is this used any more?!!!
 
 # Some stand-alone routine definitions:
 
@@ -2747,7 +2747,7 @@ class Color:
 	      self.red, self.green, self.blue, self.alpha)
 	return result
 
-# These classes are unused???
+# Are these classes are unused???
 
 class Indexed_Point:
     def __init__(self, x, y, label, index):
@@ -3628,6 +3628,217 @@ class Contour:
 	    print("{0}<=Contour.path_append(extrude_axis={1})".
 	      format(trace * ' ', extrude_axis))
 
+class Directory:
+    """ *Directory*: A *Directory* object represents a sub-directory that is written to. """
+
+    def __init__(self, parent_directory, sub_directory):
+        """ *Directory*: Initialize the *Directory* object (i.e. *self*) to create the *name*
+	    *sub_directory* in *parent_directory*.
+	"""
+
+	# Use *directory* instead of *self*:
+	directory = self
+
+	# Verify argument types:
+	assert isinstance(parent_directory, str)
+	assert isinstance(sub_directory, str)
+
+	# Create the combined *path*:
+	path = os.path.join(parent_directory, sub_directory)
+
+	# Make sure that *sub_directory* for *path* exists:
+	try:
+	    os.makedirs(path)
+	except OSError as exception:
+            assert exception.errno == os.errno.EEXIST
+
+	# If the directory previously exists, keep track of all of the *previous_files*
+        # so any left overs can be deleted:
+	previous_files = dict.fromkeys(os.listdir(path), None)
+
+	# Load up *directory*:
+	directory._current_files = {}
+	directory._parent_directory = parent_directory
+	directory._path = path
+	directory._previous_files = previous_files
+	directory._sub_directory = sub_directory
+
+    def _clean_up(self, tracing=-1000000):
+        """ *Directory*: Clean up the *Directory* object (i.e. *self*) so it has no left
+	    over files from previous.
+	"""
+
+	# Use *directory* instead of *self*:
+	directory = self
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Directory.clean_up('{1}')".format(indent, directory._path))
+
+	# Delete any files that are left over from a previous run:
+	path = directory._path
+	previous_files = directory._previous_files
+	for file_name in previous_files.keys():
+	    full_path = os.path.join(path, file_name)
+	    os.remove(full_path)
+	    del previous_files[file_name]
+	    if tracing >= 0:
+		print("{0}Removed file '{1}'".format(indent, full_path))
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Directory.clean_up('{1}')".format(indent, directory._path))
+
+    def _exists(self, file_name, tracing=-1000000):
+        """ *Directory*: Return *True* if *file_name* is in the *Directory* object (i.e. *self*)
+	    and *False* otherwise.
+	"""
+
+	# Use *directory* instead of *self*:
+	directory = self
+
+	# Verify argument types:
+	assert isinstance(file_name, str)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+            print("{0}=>Directory._exists('{1}')".format(indent, file_name))
+
+	# Determine whether *file_name* *exists* or not:
+	current_files = directory._current_files
+	previous_files = directory._previous_files
+	exists = False
+	if file_name in current_files:
+	    # We have already written out *file_name*:
+	    exists = True
+	elif file_name in previous_files:
+	    # *file_name* exists from a prevoious program run; mark it as current:
+            exists = True
+            del previous_files[file_name]
+	    current_files[file_name] = None
+
+	# Wrap up any requested *tracing* and return *exists* resulst:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+            print("{0}<=Directory._exists('{1}')=>{2}".format(indent, file_name, exists))
+	return exists
+
+    def _lines_read(self, file_name, tracing=-1000000):
+	""" *Directory*: Read *file_name* from the *Directory* object (i.e. *self*) return
+	    it as a list of lines.
+	"""
+
+	# Use *directory* instead of *self*:
+	directory = self
+
+	# Verify argument types:
+	assert isinstance(file_name, str)
+        assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Directory._lines_read('{1}', '{2}')".
+	      format(indent, directory._path, file_name))
+
+	# Open the *file_name* as *input_file*:
+	path = directory._path
+	full_path = os.path.join(path, file_name)
+	input_file = open(full_path, "r")
+	assert isinstance(input_file, file), "Unable to open file '{0}'".format(full_path)
+
+	# Read in *input_lines* and close *input_file*:
+	input_lines = input_file.readlines()
+	input_file.close()
+
+	# Remember that we read *file_name*:
+	directory._current_files[file_name] = None
+
+	# Wrap-up any requested *tracing* and return the *input_lines*:
+	if tracing >= 0:
+	    print("{0}<=Directory._lines_read('{1}', '{2}')".
+	      format(indent, directory._path, file_name))
+	return input_lines
+
+    def _lines_write(self, file_name, lines, tracing=-1000000):
+	""" *Directory*: Write *lines* out to the *Directory* object (i.e. *self*) as *file_name*.
+	    The SHA1 hash signature for *lines* is returned.
+	"""
+
+	# Use *directory* instead of *self*:
+	directory = self
+
+	# Verify argument types:
+	assert isinstance(file_name, str)
+	assert isinstance(lines, list)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+            print("{0}=>Directory._lines_write('{1}', '{2}', *)".
+ 	      format(indent, directory._sub_directory, file_name))
+
+	# Create file *content* and associated hash *signature*:
+	content = '\n'.join(lines)
+	signature = hashlib.sha1(content).hexdigest()
+
+	# Write out the *content* out to *file_name*:
+	output_file = directory._write_open(file_name, tracing + 1)
+	output_file.write(content)
+	output_file.close()
+
+	# Wrap up any requested *tracing* and return *signature*:
+	if tracing >= 0:
+	  print("{0}<=Directory._lines_write('{1}', '{2}', *)=>'{3}'".
+	    format(indent, directory._sub_directory, file_name, signature))
+	return signature
+
+    def _path_get(self):
+        """ *Directory*: Return the *Directory* object (i.e. *self*) path. """
+
+	return self._path
+
+    def _write_open(self, file_name, tracing=-1000000):
+        """ *Directory*: Open *file* name in the *Directory* object and return the associated
+	    Python *file*.
+	"""
+
+	# Use *directory* instead of *self*:
+	directory = self
+
+	# Verify argument types:
+	assert isinstance(file_name, str)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Directory.write_open('{1}', '{2}')".
+	      format(indent, directory._path, file_name))
+
+	# Open *full_path* for writing:
+	path = directory._path
+	full_path = os.path.join(path, file_name)
+	opened_file = open(full_path, "w")
+	assert isinstance(opened_file, file), "Unable to open file '{0}'".format(full_path)
+
+	# Remember that we opened *file_name*
+	directory._current_files[file_name] = None
+
+	# Remember to not delete it when when we call *_cleanup*:
+	previous_files = directory._previous_files
+	if file_name in previous_files:
+	    del previous_files[file_name]
+
+	# Wrap up any requested *tracing* and return:
+	if tracing >= 0:
+	    print("{0}<=Directory.write_open('{1}', '{2}')".
+	      format(indent, directory._path, file_name))
+	return opened_file
+
 class EZCAD3:
     """ EZCAD3 is the top level engine that executes the design. """
 
@@ -3644,23 +3855,37 @@ class EZCAD3:
 
 	#print "EZCAD.__init__() called"
 
-	# Check argument types:
-	none_type = type(None)
+	# Verify argument types:
 	assert minor == 0
 	assert isinstance(adjust, L)
 	assert isinstance(directory, str)
 
+	# Create the *Directory* objects for each sub-directory:
+	dxf_directory  = Directory(directory, "dxf")
+	ngc_directory  = Directory(directory, "ngc")
+	scad_directory = Directory(directory, "scad")
+	stl_directory  = Directory(directory, "stl")
+	wrl_directory  = Directory(directory, "wrl")
+
 	# Load up {self}:
 	self._adjust = adjust
+	self._bases_table = {}
+	self._cnc_mode = False
+	self._dxf_directory = dxf_directory
 	self._directory = directory
-	self._mode = EZCAD3.DIMENSIONS_MODE
+	#self._mode = EZCAD3.DIMENSIONS_MODE
+	#self._mode = None
 	self._major = 3
 	self._minor = minor
+	self._ngc_directory = ngc_directory
 	self._parts_stack = []
+	self._scad_directory = scad_directory
 	self._shop = Shop("Wayne's Shop")
+	self._stl_directory = stl_directory
+	self._stl_mode = False
 	self._update_count = 0
+	self._wrl_directory = wrl_directory
 	self._xml_indent = 0
-	self._bases_table = {}
 
 	self._bounding_box_dispatch = {
 	  "b":      Bounding_Box.b_get,
@@ -3693,17 +3918,9 @@ class EZCAD3:
 	  "w":      Bounding_Box.w_get,
 	}
 
-	# Make sure various output directories exist:
-	self._directory      = directory
-	self._dxf_directory  = self._directory_create("dxf", True)
-	self._ngc_directory  = self._directory_create("ngc", True)
-	self._scad_directory = self._directory_create("scad", False)
-	self._stl_directory  = self._directory_create("stl", False)
-	self._wrl_directory  = self._directory_create("wrl", True)
-
 	EZCAD3.ezcad = self
 
-    def _directory_create(self, sub_directory, clear):
+    def xxx_directory_create(self, sub_directory, clear):
         """ *EZCAD3*: Force directory named *directory*/*sub_directory* into existence, where
 	    *directory* comes for the *EZCAD3* object (i.e. *self.*)  If *clear* is *True*,
 	    the directory is cleared.  The resulting directory path is returned. """
@@ -3769,18 +3986,41 @@ class EZCAD3:
 
 	return self._wrl_directory
 
-    def _mode_get(self):
+    def xxx_mode_get(self):
 	""" *EZCAD3*: Return the mode of the *EZCAD3* object (i.e. *self*). """
 
 	return self._mode
 
 
-    def process(self, part):
+    def process(self, part, tracing = -1000000):
 	""" *EZCAD3*: Perform all of the processing starting at *part*.
 	"""
 
+	# Use *ezcad* instead of *self*:
+	ezcad = self
+
+	# Verify argument types:
 	assert isinstance(part, Part)
-	part.process(self)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>EZCAD3.preocess('{1}')".format(indent, part._name_get()))
+
+	# Process *part*:
+	part.process(self, tracing = tracing + 1)
+
+	# Clean up any directories:
+	self._dxf_directory._clean_up(tracing = tracing + 1)
+	self._ngc_directory._clean_up(tracing = tracing + 1)
+	self._scad_directory._clean_up(tracing = tracing + 1)
+	self._stl_directory._clean_up(tracing = tracing + 1)
+	self._wrl_directory._clean_up(tracing = tracing + 1)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=EZCAD3.preocess('{1}')".format(indent, part._name_get()))
 
     @staticmethod
     def update_count_get():
@@ -6516,6 +6756,35 @@ class Part:
 	if trace:
 	    print("<=Part._box_recompute({0}, {1})".format(self._name, label))
 
+    def _cnc_manufacture(self, tracing = -1000000):
+	""" *Part*: Force the generate of `.ngc` and `.wrl` path files for the *Part* object.
+	"""
+
+	# Use *part* instead of *self*
+	part = self
+
+	# Verify argument types:
+	assert isinstance(tracing, int)
+
+	# Perform an requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part._cnc_manufacture('{1}')".format(indent, part._name))
+
+	# Generate the `.ngc` files for *part*:
+	ezcad = part._ezcad
+	shop = part._shop_get()
+	part_program_number = shop._program_base_get()
+	assert part_program_number % 100 == 0
+	part_program_number = part._cnc_part_generate(part_program_number, tracing + 1)
+	assert part_program_number % 100 == 0
+	shop._program_base_set(part_program_number)
+	part._mount = -1
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}=>Part._cnc_manufacture('{1}')".format(indent, part._name))
+
     def cnc_suppress(self):
         """ *Part*: Suppress CNC generation for the *Part* object (i.e. *self*.) """
 
@@ -6597,9 +6866,8 @@ class Part:
 	# that these file names end in `.wrl` and are written into the `.../ngc sub-directory`:
 	ezcad = part._ezcad_get()
 	ngc_directory = ezcad._ngc_directory_get()
-	mount_wrl_file_name = \
-	  os.path.join(ngc_directory, "O{0}.wrl".format(mount_program_number))
-	mount_wrl_file = open(mount_wrl_file_name, "w")
+	mount_wrl_file_name = "O{0}.wrl".format(mount_program_number)
+	mount_wrl_file = ngc_directory._write_open(mount_wrl_file_name, tracing + 1)
 
 	# Output the intital VRML code to be group of children shapes of *mount_wrl_file*:
         mount_wrl_file.write("#VRML V2.0 utf8\n")
@@ -6637,8 +6905,8 @@ class Part:
 
 	# Open the top-level *part_ngc_file* that lists both the tool table and
         # calls each tool operation from a single top level .ngc file:
-	part_ngc_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(mount_program_number))
-	part_ngc_file = open(part_ngc_file_name, "w")
+	part_ngc_file_name = "O{0}.ngc".format(mount_program_number)
+	part_ngc_file = ngc_directory._write_open(part_ngc_file_name, tracing + 1)
 	assert part_ngc_file != None, "Unable to open {0}".format(part_ngc_file_name)
 	if trace_detail >= 2:
 	    print("{0}part_ngc_file_name='{1}' opened".format(indent, part_ngc_file_name))
@@ -6980,7 +7248,6 @@ class Part:
 	# Grab the *code* object and start the code generation:
 	shop = part._shop_get()
 	code = shop._code_get()
-	assert isinstance(code, Code)
 	code._start(part, tool, tool_program_number, spindle_speed, mount_wrl_file,
 	  part._stl_file_name, top_surface_safe_z, xy_rapid_safe_z, tracing=tracing + 1)
 	code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
@@ -7313,7 +7580,7 @@ class Part:
 	raise AttributeError("Part instance has no attribute named '{0}'". \
 	  format(name))
 
-    def _manufacture(self, ezcad, tracing):
+    def _manufacture(self, ezcad, tracing=-1000000):
 	""" *Part*: Visit the *Part* object (i.e. *self*) and all is the children *Part*'s
 	    and perform any manufacturing steps.
 	"""
@@ -7339,16 +7606,17 @@ class Part:
 	code = shop._code_get()
 
 	# Figure out the *mode_name* and do any requested *tracing*::
-	mode = ezcad._mode
-	mode_name = "?mode?"
-	if mode == EZCAD3.VISUALIZATION_MODE:
-	    mode_name = "Visual"
-	elif mode == EZCAD3.STL_MODE:
-	    mode_name = "STL"
-	elif mode == EZCAD3.CNC_MODE:
-	    mode_name = "CNC"
-	if tracing >= 0:
-	    print("{0}mode='{1}'".format(indent, mode_name))
+	#mode = ezcad._mode
+	#mode_name = "?mode?"
+	#if mode == EZCAD3.VISUALIZATION_MODE:
+	#    mode_name = "Visual"
+	#elif mode == EZCAD3.STL_MODE:
+	#    mode_name = "STL"
+	#elif mode == EZCAD3.CNC_MODE:
+	#    mode_name = "CNC"
+	#if tracing >= 0:
+	#    print("{0}mode='{1}'".format(indent, mode_name))
+
 
 	# First manufacture any child *Part*'s:
 	for attribute_name in dir(part):
@@ -7361,71 +7629,78 @@ class Part:
 
 	# Now run construct this *part*
 	if tracing >= 0:
-	    print("{0}==>Part.construct('{1}')".format(indent, part_name))
-	part.construct()
+	    print("{0}==>Part.construct('{1}') ****************".format(indent, part_name))
+	ezcad._stl_mode = True
+	ezcad._cnc_mode = True
 	if tracing >= 0:
-	    print("{0}<==Part.construct('{1}')".format(indent, part_name))
+	    part._tracing = tracing + 1
+	    part.construct()
+	    part._tracing = tracing
+	else:
+	    part.construct()
+	ezcad._stl_mode = False
+	ezcad._cnc_mode = False
+	if tracing >= 0:
+	    print("{0}<==Part.construct('{1}') ****************".format(indent, part_name))
 
-	# Do the visualization steps:
-	if mode == EZCAD3.VISUALIZATION_MODE:
-	    ezcad = part._ezcad_get()
-	    wrl_directory = ezcad._wrl_directory_get()
-	    wrl_file_name = os.path.join(wrl_directory, "{0}.wrl".format(part._name))
-	    wrl_file = open(wrl_file_name, "w")
-	    transform = Transform()
-	    part._wrl_write(wrl_file, transform, 0, wrl_file_name, tracing = tracing + 1)
-	    wrl_file.close()
+	# Force the `.scad` and `.stl` files in the `scad` and `stl` directories to be generated:
+	part._stl_manufacture(tracing = tracing + 1)
 
-	# Now generate any CNC files:
-	if part._cnc_suppress:
-	    print("Part '{0}' is suppressing CNC".format(part._name))
-	if mode == EZCAD3.CNC_MODE and not part._cnc_suppress:
-	    # Flush out all of the pending CNC operations:
-	    if tracing >= 0:
-		print("{0}==>Part._manufacture('{1}'):CNC****************************".
-		  format(indent, part._name))
+	# Force the `.wrl` files in the `wrl` directory to be generated:
+	part._wrl_manufacture(tracing = tracing + 1)
 
-	    shop = ezcad._shop
-	    program_base = shop._program_base_get()
-	    assert program_base % 10 == 0
-	    program_number = part._cnc_part_generate(program_base, tracing + 1)
+	# Force the `.ngc` and `.wrl` files for the `ngc` directory to be generated:
+	part._cnc_manufacture(tracing = tracing + 1)
 
-	    part._mount = -1
+	#if part._cnc_suppress:
+	#    print("Part '{0}' is suppressing CNC".format(part._name))
+	#if mode == EZCAD3.CNC_MODE and not part._cnc_suppress:
+	#    # Flush out all of the pending CNC operations:
+	#    if tracing >= 0:
+	#	print("{0}==>Part._manufacture('{1}'):CNC****************************".
+	#	  format(indent, part._name))
 
-	    # We want the program base number to start with a mulitple of 10.
-	    remainder = program_number % 10
-	    if remainder != 0:
-		program_number += 10 - remainder
-	    shop._program_base_set(program_number)
+	#    shop = ezcad._shop
+	#    program_base = shop._program_base_get()
+	#    assert program_base % 10 == 0
+	#    program_number = part._cnc_part_generate(program_base, tracing + 1)
 
-	    # See if we have a .dxf file to write:
-	    if code._dxf_content_avaiable():
-		# We do have a .dxf file to write.  Open *dxf_file*:
-		dxf_directory = ezcad._dxf_directory_get()
-		dxf_file_name = os.path.join(dxf_directory, "{0}.dxf".format(part._name))
-		dxf_file = open(dxf_file_name, "w")
+	#    part._mount = -1
 
-		# Output the .dxf file headers:
-		#dxf_file.write("0\nSECTION\n2\nHEADER\n")
-		#dxf_file.write("9\n$DIMAUNITS\n70\n1\n")
-		#dxf_file.write("9\n$INSUNITS\n70\n1\n")
-		#dxf_file.write("9\n$LUNITS\n70\n0\n")
-		#dxf_file.write("9\n$MEASUREMENT\n70\n0\n")
-		#dxf_file.write("0\nENDSEC\n")
-		dxf_file.write("0\nSECTION\n2\nENTITIES\n")
+	#    # We want the program base number to start with a mulitple of 10.
+	#    remainder = program_number % 10
+	#    if remainder != 0:
+	#	program_number += 10 - remainder
+	#    shop._program_base_set(program_number)
 
-		# Output the body of the *dxf_file*:
-		code._dxf_write(dxf_file)
+	#    # See if we have a .dxf file to write:
+	#    if code._dxf_content_avaiable():
+	#	# We do have a .dxf file to write.  Open *dxf_file*:
+	#	dxf_directory = ezcad._dxf_directory_get()
+	#	dxf_file_name = os.path.join(dxf_directory, "{0}.dxf".format(part._name))
+	#	dxf_file = open(dxf_file_name, "w")
 
-		# Close out *dxf_file*:
-		dxf_file.write("0\nENDSEC\n0\nEOF\n")
-		dxf_file.close()
+	#	# Output the .dxf file headers:
+	#	#dxf_file.write("0\nSECTION\n2\nHEADER\n")
+	#	#dxf_file.write("9\n$DIMAUNITS\n70\n1\n")
+	#	#dxf_file.write("9\n$INSUNITS\n70\n1\n")
+	#	#dxf_file.write("9\n$LUNITS\n70\n0\n")
+	#	#dxf_file.write("9\n$MEASUREMENT\n70\n0\n")
+	#	#dxf_file.write("0\nENDSEC\n")
+	#	dxf_file.write("0\nSECTION\n2\nENTITIES\n")
 
-	    if tracing >= 0:
-		print("{0}<==Part._manufacture('{1}'):CNC".format(indent, part._name))
+	#	# Output the body of the *dxf_file*:
+	#	code._dxf_write(dxf_file)
+
+	#	# Close out *dxf_file*:
+	#	dxf_file.write("0\nENDSEC\n0\nEOF\n")
+	#	dxf_file.close()
+
+	#    if tracing >= 0:
+	#	print("{0}<==Part._manufacture('{1}'):CNC".format(indent, part._name))
 
 	# Now generate any .stl files:
-	if ezcad._mode == EZCAD3.STL_MODE:
+	if False and ezcad._stl_mode:
 	    trace_detail = -1
 	    if tracing >= 0:
 		trace_detail = 3
@@ -7442,191 +7717,192 @@ class Part:
 	    #self._scad_difference_lines = None
 	    #self._scad_union_lines = None
 
-	    scad_difference_lines = self._scad_difference_lines
-	    scad_union_lines = self._scad_union_lines
-	    if trace_detail >= 3:
-		print("{0}len(scad_difference_lines)={1} len(scad_union_lines={2}".
-		  format(indent, len(scad_difference_lines), len(scad_union_lines)))
+	    #scad_difference_lines = self._scad_difference_lines
+	    #scad_union_lines = self._scad_union_lines
+	    #if trace_detail >= 3:
+	    #	print("{0}len(scad_difference_lines)={1} len(scad_union_lines)={2}".
+	    #	  format(indent, len(scad_difference_lines), len(scad_union_lines)))
 
-	    sub_parts = []
-	    sub_part_names = []
-	    # Find all the *sub_parts* from *self*:
-	    for attribute_name in dir(self):
-	    	if not attribute_name.startswith("_") and \
-	    	  attribute_name.endswith("_"):
-	    	    sub_part = getattr(self, attribute_name)
-	    	    assert isinstance(sub_part, Part)
-		    sub_parts.append(sub_part)
-		    sub_part_names.append(sub_part._name)
+	    #sub_parts = []
+	    #sub_part_names = []
+	    ## Find all the *sub_parts* from *self*:
+	    #for attribute_name in dir(self):
+	    #	if not attribute_name.startswith("_") and \
+	    #	  attribute_name.endswith("_"):
+	    #	    sub_part = getattr(self, attribute_name)
+	    #	    assert isinstance(sub_part, Part)
+	    #	    sub_parts.append(sub_part)
+	    #	    sub_part_names.append(sub_part._name)
 
-	    # Remove duplicates from *sub_parts* and *sub_part_names* and sort:
-	    sub_parts = list(set(sub_parts))
-	    sub_parts.sort(key = lambda sub_part: sub_part._name)
-	    sub_part_names = list(set(sub_part_names))
-	    sub_part_names.sort()
+	    ## Remove duplicates from *sub_parts* and *sub_part_names* and sort:
+	    #sub_parts = list(set(sub_parts))
+	    #sub_parts.sort(key = lambda sub_part: sub_part._name)
+	    #sub_part_names = list(set(sub_part_names))
+	    #sub_part_names.sort()
 
-	    # The *signature* for the Part (i.e. *self*) is the concatenation
-	    # of *scad_union_lines* and *scad_difference_lines*:
-	    signature = "\n".join(
-	      scad_union_lines + scad_difference_lines + sub_part_names)
-            signature_hash = hashlib.sha1(signature).hexdigest()
-	    self._signature_hash = signature_hash
-	    if trace_detail >= 3:
-		print("{0}signature_hash={1}".format(indent, signature_hash))
+	    ## The *signature* for the Part (i.e. *self*) is the concatenation
+	    ## of *scad_union_lines* and *scad_difference_lines*:
+	    #signature = "\n".join(
+	    #  scad_union_lines + scad_difference_lines + sub_part_names)
+            #signature_hash = hashlib.sha1(signature).hexdigest()
+	    #self._signature_hash = signature_hash
+	    #if trace_detail >= 3:
+	    #	print("{0}signature_hash={1}".format(indent, signature_hash))
 
-            # We want to create a *name* the consists of *base_name* followed
-	    # by a digit.  We want a unique *name* for each *signature*.
+	    ## We want to create a *name* the consists of *base_name* followed
+	    ## by a digit.  We want a unique *name* for each *signature*.
 
-	    # *base_name* is the most specific class name:
-	    base_name = self.__class__.__name__
+	    ## *base_name* is the most specific class name:
+	    #base_name = self.__class__.__name__
 
-	    # *bases_table* keeps track of each different *base_name*.
-	    bases_table = ezcad._bases_table
+	    ## *bases_table* keeps track of each different *base_name*.
+	    #bases_table = ezcad._bases_table
 
-	    # We deterimine there is a signature table entry for *base_name*:
-	    if base_name in bases_table:
-		base_signatures_table = bases_table[base_name]
-	    else:
-		base_signatures_table = {}
-		bases_table[base_name] = base_signatures_table
+	    ## We deterimine there is a signature table entry for *base_name*:
+	    #if base_name in bases_table:
+	    #	base_signatures_table = bases_table[base_name]
+	    #else:
+	    #	base_signatures_table = {}
+	    #	bases_table[base_name] = base_signatures_table
 
-            # Now ensure see whether we have encountered this *signature* before:
-	    if signature in base_signatures_table:
-		# Yes we have, so reuse the previously assigned name:
-		name = base_signatures_table[signature]
-		self._name = name
-		if trace_detail >= 3:
-		    print("{0}reuse name '{1}'".format(indent, name))
-	    else:
-		# No we have not so we create a new one *and* write out
-		# the associated *name*.scad file:
-		name = "{0}{1}".format(base_name, len(base_signatures_table))
-		base_signatures_table[signature] = name
-		self._name = name
-		if trace_detail >= 3:
-		    print("{0}new name '{1}'".format(indent, name))
+	    ## Now ensure see whether we have encountered this *signature* before:
+	    #if signature in base_signatures_table:
+	    #	# Yes we have, so reuse the previously assigned name:
+	    #	name = base_signatures_table[signature]
+	    #	self._name = name
+	    #	if trace_detail >= 3:
+	    #	    print("{0}reuse name '{1}'".format(indent, name))
+	    #else:
+	    #	# No we have not so we create a new one *and* write out
+	    #	# the associated *name*.scad file:
+	    #	name = "{0}{1}".format(base_name, len(base_signatures_table))
+	    #	base_signatures_table[signature] = name
+	    #	self._name = name
+	    #	if trace_detail >= 3:
+	    #	    print("{0}new name '{1}'".format(indent, name))
 
-		# Now we see whether we need to write out the file and
-		# run it through openscad:
-		stl_directory = ezcad._stl_directory_get()
-		stl_file_name = os.path.join(stl_directory,
-		  "{0}_{1}.stl".format(name, signature_hash))
-		part._stl_file_name = stl_file_name
-		if os.path.isfile(stl_file_name):
-		    # Since the .stl file already exists, we must have already
-		    # written out the .scad file.  Thus, there is nothing
-		    # more to do:
-		    if trace_detail >= 3:
-			print("{0}{1} already exists".format(indent, stl_file_name))
-		    pass
-		else:
-		    # We need to write out the .scad file and generate the
-		    # assocatied .stl file:
-		    if trace_detail >= 3:
-			print("{0}{1} does not exist".format(indent, stl_file_name))
+	    #	# Now we see whether we need to write out the file and
+	    #	# run it through openscad:
+	    #	stl_directory = ezcad._stl_directory_get()
+	    #	assert isinstance(stl_directory, Directory)
+	    #	stl_file_name = "{0}_{1}.stl".format(name, signature_hash)
+	    #	part._stl_file_name = stl_file_name
+	    #	if stl_directory._exists(stl_file_name):
+	    #	    # Since the .stl file already exists, we must have already
+	    #	    # written out the .scad file.  Thus, there is nothing
+	    #	    # more to do:
+	    #	    if trace_detail >= 3:
+	    #		print("{0}{1} already exists".format(indent, stl_file_name))
+	    #	    pass
+	    #	else:
+	    #	    # We need to write out the .scad file and generate the
+	    #	    # assocatied .stl file:
+	    #	    if trace_detail >= 3:
+	    #		print("{0}{1} does not exist".format(indent, stl_file_name))
 
-		    # Deal with the part *places*:
-		    lines = []
-		    #place_parts = {}
+	    #	    # Deal with the part *places*:
+	    #	    lines = []
+	    #	    #place_parts = {}
 
-		    # Output the use list:
-		    for sub_part_name in sub_part_names:
-			lines.append("use <{0}.scad>;".format(sub_part_name))
+	    #	    # Output the use list:
+	    #	    for sub_part_name in sub_part_names:
+	    #		lines.append("use <{0}.scad>;".format(sub_part_name))
 
-		    # Write out the module:
-		    lines.append("module {0}() {{".format(name))
+	    #	    # Write out the module:
+	    #	    lines.append("module {0}() {{".format(name))
 
-		    # Get the difference() followed union():
-		    lines.append("  difference() {")
-		    lines.append("    union() {")
+	    #	    # Get the difference() followed union():
+	    #	    lines.append("  difference() {")
+	    #	    lines.append("    union() {")
 
-		    # Output the *scan_union_lines*:
-		    for union_line in scad_union_lines:
-			lines.append(union_line)
+	    #	    # Output the *scan_union_lines*:
+	    #	    for union_line in scad_union_lines:
+	    #		lines.append(union_line)
 
-		    # Close off union():
-		    lines.append("    } // union")
+	    #	    # Close off union():
+	    #	    lines.append("    } // union")
 
-		    # Output *scad_difference_lines*:
-		    for difference_line in scad_difference_lines:
-			lines.append(difference_line)
+	    #	    # Output *scad_difference_lines*:
+	    #	    for difference_line in scad_difference_lines:
+	    #		lines.append(difference_line)
 
-		    # Close off difference():
-		    lines.append("  } // difference")
+	    #	    # Close off difference():
+	    #	    lines.append("  } // difference")
 
-		    # Perform all the placements:
-		    for sub_part in sub_parts:
-			#print("Part._manufacture.place={0}".format(place))
-			self._scad_transform(lines, 0, center = sub_part._center,
-			  axis = sub_part._axis, rotate = sub_part._rotate,
-			  translate = sub_part._translate);
-			lines.append("{0}();".format(sub_part._name))
+	    #	    # Perform all the placements:
+	    #	    for sub_part in sub_parts:
+	    #		#print("Part._manufacture.place={0}".format(place))
+	    #		self._scad_transform(lines, 0, center = sub_part._center,
+	    #		  axis = sub_part._axis, rotate = sub_part._rotate,
+	    #		  translate = sub_part._translate);
+	    #		lines.append("{0}();".format(sub_part._name))
 
-		    # Close off the module:
-		    lines.append("} // module")
-		    lines.append("")
+	    #	    # Close off the module:
+	    #	    lines.append("} // module")
+	    #	    lines.append("")
 
-		    # Call the module we just produced:
-		    lines.append("{0}();".format(name))
-		    lines.append("")
+	    #	    # Call the module we just produced:
+	    #	    lines.append("{0}();".format(name))
+	    #	    lines.append("")
 
-		    # Write out *scad_file*:
-		    scad_directory = ezcad._scad_directory_get()
-		    scad_file_name = os.path.join(scad_directory, "{0}.scad".format(name))
-		    scad_file = open(scad_file_name, "w")
-		    scad_file.write("\n".join(lines))
-		    scad_file.close()
-		    if trace_detail >= 3:
-			print("{0}'{1} written".format(indent, scad_file_name))
+	    #	    # Write *lines* out to *scad_file_name*:
+	    #	    scad_directory = ezcad._scad_directory_get()
+	    #	    scad_file_name = "{0}.scad".format(name)
+	    #	    part._signature = \
+	    #	      scad_directory._lines_write(scad_file_name, lines, tracing + 1)
+	    #	    if trace_detail >= 3:
+	    #		print("{0}'{1}' written out".format(indent, scad_file_name))
 
-		    # Delete any previous *.stl files:
-		    stl_directory = ezcad._stl_directory_get()
-		    glob_pattern = os.path.join(stl_directory, "{0}_*.stl".format(name))
-		    previous_stl_files = glob.glob(glob_pattern)
-		    for previous_stl_file in previous_stl_files:
-			os.remove(previous_stl_file)
-			if trace_detail >= 3:
-			    print("{0}{1} removed".format(indent, previous_stl_file))
+	    #	    # Run the command that converts the `.scad` file into the
+	    #       # associated `.stl` file:
+	    #        if trace_detail >= 0:
+	    #		print("{0}is_part={1}".format(indent, self._is_part))
+	    #	    if self._is_part:
+	    #		stl_file_name = "{0}_{1}.stl".format(name, part._signature)
+	    #		stl_directory = ezcad._stl_directory_get()
+	    #		if not stl_directory._exists(stl_file_name, tracing + 1):
+	    #		    # Run openscad to generate the `.stl` file:
+	    #		    stl_path = stl_directory._path_get()
+	    #		    stl_full_path = os.path.join(stl_path, stl_file_name)
 
-		    # Run the command that convert the .scad file into the
-		    # associated .stl file:
-                    if trace_detail >= 0:
-			print("{0}is_part={1}".format(indent, self._is_part))
-		    if self._is_part:
-			ignore_file = open("/dev/null", "w")
-			scad_directory = ezcad._scad_directory_get()
-			scad_file_name = os.path.join(scad_directory, "{0}.scad".format(name))
-			command = [ "openscad", "-o", stl_file_name,  scad_file_name ]
-			if trace_detail >= 2:
-			    print("{0}command='{1}".format(indent, command))
-			subprocess.call(command, stderr=ignore_file) 
-			ignore_file.close()
+	    #		    scad_path = scad_directory._path_get()
+	    #		    scad_full_path = os.path.join(stl_path, stl_file_name)
+	    #		    if trace_detail >= 2:
+	    #			print("{0}scad_full_path='{1}'".format(indent, stl_full_path))
 
-		    # Write out DXF file:
-		    dxf_scad_lines = self._dxf_scad_lines
-		    if len(dxf_scad_lines) > 0:
-			scad_directory = ezcad._scad_directory_get()
-			dxf_scad_file_name = os.path.join(scad_directory,
-			  "{0}_Dxf.scad".format(name))
-			dxf_scad_file = open(dxf_scad_file_name, "wa")
-			dxf_scad_file.write("use <{0}.scad>;\n".format(name))
-			for dxf_scad_line in dxf_scad_lines:
-			    dxf_scad_file.write(dxf_scad_line)
-			    dxf_scad_file.write("\n")
-			dxf_scad_file.write("{0}();\n".format(name))
-			dxf_scad_file.close()
-			self._dxf_scad_lines = []
+	    #		    ignore_file = open("/dev/null", "w")
+	    #		    command = [ "openscad", "-o", stl_full_path, scad_full_path ]
+	    #		    print("command=", command)
+	    #		    if trace_detail >= 2:
+	    #			print("{0}subprocess command='{1}".format(indent, command))
+	    #		    subprocess.call(command, stderr=ignore_file) 
+	    #		    ignore_file.close()
 
-			dxf_file_name = os.path.join(directory, "{0}.dxf".format(name))
-			dxf_scad_file_name = os.path.join(directory, "{0}_Dxf.scad".format(name))
-			command = [ "openscad" , "-o", dxf_file_name, dxf_scad_file_name ]
-			print("openscad command = '{0}'".format(" ".join(command)))
-			ignore_file = open("/dev/null", "w")
-			subprocess.call(command, stderr=ignore_file)
-			ignore_file.close()
-	    if tracing >= 0:
-		print("{0}<==Part._manufacture('{1}'):STL".format(indent, part._name))
+	    #	    # Write out DXF file:
+	    #	    dxf_scad_lines = self._dxf_scad_lines
+	    #	    if len(dxf_scad_lines) > 0:
+	    #		scad_directory = ezcad._scad_directory_get()
+	    #		dxf_scad_file_name = os.path.join(scad_directory,
+	    #		  "{0}_Dxf.scad".format(name))
+	    #		dxf_scad_file = open(dxf_scad_file_name, "wa")
+	    #		dxf_scad_file.write("use <{0}.scad>;\n".format(name))
+	    #		for dxf_scad_line in dxf_scad_lines:
+	    #		    dxf_scad_file.write(dxf_scad_line)
+	    #		    dxf_scad_file.write("\n")
+	    #		dxf_scad_file.write("{0}();\n".format(name))
+	    #		dxf_scad_file.close()
+	    #		self._dxf_scad_lines = []
+
+	    #		dxf_file_name = os.path.join(directory, "{0}.dxf".format(name))
+	    #		dxf_scad_file_name = os.path.join(directory, "{0}_Dxf.scad".format(name))
+	    #		command = [ "openscad" , "-o", dxf_file_name, dxf_scad_file_name ]
+	    #		print("openscad command = '{0}'".format(" ".join(command)))
+	    #		ignore_file = open("/dev/null", "w")
+	    #		subprocess.call(command, stderr=ignore_file)
+	    #		ignore_file.close()
+	    #	print("{0}<==Part._manufacture('{1}'):STL".format(indent, part._name))
     
+	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Part._manufacture:('{1}', *)".format(indent, self._name))
 
@@ -7878,6 +8154,207 @@ class Part:
 	""" *Part*: Return the priority of the *Part* (i.e. *self*). """
 
 	return self._priority
+
+
+    def _stl_manufacture(self, tracing=-1000000):
+	""" *Part*: Force the generation of the `.stl` file for the *Part* object (i.e. *self*).
+	"""
+
+	# Use *part* instead of *self*:	
+	part = self
+
+	# Verify argument types:
+        assert isinstance(tracing, int)
+
+	# Grab some values from *part*:
+        part_name = part._name
+	part_tracing = part._tracing
+	part_scad_union_lines = part._scad_union_lines
+	part_scad_difference_lines = part._scad_difference_lines
+	ezcad = part._ezcad
+
+	# Perform any requested *tracing*:
+	if tracing < 0 and part_tracing >= 0:
+	    tracing = part_tracing
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part._stl_manufacture('{1}')".format(indent, part_name))
+	    trace_detail = 1
+
+	# Write out the module:
+	lines = []
+	lines.append("module {0}() {{".format(part_name))
+
+	# Get the difference() followed union():
+	lines.append("  difference() {")
+	lines.append("    union() {")
+
+	# Append the *part_scan_union_lines*:
+	lines.extend(part_scad_union_lines)
+
+	# Close off union():
+	lines.append("    } // union")
+
+	# Output *scad_difference_lines*:
+	lines.extend(part_scad_difference_lines)
+
+	# Close off difference():
+	lines.append("  } // difference")
+
+	#    # Perform all the placements:
+	#    for sub_part in sub_parts:
+	#	#print("Part._manufacture.place={0}".format(place))
+	#	self._scad_transform(lines, 0, center = sub_part._center,
+	#	  axis = sub_part._axis, rotate = sub_part._rotate,
+	#	  translate = sub_part._translate);
+	#	lines.append("{0}();".format(sub_part._name))
+
+	# Close off the module:
+	lines.append("} // module")
+	lines.append("")
+
+	# Call the module we just produced:
+	lines.append("{0}();".format(part_name))
+	lines.append("")
+
+	# Write *lines* out to *scad_file_name*:
+	scad_directory = ezcad._scad_directory_get()
+	scad_file_name = "{0}.scad".format(part_name)
+	signature = scad_directory._lines_write(scad_file_name, lines, tracing + 1)
+	part._signature = signature
+	if trace_detail >= 1:
+	    print("{0}'{1}' written out".format(indent, scad_file_name))
+
+	# Figure out if we can reuse any previously generated `.stl` file:
+	stl_file_name = "{0}_{1}.stl".format(part_name, signature)
+	part._stl_file_name = stl_file_name
+	stl_directory = ezcad._stl_directory_get()
+	if stl_directory._exists(stl_file_name, tracing + 1):
+	    # Do any requested *trace_detail*:
+            if trace_detail >= 1:
+                print("{0}stl_file '{1}' exists".format(indent, stl_file_name))
+	else:
+	    # Run openscad to generate the `.stl` file:
+	    stl_path = stl_directory._path_get()
+	    stl_full_path = os.path.join(stl_path, stl_file_name)
+	    if trace_detail >= 1:
+	        print("{0}stl_full_path='{1}'".format(indent, stl_full_path))
+
+	    scad_path = scad_directory._path_get()
+	    scad_full_path = os.path.join(scad_path, scad_file_name)
+	    if trace_detail >= 1:
+	        print("{0}scad_full_path='{1}'".format(indent, scad_full_path))
+
+	    # Execute `openscad` to generate the `.stl` file:
+	    ignore_file = open("/dev/null", "w")
+	    command = [ "openscad", "-o", stl_full_path, scad_full_path ]
+	    if trace_detail >= 1:
+	        print("{0}subprocess command='{1}".format(indent, command))
+	    subprocess.call(command, stderr=ignore_file) 
+	    ignore_file.close()
+
+	#if False:
+	#    # Now manufacture this node:
+	#    #scad_difference_lines = []
+	#    #scad_union_lines = []
+	#    #self._scad_difference_lines = scad_difference_lines
+	#    #self._scad_union_lines = scad_union_lines
+	#    #self.tracing = tracing + 1
+	#    #self.construct()
+	#    #self._scad_difference_lines = None
+	#    #self._scad_union_lines = None
+
+	#    scad_difference_lines = self._scad_difference_lines
+	#    scad_union_lines = self._scad_union_lines
+	#    if trace_detail >= 3:
+	#	print("{0}len(scad_difference_lines)={1} len(scad_union_lines)={2}".
+	#	  format(indent, len(scad_difference_lines), len(scad_union_lines)))
+
+	#    sub_parts = []
+	#    sub_part_names = []
+	#    # Find all the *sub_parts* from *self*:
+	#    for attribute_name in dir(self):
+	#    	if not attribute_name.startswith("_") and \
+	#    	  attribute_name.endswith("_"):
+	#    	    sub_part = getattr(self, attribute_name)
+	#    	    assert isinstance(sub_part, Part)
+	#	    sub_parts.append(sub_part)
+	#	    sub_part_names.append(sub_part._name)
+
+	#    # Remove duplicates from *sub_parts* and *sub_part_names* and sort:
+	#    sub_parts = list(set(sub_parts))
+	#    sub_parts.sort(key = lambda sub_part: sub_part._name)
+	#    sub_part_names = list(set(sub_part_names))
+	#    sub_part_names.sort()
+
+	#    # The *signature* for the Part (i.e. *self*) is the concatenation
+	#    # of *scad_union_lines* and *scad_difference_lines*:
+	#    signature = "\n".join(
+	#      scad_union_lines + scad_difference_lines + sub_part_names)
+        #    signature_hash = hashlib.sha1(signature).hexdigest()
+	#    self._signature_hash = signature_hash
+	#    if trace_detail >= 3:
+	#	print("{0}signature_hash={1}".format(indent, signature_hash))
+
+        #    # We want to create a *name* the consists of *base_name* followed
+	#    # by a digit.  We want a unique *name* for each *signature*.
+
+	#    # *base_name* is the most specific class name:
+	#    base_name = self.__class__.__name__
+
+	#    # *bases_table* keeps track of each different *base_name*.
+	#    bases_table = ezcad._bases_table
+
+	#    # We deterimine there is a signature table entry for *base_name*:
+	#    if base_name in bases_table:
+	#	base_signatures_table = bases_table[base_name]
+	#    else:
+	#	base_signatures_table = {}
+	#	bases_table[base_name] = base_signatures_table
+
+        #    # Now ensure see whether we have encountered this *signature* before:
+	#    if signature in base_signatures_table:
+	#	# Yes we have, so reuse the previously assigned name:
+	#	name = base_signatures_table[signature]
+	#	self._name = name
+	#	if trace_detail >= 3:
+	#	    print("{0}reuse name '{1}'".format(indent, name))
+	#    else:
+	#	# No we have not so we create a new one *and* write out
+	#	# the associated *name*.scad file:
+	#	name = "{0}{1}".format(base_name, len(base_signatures_table))
+	#	base_signatures_table[signature] = name
+	#	self._name = name
+	#	if trace_detail >= 3:
+	#	    print("{0}new name '{1}'".format(indent, name))
+
+	#	    # Write out DXF file:
+	#	    dxf_scad_lines = self._dxf_scad_lines
+	#	    if len(dxf_scad_lines) > 0:
+	#		scad_directory = ezcad._scad_directory_get()
+	#		dxf_scad_file_name = os.path.join(scad_directory,
+	#		  "{0}_Dxf.scad".format(name))
+	#		dxf_scad_file = open(dxf_scad_file_name, "wa")
+	#		dxf_scad_file.write("use <{0}.scad>;\n".format(name))
+	#		for dxf_scad_line in dxf_scad_lines:
+	#		    dxf_scad_file.write(dxf_scad_line)
+	#		    dxf_scad_file.write("\n")
+	#		dxf_scad_file.write("{0}();\n".format(name))
+	#		dxf_scad_file.close()
+	#		self._dxf_scad_lines = []
+
+	#		dxf_file_name = os.path.join(directory, "{0}.dxf".format(name))
+	#		dxf_scad_file_name = os.path.join(directory, "{0}_Dxf.scad".format(name))
+	#		command = [ "openscad" , "-o", dxf_file_name, dxf_scad_file_name ]
+	#		print("openscad command = '{0}'".format(" ".join(command)))
+	#		ignore_file = open("/dev/null", "w")
+	#		subprocess.call(command, stderr=ignore_file)
+	#		ignore_file.close()
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part._stl_manufacture('{1}')".format(indent, part._name))
 
     def _top_surface_transform_get(self):
 	""" *Part*: Return the top surface *Trasform* object from the *Part* object (i.e. *self*).
@@ -8438,8 +8915,7 @@ class Part:
 	#part._top_surface_transform = top_surface_transform
 
 	ezcad = part._ezcad
-	ezcad_mode = ezcad._mode
-	if ezcad_mode == EZCAD3.STL_MODE:
+	if ezcad._stl_mode:
 	    # If there are any welds, we make the block a little bigger on each weld surface:
 	    adjust = ezcad._adjust * 2
 	    weld_extra = adjust.absolute() + L(mm=.01)
@@ -8467,8 +8943,8 @@ class Part:
 	    union_lines.append("{0}cube([{1:m}, {2:m}, {3:m}], center=true); // {4}".
 	      format(pad, x2 - x1, y2 - y1, z2 - z1, comment))
 
-	if ezcad_mode == EZCAD3.CNC_MODE:
-	    # For no do nothing for CNC:
+	if ezcad._cnc_mode:
+	    # Do nothing for CNC:
 	    pass
 
 	# Wrap up tracing:
@@ -8547,7 +9023,7 @@ class Part:
 		    point = reverse_transform * P(x, y, z)
 		    bounding_box.point_expand(point)
 
-	if self._ezcad._mode_get() == EZCAD3.STL_MODE:
+	if self._ezcad._stl_mode:
 	    # Output some openscad stuff:
 	    pad = ' ' * 4
 	    lines = part._scad_union_lines
@@ -8596,9 +9072,8 @@ class Part:
 	      format(indent, part._name, comment, plunge_point, dowel_point))
 
 	# Only generate the operation in CNC generate mode:
-	shop = part._shop
-	assert isinstance(shop, Shop)
-	if shop._cnc_generate_get():
+	ezcad = part._ezcad
+	if ezcad._cnc_mode:
 	    # Find the *tool_dowel_pin* to use :
 	    tool_dowel_pin = part._tools_dowel_pin_search(tracing)
 	    assert isinstance(tool_dowel_pin, Tool_Dowel_Pin), "No dowel pin tool found"
@@ -8745,7 +9220,7 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*
-	#if part._ezcad._mode == EZCAD3.STL_MODE:
+	#if part._ezcad._stl_mode:
 	#    tracing = 0
 	#if tracing == -1000000:
 	#    tracing = part._tracing
@@ -8837,7 +9312,7 @@ class Part:
 	self._is_part = True
 	ezcad = self._ezcad
 	assert isinstance(ezcad, EZCAD3)
-	if ezcad._mode == EZCAD3.STL_MODE:
+	if ezcad._stl_mode:
 	    if trace_detail >= 1:
 		print("{0}==>Part.extrude:STL".format(indent))
 	    # Set up the transform and extrude:
@@ -8958,7 +9433,7 @@ class Part:
 	through_hole = not flat_hole
 	show = flags.find("s") >= 0
 
-	if self._ezcad._mode == EZCAD3.CNC_MODE:
+	if self._ezcad._cnc_mode:
             axis  = start - end
             normalized = axis.normalize()
 	    start = start + normalized
@@ -9026,8 +9501,8 @@ class Part:
 	part._mount_translate_point = mount_translate_point
 	part._cnc_transform = cnc_transform
 
-	shop = part._shop_get()
-	if shop._cnc_generate_get():
+	ezcad = part._ezcad
+	if ezcad._cnc_mode:
 	    # Increment the mount number for *part*:
 	    part._mount += 1
 
@@ -9041,25 +9516,25 @@ class Part:
             print("{0}<=Part.mount('{1}', '{2}', *, {3:i})".
 	      format(indent, part._name, comment, mount_translate_point))
 
-    def process(self, ezcad):
+    def process(self, ezcad, tracing = -1000000):
 	""" *Part*: Perform all the manufacturing processing for a *Part*
 	    object (i.e. *self*) and all its sub-*Part*'s.
 	"""
 
 	# Verify argument types:
 	assert isinstance(ezcad, EZCAD3)
+	assert isinstance(tracing, int)
 
 	# Use *part* instead of *self*:
 	part = self
 
         # For debugging, set *debug* to *True*:
-	debug = False
-	#debug = True
-	if debug:
-	    print("=>Part.process('{0}')".format(part._name))
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.process('{1}')".format(indent, part._name))
 
 	# Do the dimensions propogate phase:
-	ezcad._mode = EZCAD3.DIMENSIONS_MODE
+	ezcad._dimensions_mode = True
 	ezcad._update_count = 0
 	changed = 1
 	while changed != 0:
@@ -9070,30 +9545,41 @@ class Part:
 	    #part._bounding_box_check(0)
 	    print("Part.process: {0} dimension(s) changed\n".format(changed))
 	    ezcad._update_count += 1
+	ezcad._dimensions_mode = False
 
 	print("*************Part:{0} bounding_box={1}".format(self._name, self._bounding_box))
 
+	part._manufacture(ezcad, tracing + 1)
+
 	# Now visit *part* and all of its children in STL mode:
-	ezcad._mode = EZCAD3.STL_MODE
-	part._manufacture(ezcad, -1000000)
-	ezcad._update_count += 1
+	#ezcad._cnc_mode = True
+	#part._manufacture(ezcad, -1000000)
+	#ezcad._update_count += 1
 
 	# Now visit *part* and all of its children in visualization mode:
-	ezcad._mode = EZCAD3.VISUALIZATION_MODE
-	part._manufacture(ezcad, -1000000)
-	ezcad._update_count += 1
+	#ezcad._visualization_mode = True
+	#part._manufacture(ezcad, -1000000)
+	#ezcad._update_count += 1
 
 	# Now visit *part* and all of its children in CNC mode:
-	ezcad._mode = EZCAD3.CNC_MODE
-	shop = ezcad._shop
-	shop._cnc_generate_set(True)
+	#ezcad._cnc_mode = True
+	#shop = ezcad._shop
+	#shop._cnc_generate_set(True)
 	#part._manufacture(ezcad, 0)
-	part._manufacture(ezcad, -1000000)
-	shop._cnc_generate_set(False)
-	ezcad._update_count += 1
+	#part._manufacture(ezcad, -1000000)
+	#shop._cnc_generate_set(False)
+	#ezcad._update_count += 1
 
-	if debug:
-	    print("<=Part.process('{0}')".format(part._name))
+	# Clean up any directories:
+	ezcad._dxf_directory._clean_up(tracing = tracing + 1)
+	ezcad._ngc_directory._clean_up(tracing = tracing + 1)
+	ezcad._scad_directory._clean_up(tracing = tracing + 1)
+	ezcad._stl_directory._clean_up(tracing = tracing + 1)
+	ezcad._wrl_directory._clean_up(tracing = tracing + 1)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part.process('{1}')".format(indent, part._name))
 
     def rectangular_tube_extrude(self, comment, material, color,
       width, height, thickness, start, start_extra, end, end_extra, rotate, tracing = -1000000):
@@ -9367,8 +9853,38 @@ class Part:
         bounding_box.point_expand(P(x1, y1, z1))
         bounding_box.point_expand(P(x2, y2, z2))
 
+    def _wrl_manufacture(self, tracing = -1000000):
+        """ *Part*: Cause the `.wrl` file associated with the *Part* object (i.e. *self*)
+	    to be generated.
+	"""
+
+	# Use *part* instead of *self*:
+        part = self
+
+	# Verify argument types:
+	assert isinstance(tracing, int)
+        
+	# Perform any requested tracing:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part._wrl_manufacture('{1}')".format(indent, part._name))
+
+	ezcad = part._ezcad
+	wrl_directory = ezcad._wrl_directory_get()
+	part_name = part._name
+	wrl_file_name = "{0}.wrl".format(part_name)
+	wrl_file = wrl_directory._write_open(wrl_file_name)
+	part._wrl_write(wrl_file, Transform(), 0, "foo", parts_table={}, tracing=tracing + 1)
+	wrl_file.close()
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part._wrl_manufacture('{1}')".format(indent, part._name))
+
+
     def _wrl_write(self,
-      wrl_file, transform, wrl_indent, file_name, parts_table = {}, tracing = -1000000):
+      wrl_file, transform, wrl_indent, xstl_file_name, parts_table = {}, tracing = -1000000):
 	""" *Part*: Write *self* to *wrl_file*. """
 
 	# Check argument types:
@@ -9376,7 +9892,7 @@ class Part:
 	assert isinstance(transform, Transform)
 	assert isinstance(wrl_indent, int)
 	assert isinstance(parts_table, dict)
-	assert isinstance(file_name, str)
+	assert isinstance(xstl_file_name, str)
 	assert isinstance(tracing, int)
 
 	# Use *part* instead of *self*:
@@ -9385,8 +9901,13 @@ class Part:
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Part.wrl_write('{1}', file_name='{2}')".
-	      format(indent, part._name, file_name))
+	    print("{0}=>Part._wrl_write('{1}', file_name='{2}')".
+	      format(indent, part._name, xstl_file_name))
+
+	# Get both the *stl_direcctory* and the *wrl_directory*:
+	ezcad = part._ezcad_get()
+	#stl_directory = ezcad._stl_directory_get()
+        #wrl_directory = ezcad._wrl_directory_get()
 
 	# Make sure the top level starts with an empty *parts_table*:
 	if wrl_indent == 0:
@@ -9397,31 +9918,25 @@ class Part:
 	    wrl_file.write("NavigationInfo { type \"EXAMINE\" }\n")
 
 	# Do some preparation work:
-	name = self._name
+	name = part._name
 	spaces = ' ' * wrl_indent
 
-
-	#  format(spaces, name, indent, parts_table.keys(), file_name))
-
 	# Figure out whether to generate USE or DEF:
-	if self._visible:
+	if part._visible:
 	    if name in parts_table:
 		wrl_file.write("{0}USE x{1}\n".format(spaces, name))
 	    else:
-		# Remember that we have defined *self* in the .wrl file:
-		parts_table[name] = self
+		# Remember that we have defined *part* in the .wrl file:
+		parts_table[name] = part
     
 		# Decide whether we are a part or an assembly:
-		if self._is_part and self._color.alpha > 0.0:
+		if part._is_part and part._color.alpha > 0.0:
 		    # Read in the .stl file that was generated by OpenSCAD:
-		    name = self._name
-		    ezcad = self._ezcad_get()
+		    name = part._name
+		    ezcad = part._ezcad_get()
 		    stl_directory = ezcad._stl_directory_get()
-		    stl_file_name = os.path.join(
-		      stl_directory, "{0}_{1}.stl".format(name, self._signature_hash))
-		    stl_file = open(stl_file_name, "r")
-		    stl_lines = stl_file.readlines()
-		    stl_file.close()
+		    stl_file_name = "{0}_{1}.stl".format(name, part._signature)
+		    stl_lines = stl_directory._lines_read(stl_file_name, tracing = tracing + 1)
     
 		    # Extract the *triangles* and *vertices* from the read
 		    # in content:
@@ -9492,7 +10007,7 @@ class Part:
 		      "{0}Shape {{\n".format(spaces, name))
     
 		    # Output appearance *color* and material properties::
-		    color = self._color
+		    color = part._color
 		    assert isinstance(color, Color)
 		    wrl_file.write(
 		      "{0} appearance Appearance {{\n".format(spaces))
@@ -9548,16 +10063,16 @@ class Part:
 		else:
 		    # Start a named "Group {...}":
 		    wrl_file.write(
-		      "{0}DEF x{1} Group {{\n".format(spaces, self._name))
+		      "{0}DEF x{1} Group {{\n".format(spaces, part._name))
 		    wrl_file.write(
 		      "{0} children [\n".format(spaces))
     
 		    # Output each *place* in *places*
 		    sub_parts = []
-		    for attribute_name in dir(self):
+		    for attribute_name in dir(part):
 			if not attribute_name.startswith("_") and \
 			  attribute_name.endswith("_"):
-			    sub_part = getattr(self, attribute_name)
+			    sub_part = getattr(part, attribute_name)
 			    assert isinstance(sub_part, Part)
 			    sub_parts.append(sub_part)
 		    sub_parts = list(set(sub_parts))
@@ -9630,8 +10145,8 @@ class Part:
 	    #  format(spaces, name, indent, parts_table.keys(), file_name))
 
 	if tracing >= 0:
-	    print("{0}<=Part.wrl_write('{1}', file_name='{2}')".
-	      format(indent, part._name, file_name))
+	    print("{0}<=Part._wrl_write('{1}', file_name='{2}')".
+	      format(indent, part._name, xstl_file_name))
     
     # ===================================
     def __str__(self):
@@ -9819,8 +10334,8 @@ class Part:
 
 	# Figure out if we are in *cnc_mode* or *stl_mode*:
 	ezcad = part._ezcad
-	cnc_mode = (ezcad._mode == EZCAD3.CNC_MODE)
-	stl_mode = (ezcad._mode == EZCAD3.STL_MODE)
+	cnc_mode = ezcad._cnc_mode
+	stl_mode = ezcad._stl_mode
 
 	if stl_mode:
 	    # Compute the *top_surface_transform*:
@@ -10148,10 +10663,7 @@ class Part:
             print("{0}hole_kind={1}".format(indent, hole_kind))
         
 	ezcad = part._ezcad
-	mode = ezcad._mode_get()
-	if trace_detail >= 1:
-            print("{0}mode == {1}".format(indent, mode))
-    	if mode == EZCAD3.CNC_MODE:
+	if ezcad._cnc_mode or ezcad._stl_mode:
 	    spot_operation = None
 	    if is_through_hole or is_tip_hole:
 		# Figure out how deep we want the countsink "cone hole" to go:
@@ -10227,7 +10739,7 @@ class Part:
 		      part._top_surface_transform_get(), tracing + 1)
 		    part._operation_append(operation_round_pocket)
 
-	if mode == EZCAD3.STL_MODE:
+	if ezcad._stl_mode:
 	    if trace_detail >= 1:
                 print("{0}STL Mode".format(indent))
 
@@ -10306,7 +10818,8 @@ class Part:
 	        start_diameter, end_diameter, start, end, pad, color))
 
 	# Only do the append in STL mode:
-	if self._ezcad._mode == EZCAD3.STL_MODE:
+	ezcad = self._ezcad
+	if ezcad._stl_mode:
 
 	    # Append to *lines*:
 	    lines.append("{0}// {1} cylinder!".format(pad, comment))
@@ -10642,8 +11155,7 @@ class Part:
 	part._material = material
 
 	ezcad = part._ezcad
-	mode = ezcad._mode_get()
-	if mode == EZCAD3.STL_MODE:
+	if ezcad._stl_mode:
 	    part._is_part = True
 	    pad = ' ' * 4
 
@@ -10892,7 +11404,7 @@ class Part:
 	assert isinstance(tracing, int)
 
 	ezcad = self._ezcad
-	if ezcad._mode == EZCAD3.STL_MODE:
+	if ezcad._stl_mode:
             assert isinstance(lines, list)
 	    spaces = " " *indent
 
@@ -11625,7 +12137,7 @@ class Part:
 	    end_extra = L(mm = 1.0)
 	#adjust = ezcad._adjust
 
-	if ezcad._mode == EZCAD3.STL_MODE:
+	if ezcad._stl_mode:
 	    if tracing >= 0:
                 print("{0}STL_MODE".format(indent))
                 #print("bsw_corner={0:m} tne_corner={1:m}".format(bsw_corner, tne_corner))
@@ -11766,7 +12278,7 @@ class Part:
 	    #  "{0}cube([{1:m}, {2:m}, {3:m}], center=true);".
 	    #  format(pad, x2 - x1, y2 - y1, z2 - z1))
 
-	if ezcad._mode == EZCAD3.CNC_MODE:
+	if ezcad._cnc_mode:
 	    if tracing >= 0:
                 print("{0}Part.simple_pocket: CNC_MODE started".format(indent))
 
@@ -12046,8 +12558,10 @@ class Part:
             assert isinstance(skip, tuple) or isinstance(skip, list)
 	    assert(len(skip) == 2) and isinstance(skip[0], int) and isinstance(skip[1], int)
 
-	# Perform an requested *tracing*:
+	# Perform any requested *tracing*:
 	trace_detail = -1
+	if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.tooling_plate_drill('{1}', '{2}', {3}, {4}, {5})".format(
@@ -12568,15 +13082,15 @@ class Part:
  	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print(("{0}<=Part.vice_mount('{1}', '{2}', '{3}', '{4}', '{5}, " +
+	    print(("{0}=>Part.vice_mount('{1}', '{2}', '{3}', '{4}', '{5}, " +
               "{6:i}, {7:i}, {8:i}, {9:i})").format(indent,
 	      part._name, comment, top_surface, jaw_surface, flags,
 	      extra_dx, extra_dy, extra_top_dz, extra_bottom_dz))
 	    trace_detail = 2
 
-	# We only do work if we are in CNC mode.  Actually, no, we still need the transforms...:
-	shop = part._shop_get()
-	if shop._cnc_generate_get() or True:
+	# We need the *top_surface_transform* for both STL and CNC mode
+	ezcad = part._ezcad_get()
+	if True:
 	    # The *x_axis*, *y_axis*, and *z_axis* are needed for rotations:
 	    one = L(mm=1.0)
 	    x_axis = P(one, zero, zero).normalize()
@@ -12802,6 +13316,7 @@ class Part:
 		  "rotate jaw surface to point north in vice", jaw_axis, jaw_rotate_angle)
 
 	    # Grab some values from the *vice*:
+	    shop = part._shop_get()
 	    vice = shop._vice_get()
 	    parallels = vice._parallels_get()
 	    vice_jaw_volume = vice._jaw_volume_get()
@@ -13218,7 +13733,7 @@ class Fastener(Part):
 	assert isinstance(part, Part)
 	assert isinstance(flags, str)
 
-	if part._ezcad._mode == EZCAD3.CNC_MODE:
+	if part._ezcad._cnc_mode:
 	    # Grab some values from *self*:
 	    start = self.start_p
 	    end = self.end_p
@@ -14454,9 +14969,8 @@ class Code:
 	# Open new *code_stream*:
 	ezcad = part._ezcad_get()
 	ngc_directory = ezcad._ngc_directory_get()
-	code_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(tool_program_number))
-	code_stream = open(code_file_name, "w")
-	assert code_stream != None, "Could not open '{0}' for writing".format(code_file_name)
+	tool_file_name = "O{0}.ngc".format(tool_program_number)
+	code_stream = ngc_directory._write_open(tool_file_name)
 	code._code_stream = code_stream
 	if trace_detail >= 2:
             print("{0}code_file_name='{1}' opened".format(indent, code_file_name))
@@ -14488,9 +15002,8 @@ class Code:
 
 	# Open new *vrml_file*:
 	ngc_directory = ezcad._ngc_directory_get()
-	vrml_file_name = os.path.join(ngc_directory, "O{0}.wrl".format(tool_program_number))
-	vrml_file = open(vrml_file_name, "w")
-	assert vrml_file != None, "Could not open '{0}' for writing".format(vrml_file_name)
+	vrml_file_name = "O{0}.wrl".format(tool_program_number)
+	vrml_file = ngc_directory._write_open(vrml_file_name)
 
 	# Start the top-level group in *vrml_file*:
 	vrml_file.write("#VRML V2.0 utf8\n")
@@ -16146,14 +16659,14 @@ class Shop:
 
 	return self._code
 
-    def _cnc_generate_get(self):
+    def xxx_cnc_generate_get(self):
 	""" *Shop*: Return the CNC generate field associated with the *Shop* object
 	    (i.e. *self*.)
 	"""
 
 	return self._cnc_generate
 
-    def _cnc_generate_set(self, cnc_generate):
+    def xxx_cnc_generate_set(self, cnc_generate):
 	""" *Shop*: Set the CNC generate field associated with the *Shop* object (i.e. *self*)
 	    to *cnc_generate*.
 	"""
