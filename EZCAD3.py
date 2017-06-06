@@ -4435,7 +4435,7 @@ class Operation_Contour(Operation):
 	# Perform an requested *tracing*:
 	if tracing >= 0:
 	    indent = " " * tracing
-	    print("{0}=>Operation_Contour._cnc_generate".format(indent))
+	    print("{0}=>Operation_Contour._cnc_generate()".format(indent))
 
 	# Record *comment* into *code*:
 	code._line_comment(comment)
@@ -4449,6 +4449,8 @@ class Operation_Contour(Operation):
 	f = operation._feed_speed_get()
 	tool_diameter = tool._diameter_get()
 	z_feed = f / 2
+	assert isinstance(f, Speed)
+	assert isinstance(s, Hertz)
 
 	# Grap some more values from *operation*:
 	z_start = operation._z_start
@@ -4467,7 +4469,7 @@ class Operation_Contour(Operation):
 	# Now generate the G-Code.  We visit each corner once, and the
 	# first corner twice.  Thus, we need to loop through *size* + 1 times:
 
-	code._z_safe_assert("contour", comment)
+	code._xy_rapid_safe_z_force(f, s)
 
 	plunge_offset = tool_diameter
 	#call d@("plunge_offset temporary set to zero\n")
@@ -4487,10 +4489,10 @@ class Operation_Contour(Operation):
 	    contour = operation._contour
 	    code._contour(contour, plunge_offset, offset, radius, True, z, f, s, tracing + 1)
 
-	code._z_safe_retract(z_feed, s)
+	code._xy_rapid_safe_z_force(f, s)
 
 	if tracing >= 0:
-	    print("{0}<=Operation_Contour._cnc_generate".format(indent))
+	    print("{0}<=Operation_Contour._cnc_generate()".format(indent))
 
     def compare(self, contour2):
 	""" *Operation_Contour* will return -1, 0, 1 depending upon whether
@@ -5306,8 +5308,7 @@ class Operation_Mount(Operation):
 	    cnc_bsw = cnc_transform * bsw - P(extra_dx/2, extra_dy/2, extra_bottom_dz)
 	    cnc_tne = cnc_transform * tne + P(extra_dx/2, extra_dy/2, extra_top_dz)
 	    vrml_lines = VRML_Lines("Extra Material")
-	    color = Color("azure")
-	    vrml_lines._box_outline(color, cnc_bsw, cnc_tne)
+	    vrml_lines._box_outline("azure", cnc_bsw, cnc_tne)
 	    vrml_lines._write(mount_wrl_file, 2)
 
 	# Wrap up any requested *tracing*:
@@ -6406,10 +6407,9 @@ class Parallels:
 	corner4 = P(length, -dy, height)
 	
 	# Draw the two parallels and write them out:
-	brown = Color("brown")
 	vrml_lines = VRML_Lines("Parallels")
-	vrml_lines._box_outline(brown, corner1, corner2)
-	vrml_lines._box_outline(brown, corner3, corner4)
+	vrml_lines._box_outline("brown", corner1, corner2)
+	vrml_lines._box_outline("brown", corner3, corner4)
 	vrml_lines._write(wrl_file, 2, tracing = tracing + 1)
 
 	# Wrap-up any requested *tracing*:
@@ -9726,6 +9726,77 @@ class Part:
 	if tracing >= 0:
 	    print("{0}<=Part.process('{1}')".format(indent, part._name))
 
+    def rectangular_contour(self, comment, radius, tracing=-1000000):
+	""" *Part*: Peform a rectangular exterior contour of the *Part* object (i.e. *self*)
+	    where the corners have a radius of *radius*.  *comment* will show up in generated
+	    G-code.
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(radius, L)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.rectangular_contour('{1}', '{2}', {3:i}".
+	      format(indent, part._name, comment, radius))
+
+	# We only need to do stuff in CNC mode:
+	ezcad = part._ezcad_get()
+	if ezcad._cnc_mode:
+	    # We need to figure out where the four corners are in 3D space.  To do this we first
+	    # figure out where everything landed after *top_surface_transform* is applied.  After
+	    # that we can reverse the points back into 3D space.  So first we compute the bounding
+	    # box coordinaes of the *part* after it has been transformed to CNC machine coordinates
+	    # with the top surface touching the machine origin:
+	    top_surface_transform = part._top_surface_transform
+	    if tracing >= 0:
+		print("{0}top_surface_transform".format(indent), top_surface_transform)
+	    assert isinstance(top_surface_transform, Transform)
+	    bsw = part.bsw
+	    tne = part.tne
+	    assert isinstance(tne, P)
+	    cnc_bsw = top_surface_transform * bsw
+	    cnc_tne = top_surface_transform * tne
+	    x0, x1 = cnc_bsw.x.minimum_maximum(tne.x)
+	    y0, y1 = cnc_bsw.y.minimum_maximum(tne.y)
+	    z0, z1 = cnc_bsw.y.minimum_maximum(tne.y)
+	
+	    # Now we use *reverse_top_surface_transform* to map the points back to 3D space:
+	    reverse_top_surface_transform = top_surface_transform.reverse()
+	    corner1 = reverse_top_surface_transform * P(x0, y0, z1)
+	    corner2 = reverse_top_surface_transform * P(x0, y1, z1)
+	    corner3 = reverse_top_surface_transform * P(x1, y1, z1)
+	    corner4 = reverse_top_surface_transform * P(x1, y0, z1)
+	    start = reverse_top_surface_transform * P(x0, (y0 + y1)/2, z1)
+	    stop = reverse_top_surface_transform * P(x0, (y0 + y1)/2, z0)
+
+	    # Create the *exterior_contour*:
+	    exterior_contour = Contour("Exterior Contour")
+	    exterior_contour.bend_append("Corner 1", corner1, radius)
+	    exterior_contour.bend_append("Corner 2", corner2, radius)
+	    exterior_contour.bend_append("Corner 3", corner3, radius)
+	    exterior_contour.bend_append("Corner 4", corner4, radius)
+	
+	    # *extra* is the material around *part*.  It used to compute how many passes
+	    # are needed to machine out the contour:
+	    extra_dx = part._extra_dx
+	    extra_dy = part._extra_dy
+	    extra = extra_dx.maximum(extra_dy)
+
+	    # Actually perform the contour operation:
+	    part.contour("Exterior Contour", exterior_contour, start, stop, extra/2, "t")
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part.rectangular_contour('{1}', '{2}', {3:i}".
+	      format(indent, part._name, comment, radius))
+
     def rectangular_tube_extrude(self, comment, material, color,
       width, height, thickness, start, start_extra, end, end_extra, rotate, tracing = -1000000):
 	""" *Part*: Create an extrusion long the axis from *start* to *end* out of *material*
@@ -10483,12 +10554,6 @@ class Part:
 	stl_mode = ezcad._stl_mode
 
 	if stl_mode:
-	    # Compute the *top_surface_transform*:
-	    degrees0 = Angle(deg=0.0)
-	    top_surface_transform = \
-	      Transform.top_surface("extrude", start_point, end_point, degrees0, tracing + 1)
-	    part._top_surface_transform_set(top_surface_transform, "contour")
-
 	    # Perform all of the *contour* massaging:
 	    top_surface_transform = part._top_surface_transform_get()
 	    contour._project(top_surface_transform, tracing + 1)
@@ -12943,9 +13008,16 @@ class Part:
 	    xy_rapid_safe_z = tooling_plate._xy_rapid_safe_z_get()
 
 	    # Grap the transforms from *tooling_plate* and stuff them into *part*:
+	    assert isinstance(top_surface_transform, Transform)
+	    assert isinstance(mount_translate_point, P)
+
 	    part._top_surface_transform = top_surface_transform
 	    part._mount_translate_point = mount_translate_point
 	    part._cnc_transform = top_surface_transform.translate("Mount", mount_translate_point)
+
+	    assert isinstance(part._top_surface_transform, Transform)
+	    assert isinstance(part._mount_translate_point, P)
+	    assert isinstance(part._cnc_transform, Transform)
 
 	    # Create *operation_mount* and add it to *part* operations list:
 	    vice = shop._vice_get()
@@ -14239,9 +14311,9 @@ class Code:
 	code._z_safe_s = Hertz()	# Speed to perform z safe operation at
 
 	# Some color index constants:
-	code._vrml_motion_color_rapid = 0
-	code._vrml_motion_color_cutting = 1
-	code._vrml_motion_color_retract = 2
+	code._vrml_motion_color_rapid = "green"
+	code._vrml_motion_color_cutting = "red"
+	code._vrml_motion_color_retract = "cyan"
 
 	# Reset VRML fields here.  Note: routine acessses some of the G-code variable,
         # so it must be called last:
@@ -14261,7 +14333,7 @@ class Code:
 	code._vrml_start_x = code._x_value()
 	code._vrml_start_y = code._y_value()
 	code._vrml_start_z = code._z
-	code._vrml_motion_color = -1
+	code._vrml_motion_color = "yellow"
 
     def _cnc_transform_set(self, cnc_transform):
         """ *Code*: Set the CNC transform for the *Code* object (i.e. *self*) to *cnc_transform*.
@@ -14309,18 +14381,31 @@ class Code:
 	# Mark that we ended the current command:
 	code._command_started = False
 
-	# Figure out what *color_index* to use draw tool path in VRML:
-	color_index = code._vrml_motion_color
+	# Deterimine if the path color changed:
+	vrml_motion_color = code._vrml_motion_color
+	vrml_lines_current_color = code._vrml_lines_current_color
+	vrml_lines_points = code._vrml_lines_points
+	if vrml_lines_current_color != vrml_motion_color:
+	    # The path color has changed, so we need to flush out *vrml_lines_points* using the
+            # current color:
+	    if vrml_lines_current_color == "":
+                vrml_lines_current_color = "yellow"
+	    vrml_lines = code._vrml_lines
+	    vrml_lines._line(vrml_lines_current_color, vrml_lines_points)
 
-	# Add some information to draw the tool path in VRML:
-	if color_index >= 0:
-	    start_index = \
-	      code._vrml_point(code._vrml_start_x, code._vrml_start_y, code._vrml_start_z)
-	    end_index = code._vrml_point(code._x_value(), code._y_value(), code._z)
-	    code._vrml_point_indices.append(start_index)
-	    code._vrml_point_indices.append(end_index)
-	    code._vrml_point_indices.append(-1)
-	    code._vrml_color_indices.append(color_index)
+	    # We need to clear out *vrml_lines_points* and start it with the *last_point* so
+ 	    # there will be no gaps in the path:
+	    if len(vrml_lines_points) > 0:
+		last_point = vrml_lines_points[-1]
+		del vrml_lines_points[:]
+		vrml_lines_points.append(last_point)
+	    else:
+		zero = L()
+		vrml_lines_points.append(P(zero, zero, zero))
+	    code._vrml_lines_current_color = vrml_motion_color
+
+	# Now we can tack the current point onto *vrml_lines_points*:
+	vrml_lines_points.append(P(code._x_value(), code._y_value(), code._z))
 
     def _comment(self, comment):
 	""" *Code*: Output *comment* to the *Code* object (i.e. *self*). Any parentheses
@@ -14855,81 +14940,22 @@ class Code:
 	#vrml_file.write("# Started Code._finish(): vrml\n")
 	#mount_wrl_file.write("# Started Code._finish(): mount\n")
 
-	vrml_file.write(    "  #VRML V2.0 utf8\n")
-	mount_wrl_file.write("  #VRML V2.0 utf8\n")
-	vrml_file.write(    "  Shape {\n")
-	mount_wrl_file.write("  Shape {\n")
-	vrml_file.write(    "   geometry IndexedLineSet {\n")
-	mount_wrl_file.write("   geometry IndexedLineSet {\n")
-	vrml_file.write(    "    colorPerVertex FALSE\n")
-	mount_wrl_file.write("    colorPerVertex FALSE\n")
+	# Flush any remaining points into *vrml_lines*:
+	vrml_lines = code._vrml_lines
+	vrml_lines_points = code._vrml_lines_points
+	if len(vrml_lines_points) > 0:
+	    vrml_lines_current_color = code._vrml_lines_current_color
+	    vrml_lines._line("yellow", vrml_lines_points)
+	    vrml_lines_current_color = ""
+	    del vrml_lines_points[:]
 
-	# Output the colors:
-	vrml_file.write(    "    color Color {\n")
-	mount_wrl_file.write("    color Color {\n")
-	vrml_file.write(    "     color [\n")
-	mount_wrl_file.write("     color [\n")
-	vrml_file.write(    "       0.0 0.0 1.0 # blue\n")
-	mount_wrl_file.write("       0.0 0.0 1.0 # blue\n")
-	vrml_file.write(    "       1.0 0.0 0.0 # red\n")
-	mount_wrl_file.write("       1.0 0.0 0.0 # red\n")
-	vrml_file.write(    "       0.0 1.0 1.0 # cyan\n")
-	mount_wrl_file.write("       0.0 1.0 1.0 # cyan\n")
-	vrml_file.write(    "     ]\n")
-	mount_wrl_file.write("     ]\n")
-	vrml_file.write(    "    }\n")
-	mount_wrl_file.write("    }\n")
+	# Write *vrml_lines* out to both *mount_wrl_file* and *vrml_file*:
+	vrml_lines._write(mount_wrl_file, 2, tracing = tracing + 1)
+	vrml_lines._write(vrml_file, 2, tracing = tracing + 1)
 
-	# Write out points:
-	vrml_file.write(    "    coord Coordinate {\n")
-	mount_wrl_file.write("    coord Coordinate {\n")
-	vrml_file.write(    "     point [\n")
-	mount_wrl_file.write("     point [\n")
-	for point in code._vrml_points:
-	    vrml_file.write(    "      {0} {1} {2}\n".format(point[0], point[1], point[2]))
-	    mount_wrl_file.write("      {0} {1} {2}\n".format(point[0], point[1], point[2]))
-	vrml_file.write(    "     ]\n")
-	mount_wrl_file.write("     ]\n")
-	vrml_file.write(    "    }\n")
-	mount_wrl_file.write("    }\n")
-		
-	# Write out coordinate index:
-	vrml_file.write(    "    coordIndex [\n")
-	mount_wrl_file.write("    coordIndex [\n")
-	vrml_point_indices = code._vrml_point_indices
-	vrml_file.write(    "    ");
-	mount_wrl_file.write("    ");
-	for index in vrml_point_indices:
-	    vrml_file.write(    "   {0}".format(index))
-	    mount_wrl_file.write("   {0}".format(index))
-	    if index < 0:
-		vrml_file.write    ("\n  ")
-		mount_wrl_file.write("\n    ")
-	vrml_file.write(    "  ]\n")
-	mount_wrl_file.write("  ]\n")
-
-	# Write out the color indices:
-	vrml_file.write(    "    colorIndex [\n")
-	mount_wrl_file.write("    colorIndex [\n")
-	for color_index in code._vrml_color_indices:
-	    vrml_file.write(    "      {0}\n".format(color_index))
-	    mount_wrl_file.write("      {0}\n".format(color_index))
-	vrml_file.write(    "    ]\n")
-	mount_wrl_file.write("    ]\n")
-
-	# Close out the shape and geometry clauses:
-	vrml_file.write(    "   }\n")
-	mount_wrl_file.write("   }\n")
-	vrml_file.write(    "  }\n")
-	mount_wrl_file.write("  }\n")
-
-	# Close *vrml_file* but leave *mount_wrl_file* open:
+	# Close *vrml_file*:
 	vrml_file.write(" ]\n")
 	vrml_file.write("}\n")
-
-	#vrml_file.write("# Ended Code._finish(): vrml\n")
-	#mount_wrl_file.write("# Ended  Code._finish(): mount\n")
-
 	vrml_file.close()
 
 	# Reset *code*:
@@ -15077,9 +15103,9 @@ class Code:
 	code._comment(comment)
 	code._command_end()
 
-    def _mode_motion(self, g1_value, motion_color_index):
+    def _mode_motion(self, g1_value, motion_color):
 	""" *Code*: This routine will issue a G*g1_value* motion command to the *Code* object
-	    (i.e. *self*).  *motion_color_index* specifies what color index to draw into the tool
+	    (i.e. *self*).  *motion_color* specifies what color to draw into the tool
 	    path .wrl file.
 	"""
 
@@ -15088,11 +15114,11 @@ class Code:
 
 	# Verify arguement types:
 	assert isinstance(g1_value, int) and g1_value in code._g1_table
-	assert isinstance(motion_color_index, int)
+	assert isinstance(motion_color, str)
 
 	# Add a G1 field to the command:
 	code._unsigned("G1", g1_value)
-	code._vrml_motion_color = motion_color_index
+	code._vrml_motion_color = motion_color
 
     def _reset(self):
 	""" *Code*: Reset the contents of the *Code* object (i.e. *self*) """
@@ -15813,9 +15839,8 @@ class Code:
 	step_angle = arb_angle / float(steps)
 
 	# Lay down A=(*ax*,*ay*,*az*):
-	vrml_point_indices = code._vrml_point_indices
-	a_index = code._vrml_point(ax, ay, az)
-	vrml_point_indices.append(a_index)
+	vrml_lines_points = code._vrml_lines_points
+	vrml_lines_points.append(P(ax, ay, z))
 
 	# Lay down the intermediate points along the arc:
 	for step in range(1, steps - 1):
@@ -15823,20 +15848,12 @@ class Code:
 	    segment_x = rx + radius.cosine(segment_angle)
 	    segment_y = ry +   radius.sine(segment_angle)
 	    segment_z = az
-	    segment_index = code._vrml_point(segment_x, segment_y, segment_z)
-	    vrml_point_indices.append(segment_index)
+	    vrml_lines_points.append(P(segment_x, segment_y, segment_z))
 
 	# Lay down B=(*bx*,*by*,*bz):
-	b_index = code._vrml_point(bx, by, bz)
-	vrml_point_indices.append(b_index)
+	vrml_lines_points.append(P(bx, by, z))
 
-	# Terminate the polyline:
-	vrml_point_indices.append(-1)
-
-	# Set the color for the polyline:
-	code._vrml_color_indices.append(code._vrml_motion_color_cutting)
-
-    def _vrml_point(self, x, y, z):
+    def _vrml_point(self, x, y, z, from_routine):
 	""" *Code*: Return the VRML point index for point (*x*, *y*, *z*) using the
 	    *Code* object (i.e. *self*).
 	"""
@@ -15848,16 +15865,10 @@ class Code:
 	assert isinstance(x, L)
 	assert isinstance(y, L)
 	assert isinstance(z, L)
+	assert isinstance(from_routine, str)
 
+	code._vrml_lines_points.append(P(x, y, z))
 	point = (x.millimeters(), y.millimeters(), z.millimeters())
-	vrml_points_table = code._vrml_points_table
-	if point in vrml_points_table:
-	    index = vrml_points_table[index]
-	else:
-	    vrml_points = code._vrml_points
-	    index = len(vrml_points)
-	    vrml_points.append(point)
-	return index
 
     def _vrml_reset(self):
 	""" *Code*: Reset the VRML sub-system of the *Code* object (i.e. *self*). """
@@ -15865,17 +15876,11 @@ class Code:
 	# Use *code* instead of *self*:
 	code = self
 
-	# Reset the VRML data structures of *code*:
-	code._vrml_color_indices = []
-	code._vrml_file = None
-	code._vrml_motion_color = -1
-	code._vrml_point_indices = []
-	code._vrml_points = []
-	code._vrml_points_table = []
-	code._vrml_start_r0 = code._r0
-	code._vrml_start_x = code._x
-	code._vrml_start_y = code._y
-	code._vrml_start_z = code._z
+	zero = L()
+	code._vrml_lines = VRML_Lines("Tool Path")
+	code._vrml_lines_points = [P(zero, zero, zero)]
+	code._vrml_lines_current_color = ""
+	code._vrml_lines = VRML_Lines("Tool Path")
 
     def _x_value(self):
 	""" *Code*: Return the current value of X offset by the vice X for the *Code* object
@@ -15919,7 +15924,7 @@ class Code:
 	    	code._dxf_arc_append(True, x, y, r)
 
 	    # Now do the RS274 code and get F, R0, S, X, and Y updated:
-	    code._z_safe_retract_actual()
+	    #code._xy_rapid_safe_z_force(f, s)
 	    code._r0 = L(inch=-100.0)	# Forget R
 	    code._command_begin()
 	    code._mode_motion(2, code._vrml_motion_color_cutting)
@@ -15960,7 +15965,7 @@ class Code:
 	    	code._dxf_arc_append(False, x, y, r)
     
 	    # Now do the RS274 code and get F, R0, S, X, and Y updated:
-	    code._z_safe_retract_actual()
+	    #code._xy_rapid_safe_z_force(f, s)
 	    code._r0 = L(inch=-100.00)	# Forget R
 	    code._command_begin()
 	    code._mode_motion(3, code._vrml_motion_color_cutting)
@@ -17404,8 +17409,7 @@ class Tool:
 
 	# Create *vrml* lines object to draw the tool outline:
 	vrml_lines = VRML_Lines("{0}".format(tool._name))
-	color = Color("purple")
-	vrml_lines._line(color, points)
+	vrml_lines._line("purple", points)
 
 	# Write out *vrml_lines* to *wrl_file*:
 	vrml_lines._write(wrl_file, 2)
@@ -18188,15 +18192,15 @@ class Tooling_Plate:
 
 	# Draw the tooling plate lines:
 	vrml_lines = VRML_Lines("Tooling_Plate")
-	color = Color("orange")
 	corner1 = corner
 	corner2 = corner1 + P(dx, -dy, dz)
-	vrml_lines._box_outline(color, corner1, corner2)
+	color_name = "orange"
+	vrml_lines._box_outline(color_name, corner1, corner2)
 	for column in range(columns):
 	    x = left_column_x + hole_pitch * float(column)
 	    top_point    = corner1 + P(x, top_row_y,    dz)
 	    bottom_point = corner1 + P(x, bottom_row_y, dz)
-	    vrml_lines._line(color, [top_point, bottom_point])
+	    vrml_lines._line(color_name, [top_point, bottom_point])
 	    if trace_detail >= 2:
 		print("{0}column[{1}]: top_point={2:i} bottom_point={3:i}".
 		  format(indent, column, top_point, bottom_point))
@@ -18204,10 +18208,10 @@ class Tooling_Plate:
 	    y = top_row_y - hole_pitch * float(row)
 	    left_point =  corner1 + P(left_column_x,  y, dz)
 	    right_point = corner1 + P(right_column_x, y, dz)
-	    vrml_lines._line(color, [left_point, right_point])
+	    vrml_lines._line(color_name, [left_point, right_point])
 
 	# Now draw the *spacers*:
-	color = Color("aqua")
+	color_name = "aqua"
 	for spacer in spacers:
 	    # Extract the row/column values from the *spacer* quadruple:
 	    column1 = spacer[0]
@@ -18222,14 +18226,14 @@ class Tooling_Plate:
 	    y2 = top_row_y - hole_pitch * float(row2)
 	    corner1 = corner + P(x1 - spacer_width/2, y1 - spacer_width/2, dz)
 	    corner2 = corner + P(x2 + spacer_width/2, y2 + spacer_width/2, dz + spacer_dz)
-	    vrml_lines._box_outline(color, corner1, corner2)
+	    vrml_lines._box_outline(color_name, corner1, corner2)
 
 	    # Draw some lines to show where the holes belong:
 	    p1 = corner + P(x1, y1, dz)
 	    p2 = corner + P(x2, y2, dz)
 	    p3 = corner + P(x2, y2, dz + spacer_dz)
 	    p4 = corner +P(x1, y1, dz + spacer_dz)
-	    vrml_lines._line(color, [p1, p2, p3, p4, p1])
+	    vrml_lines._line(color_name, [p1, p2, p3, p4, p1])
 
 	# Write *vrml_lines* to *wrl_file*:
 	vrml_lines._write(wrl_file, 2)
@@ -19270,9 +19274,9 @@ class Vice:
 
 	# Create the coordinate system and write it out:
 	vrml_lines = VRML_Lines("Coordinate_Axes")
-	vrml_lines._line(Color("red"),   [origin, x_tip, x_tip1, x_tip2, x_tip])
-	vrml_lines._line(Color("green"), [origin, y_tip, y_tip1, y_tip2, y_tip])
-	vrml_lines._line(Color("blue"),  [origin, z_tip, z_tip1, z_tip2, z_tip])
+	vrml_lines._line("red",   [origin, x_tip, x_tip1, x_tip2, x_tip])
+	vrml_lines._line("green", [origin, y_tip, y_tip1, y_tip2, y_tip])
+	vrml_lines._line("blue",  [origin, z_tip, z_tip1, z_tip2, z_tip])
 	vrml_lines._write(wrl_file, 2)
 
 	# Wrap up any requested *tracing*:
@@ -19351,7 +19355,7 @@ class VRML_Lines:
 	vrml_lines = self
 
 	# Verify argument types:
-	assert isinstance(color, Color)
+	assert isinstance(color, str)
 	assert isinstance(corner1, P)
 	assert isinstance(corner2, P)
 
@@ -19376,7 +19380,7 @@ class VRML_Lines:
 	vrml_lines._line(color, [p2, p7])
 	vrml_lines._line(color, [p3, p6])
 
-    def _line(self, color, points):
+    def _line(self, color_name, points):
 	""" *VRML_Lines*: Draw a *color* line between *points* in the *VRML_Lines* object
 	    (i.e. *self*).
 	"""
@@ -19385,22 +19389,22 @@ class VRML_Lines:
 	vrml_lines = self
         
 	# Verify argument types:
-	assert isinstance(color, Color)
+	assert isinstance(color_name, str) and color_name != ""
 	assert isinstance(points, list)
 	for point in points:
             assert isinstance(point, P)
 
 	# Figure out the *color_index* for *color*:
-	red, green, blue = color._red_green_blue_get()
-	color_key = (red, green, blue)
 	colors_table = vrml_lines._colors_table
-	if color_key in colors_table:
-	    color_index = colors_table[color_key]
+	if color_name in colors_table:
+	    color_index = colors_table[color_name]
 	else:
+	    color = Color(color_name)
+	    red, green, blue = color._red_green_blue_get()
 	    color_index = len(colors_table)
-	    colors_table[color_key] = color_index
+	    colors_table[color_name] = color_index
 	    color_lines = vrml_lines._color_lines
-	    color_lines.append("    {0} {1} {2}\n".format(red, green, blue))
+	    color_lines.append("    {0} {1} {2} ## {3}\n".format(red, green, blue, color_name))
 	assert 0 <= color_index < len(colors_table)
 
 	# Make sure we have a *coordinate_index*:
