@@ -4360,11 +4360,14 @@ class Operation_Contour(Operation):
 
     def __init__(self,
       part, comment, sub_priority, mill_tool, order, follows, feed_speed, spindle_speed,
-      z_start, z_stop, contour, offset, effective_tool_radius, passes, tracing):
+      z_start, z_stop, contour, offset, effective_tool_radius, passes, tracing = -1000000):
 	""" *Operation_Contour*: Initialize the *Operation_Contour* object (i.e. *self*)
 	    with *part*, *comment*, *sub_priorit*, *mill_tool*, *order*, *follows*,
 	    *z_start*, *z_stop*, 
 	"""
+
+	# Use *operation_contour* instead of *self*:
+	operation_contour = self
 
 	# Verify argument types:
 	assert isinstance(part, Part)
@@ -4383,6 +4386,7 @@ class Operation_Contour(Operation):
 	assert isinstance(passes, int) and passes > 0
 	assert isinstance(tracing, int)
 
+	# Perform any requesteed *tracing*:
 	if tracing >= 1:
 	    indent = ' ' * tracing
 	    print("{0}=>Operaton_Contour.__init__(*, '{1}', '{2}', {3}, '{4}', {5}, {6},".
@@ -4393,16 +4397,16 @@ class Operation_Contour(Operation):
 	      contour._name_get(), offset, effective_tool_radius, passes))
 
 	# Initialize super class:
-	Operation.__init__(self, "Contour", Operation.KIND_CONTOUR,
+	Operation.__init__(operation_contour, "Contour", Operation.KIND_CONTOUR,
 	  part, comment, sub_priority, mill_tool, order, follows, feed_speed, spindle_speed)
 
 	# Load up the rest of *self*:
-	self._z_start = z_start
-	self._z_stop = z_stop
-	self._contour = contour
-	self._offset = offset
-	self._effective_tool_radius = effective_tool_radius
-	self._passes = passes
+	operation_contour._z_start = z_start
+	operation_contour._z_stop = z_stop
+	operation_contour._contour = contour
+	operation_contour._offset = offset
+	operation_contour._effective_tool_radius = effective_tool_radius
+	operation_contour._passes = passes
 
 	if tracing >= 1:
 	    indent = ' ' * tracing
@@ -4418,19 +4422,19 @@ class Operation_Contour(Operation):
 	    (i.e. *self*).
 	"""
 
-	# Use *operaton* instead of *self*:
-	operation = self
+	# Use *operaton_contour* instead of *self*:
+	operation_contour = self
 
 	# Verify argument types:
 	assert isinstance(mount_wrl_file, file)
 	assert isinstance(tracing, int)
 
 	# Grab some values from *contour*:
-	part = operation._part
+	part = operation_contour._part
 	shop = part._shop_get()
 	code = shop._code_get()
-	tool = operation._tool
-	comment = operation._comment
+	tool = operation_contour._tool
+	comment = operation_contour._comment
 
 	# Perform an requested *tracing*:
 	if tracing >= 0:
@@ -4445,20 +4449,20 @@ class Operation_Contour(Operation):
 	code._is_laser_set(is_laser)
 
 	# Grab some values from *tool*:
-	s = operation._spindle_speed_get()
-	f = operation._feed_speed_get()
+	s = operation_contour._spindle_speed_get()
+	f = operation_contour._feed_speed_get()
 	tool_diameter = tool._diameter_get()
 	z_feed = f / 2
 	assert isinstance(f, Speed)
 	assert isinstance(s, Hertz)
 
-	# Grap some more values from *operation*:
-	z_start = operation._z_start
-	z_stop = operation._z_stop
-	passes = operation._passes
-	contour = operation._contour
-	offset = operation._offset
-	radius = operation._effective_tool_radius
+	# Grap some more values from *operation_contour*:
+	z_start = operation_contour._z_start
+	z_stop = operation_contour._z_stop
+	passes = operation_contour._passes
+	contour = operation_contour._contour
+	offset = operation_contour._offset
+	radius = operation_contour._effective_tool_radius
 
 	# Do the setup step for doing the contour:
 	contour._radius_center_and_tangents_compute(tracing + 1)
@@ -4466,8 +4470,8 @@ class Operation_Contour(Operation):
 	z_depth = z_start - z_stop
 	depth_per_pass = z_depth / float(passes)
 
-	# Now generate the G-Code.  We visit each corner once, and the
-	# first corner twice.  Thus, we need to loop through *size* + 1 times:
+	mount_translate_point = part._mount_translate_point
+	assert isinstance(mount_translate_point, P)
 
 	code._xy_rapid_safe_z_force(f, s)
 
@@ -4475,22 +4479,21 @@ class Operation_Contour(Operation):
 	#call d@("plunge_offset temporary set to zero\n")
 	zero = L()
 
-	if tracing >= 0:
-            print("{0}passes={1}".format(indent, passes))
+	# Now generate the G-Code.  We need to perform a number of *passes*:
 	for index in range(passes):
+	    if tracing >= 0:
+		print("{0}Pass {1} of {2}".format(indent, index + 1, passes))
 	    code._line_comment("Pass {0} of {1}".format(index + 1, passes))
 
 	    # Get cutter down to the correct depth:
 	    z = z_start - depth_per_pass * float(index + 1)
 
-	    #call d@(form@("tool=%v% plunge_offset=%i%\n\") %
-	    #  f@(tool.name) / f@(plunge_offset))
-
-	    contour = operation._contour
-	    code._contour(contour, plunge_offset, offset, radius, True, z, f, s, tracing + 1)
-
+	    contour = operation_contour._contour
+	    code._contour(contour, plunge_offset, offset, radius,
+	      True, mount_translate_point, z, f, s, tracing + 1)
 	code._xy_rapid_safe_z_force(f, s)
 
+	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Operation_Contour._cnc_generate()".format(indent))
 
@@ -5280,6 +5283,7 @@ class Operation_Mount(Operation):
 	vice =                  operation_mount._vice
 
 	# Load up *part* transforms:
+	assert isinstance(mount_translate_point, P)
 	part._top_surface_transform_set(top_surface_transform, "Operation_Mount.__init__")
         part._mount_translate_point_set(mount_translate_point)
 	part._cnc_transform_set(cnc_transform)
@@ -9741,10 +9745,14 @@ class Part:
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.rectangular_contour('{1}', '{2}', {3:i}".
 	      format(indent, part._name, comment, radius))
+	    trace_detail = 1
 
 	# We only need to do stuff in CNC mode:
 	ezcad = part._ezcad_get()
@@ -9763,10 +9771,10 @@ class Part:
 	    assert isinstance(tne, P)
 	    cnc_bsw = top_surface_transform * bsw
 	    cnc_tne = top_surface_transform * tne
-	    x0, x1 = cnc_bsw.x.minimum_maximum(tne.x)
-	    y0, y1 = cnc_bsw.y.minimum_maximum(tne.y)
-	    z0, z1 = cnc_bsw.y.minimum_maximum(tne.y)
-	
+	    x0, x1 = cnc_bsw.x.minimum_maximum(cnc_tne.x)
+	    y0, y1 = cnc_bsw.y.minimum_maximum(cnc_tne.y)
+	    z0, z1 = cnc_bsw.z.minimum_maximum(cnc_tne.z)
+
 	    # Now we use *reverse_top_surface_transform* to map the points back to 3D space:
 	    reverse_top_surface_transform = top_surface_transform.reverse()
 	    corner1 = reverse_top_surface_transform * P(x0, y0, z1)
@@ -9774,7 +9782,7 @@ class Part:
 	    corner3 = reverse_top_surface_transform * P(x1, y1, z1)
 	    corner4 = reverse_top_surface_transform * P(x1, y0, z1)
 	    start = reverse_top_surface_transform * P(x0, (y0 + y1)/2, z1)
-	    stop = reverse_top_surface_transform * P(x0, (y0 + y1)/2, z0)
+	    stop = reverse_top_surface_transform * P(x0, (y0 + y1)/2, z0 - L(inch=0.020))
 
 	    # Create the *exterior_contour*:
 	    exterior_contour = Contour("Exterior Contour")
@@ -9790,7 +9798,8 @@ class Part:
 	    extra = extra_dx.maximum(extra_dy)
 
 	    # Actually perform the contour operation:
-	    part.contour("Exterior Contour", exterior_contour, start, stop, extra/2, "t")
+	    part.contour("Exterior Contour",
+	      exterior_contour, start, stop, extra/2, "t", tracing=tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -10581,6 +10590,8 @@ class Part:
 	    # Grab the previously computed *top_surface_transform* that reorients the
             # material properly for the CNC machine:
 	    top_surface_transform = part._top_surface_transform_get()
+	    mount_translate_point = part._mount_translate_point
+	    assert isinstance(mount_translate_point, P)
 
 	    # Perform all of the *contour* massaging:
 	    contour._project(top_surface_transform, tracing + 1)
@@ -14443,8 +14454,8 @@ class Code:
 	code._vice_x = vice_x
 	code._vice_y = vice_y
 
-    def _contour(self, contour,
-      plunge_offset, contour_offset, tool_radius, clockwise, z, feed_speed, spindle_speed, tracing):
+    def _contour(self, contour, plunge_offset, contour_offset, tool_radius, clockwise,
+      mount_translate_point, z, feed_speed, spindle_speed, tracing):
 	""" *Code*: Ggenerate the G-code for *contour* using the *Code* object (i.e. *self*).
 	    *plunge_offset* is the offset from contour at which to lower the tool.
 	    *contour_offset* is an additional +/- offset from the contour.  *tool_radius*
@@ -14464,6 +14475,7 @@ class Code:
 	assert isinstance(contour_offset, L) and contour_offset >= zero
 	assert isinstance(tool_radius, L) and tool_radius >= zero
 	assert isinstance(clockwise, bool)
+	assert isinstance(mount_translate_point, P)
 	assert isinstance(z, L)
 	assert isinstance(feed_speed, Speed)
 	assert isinstance(spindle_speed, Hertz)
@@ -14478,6 +14490,10 @@ class Code:
 	    indent = ' ' * tracing
 	    print("{0}=>Code._contour(*, po={1:i} co={2:i} tr={3:i} cl={4} z={5:i} *)".format(
 	      indent, plunge_offset, contour_offset, tool_radius, clockwise, z))
+
+	mount_translate_x = mount_translate_point.x
+	mount_translate_y = mount_translate_point.y
+	mount_translate_z = mount_translate_point.z
 
 	# Grab *bends* from *contour*:
 	bends = contour._bends_get()
@@ -14496,8 +14512,9 @@ class Code:
 		west_most_index = index
 		west_most_bend = bend
 		west_most_x = bend_point_x
+	west_most_x += mount_translate_x
 	if trace_detail >= 1:
-	    print("{0}".format(indent, ))
+	    print("{0}".format(indent, west_most_x))
 
 	# Make sure that *west_most_bend* is not an inside bend (i.e. it should be impossible):
 	assert not west_most_bend._is_inside_get(), \
@@ -14514,6 +14531,8 @@ class Code:
 	else:
 	    start_tangent = west_most_bend._outgoing_tangent_compute(-start_offset)
 	    plunge_tangent = west_most_bend._outgoing_tangent_compute(-plunge_arc_offset)
+	start_tangent += mount_translate_point
+	plunge_tangent += mount_translate_point
 	if trace_detail >= 1:
 	    print("{0}plunge_x={1:i}, plunge_y={2:i}".
 	      format(indent, plunge_tangent.x, plunge_tangent.y))
@@ -14524,7 +14543,7 @@ class Code:
 	code._xy_rapid(plunge_tangent.x, plunge_tangent.y)
 
 	# Now we get to down to the correct Z level:
-	code._z_feed(feed_speed/2, spindle_speed, z, "Contour")
+	code._z_feed(feed_speed/2, spindle_speed, z + mount_translate_z, "Contour")
 
 	# Now feed to the start point using a circular motion so that there is no divit
 	# at the plunge point:
@@ -14533,7 +14552,7 @@ class Code:
 	      tool_radius * 1.001, start_tangent.x, start_tangent.y)
 	else:
 	    code._xy_cw_feed(feed_speed, spindle_speed,
-	      tool_radius * 1.001, start_tangent.x, start_tangent.y)
+ 	      tool_radius * 1.001, start_tangent.x, start_tangent.y)
 
 	# We iterate across all of the corners.  We need to visit
 	# the first corner one last time at the end; hence we
@@ -14566,8 +14585,8 @@ class Code:
 		    arc_radius = bend_radius - total_offset
 
 		    # For inside bends, we need to negate the *arc_radius*:
-		    arc_start = bend._incoming_tangent_compute(-arc_radius)
-		    arc_end = bend._outgoing_tangent_compute(-arc_radius)
+		    arc_start = bend._incoming_tangent_compute(-arc_radius) + mount_translate_point
+		    arc_end = bend._outgoing_tangent_compute(-arc_radius) + mount_translate_point
 		    code._xy_feed(feed_speed, spindle_speed, arc_start.x, arc_start.y)
 		    code._xy_ccw_feed(feed_speed, spindle_speed, arc_radius, arc_end.x, arc_end.y)
 		else:
@@ -14575,8 +14594,8 @@ class Code:
 		    arc_radius = bend_radius + total_offset
 
 		    # For outside bends, no further adjustments are needed:
-		    arc_start = bend._incoming_tangent_compute(arc_radius)
-		    arc_end = bend._outgoing_tangent_compute(arc_radius)
+		    arc_start = bend._incoming_tangent_compute(arc_radius) + mount_translate_point
+		    arc_end = bend._outgoing_tangent_compute(arc_radius) + mount_translate_point
 		    code._xy_feed(feed_speed, spindle_speed, arc_start.x, arc_start.y)
 		    code._xy_cw_feed(feed_speed, spindle_speed, arc_radius, arc_end.x, arc_end.y)
 
