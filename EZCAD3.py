@@ -1,4 +1,4 @@
-###################################################################################################
+####################################################################################################
 #<-----------------------------------------100 characters----------------------------------------->#
 #
 # EZCAD Coding Standards/Style
@@ -12,7 +12,7 @@
 #   are marked in *italics* inside all comments.
 # * All variable names are in lower case with adverbs, nouns, and verbs, separated by underscore
 #   `_` characters.  Fully spelled out words are **strongly** encouraged.  Dropping vowels and
-#   and syllables is not done.
+#   and syllables is simply not done.
 # * All class names are like variable names, but first letter of each word is capitalized.
 #   CamelCase class names are not used.  The only exception is classes that come from imported
 #   Python libraries.  The *L* (i.e. length) and *P* classes (i.e. point) classes are an
@@ -20,18 +20,18 @@
 # * No lines longer than 100 characters are allowed.  When the code gets too long, is manually
 #   formatted to fit within 100 characters.  No exceptions!
 # * Indentation levels are 4 spaces.  Continuation lines are typically typically indented to
-#   some multipe of 4 with two more spaces.
+#   some multiple of 4 with two more spaces.
 # * Strings of multiple characters are enclosed in double quotes (`"`) and single characters are
 #   enclosed in single quotes (`'`).
 # * Classes are listed alpabetically in the code.  The *Angle*, *P* and *L* classes are pulled
-#   forward because they sometimes are needed for default argument types in other routines.
+#   forward because they sometimes are needed for default argument values in other routines.
 # * Within a class, routine definitions are listed alphabetically.  A preceeding underscore `_`
 #   is ignored for alphabetical sorting.  An underscore in the middle of the routine definition
 #   is treated as a space.
 # * Each routine definition is followed by a description of what the routine does in standard
 #   Python triple quotes `""" .... """`.  If the routine definition is defined in a class,
 #   the class name is listed first in the triple quotes (e.g. `""" *Class_Name*: ..."""`.)
-#   This helps the user disambiguoate overloaded routine definitions in Python.
+#   This helps the user disambiguate overloaded routine definitions in Python.
 # * For longer routines, the *self* variable gets assigined a more descriptive variable name:
 #         # Used *class_name* instead of *self*:
 #         class_name = self
@@ -60,8 +60,9 @@
 # * Code within a routine is written in "paragraph style", where there is an
 #   English comment that preceeds each chunk of statements.  It should be possible to
 #   read the comments before reading the code to figure out generally what is going on.
-# * No python global variables are used.
+# * No python global variables are used.  Period.
 # * Doxygen was tried for while, but was found to be a lot of typing for not much value.
+#   Doxygen is no longer used.
 # * Class routine defintions that start with an `_` are "private/protected" and only meant
 #   to be used interally by routines in EZCAD.  These routines can be renamed/removed
 #   without breaking user code.
@@ -73,15 +74,12 @@
 ####################################################################################################
 
 # Imported libraries:
-#import glob				# Used to search directories for stale files
 import hashlib				# Used to create unique hash for `.scad` files
 import math				# Primarily used for trigonmic functions
 import numpy				# Used for 4x4 afine matrix transforms
 import os				# Used for operating system functions
-#import os.path				# Used for OS independent file name manipulation
-import re				# FIXME: Is this used any more?!!!
+#import re				# FIXME: Is this used any more?!!!
 import subprocess			# Used to run `openscad` program.
-#import xml.etree.ElementTree as ET	# FIXME: Is this used any more?!!!
 
 # Some stand-alone routine definitions:
 
@@ -2747,6 +2745,13 @@ class Color:
 	      self.red, self.green, self.blue, self.alpha)
 	return result
 
+    def _red_green_blue_get(self):
+        """ *Color*: Return the red, green, and blue components of the *Color* object
+	    (i.e. *self*).
+	"""
+
+	return self.red, self.green, self.blue
+
 # Are these classes are unused???
 
 class Indexed_Point:
@@ -4408,7 +4413,7 @@ class Operation_Contour(Operation):
 	      format(indent, feed_speed, spindle_speed, z_start, z_stop,
 	      contour._name_get(), offset, effective_tool_radius, passes))
 
-    def _cnc_generate(self, tracing=-1000000):
+    def _cnc_generate(self, mount_wrl_file, tracing=-1000000):
 	""" *Operation_Contour*: Generate the CNC code for the *Operation_Contour* object
 	    (i.e. *self*).
 	"""
@@ -4417,6 +4422,7 @@ class Operation_Contour(Operation):
 	operation = self
 
 	# Verify argument types:
+	assert isinstance(mount_wrl_file, file)
 	assert isinstance(tracing, int)
 
 	# Grab some values from *contour*:
@@ -4586,7 +4592,7 @@ class Operation_Dowel_Pin(Operation):
 	      pad, part_name, comment, sub_priority, tool._name_get(), follows_name,
 	      feed_speed, spindle_speed, diameter, dowel_point, plunge_point))
 
-    def _cnc_generate(self, tracing):
+    def _cnc_generate(self, mount_wrl_file, tracing=-1000000):
 	""" *Operation_Dowel_Pin*: Generate the CNC G-code for a an
 	    *Operation_Dowel_Pin* object (i.e. *self*.)
 	"""
@@ -4595,6 +4601,7 @@ class Operation_Dowel_Pin(Operation):
 	operation_dowel_pin = self
 
 	# Verify argument types:
+	assert isinstance(mount_wrl_file, file)
 	assert isinstance(tracing, int)
 
 	# Perform any *tracing*:
@@ -4613,6 +4620,8 @@ class Operation_Dowel_Pin(Operation):
 	diameter = operation_dowel_pin._diameter
 	cnc_dowel_point = operation_dowel_pin._dowel_point
 	cnc_plunge_point = operation_dowel_pin._plunge_point
+	tool = operation_dowel_pin._tool
+	tip_depth = tool._tip_depth_get()
 	#cnc_top_surface_z = operation_dowel_pin._top_surface_z
 	#cnc_xy_rapid_safe_z = operation_dowel_pin._xy_rapid_safe_z
 
@@ -4665,6 +4674,9 @@ class Operation_Dowel_Pin(Operation):
 	# back up to Z safe:
 	code._xy_feed(ipm10, rpm0, cnc_plunge_point.x, cnc_plunge_point.y)
 	code._xy_rapid_safe_z_force(ipm10, rpm0)
+
+	# Visualize the tool placement:
+	tool._wrl_write(mount_wrl_file, 2, cnc_dowel_point, tip_depth, tracing + 1)
 
 	# Wrap-up any *tracing*:
 	if tracing >= 0:
@@ -4835,15 +4847,16 @@ class Operation_Drill(Operation):
 	self._stop = stop
 	self._is_countersink = is_countersink
 
-    def _cnc_generate(self, tracing):
-	""" *Operation_Drill*: Generate the CNC G-code for an
-	    *Operation_Drill* object (i.e. *self*).
+    def _cnc_generate(self, mount_wrl_file, tracing=-1000000):
+	""" *Operation_Drill*: Generate the CNC G-code for an *Operation_Drill* object
+	    (i.e. *self*).
 	"""
 
 	# Use *drill* instead of *self*:
 	operation_drill = self
 
 	# Verify argument types:
+	assert isinstance(mount_wrl_file, file)
 	assert isinstance(tracing, int)
 
 	# Grab some values from *operation_drill*:
@@ -5166,10 +5179,25 @@ class Operation_Mount(Operation):
     """
 
     def __init__(self, part, comment,
-      top_surface_transform, mount_translate_point, top_surface_safe_z, xy_rapid_safe_z):
-	""" *Operation_Mount*: Initialize the *Operation_Mount* object to contain
-	    *part*, *comment*, *top_surface_transform*, *vice_translate_point*,
-	    *top_surface_z*, *xy_rapid_safe_z*.
+      top_surface_transform, mount_translate_point, top_surface_safe_z, xy_rapid_safe_z,
+      vice, jaws_spread, parallels_height, tooling_plate, spacers):
+      
+	""" *Operation_Mount*: Initialize the *Operation_Mount* object (i.e. *self*) to describe
+	    how *part* is mounted for CNC operations.  *comment* shows up in generated G-code.
+	    *top_surface_transform* specifies how to reorient *part* so that top surface is
+	    located at the machine origin with its "north" surface facing the back of the CNC
+	    machine (i.e. towards the back vice jaw.)  *top_surface_safe_z* specifies the Z
+	    altitude above with rapid moves (i.e. GO) in the Z axis are allowed.  *xy_rapids_save_z*
+	    specifies the Z altitude above with rapid moves in the X an Y axis ere allowed.
+	    *vice* specifies which vice is being used; `None` is used if there is no vice.
+	    *jaws_spread* specifics the distance in Y between the two vice jaws (negative for
+	    no vice.)  If a vice is being used, parallels height specifies what height should
+	    be selected from the vice parallels (negative for none.)  *tooling_plate* specifies
+	    whether or not a tooling plate should be mounted on top of the parallels.  Use `None`
+	    if no tooling plate is needed.  *spacers* is a list of tooling plate hole coordinate
+	    quadruples, which specify where tooling plate spacers are placed
+	    (e.g. [(x1,y1,x2,y2),...,(xN,yN,xN+1,yN+1)] .)  The list can be empty if there is
+	    no tooling plate.
 	"""
 
 	# Use *operation_mount* instead of *self*:
@@ -5182,6 +5210,15 @@ class Operation_Mount(Operation):
 	assert isinstance(mount_translate_point, P)
 	assert isinstance(top_surface_safe_z, L)
 	assert isinstance(xy_rapid_safe_z, L)
+	assert isinstance(vice, Vice) or vice == None
+	assert isinstance(jaws_spread, L)
+	assert isinstance(parallels_height, L)
+	assert isinstance(tooling_plate, Tooling_Plate) or tooling_plate == None
+	assert isinstance(spacers, list)
+	for spacer in spacers:
+	    assert isinstance(spacer, tuple) and len(spacer) == 4
+	    for row_column in spacer:
+		assert isinstance(row_column, int) and row_column >= 0
 
 	# Initialize the *Operation* super class:
 	sub_priority = 0
@@ -5193,17 +5230,25 @@ class Operation_Mount(Operation):
 	Operation.__init__(self, "Mount", Tool.KIND_MOUNT,
 	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
 
+	#part._top_surface_transform_set(top_surface_transform, "Operation_Mount.__init__")
+	#part._mount_translate_point_set(mount_translate_point)
+	#part._cnc_transform_set(cnc_transform)
+
 	# Compute *cnc_transform*:
         cnc_transform = top_surface_transform.translate("mount_translate", mount_translate_point)
 
 	# Load up *operation_mount*:
 	operation_mount._cnc_transform = cnc_transform
+	operation_mount._jaws_spread = jaws_spread
 	operation_mount._mount_translate_point = mount_translate_point
+	operation_mount._parallels_height = parallels_height
+	operation_mount._tooling_plate = tooling_plate
 	operation_mount._top_surface_transform = top_surface_transform
 	operation_mount._top_surface_safe_z = top_surface_safe_z
+	operation_mount._vice = vice
 	operation_mount._xy_rapid_safe_z = xy_rapid_safe_z
 
-    def _cnc_generate(self, tracing=-1000000):
+    def _cnc_generate(self, mount_wrl_file, tracing=-1000000):
         """ *Operation_Mount*: Generate the CNC operations for the *Operation_Mount* object
 	    (i.e. *self*).
 	"""
@@ -5212,6 +5257,7 @@ class Operation_Mount(Operation):
 	operation_mount = self
 
 	# Verify argument types:
+	assert isinstance(mount_wrl_file, file)
         assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -5223,14 +5269,46 @@ class Operation_Mount(Operation):
 	    print("{0}=>Operation_Mount._cnc_generate()".format(indent))
 
 	# Grab some values out *operation_mount*:
-        top_surface_transform = operation_mount._top_surface_transform
-        mount_translate_point = operation_mount._mount_translate_point
 	cnc_transform =         operation_mount._cnc_transform
+        mount_translate_point = operation_mount._mount_translate_point
+	jaws_spread =           operation_mount._jaws_spread
+	parallels_height =      operation_mount._parallels_height
+	tooling_plate =         operation_mount._tooling_plate
+        top_surface_transform = operation_mount._top_surface_transform
+	vice =                  operation_mount._vice
 
 	# Load up *part* transforms:
 	part._top_surface_transform_set(top_surface_transform, "Operation_Mount.__init__")
         part._mount_translate_point_set(mount_translate_point)
 	part._cnc_transform_set(cnc_transform)
+	
+	# Show the *parallels* in *mount_wrl_file*:
+	parallels = vice._parallels_get()
+	parallels._wrl_write(mount_wrl_file, 2, "", parallels_height, jaws_spread, tracing + 1)
+
+	# If there is a tooling plate, show that as well:
+	if tooling_plate != None:
+	    zero = L()
+	    corner = P(zero, zero, parallels_height)
+	    tooling_plate._wrl_write(mount_wrl_file, 2, corner, tracing + 1)
+
+	# See whether or not to visualize the extra material around *part*:
+	extra_dx = part._extra_dx
+	extra_dy = part._extra_dy
+	extra_bottom_dz = part._extra_bottom_dz
+	extra_top_dz = part._extra_top_dz
+	zero = L()
+	if extra_dx > zero or extra_dy > zero or extra_bottom_dx > zero or extra_top_dz > zero:
+	    # Yes let's visualize the extra material:
+	    cnc_transform = part._cnc_transform
+	    bsw = part.bsw
+	    tne = part.tne
+	    cnc_bsw = cnc_transform * bsw - P(extra_dx/2, extra_dy/2, extra_bottom_dz)
+	    cnc_tne = cnc_transform * tne + P(extra_dx/2, extra_dy/2, extra_top_dz)
+	    vrml_lines = VRML_Lines("Extra Material")
+	    color = Color("azure")
+	    vrml_lines._box_outline(color, cnc_bsw, cnc_tne)
+	    vrml_lines._write(mount_wrl_file, 2)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -5243,6 +5321,13 @@ class Operation_Mount(Operation):
 	"""
 
 	return self._mount_translate_point
+
+    def _parallels_height_get(self):
+        """ *Operation_Mount*: Return the vice parallels heightfrom the *Operation_Mount* object
+	    (i.e. *self*.)
+	"""
+
+	return self._parallels_height
 
     def _xy_rapid_safe_z_get(self):
         """ *Operation_Mount*: Return the Z at which XY rapids are from the *Operation_Mount*
@@ -5329,12 +5414,13 @@ class Operation_Round_Pocket(Operation):
 	      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
 	      top_surface_transform))
 
-    def _cnc_generate(self, tracing):
+    def _cnc_generate(self, mount_wrl_file, tracing=-1000000):
 	""" *Operation_Round_Pocket*: Generate the CNC G-code for an *Operation_Round_Pocket*
 	    object (i.e. *self*).
 	"""
 
 	# Verify argument types:
+	assert isinstance(mount_wrl_file, file)
 	assert isinstance(tracing, int)
 
 	# Use *round_pocket* instead of *self*:
@@ -5561,12 +5647,13 @@ class Operation_Simple_Exterior(Operation):
 	self.corner_radius = corner_radius
 	self.tool_radius = tool_radius
 
-    def _cnc_generate(self, tracing):
+    def _cnc_generate(self, mount_wrl_file, tracing=-1000000):
 	""" *Operation_Simple_Exterior*: Generate the CNC G-code for an
 	    *Operation_Simple_Exterior* object (i.e. self).
 	"""
 
 	# Verify argument types:
+	assert isinstance(mount_wrl_file, file)
 	assert isinstance(tracing, int)
 
 	shop = part._shop
@@ -5730,12 +5817,13 @@ class Operation_Simple_Pocket(Operation):
 
 	return self._corner_radius
 
-    def _cnc_generate(self, tracing = -1000000):
+    def _cnc_generate(self, mount_wrl_file, tracing = -1000000):
 	""" *Operation_Simple_Pocket*: Generate the CNC G-code for a
 	    *Operation_Simple_Pocket* object (i.e. *self*).
 	"""
 
 	# Verify argument types:
+	assert isinstance(mount_wrl_file, file)
 	assert isinstance(tracing, int)
 
 	# Use *pocket* instead of *self*:
@@ -6075,11 +6163,12 @@ class Operation_Vertical_Lathe(Operation):
 	self.z_start = z_start
 	self.z_stop = z_stop
 
-    def _cnc_generate(self, tracing):
+    def _cnc_generate(self, mount_wrl_file, tracing=-1000000):
 	""" *Operation_Vertical_Lathe*:
 	"""
 
 	# Verify argument types:
+	assert isisstance(mount_wrl_file, file)
 	assert isinstance(tracing, int)
 
 	shop = part._shop
@@ -6279,6 +6368,55 @@ class Parallels:
 
 	return self._heights
 
+    def _wrl_write(self, wrl_file, pad, comment, height, dy, tracing=-1000000):
+	""" *Parallels*: Write out a VRML visualization of two *height* high parallels separated
+	    by *dy* to *wrl_file* for the *Parallels* object (i.e. *self*).  The VRML lines
+	    are indented by *pad* spaces and have *comment* embedded at the front of the VRML.
+	"""
+
+	# Use *parallels* instead of *self*:
+	parallels = self
+
+	# Verify argument types:
+	assert isinstance(wrl_file, file)
+	assert isinstance(pad, int)
+	assert isinstance(comment, str)
+	assert isinstance(height, L)
+	assert isinstance(dy, L)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Parallels._wrl_write(*, *, {1}, '{2}', {3:i}, {4:i})".
+	      format(indent, pad, comment, height, dy))
+
+	# Grab some values from *parallels*:
+	heights = parallels._heights
+	length = parallels._length
+	thickness = parallels._thickness
+	
+	# Create the first set of parallels points:
+	zero = L()
+	corner1 = P(zero, zero, zero)
+	corner2 = P(length, -thickness, height)
+
+	# Create the second set of parallels points:
+	corner3 = P(zero, thickness - dy, zero)
+	corner4 = P(length, -dy, height)
+	
+	# Draw the two parallels and write them out:
+	brown = Color("brown")
+	vrml_lines = VRML_Lines("Parallels")
+	vrml_lines._box_outline(brown, corner1, corner2)
+	vrml_lines._box_outline(brown, corner3, corner4)
+	vrml_lines._write(wrl_file, 2, tracing = tracing + 1)
+
+	# Wrap-up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}=>Parallels._wrl_write(*, *, {1}, '{2}', {3:i}, {4:i})".
+	      format(indent, pad, comment, height, dy))
+
 class Part:
     """ A *Part* specifies either an assembly of parts or a single physical part. """
 
@@ -6318,6 +6456,9 @@ class Part:
 	part._dz_original = zero
 	part._dxf_scad_lines = []
 	part._extra_dx = zero			# Extra dx material from *Part.vice_mount()*
+	part._extra_dy = zero			# Extra dy material from *Part.vice_mount()*
+	part._extra_bottom_dz = zero		# Extra lower dz material from *Part.vice_mount()*
+	part._extra_top_dz = zero		# Extra upper dz material from *Part.vice_mount()*
 	part._ezcad = ezcad
 	part._is_part = False	
 	part._laser_preferred = False
@@ -6340,8 +6481,8 @@ class Part:
 	part._scad_union_lines = []
 	part._signature_hash = None
 	part._stl_file_name = None
-	part._xtop_surface_transform_from = "None"
-	part._xtop_surface_transform = None
+	part._top_surface_transform_from = "None"
+	part._top_surface_transform = None
 	#part._top_surface_set = False		# Scheduled to go away
 	part._tooling_plate_translate_point = P() # Vice transform for tooling plate.
 	part._tool_preferred = ""
@@ -6797,7 +6938,9 @@ class Part:
     def _cnc_transform_get(self):
         """ *Part*: Return the CNC transform associated with the *Part* object (i.e. *self*.) """
 
-	return self._cnc_transform
+	cnc_transform = self._cnc_transform
+	assert isinstance(cnc_transform, Transform)
+	return cnc_transform
 
     def _cnc_transform_set(self, cnc_transform):
 	""" *Part*: Set the CNC trnasform for the *Part* object (i.e. *self*) to *cnc_transform*.
@@ -7270,7 +7413,7 @@ class Part:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 
 	    # Perform the CNC generation step for *operation*:
-	    tool_operation._cnc_generate(tracing + 1)
+	    tool_operation._cnc_generate(mount_wrl_file, tracing + 1)
 
 	    # Make darn we end at a safe height:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
@@ -8360,7 +8503,7 @@ class Part:
 	""" *Part*: Return the top surface *Trasform* object from the *Part* object (i.e. *self*).
 	"""
 
-	top_surface_transform = self._xtop_surface_transform
+	top_surface_transform = self._top_surface_transform
 	assert isinstance(top_surface_transform, Transform)
 	return top_surface_transform
 
@@ -8377,8 +8520,8 @@ class Part:
 	assert isinstance(from_routine, str)
 
 	# Set *top_surface_transform* in *part*:
-	part._xtop_surface_transform = top_surface_transform
-	part._xtop_sufrace_transform_from = from_routine
+	part._top_surface_transform = top_surface_transform
+	part._top_sufrace_transform_from = from_routine
 
     def _tools_dowel_pin_search(self, tracing):
 	""" *Part*: Find and return a *Tool_Dowel_Pin* object. """
@@ -9043,7 +9186,7 @@ class Part:
 	      format(indent, self._name, comment, material, color, start_diameter, end_diameter,
 	      start, end, sides, sides_angle, welds, flags))
 
-    def dowel_pin(self, comment, plunge_point, dowel_point, tracing=-1000000):
+    def dowel_pin(self, comment, dowel_point, plunge_point, tracing=-1000000):
 	""" *Part*: Request that a dowel pin be used to align the *Part* object (i.e. *self*).
 	    The dowel pin will come down at *plunge_point* and move to *dowel_point* and
 	    then back.  Only the x and y values of *plunge_point* and *dowel_point* are used.
@@ -9058,8 +9201,8 @@ class Part:
 
 	# Verify argument types
 	assert isinstance(comment, str)
-	assert isinstance(plunge_point, P)
 	assert isinstance(dowel_point, P)
+	assert isinstance(plunge_point, P)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
@@ -9069,12 +9212,12 @@ class Part:
 	    trace_detail = 1
 	    indent = ' ' * tracing
 	    print("{0}=>Part.dowel_pin('{1}', '{2}', {3}, {4})".
-	      format(indent, part._name, comment, plunge_point, dowel_point))
+	      format(indent, part._name, comment, dowel_point, plunge_point))
 
 	# Only generate the operation in CNC generate mode:
 	ezcad = part._ezcad
 	if ezcad._cnc_mode:
-	    # Find the *tool_dowel_pin* to use :
+	    # Find the *tool_dowel_pin* to use :a
 	    tool_dowel_pin = part._tools_dowel_pin_search(tracing)
 	    assert isinstance(tool_dowel_pin, Tool_Dowel_Pin), "No dowel pin tool found"
 
@@ -9110,10 +9253,10 @@ class Part:
 	    radius = diameter / 2
 	    if plunge_point_x < dowel_point_x:
 		# *plunge_point* is to the left of *dowel_point*:
-		dowel_point_x += radius / 2
+		dowel_point_x -= radius
 	    else:
 		# *plunge_point* is to the right of *dowel_point*:
-		dowel_point_x -= radius / 2
+		dowel_point_x += radius
 
 	    # Now create the final *cnc_dowel_point* and *cnc_plunge_point*:
 	    cnc_dowel_point = P(dowel_point_x, dowel_point_y, tip_z)
@@ -9126,13 +9269,13 @@ class Part:
 	    dowel_pin_order = Operation.ORDER_DOWEL_PIN
 	    operation_dowel_pin = Operation_Dowel_Pin(part,
 	      comment, 0, tool_dowel_pin, dowel_pin_order, None, feed_speed, spindle_speed,
-	      diameter, dowel_point, plunge_point, tracing + 1)
+	      diameter, cnc_dowel_point, cnc_plunge_point, tracing + 1)
 	    self._operation_append(operation_dowel_pin)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}=>Part.dowel_pin('{1}', '{2}', {3}, {4})".
-	      format(indent, part._name, comment, plunge_point, dowel_point))
+	      format(indent, part._name, comment, dowel_point, plunge_point))
 
     def dowel_position_set(self, dowel_point):
 	""" *Part*: Set the dowel pin contact point for the *Part* object (i.e. *self*)
@@ -9464,7 +9607,7 @@ class Part:
 	assert isinstance(invisible, bool)
 	self._visible = not invisible
 
-    def mount(self, comment, top_surface_transform, mount_translate_point,
+    def xxx_mount(self, comment, top_surface_transform, mount_translate_point,
       top_surface_safe_z, xy_rapid_safe_z, tracing=-1000000):
 	""" *Part*: Mount the *Part* object (i.e. *self*) so that *top_surface_transform*
 	    will orient the part at the CNC machine origin with the part top surface
@@ -9507,8 +9650,10 @@ class Part:
 	    part._mount += 1
 
 	    # Create *operation_mount* and add it to *part* operations list:
-	    operation_mount = Operation_Mount(part, comment,
-	      top_surface_transform, mount_translate_point, top_surface_safe_z, xy_rapid_safe_z)
+	    vice = shop._vice_get()
+	    operation_mount = Operation_Mount(part, comment, top_surface_transform,
+	      mount_translate_point, top_surface_safe_z, xy_rapid_safe_z,
+	      vice, jaws_spread, tooling_plate)
 	    part._operation_append(operation_mount)
 
 	# Wrap up any requested *tracing*:
@@ -12537,7 +12682,11 @@ class Part:
 	    #	  format(" " *ezcad._xml_indent))
 
     def tooling_plate_drill(self, comment, columns, rows, skips, tracing=-1000000):
-        """ *Part*: Force the drilling of 
+        """ *Part*: Force the drilling of tooling plate mounting holes in the *Part* object
+	    (i.e. *self*).  *comment* will show up in any generated G-code.  *columns* and
+	    *rows* specify a grid of holes to be drilled in the *Part* object.  *skips* is
+	    a list of grid locations in the grid that will *not* be drilled.  Thus, an empty
+	    *skips* list causes all grid locations to be drilled.
 	"""
 
 	# Use *part* instead of *self:
@@ -12548,6 +12697,10 @@ class Part:
 	assert isinstance(columns, tuple) or isinstance(columns, list)
 	assert isinstance(rows, tuple) or isinstance(rows, list)
 	assert isinstance(skips, tuple) or isinstance(skips, list)
+	for skip in skips:
+	    assert isinstance(skip, tuple) and len(skip) == 2
+	    for row_column in skip:
+		assert isinstance(row_column, int) and row_column >= 0
 
 	# Do some more argument verification:
 	for row in rows:
@@ -12568,164 +12721,187 @@ class Part:
 	      indent, part._name, comment, rows, columns, skips))
 	    trace_detail = 1
 
-	# Grab the *tooling_plate* from *shop* and some associated values::
-	shop = part._shop_get()
-	tooling_plate = shop._tooling_plate_get()
-	tooling_plate_dx = tooling_plate._dx_get()
-	tooling_plate_dy = tooling_plate._dy_get()
-	tooling_plate_dz = tooling_plate._dz_get()
-	tooling_plate_rows = tooling_plate._rows_get()
-	tooling_plate_columns = tooling_plate._columns_get()
-	tooling_plate_drill_diameter =  tooling_plate._drill_diameter_get(part._material)
-	tooling_plate_hole_pitch = tooling_plate._hole_pitch_get()
-	tooling_plate_spacer_dz = tooling_plate._spacer_dz_get()
-	tooling_plate_spacer_width = tooling_plate._spacer_width_get()
+	ezcad = part._ezcad_get()
+	if ezcad._cnc_mode:
+	    # Grab the *tooling_plate* from *shop* and some associated values::
+	    shop = part._shop_get()
+	    tooling_plate = shop._tooling_plate_get()
+	    tooling_plate_dx = tooling_plate._dx_get()
+	    tooling_plate_dy = tooling_plate._dy_get()
+	    tooling_plate_dz = tooling_plate._dz_get()
+	    tooling_plate_rows = tooling_plate._rows_get()
+	    tooling_plate_columns = tooling_plate._columns_get()
+	    tooling_plate_drill_diameter =  tooling_plate._drill_diameter_get(part._material)
+	    tooling_plate_hole_pitch = tooling_plate._hole_pitch_get()
+	    tooling_plate_spacer_dz = tooling_plate._spacer_dz_get()
+	    tooling_plate_spacer_width = tooling_plate._spacer_width_get()
 
-	# Grab the *vice* from *shop* and some associated values:
-	vice = shop._vice_get()
-	vice_jaw_volume = vice._jaw_volume_get()
-	vice_jaw_volume_dx = vice_jaw_volume.x
-	vice_jaw_volume_dy = vice_jaw_volume.y
-	vice_jaw_volume_dz = vice_jaw_volume.z
-	parallels = vice._parallels_get()
+	    # Grab the *vice* from *shop* and some associated values:
+	    vice = shop._vice_get()
+	    vice_jaw_volume = vice._jaw_volume_get()
+	    vice_jaw_volume_dx = vice_jaw_volume.x
+	    vice_jaw_volume_dy = vice_jaw_volume.y
+	    vice_jaw_volume_dz = vice_jaw_volume.z
+	    parallels = vice._parallels_get()
 	    
-	# We need to know the how the *part* bounding box lays out after the
-        # *top_surface_transform* has been applied:
-	bsw = part.bsw
-        tne = part.tne
-	top_surface_transform = part._top_surface_transform_get()
-	transformed_bsw = top_surface_transform * bsw
-	transformed_tne = top_surface_transform * tne
-	minimum_x, maximum_x = transformed_bsw.x.minimum_maximum(transformed_tne.x)
-	minimum_y, maximum_y = transformed_bsw.y.minimum_maximum(transformed_tne.y)
-	minimum_z, maximum_z = transformed_bsw.z.minimum_maximum(transformed_tne.z)
-	part_dx = maximum_x - minimum_x
-	part_dy = maximum_y - minimum_y
-	part_dz = maximum_z - minimum_z
-	if trace_detail >= 1:
-	    print("{0}bsw={1:i} tne={2:i} *************************************".
- 	      format(indent, bsw, tne))
-	    print("{0}minimum_x={1:i} maximum_x={2:i}".
-	      format(indent, minimum_x, maximum_x))
-	    print("{0}minimum_y={1:i} maximum_y={2:i}".
-	      format(indent, minimum_y, maximum_y))
-	    print("{0}minimum_z={1:i} maximum_z={2:i}".
-	      format(indent, minimum_z, maximum_z))
-	    print("{0}part_dx={1:i} part_dy={2:i} part_dz={3:i}".
-	      format(indent, part_dx, part_dy, part_dz))
+	    # We need to know the how the *part* bounding box lays out after the
+            # *top_surface_transform* has been applied:
+	    bsw = part.bsw
+	    tne = part.tne
+	    top_surface_transform = part._top_surface_transform
+	    transformed_bsw = top_surface_transform * bsw
+	    transformed_tne = top_surface_transform * tne
+	    minimum_x, maximum_x = transformed_bsw.x.minimum_maximum(transformed_tne.x)
+	    minimum_y, maximum_y = transformed_bsw.y.minimum_maximum(transformed_tne.y)
+	    minimum_z, maximum_z = transformed_bsw.z.minimum_maximum(transformed_tne.z)
+	    part_dx = maximum_x - minimum_x
+	    part_dy = maximum_y - minimum_y
+	    part_dz = maximum_z - minimum_z
+	    if trace_detail >= 1:
+		print("{0}bsw={1:i} tne={2:i}".
+		  format(indent, bsw, tne))
+		print("{0}minimum_x={1:i} maximum_x={2:i}".
+		  format(indent, minimum_x, maximum_x))
+		print("{0}minimum_y={1:i} maximum_y={2:i}".
+		  format(indent, minimum_y, maximum_y))
+		print("{0}minimum_z={1:i} maximum_z={2:i}".
+		  format(indent, minimum_z, maximum_z))
+		print("{0}part_dx={1:i} part_dy={2:i} part_dz={3:i}".
+		  format(indent, part_dx, part_dy, part_dz))
 
-	# Figure out which *parallel_height* to use from *parallels* to use to mount
-	# the *tooling_plate*:
-        parallels_heights = sorted(parallels._heights_get())
-	selected_parallel_height = parallels_heights[0]
-	for parallel_height in parallels_heights:
-	    if parallel_height > selected_parallel_height and \
-	      parallel_height + part_dz <= vice_jaw_volume_dz:
-		selected_parallel_height = parallel_height
+	    # Figure out which *parallel_height* to use from *parallels* to use to mount
+	    # the *tooling_plate*:
+	    parallels_heights = sorted(parallels._heights_get())
+	    selected_parallel_height = parallels_heights[0]
+	    for parallel_height in parallels_heights:
+		if parallel_height > selected_parallel_height and \
+		  parallel_height + part_dz <= vice_jaw_volume_dz:
+		    selected_parallel_height = parallel_height
 
-	# Load up *skips_table* with the (row, column) pairs that are not to be drilled:
-	skips_table = {}
-	for skip in skips:
-	    skip = tuple(skip)
-	    skip_column = skip[0]
-	    skip_row = skip[1]
-	    assert skip_row in rows, "Skip row {0} not in rows {1}".format(skip_row, rows)
-	    assert skip_column in columns, \
-	      "Skip column {0} not in columns {1}".format(skip_column, columns)
-	    skips_table[skip] = skip
+	    # Load up *skips_table* with the (row, column) pairs that are not to be drilled:
+	    skips_table = {}
+	    for skip in skips:
+		skip = tuple(skip)
+		skip_column = skip[0]
+		skip_row = skip[1]
+		assert skip_row in rows, "Skip row {0} not in rows {1}".format(skip_row, rows)
+		assert skip_column in columns, \
+		  "Skip column {0} not in columns {1}".format(skip_column, columns)
+		skips_table[skip] = skip
 
-	# Sort *rows* and *columns*:
-	sorted_rows = sorted(tuple(rows))
-	sorted_columns = sorted(tuple(columns))
+	    # Sort *rows* and *columns*:
+	    sorted_rows = sorted(tuple(rows))
+	    sorted_columns = sorted(tuple(columns))
 
-	# Grab the minimum and maximum from *rows* and *columns*:
-	minimum_row = sorted_rows[0]
-	maximum_row = sorted_rows[-1]
-	minimum_column = sorted_columns[0]
-	maximum_column = sorted_columns[-1]
+	    # Grab the minimum and maximum from *rows* and *columns*:
+	    minimum_row = sorted_rows[0]
+	    maximum_row = sorted_rows[-1]
+	    minimum_column = sorted_columns[0]
+	    maximum_column = sorted_columns[-1]
 
-	# Make sure that we do not try to use a hole that does not exist:
-	assert minimum_column >= 0, \
-	  "Negative column {0} in {1} not allowed".format(minimum_column, columns)
-	assert maximum_column < tooling_plate_columns, \
-	  "Column {0} in {1} too big".format(maximum_column, columns)
-	assert minimum_row >= 0, \
-	  "Negative row {0} in {1} not allowed".format(minimum_row, rows)
-	assert maximum_row < tooling_plate_rows, \
-	  "Row {0} in {1} too big".format(maximum_row, rows)
+	    # Make sure that we do not try to use a hole that does not exist:
+	    assert minimum_column >= 0, \
+	      "Negative column {0} in {1} not allowed".format(minimum_column, columns)
+	    assert maximum_column < tooling_plate_columns, \
+	      "Column {0} in {1} too big".format(maximum_column, columns)
+	    assert minimum_row >= 0, \
+	      "Negative row {0} in {1} not allowed".format(minimum_row, rows)
+	    assert maximum_row < tooling_plate_rows, \
+	      "Row {0} in {1} too big".format(maximum_row, rows)
 
-	# Compute the *rows_spanned* and *columns_spanned*:
-        rows_spanned = maximum_row - minimum_row
-	columns_spanned = maximum_column - minimum_column
+	    # Compute the *rows_spanned* and *columns_spanned*:
+	    rows_spanned = maximum_row - minimum_row
+	    columns_spanned = maximum_column - minimum_column
 
-	# Figure out where upper left tooling hole is located:
-	upper_left_x = -((2 * minimum_column + columns_spanned) * tooling_plate_hole_pitch) / 2
-	upper_left_y = -((2 * minimum_row  + rows_spanned) * tooling_plate_hole_pitch) / 2
-	zero = L()
+	    # Figure out where upper left tooling hole is located:
+	    upper_left_x = -((2 * minimum_column + columns_spanned) * tooling_plate_hole_pitch) / 2
+	    upper_left_y = -((2 * minimum_row  + rows_spanned) * tooling_plate_hole_pitch) / 2
+	    zero = L()
 
-	# Drill the *tooling_plate* holes at the intersections of *rows* and *columns*,
-        # but ommitting any that are in *skips*:
-	reverse_top_surface_transform = top_surface_transform.reverse()
-	for row in rows:
-	    for column in columns:
-		column_row = (column, row)
-		if not column_row in skips_table:
-		    # Figure out the *start* and *stop* points for the drill as if the
-		    # part is centered immediately under the origin (i.e. after
-		    # *top_sufrace_transform* is applied to the entire *part*.):
-		    x = upper_left_x + tooling_plate_hole_pitch * column
-		    y = upper_left_y + tooling_plate_hole_pitch * row
-		    start = P(x, y, zero)
-		    stop = P(x, y, -part_dz)
+	    # Drill the *tooling_plate* holes at the intersections of *rows* and *columns*,
+	    # but ommitting any that are in *skips*:
+	    reverse_top_surface_transform = top_surface_transform.reverse()
+	    for row in rows:
+		for column in columns:
+		    column_row = (column, row)
+		    if not column_row in skips_table:
+			# Figure out the *start* and *stop* points for the drill as if the
+			# part is centered immediately under the origin (i.e. after
+			# *top_sufrace_transform* is applied to the entire *part*.):
+			x = upper_left_x + tooling_plate_hole_pitch * column
+			y = upper_left_y + tooling_plate_hole_pitch * row
+			start = P(x, y, zero)
+			stop = P(x, y, -part_dz)
 
-		    # Drill the hole using *reversed_start* and *reversed_stop*:
-		    reversed_start = reverse_top_surface_transform * start
-		    reversed_stop = reverse_top_surface_transform * stop
-		    part.hole("Tooling plate hole ({0}, {1})".format(row, column),
-		      tooling_plate_drill_diameter, reversed_start, reversed_stop, "t",
-		      tracing=tracing+1)
-		    if trace_detail >= 1:
-			print(("{0}column={1} row={2} " +
-			  "start={3:i} stop={4:i} rstart={5:i} rstop={6:i}").format(
-			  indent, column, row, start, stop, reversed_start, reversed_stop))
+			# Drill the hole using *reversed_start* and *reversed_stop*:
+			reversed_start = reverse_top_surface_transform * start
+			reversed_stop = reverse_top_surface_transform * stop
+			part.hole("Tooling plate hole ({0}, {1})".format(row, column),
+			  tooling_plate_drill_diameter, reversed_start, reversed_stop, "t",
+			  tracing=tracing+1)
+			if trace_detail >= 1:
+			    print(("{0}column={1} row={2} " +
+			      "start={3:i} stop={4:i} rstart={5:i} rstop={6:i}").format(
+			      indent, column, row, start, stop, reversed_start, reversed_stop))
 
-	# We are done with drilling the holes.  Now we move on to figuring out where
-	# everything for the *Part.tooling_plate_mount()* routine.  All the information
-        # computed here is stuffed into the *tooling_plate* object.
+	    # We are done with drilling the holes.  Now we move on to figuring out where
+	    # everything for the *Part.tooling_plate_mount()* routine.  All the information
+	    # computed here is stuffed into the *tooling_plate* object.
 
-	# Identify the location of (0, 0) *tooling_plate* hole:
-	tooling_plate_columns_dx = (tooling_plate_columns - 1) * tooling_plate_hole_pitch
-	tooling_plate_rows_dy = (tooling_plate_rows - 1) * tooling_plate_hole_pitch
-	tooling_plate_edge_dx = (tooling_plate_dx - tooling_plate_columns_dx) / 2
-	tooling_plate_edge_dy = (tooling_plate_dy - tooling_plate_rows_dy) / 2
+	    # Identify the location of (0, 0) *tooling_plate* hole:
+	    tooling_plate_columns_dx = (tooling_plate_columns - 1) * tooling_plate_hole_pitch
+	    tooling_plate_rows_dy = (tooling_plate_rows - 1) * tooling_plate_hole_pitch
+	    tooling_plate_edge_dx = (tooling_plate_dx - tooling_plate_columns_dx) / 2
+	    tooling_plate_edge_dy = (tooling_plate_dy - tooling_plate_rows_dy) / 2
 
-	# Determine which parallel to use to mount the tooling plate such that
-	# the top surface of the tooling plate is near the top surface the vice:
-	selected_parallel_height = parallels_heights[0]
-	for parallel_height in parallels_heights:
-	    if parallel_height > selected_parallel_height and \
-	      parallel_height + tooling_plate_dz <= vice_jaw_volume_dz:
-		selected_parallel_height = parallel_height
+	    # Determine which parallel to use to mount the tooling plate such that
+	    # the top surface of the tooling plate is near the top surface the vice:
+	    selected_parallel_height = parallels_heights[0]
+	    for parallel_height in parallels_heights:
+		if parallel_height > selected_parallel_height and \
+		  parallel_height + tooling_plate_dz <= vice_jaw_volume_dz:
+		    selected_parallel_height = parallel_height
 
-	# The *tooling_plate* is placed so that its upper left corner touchs the upper left
-	# jaw vice corner.  The part is placed so that it is centered in between the
-	# minimum/maximum number of spanned rows/colums        
-	x = tooling_plate_edge_dx + minimum_column * tooling_plate_hole_pitch + \
-	  (columns_spanned * tooling_plate_hole_pitch) / 2
-	y = -(tooling_plate_edge_dy + minimum_row * tooling_plate_hole_pitch +
-	  (rows_spanned * tooling_plate_hole_pitch) / 2)
-	z = selected_parallel_height + tooling_plate_dz + tooling_plate_spacer_dz + part_dz
-	tooling_plate_translate_point = P(x, y, z)
+	    # The *tooling_plate* is placed so that its upper left corner touchs the upper left
+	    # jaw vice corner.  The part is placed so that it is centered in between the
+	    # minimum/maximum number of spanned rows/colums        
+	    x = tooling_plate_edge_dx + minimum_column * tooling_plate_hole_pitch + \
+	      (columns_spanned * tooling_plate_hole_pitch) / 2
+	    y = -(tooling_plate_edge_dy + minimum_row * tooling_plate_hole_pitch +
+	      (rows_spanned * tooling_plate_hole_pitch) / 2)
+	    z = selected_parallel_height + tooling_plate_dz + tooling_plate_spacer_dz + part_dz
+	    tooling_plate_translate_point = P(x, y, z)
+	    top_surface_safe_z = z
+	    xy_rapid_safe_z = top_surface_safe_z + L(inch=0.500)
 
-	top_surface_safe_z = z
-	xy_rapid_safe_z = top_surface_safe_z + L(inch=0.500)
+	    # Compute the *dowel_point*:
+	    extra_dx = part._extra_dx
+	    dowel_point = P(x - part_dx/2 - extra_dx/2, y, z - part_dz)
 
-	# Now remember where to mount the part with the tooling plate:
-	tooling_plate._mount_reset()
-	tooling_plate._mount_translate_point_set(tooling_plate_translate_point)
-	tooling_plate._top_surface_transform_set(top_surface_transform)
-	tooling_plate._top_surface_safe_z_set(top_surface_safe_z)
-	tooling_plate._xy_rapid_safe_z_set(xy_rapid_safe_z)
+	    # Specify which *spacers* to visualize:
+	    spacers = []
+	    if len(rows) >= len(columns):
+		# Orient the spacers horizontally:
+		for row in rows:
+		    spacers.append( (minimum_column, row, maximum_column, row) )
+	    else:
+		# Orient the spacers vertically:
+		for column in columns:
+		    spacers.append( (column, minimum_row, column, maximum_row) )
+	    if trace_detail >= 1:
+		print("{0}spacers={1}".format(indent, spacers))
+
+	    # Now remember where to mount the part with the tooling plate:
+	    tooling_plate._mount_reset()
+	    tooling_plate._dowel_point_set(dowel_point)
+	    tooling_plate._parallels_height_set(selected_parallel_height)
+	    if trace_detail >= 1:
+		print("{0}parallels_height_set({1:i})".format(indent, selected_parallel_height))
+	    tooling_plate._mount_translate_point_set(tooling_plate_translate_point)
+	    tooling_plate._spacers_set(spacers)
+	    tooling_plate._top_surface_transform_set(top_surface_transform)
+	    tooling_plate._top_surface_safe_z_set(top_surface_safe_z)
+	    tooling_plate._xy_rapid_safe_z_set(xy_rapid_safe_z)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -12753,23 +12929,35 @@ class Part:
 	    trace_detail = 2
 
 	# Only do this code when CNC generation is on:
-        shop = part._shop_get()
-	if shop._cnc_generate_get():
+	ezcad = part._ezcad_get()
+	if ezcad._cnc_mode:
+	    shop = part._shop_get()
 	    tooling_plate = shop._tooling_plate_get()
+	    dowel_point = tooling_plate._dowel_point_get()
+	    dy = tooling_plate._dy_get()
+	    mount_translate_point = tooling_plate._mount_translate_point_get()
+	    parallels_height = tooling_plate._parallels_height_get()
+	    spacers = tooling_plate._spacers_get()
 	    top_surface_safe_z = tooling_plate._top_surface_safe_z_get()
 	    top_surface_transform = tooling_plate._top_surface_transform_get()
-	    mount_translate_point = tooling_plate._mount_translate_point_get()
 	    xy_rapid_safe_z = tooling_plate._xy_rapid_safe_z_get()
 
-	    part.mount(comment,
-	      top_surface_transform, mount_translate_point, top_surface_safe_z, xy_rapid_safe_z)
+	    # Grap the transforms from *tooling_plate* and stuff them into *part*:
+	    part._top_surface_transform = top_surface_transform
+	    part._mount_translate_point = mount_translate_point
+	    part._cnc_transform = top_surface_transform.translate("Mount", mount_translate_point)
 
-	    #jig_dy :@= part.jig_dy
-	    #half_jig_dy :@= half@(jig_dy)
-	    #vice_y :@= half_jig_dy + in@("1/4")
-	    ##call d@(form@("jig_dy=%i% vice_y=%i%\n\") % f@(jig_dy) / f@(vice_y))
-	    #call reposition@(part, vice_y)
-	    #call dowel_pin@(part, "Mount on tooling plate")
+	    # Create *operation_mount* and add it to *part* operations list:
+	    vice = shop._vice_get()
+	    operation_mount = Operation_Mount(part, comment, top_surface_transform,
+	      mount_translate_point, top_surface_safe_z, xy_rapid_safe_z, vice, dy,
+	      parallels_height, tooling_plate, spacers)
+	    part._operation_append(operation_mount)
+
+	    # Perform a dowel pin operation:
+	    zero = L()
+	    plunge_point = dowel_point - P(L(inch=1.000), zero, zero)
+	    part.dowel_pin("", dowel_point, plunge_point, tracing = tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -13090,7 +13278,7 @@ class Part:
 
 	# We need the *top_surface_transform* for both STL and CNC mode
 	ezcad = part._ezcad_get()
-	if True:
+	if ezcad._cnc_mode:
 	    # The *x_axis*, *y_axis*, and *z_axis* are needed for rotations:
 	    one = L(mm=1.0)
 	    x_axis = P(one, zero, zero).normalize()
@@ -13406,11 +13594,29 @@ class Part:
 	    # Now we can issue the mount command for the *part*:
 	    cnc_top_surface_safe_z = cnc_top_surface_z + extra_top_dz
 	    cnc_xy_rapid_safe_z = cnc_top_surface_z + L(inch=0.500)
-	    part.mount("Position '{0}' in vice".format(part._name), top_surface_transform,
-	       mount_translate_point, cnc_top_surface_safe_z, cnc_xy_rapid_safe_z, tracing + 1)
+	    
+	    # Remember mount transforms into *part*:
+	    cnc_transform = \
+	      top_surface_transform.translate("Mount in vice", mount_translate_point)
+	    part._cnc_transform_set(cnc_transform)
+	    part._top_surface_transform_set(top_surface_transform, "Part.vice_mount")
+	    part._mount_translate_point_set(mount_translate_point)
 
-	    # Save *extra_dx* for *Part.tooling_plate_mount()* routine:
+	    # Create *operation_mount* and add it to *part* operations list:
+	    vice = shop._vice_get()
+	    jaws_spread = part_dy + extra_dy
+	    tooling_plate = None
+	    spacers = []
+	    operation_mount = Operation_Mount(part, comment, top_surface_transform,
+	      mount_translate_point, cnc_top_surface_safe_z, cnc_xy_rapid_safe_z,
+	      vice, jaws_spread, selected_parallel_height, tooling_plate, spacers)
+	    part._operation_append(operation_mount)
+
+	    # Save extra material diminsions for visualization purposes:
             part._extra_dx = extra_dx
+	    part._extra_dy = extra_dy
+	    part._extra_bottom_dz = extra_bottom_dz
+	    part._extra_top_dz = extra_top_dz
 
 	    # Generate any needed dowel pin operation:
 	    if dowel_pin_requested:
@@ -13441,7 +13647,7 @@ class Part:
 		      indent, cnc_dowel_point, cnc_plunge_point))
 
 		# Perform the dowel pin operation:
-		part.dowel_pin(dowel_pin_comment, cnc_plunge_point, cnc_dowel_point, tracing + 1)
+		part.dowel_pin(dowel_pin_comment, cnc_dowel_point, cnc_plunge_point, tracing + 1)
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
@@ -14726,6 +14932,9 @@ class Code:
 
 	vrml_file.close()
 
+	# Reset *code*:
+	code._reset()
+
 	# Now reset all the VRML values:
 	code._vrml_reset()
 
@@ -14889,6 +15098,7 @@ class Code:
 	""" *Code*: Reset the contents of the *Code* object (i.e. *self*) """
 
 	# Use *code* instead of *self:
+	code = self
 
 	zero = L()
 	large = L(inch=123456789.0)
@@ -14909,9 +15119,9 @@ class Code:
 	code._g9 = huge
 	code._g10 = huge
 	code._g11 = huge
-	code._h = huge
-	code._i = big
-	code._j = big
+	code._h = zero
+	code._i = zero
+	code._j = zero
 	code._m1 = huge
 	code._m2 = huge
 	code._m3 = huge
@@ -14922,10 +15132,10 @@ class Code:
 	code._r0 = big
 	code._r1 = big
 	code._s = Hertz(rps=123456789.0)
-	code._x = big
-	code._y = big
-	code._z = big
-	code._z1 = big
+	code._x = zero
+	code._y = zero
+	code._z = zero
+	code._z1 = zero
 
     def _start(self, part, tool, tool_program_number, spindle_speed, mount_wrl_file,
       stl_file_name, top_surface_safe_z, xy_rapid_safe_z ,tracing=-1000000):
@@ -14944,6 +15154,9 @@ class Code:
 	assert isinstance(stl_file_name, str)
 	assert isinstance(top_surface_safe_z, L)
 	assert isinstance(xy_rapid_safe_z, L)
+
+	# Reset *code*:
+	code._reset()
 
 	# Save *top_surface_safe_z*
 	code._top_surface_safe_z = top_surface_safe_z
@@ -16451,7 +16664,7 @@ class Shop:
 	no4_50_percent_thread_diameter = L(inch=.0960)
 	tooling_plate = Tooling_Plate(L(inch=6.0), L(inch=6.0), L(inch=.250), 11, 11, L(inch=.500),
 	  no4_close_fit_diameter, no4_75_percent_thread_diameter, no4_50_percent_thread_diameter,
-	  L(inch=0.500), L(inch=1.000))
+	  L(inch=0.250), L(inch=0.500))
 
 	# Vice to use:
 	parallels = Parallels(L(inch=6.0), L(inch="1/8"), [
@@ -17136,6 +17349,72 @@ class Tool:
 
 	self._spindle_speed = spindle_speed
 
+    def _wrl_write(self, wrl_file, pad, tip, tip_depth, tracing=-1000000):
+	""" *Tool*: Write out a visualization of the *Tool* object in VRML format to
+	    *wrl_file* indented by *pad*.  The tip of the tool is located at *tip*.
+	"""
+	
+	# Use *tool* instead of *self*:
+	tool = self
+
+	# Verify argument types:
+	assert isinstance(wrl_file, file)
+	assert isinstance(pad, int)
+	assert isinstance(tip, P)
+	assert isinstance(tip_depth, L)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Tool._wrl_write('{1}', *, {2}, {3:i}, {4:i})".
+   	      format(indent, tool._name, pad, tip, tip_depth))
+
+	# Grab some values from *tool*:
+	maximum_z_depth = tool._maximum_z_depth
+	diameter = tool._diameter
+	radius = diameter/2
+
+	zero = L()
+	x0 = tip.x
+	y0 = tip.y
+	z0 = tip.z
+	z1 = z0 + tip_depth
+	z2 = z0 + maximum_z_depth
+
+	upper_points = []
+	lower_points = []
+	count = 16
+	sub_angle = 360.0 / count
+	for index in range(count):
+	    angle = Angle(deg=(sub_angle * float(index)))
+	    x = x0 + radius.cosine(angle)
+	    y = y0 + radius.sine(angle)
+	    upper_point = P(x, y, z2)
+	    lower_point = P(x, y, z1)
+	    upper_points.append(upper_point)
+	    lower_points.append(lower_point)
+
+	points = []
+	for index in range(0, count, 2):
+	    points.append(tip)
+	    points.append(lower_points[index])
+	    points.append(upper_points[index])
+	    points.append(upper_points[index + 1])
+	    points.append(lower_points[index + 1])
+
+	# Create *vrml* lines object to draw the tool outline:
+	vrml_lines = VRML_Lines("{0}".format(tool._name))
+	color = Color("purple")
+	vrml_lines._line(color, points)
+
+	# Write out *vrml_lines* to *wrl_file*:
+	vrml_lines._write(wrl_file, 2)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Tool._wrl_write('{1}', *, {2}, {3:i}, {4:i})".
+	      format(indent, tool._name, pad, tip, tip_depth))
+
 class Tool_Double_Angle(Tool):
 
     def __init__(self):
@@ -17627,20 +17906,6 @@ class Tooling_Plate:
 	# Reset all of the mount settings:
 	tooling_plate._mount_reset()
 
-    def _mount_reset(self):
-        """ *Tooling_Plate*: Reset all the mount settings for the *Tooling_Plate* object
-	    (i.e. *self*.)
-	"""
-
-	# Use *tooling_plate* instead of *self*:
-        tooling_plate = self
-
-	# Reset all of the mount settings to invalid values:
-	tooling_plate._mount_translate_point = None
-	tooling_plate._top_surface_safe_z = None
-	tooling_plate._top_surface_transform = None
-	tooling_plate._xy_rapid_safe_z = None
-
     def _columns_get(self):
         """ *Tooling_Plate*: Return the number of columns of mounting holes for the *Tooling_Plate*
 	    object (i.e. *self*.)
@@ -17666,6 +17931,27 @@ class Tooling_Plate:
 	    drill_diameter = tooling_plate._steel_drill_diameter
 
 	return drill_diameter
+
+    def _dowel_point_get(self):
+        """ *Tooling_Plate*: Return the dowel point stored the *Tooling_Plate* object (i.e. *self*.)
+	"""
+
+	dowel_point = self._dowel_point
+	assert isinstance(dowel_point, P)
+	return dowel_point
+
+    def _dowel_point_set(self, dowel_point):
+        """ *Tooling_Plate*: Return the dowel point stored the *Tooling_Plate* object (i.e. *self*.)
+	"""
+
+	# Use *tooling_plate* instead of *self*:
+	tooling_plate = self
+
+	# Verifiy argument types:
+	assert isinstance(dowel_point, P)
+
+	# Stuff *dowel_point* into *tooling_plate*:
+	self._dowel_point = dowel_point
 
     def _dx_get(self):
         """ *Tooling_Plate*: Return the dx dimension of the *Tooling_Plate* object (i.e. *self*.)
@@ -17706,6 +17992,23 @@ class Tooling_Plate:
 
 	return self._mount_translate_point
 
+    def _mount_reset(self):
+        """ *Tooling_Plate*: Reset all the mount settings for the *Tooling_Plate* object
+	    (i.e. *self*.)
+	"""
+
+	# Use *tooling_plate* instead of *self*:
+        tooling_plate = self
+
+	# Reset all of the mount settings to invalid values:
+	tooling_plate._dowel_point           = None
+	tooling_plate._mount_translate_point = None
+	tooling_plate._parallels_height      = None
+	tooling_plate._spacers               = None
+	tooling_plate._top_surface_safe_z    = None
+	tooling_plate._top_surface_transform = None
+	tooling_plate._xy_rapid_safe_z       = None
+
     def _mount_translate_point_set(self, mount_translate_point):
         """ *Tooling_Plate*: Store a top surface transform into the *Tooling_Plate* object
 	    (i.e. *self*.)
@@ -17720,12 +18023,64 @@ class Tooling_Plate:
 	# Stuff *mount_translate_point* into *tooling_plate*:
 	tooling_plate._mount_translate_point = mount_translate_point
 
+    def _parallels_height_get(self):
+        """ *Tooling_Plate*: Return the height of the parallels in the vice for the *Tooling_Plate*
+	    object (i.e. *self*.)
+	"""
+
+	return self._parallels_height
+
+    def _parallels_height_set(self, parallels_height):
+        """ *Tooling_Plate*: Store vice *parallels_heigh*t into the *Tooling_Plate* object
+	    (i.e. *self*.)
+	"""
+
+	# Use *tooling_plate* instead of *self*:
+        tooling_plate = self
+
+	# Verify argument types:
+	assert isinstance(parallels_height, L)
+
+	# Stuff *parallels_height* into *tooling_plate*:
+	tooling_plate._parallels_height = parallels_height
+
     def _rows_get(self):
         """ *Tooling_Plate*: Return the number of rows of mounting holes for the *Tooling_Plate*
 	    object (i.e. *self*.)
 	"""
 
 	return self._rows
+
+    def _spacers_get(self):
+        """ *Tooling_Plate*: Return the a list of spacer quadruples used for mounting
+	    on the *Tooling_Plate* object (i.e. *self*.)  Each quaduple is a tuple of the
+	    form (x1, y1, x2, y2) where x1 and x2 represent a tooling plate column number,
+	    and y1 and y2 represent the tooling plate row number.
+	"""
+
+	spacers = self._spacers
+	assert isinstance(spacers, list)
+	return spacers
+
+    def _spacers_set(self, spacers):
+        """ *Tooling_Plate*: Set the *spacers* quadruples used for mounting on the
+	    *Tooling_Plate* object (i.e. *self*.)  Each quaduple is a tuple of the
+	    form (x1, y1, x2, y2) where x1 and x2 represent a tooling plate column number,
+	    and y1 and y2 represent the tooling plate row number.
+	"""
+
+	# Use *tooling_plate* instead of *self*:
+	tooling_plate = self
+
+	# Verify argument types:
+	assert isinstance(spacers, list)
+	for spacer in spacers:
+	    assert isinstance(spacer, tuple) and len(spacer) == 4
+	    for row_column in spacer:
+		assert isinstance(row_column, int) and row_column >= 0
+
+	# Stuff *spacers* into *tooling_plate*
+	tooling_plate._spacers = spacers
 
     def _spacer_width_get(self):
         """ *Tooling_Plate*: Return the number of spacer width for the *Tooling_Plate*
@@ -17782,6 +18137,106 @@ class Tooling_Plate:
 
 	# Stuff *top_surface_transform* into *tooling_plate*:
 	tooling_plate._top_surface_transform = top_surface_transform
+
+    def _wrl_write(self, wrl_file, pad, corner, tracing = -1000000):
+	""" *Tooling_Plate*: Write out a VRML visulazation of *Tooling_Plate* (i.e. *self*)
+	    to *wrl_file* with each line indent by *pad* pasces.  The lower left *corner*
+	    is specified.
+	"""
+
+	# Use *tooling_plate* instead of *self*:
+	tooling_plate = self
+        
+	# Verify argument types:
+	assert isinstance(wrl_file, file)
+        assert isinstance(pad, int) and pad >= 0
+        assert isinstance(corner, P)
+        assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' *tracing
+	    print("{0}=>Tooling_Plate.wrl_write(*, *, {1}, {2:i})".format(indent, pad, corner))
+	    trace_detail = 1
+
+	# Grab some values from *tooling_plate*
+	columns = tooling_plate._columns
+	dx = tooling_plate._dx
+	dy = tooling_plate._dy
+	dz = tooling_plate._dz
+	hole_pitch = tooling_plate._hole_pitch
+	rows = tooling_plate._rows
+	spacers = tooling_plate._spacers
+	spacer_dz = tooling_plate._spacer_dz
+	spacer_width = tooling_plate._spacer_width
+
+	extra_dx = dx - hole_pitch * (columns - 1)
+	extra_dy = dy - hole_pitch * (rows - 1)
+	if trace_detail >=1:
+	    print("{0}extra_dx={1:i} extra_dy={2:i}".format(indent, extra_dx, extra_dy))
+
+	zero = L()
+
+	left_column_x = extra_dx/2
+	right_column_x = extra_dx/2 + hole_pitch * float(columns - 1)
+	top_row_y =    -extra_dy/2
+	bottom_row_y = -(extra_dy/2 + hole_pitch * float(rows - 1))
+	if trace_detail >= 1:
+	    print("{0}left_column_x={1:i} right_column_x={2:i} top_row_y={3:i} bottom_row_y{4:i}".
+	      format(indent, left_column_x, right_column_x, top_row_y, bottom_row_y))
+
+	# Draw the tooling plate lines:
+	vrml_lines = VRML_Lines("Tooling_Plate")
+	color = Color("orange")
+	corner1 = corner
+	corner2 = corner1 + P(dx, -dy, dz)
+	vrml_lines._box_outline(color, corner1, corner2)
+	for column in range(columns):
+	    x = left_column_x + hole_pitch * float(column)
+	    top_point    = corner1 + P(x, top_row_y,    dz)
+	    bottom_point = corner1 + P(x, bottom_row_y, dz)
+	    vrml_lines._line(color, [top_point, bottom_point])
+	    if trace_detail >= 2:
+		print("{0}column[{1}]: top_point={2:i} bottom_point={3:i}".
+		  format(indent, column, top_point, bottom_point))
+	for row in range(rows):
+	    y = top_row_y - hole_pitch * float(row)
+	    left_point =  corner1 + P(left_column_x,  y, dz)
+	    right_point = corner1 + P(right_column_x, y, dz)
+	    vrml_lines._line(color, [left_point, right_point])
+
+	# Now draw the *spacers*:
+	color = Color("aqua")
+	for spacer in spacers:
+	    # Extract the row/column values from the *spacer* quadruple:
+	    column1 = spacer[0]
+	    row1 = spacer[1]
+	    column2 = spacer[2]
+	    row2 = spacer[3]
+
+	    # Draw the box outline of the *spacer*:
+	    x1 = left_column_x + hole_pitch * float(column1)
+	    y1 = top_row_y - hole_pitch * float(row1)
+	    x2 = left_column_x + hole_pitch * float(column2)
+	    y2 = top_row_y - hole_pitch * float(row2)
+	    corner1 = corner + P(x1 - spacer_width/2, y1 - spacer_width/2, dz)
+	    corner2 = corner + P(x2 + spacer_width/2, y2 + spacer_width/2, dz + spacer_dz)
+	    vrml_lines._box_outline(color, corner1, corner2)
+
+	    # Draw some lines to show where the holes belong:
+	    p1 = corner + P(x1, y1, dz)
+	    p2 = corner + P(x2, y2, dz)
+	    p3 = corner + P(x2, y2, dz + spacer_dz)
+	    p4 = corner +P(x1, y1, dz + spacer_dz)
+	    vrml_lines._line(color, [p1, p2, p3, p4, p1])
+
+	# Write *vrml_lines* to *wrl_file*:
+	vrml_lines._write(wrl_file, 2)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Tooling_Plate.wrl_write(*, *, {1}, {2:i})".format(indent, pad, corner))
 
     def _xy_rapid_safe_z_get(self):
         """ *Tooling_Plate*: Return the top surface transform previoulsy set for the *Tooling_Plate*
@@ -18796,60 +19251,217 @@ class Vice:
 	    indent = ' ' * tracing
 	    print("{0}".format("{0}=>Vice._wrl_coordinates_write(*)".format(indent)))
 
-	# Write out the VRML to *wrl_file*:
-	wrl_file.write("  #VRML V2.0 utf8\n")
-        wrl_file.write("  Shape {\n")
-	wrl_file.write("   geometry IndexedLineSet {\n")
-	wrl_file.write("    colorPerVertex FALSE\n")
-	wrl_file.write("    color Color {\n")
-	wrl_file.write("     color [\n")
-	wrl_file.write("      1.0 0.0 0.0 # red\n")
-	wrl_file.write("      0.0 1.0 0.0 # green\n")
-	wrl_file.write("      0.0 0.0 1.0 # bule\n")
-	wrl_file.write("     ]\n")
-	wrl_file.write("    }\n")
-	wrl_file.write("    coord Coordinate {\n")
-	wrl_file.write("     point [\n")
-	wrl_file.write("      0.0 0.0 0.0\n")	# [0]: Origin
-	wrl_file.write("      25.4 0.0 0.0\n")	# [1]: X axis end-point
-	wrl_file.write("      0.0 25.4 0.0\n")	# [2]: Y axis end-pont
-	wrl_file.write("      0.0 0.0 25.4\n")	# [3]: Z axis end-pont
-	wrl_file.write("      23.0 0.0 2.0\n")	# [4]: X axis arrow head
-	wrl_file.write("      23.0 0.0 -2.0\n")	# [5]: X axis arrow head
-	wrl_file.write("      0.0 23.0 2.0\n")	# [6]: Y axis arrow head
-	wrl_file.write("      0.0 23.0 -2.0\n")	# [7]: Y axis arrow head
-	wrl_file.write("      2.0 0.0 23.0\n")	# [6]: Z axis arrow head
-	wrl_file.write("      -2.0 0.0 23.0\n")	# [7]: Z axis arrow head
-	wrl_file.write("     ]\n")
-	wrl_file.write("    }\n")
-	wrl_file.write("    coordIndex [\n")
-	wrl_file.write("     0 1 -1\n")		# X Axis
-	wrl_file.write("     1 4 -1\n")		# X Axis Arrow Head
-	wrl_file.write("     1 5 -1\n")		# X Axis Arrow Head
-	wrl_file.write("     0 2 -1\n")		# Y Axis
-	wrl_file.write("     2 6 -1\n")		# Y Axis Arrow Head
-	wrl_file.write("     2 7 -1\n")		# Y Axis Arrow Head
-	wrl_file.write("     0 3 -1\n")		# Z Axis
-	wrl_file.write("     3 8 -1\n")		# Z Axis Arrow Head
-	wrl_file.write("     3 9 -1\n")		# Z Axis Arrow Head
-	wrl_file.write("    ]\n")
-	wrl_file.write("    colorIndex [\n")
-	wrl_file.write("     0\n")			# X Axis
-	wrl_file.write("     0\n")			# X Axis Arrow Head
-	wrl_file.write("     0\n")			# X Axis Arrow Head
-	wrl_file.write("     1\n")			# Y Axis
-	wrl_file.write("     1\n")			# Y Axis Arrow Head
-	wrl_file.write("     1\n")			# Y Axis Arrow Head
-	wrl_file.write("     2\n")			# Z Axis
-	wrl_file.write("     2\n")			# Z Axis Arrow Head
-	wrl_file.write("     2\n")			# Z Axis Arrow Head
-	wrl_file.write("    ]\n")
-	wrl_file.write("   }\n")
-        wrl_file.write("  }\n")
+	# Define some constants:
+	zero = L()
+	tip = L(inch=1.000)
+	tip_offset = L(inch=0.100)
+
+	# Define the various points that make up the coordinate axes:
+	origin = P(zero, zero, zero)
+	x_tip = P(tip, zero, zero)
+	x_tip1 = P(tip - tip_offset,  tip_offset, zero)
+	x_tip2 = P(tip - tip_offset, -tip_offset, zero)
+	y_tip = P(zero, tip, zero)
+	y_tip1 = P(zero, tip - tip_offset,  tip_offset)
+	y_tip2 = P(zero, tip - tip_offset, -tip_offset)
+	z_tip = P(zero, zero, tip)
+	z_tip1 = P(zero,  tip_offset, tip - tip_offset)
+	z_tip2 = P(zero, -tip_offset, tip - tip_offset)
+
+	# Create the coordinate system and write it out:
+	vrml_lines = VRML_Lines("Coordinate_Axes")
+	vrml_lines._line(Color("red"),   [origin, x_tip, x_tip1, x_tip2, x_tip])
+	vrml_lines._line(Color("green"), [origin, y_tip, y_tip1, y_tip2, y_tip])
+	vrml_lines._line(Color("blue"),  [origin, z_tip, z_tip1, z_tip2, z_tip])
+	vrml_lines._write(wrl_file, 2)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}".format("{0}<=Vice._wrl_coordinates_write(*)".format(indent)))
+
+class VRML_Lines:
+    """ *VRML_Lines* is used to draw lines in a VRML (Virtual Reality Markup Language) file.  """
+
+    def __init__(self, name):
+	""" *VRML_Lines*: Initialize the *VRML_Lines* object (i.e. *self*) to be ready to
+	    draw line.
+	"""
+
+	# Use *vrml_lines* instead *self*:
+	vrml_lines = self
+
+	# Verify argument types:
+	assert isinstance(name, str)
+
+	# Create *header_lines*:
+	header_lines = []
+	header_lines.append("#VRML V2.0 utf8\n")
+	header_lines.append("# {0}\n".format(name))
+	header_lines.append("Shape {\n")
+	header_lines.append(" geometry IndexedLineSet {\n")
+
+	# Create *color_lines*
+	color_lines = []
+	color_lines.append("  colorPerVertex FALSE\n")
+	color_lines.append("  color Color {\n")
+	color_lines.append("   color [\n")
+
+	# Create *coodinate_lines*:
+	coordinate_lines = []
+        coordinate_lines.append("   ]\n")
+        coordinate_lines.append("  }\n")
+        coordinate_lines.append("  coord Coordinate {\n")
+        coordinate_lines.append("   point [\n")
+
+	# Create *coordinate_index_lines*:
+	coordinate_index_lines = []
+        coordinate_index_lines.append("   ]\n")
+        coordinate_index_lines.append("  }\n")
+        coordinate_index_lines.append("  coordIndex [\n")
+
+	# Create *color_index_lines*:
+	color_index_lines = []
+	color_index_lines.append("  ]\n")
+	color_index_lines.append("  colorIndex [\n")
+
+	# Create *trailer_lines*:
+	trailer_lines = []
+        trailer_lines.append("  ]\n")
+        trailer_lines.append(" }\n")
+        trailer_lines.append("}\n")
+
+	# Load up *vrml_lines*:
+	vrml_lines._color_lines = color_lines
+	vrml_lines._colors_table = {}
+	vrml_lines._coordinate_lines = coordinate_lines
+	vrml_lines._coordinate_index_lines = coordinate_index_lines
+	vrml_lines._coordinates_table = {}
+	vrml_lines._color_index_lines = color_index_lines
+	vrml_lines._header_lines = header_lines
+	vrml_lines._name = name
+	vrml_lines._trailer_lines = trailer_lines
+
+    def _box_outline(self, color, corner1, corner2):
+	""" *VRML_Lines*: Draw a box outline that touches *corner1* and *corner2* using the
+	    *VRML_Lines* object (i.e. *self*).  The lines will be drawn in *color*.
+	
+	"""
+
+	# Use *vrml_lines* instead of *self*:
+	vrml_lines = self
+
+	# Verify argument types:
+	assert isinstance(color, Color)
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
+
+	# Figure out the X/Y/Z coordinates:
+	x1, x2 = corner1.x.minimum_maximum(corner2.x)
+	y1, y2 = corner1.y.minimum_maximum(corner2.y)
+	z1, z2 = corner1.z.minimum_maximum(corner2.z)
+
+	# Create the 8 box corners:
+	p1 = P(x1, y1, z1)	# BSW
+	p2 = P(x2, y1, z1)	# BSE
+	p3 = P(x2, y2, z1)	# BNE
+	p4 = P(x1, y2, z1)	# BNW
+	p5 = P(x1, y2, z2)	# TNW
+	p6 = P(x2, y2, z2)	# TNE
+	p7 = P(x2, y1, z2)	# TSE
+	p8 = P(x1, y1, z2)	# TSW
+
+	# Draw the box lines:
+	vrml_lines._line(color, [p1, p2, p3, p4, p5, p6, p7, p8, p1, p4])
+	vrml_lines._line(color, [p5, p8])
+	vrml_lines._line(color, [p2, p7])
+	vrml_lines._line(color, [p3, p6])
+
+    def _line(self, color, points):
+	""" *VRML_Lines*: Draw a *color* line between *points* in the *VRML_Lines* object
+	    (i.e. *self*).
+	"""
+
+	# Use *vrml_lines* instead of *self*:
+	vrml_lines = self
+        
+	# Verify argument types:
+	assert isinstance(color, Color)
+	assert isinstance(points, list)
+	for point in points:
+            assert isinstance(point, P)
+
+	# Figure out the *color_index* for *color*:
+	red, green, blue = color._red_green_blue_get()
+	color_key = (red, green, blue)
+	colors_table = vrml_lines._colors_table
+	if color_key in colors_table:
+	    color_index = colors_table[color_key]
+	else:
+	    color_index = len(colors_table)
+	    colors_table[color_key] = color_index
+	    color_lines = vrml_lines._color_lines
+	    color_lines.append("    {0} {1} {2}\n".format(red, green, blue))
+	assert 0 <= color_index < len(colors_table)
+
+	# Make sure we have a *coordinate_index*:
+	coordinates_table = vrml_lines._coordinates_table
+	line_indices = [" "]
+	for point in points:
+	    x = point.x.millimeters()
+	    y = point.y.millimeters()
+	    z = point.z.millimeters()
+	    coordinate_key = (x, y, z)
+	    if coordinate_key in coordinates_table:
+		coordinate_index = coordinates_table[coordinate_key]
+	    else:
+		coordinate_index = len(coordinates_table)
+		coordinates_table[coordinate_key] = coordinate_index
+		coordinate_lines = vrml_lines._coordinate_lines
+		coordinate_lines.append("    {0} {1} {2}\n".format(x, y, z))
+	    line_indices.append("{0}".format(coordinate_index))
+	line_indices.append("-1\n")
+	coordinate_index_lines = vrml_lines._coordinate_index_lines
+	coordinate_index_lines.append(' '.join(line_indices))
+	color_index_lines = vrml_lines._color_index_lines
+	color_index_lines.append("   {0}\n".format(color_index))
+
+    def _write(self, vrml_file, pad, tracing = -1000000):
+	""" *VRML_Lines*: Write the *VRML_Lines* object (i.e. *self*) out to *vrml_file*
+	    with each line indented by *pad* spaces.
+	"""
+	
+	# Use *vrml_lines* instead of *self*:
+	vrml_lines = self
+
+	# Verify argument types:
+	assert isinstance(vrml_file, file)
+        assert isinstance(pad, int) and pad >= 0
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+            print("{0}=>VRML_Lines._write('{1}', *, '{2})".format(indent, vrml_lines._name, pad))
+	padding = ' ' * pad
+	
+	# Grab some values from *vrml_lines*:
+	header_lines = vrml_lines._header_lines
+	color_lines = vrml_lines._color_lines
+	coordinate_lines = vrml_lines._coordinate_lines
+	coordinate_index_lines = vrml_lines._coordinate_index_lines
+	color_index_lines = vrml_lines._color_index_lines
+	trailer_lines = vrml_lines._trailer_lines
+
+	# Concatenate all the lines together with *padding* and write out to *vrml_file*:
+	lines = header_lines + color_lines + coordinate_lines + \
+	  coordinate_index_lines + color_index_lines + trailer_lines
+	padded_lines = padding.join(lines)
+	vrml_file.write(padding)
+	vrml_file.write(padded_lines)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+            print("{0}<=VRML_Lines._write('{1}', *, '{2})".format(indent, vrml_lines._name, pad))
 
 #    #FIXME: This Part routine appears to be no longer used!!!
 #    def _flush(self, program_number):
