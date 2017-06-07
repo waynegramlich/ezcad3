@@ -5362,7 +5362,7 @@ class Operation_Round_Pocket(Operation):
 
     def __init__(self, part, comment, sub_priority, tool, order, follows, diameter,
       countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
-      top_surface_transform, tracing):
+      top_surface_transform, mount_translate_point, tracing):
 	""" *Operation_Round_Pocket* will intitialize an
 	    *Operation_Round_Pocket* object (i.e. *self*) to contain
 	    *part*, *comment*, *sub_priority*, *tool*, *order*, *follows*,
@@ -5385,16 +5385,17 @@ class Operation_Round_Pocket(Operation):
 	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(tracing, int)
 	assert isinstance(top_surface_transform, Transform)
+	assert isinstance(mount_translate_point, P)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print(("{0}=>Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
-	      " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, {14:s}, {15})").
-	      format(indent, "Round_Pocket", part._name_get(), comment, sub_priority, tool,
-	        order, diameter, countersink_diameter, hole_kind, start, stop, feed_speed,
-	        spindle_speed, top_surface_transform, tracing))
+	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, *, {14:i})").
+	      format(indent, "Round_Pocket", part._name_get(), comment, sub_priority, tool, order,
+	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
+	      mount_translate_point))
 
 	# Initialize superclass:
 	Operation.__init__(self, "Round_Pocket", Operation.KIND_ROUND_POCKET,
@@ -5409,15 +5410,16 @@ class Operation_Round_Pocket(Operation):
 	self._tracing = -1000000
 	#self._tracing = tracing
 	self._top_surface_transform = top_surface_transform
+	self._mount_translate_point = mount_translate_point
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print(("{0}<=Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
-	      " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, {14:s})").format(indent,
-	      "Round_Pocket", part._name_get(), comment, sub_priority, tool, order, diameter,
-	      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
-	      top_surface_transform))
+	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, *, {14:i})").
+              format(indent,"Round_Pocket", part._name_get(), comment, sub_priority, tool, order,
+	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
+	      mount_translate_point))
 
     def _cnc_generate(self, mount_wrl_file, tracing=-1000000):
 	""" *Operation_Round_Pocket*: Generate the CNC G-code for an *Operation_Round_Pocket*
@@ -5448,8 +5450,10 @@ class Operation_Round_Pocket(Operation):
 
 	# The *top_surface_transform* has been previously set orient the material correctly for CNC:
 	top_surface_transform = round_pocket._top_surface_transform
-	mapped_start = top_surface_transform * start
-	mapped_stop = top_surface_transform * stop
+	mount_translate_point = round_pocket._mount_translate_point
+	cnc_transform = top_surface_transform.translate("Mount translate", mount_translate_point)
+	mapped_start = cnc_transform * start
+	mapped_stop = cnc_transform * stop
 
 	# Compute some values based on *diameter*:
 	maximum_depth = diameter / 3.0
@@ -5481,6 +5485,8 @@ class Operation_Round_Pocket(Operation):
 	else:
 	    # We do all the work to mill out the round_pocket pocket;
 
+	    mount_translate_point = part._mount_translate_point_get()
+
 	    # Deal with through holes:
 	    is_through = False
 	    #print("operation.comment='{0}'".format(self._comment))
@@ -5506,7 +5512,7 @@ class Operation_Round_Pocket(Operation):
 
 	    # Move to position:
 	    code._comment(comment)
-	    code._z_safe_assert("round_pocket_pocket", comment)
+	    code._xy_rapid_safe_z_force(f, s)
 	    code._xy_rapid(x, y)
 
 	    z_feed = f / 4.0
@@ -5534,8 +5540,8 @@ class Operation_Round_Pocket(Operation):
 			pass_remove = pass_remove_delta * float(radius_index + 1)
 			code._xy_feed(f, s, x, y + pass_remove)
 			code._z_feed(z_feed, s, z, "round_pocket_pocket")
-			code._xy_ccw_circle(f, s, pass_remove, x, y - pass_remove)
-			code._xy_ccw_circle(f, s, pass_remove, x, y + pass_remove)
+			code._xy_ccw_feed(f, s, pass_remove, x, y - pass_remove)
+			code._xy_ccw_feed(f, s, pass_remove, x, y + pass_remove)
 
 	    # Do a "spring pass" to make everybody happy:
 	    code._comment("{0} round_pocket pocket 'spring' pass".format(comment))
@@ -5560,7 +5566,7 @@ class Operation_Round_Pocket(Operation):
 
 	    # Safely retract to z safe:
 	    code._comment("Safely retract to z safe")
-	    code._z_safe_retract(z_feed, s)
+	    code._xy_rapid_safe_z_force(f, s)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -8064,6 +8070,14 @@ class Part:
         """ *Part*: Return the mount number for the *Part* object (i.e. *self*.) """
 
 	return self._mount
+
+    def _mount_translate_point_get(self):
+	""" *Part*: Return the mount translate point for the *Part* object (i.e. *self*).
+	"""
+
+	mount_translate_point = self._mount_translate_point
+	assert isinstance(mount_translate_point, P)
+	return mount_translate_point
 
     def _mount_translate_point_set(self, mount_translate_point):
 	""" *Part*: Set the mount translate point for the *Part* object (i.e. *self*)
@@ -10888,6 +10902,7 @@ class Part:
 	ezcad = part._ezcad
 	if ezcad._cnc_mode or ezcad._stl_mode:
 	    spot_operation = None
+	    hole_z_depth = start.distance(hole_stop)
 	    if is_through_hole or is_tip_hole:
 		# Figure out how deep we want the countsink "cone hole" to go:
 		if countersink_diameter <= zero:
@@ -10901,7 +10916,6 @@ class Part:
 		maximum_mill_drill_diameter = L(inch=1.0)
 		tool_mill_drill = part._tools_mill_drill_tip_search(
 		  maximum_mill_drill_diameter, countersink_diameter/2, tracing + 1)
-		hole_z_depth = start.distance(hole_stop)
 		tool_drill = part._tools_drill_search(hole_diameter, hole_z_depth, tracing + 1)
 
 		# Can this hole be drilled or should it be milled out:
@@ -10953,13 +10967,14 @@ class Part:
 	    # See if we should try to mill the hole:
 	    if try_flat:
 		end_mill_tool = part._tools_end_mill_search(hole_diameter,
-		  z_depth, "countersink_hole", tracing + 1)
+		  hole_z_depth, "countersink_hole", tracing + 1)
 		if end_mill_tool != None:
 		    operation_round_pocket = Operation_Round_Pocket(part, comment,
 		      0, end_mill_tool, Operation.ORDER_END_MILL_ROUND_POCKET, None,
-		      hole_diameter, countersink_diameter, hole_kind, start, end,
+		      hole_diameter, countersink_diameter, hole_kind, start, stop,
 		      end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
-		      part._top_surface_transform_get(), tracing + 1)
+		      part._top_surface_transform_get(), part._mount_translate_point_get(),
+		      tracing + 1)
 		    part._operation_append(operation_round_pocket)
 
 	if ezcad._stl_mode:
@@ -11365,8 +11380,9 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*:
-	#tracing = 0
 	trace_detail = -1
+	if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    trace_detail = 3
@@ -12304,7 +12320,7 @@ class Part:
 	  start_point, flags, countersink_diameter)
 
     def simple_pocket(self,
-      comment, corner1, corner2, radius, pocket_top, rotate, flags, tracing = -1000000):
+      comment, corner1, corner2, radius, flags, tracing = -1000000):
 	""" *Part*: Create a simple rectangular pocket in the *Part* object (i.e. *self*)
 	    bounding corners of *bottom_corner* and *top_corner*, a corner radius if *radius*.
 	"""
@@ -12317,8 +12333,6 @@ class Part:
 	assert isinstance(corner1, P)
 	assert isinstance(corner2, P)
 	assert isinstance(radius, L)
-	assert isinstance(pocket_top, str)
-	assert isinstance(rotate, Angle)
 	assert isinstance(flags, str)
 	assert isinstance(tracing, int)
 
@@ -12328,9 +12342,8 @@ class Part:
 	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}', {7:d}, '{8}')".
-	      format(indent, self._name,
-	      comment, corner1, corner2, radius, pocket_top, rotate, flags))
+	    print("{0}=>Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
+	      format(indent, self._name, comment, corner1, corner2, radius, flags))
 
 	# Some constants:
 	zero = L()
@@ -12375,8 +12388,8 @@ class Part:
 	    top_surface_transform_reverse._scad_lines_append(difference_lines, pad)
 
 	    difference_lines.append(
-	      "{0}// Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}', {7:d}, '{8}')".
-	      format(pad, self._name, comment, corner1, corner2, radius, pocket_top, rotate, flags))
+	      "{0}// Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
+	      format(pad, self._name, comment, corner1, corner2, radius, flags))
 	    #difference_lines.append(
 	    #  "{0}//start={1:m} end={2:m}".format(pad, start, end))
 	    #difference_lines.append(
@@ -12501,9 +12514,8 @@ class Part:
                 print("{0}Part.simple_pocket: CNC_MODE done".format(indent))
 	# Perform any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}', {7:d}, '{8}')".
-	      format(indent, self._name,
-	      comment, corner1, corner2, radius, pocket_top, rotate, flags))
+	    print("{0}<=Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
+	      format(indent, self._name, comment, corner1, corner2, radius, flags))
 
     def xxx_simple_pocket(self, comment, \
       corner1_point, corner2_point, radius, flags):
