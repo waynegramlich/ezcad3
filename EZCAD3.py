@@ -5677,8 +5677,6 @@ class Operation_Simple_Exterior(Operation):
 	y2 = exterior.y2
 	z_start = exterior.z_start
 	z_stop = exterior.z_stop
-	#call d@(form@("comment=%v% tool=%v% z_start=%i% z_stop=%i%\n\") %
-	#  f@(comment) % f@(tool.name) % f@(z_start) / f@(z_stop))
 
 	# Compute some more coordinates:
 	x1mtr = x1 - tool_radius
@@ -5890,6 +5888,9 @@ class Operation_Simple_Pocket(Operation):
 	f = tool._feed_speed_get()
 	s = tool._spindle_speed_get()
 
+	mount_translate_point = part._mount_translate_point
+	assert isinstance(mount_translate_point, P)
+
 	# Start with {comment}:
 	code._line_comment(comment)
 
@@ -5965,11 +5966,11 @@ class Operation_Simple_Pocket(Operation):
 	#t :@= smul@(r, 0.65)
 	t = r / 2
 
-	code._z_safe_assert("simple_pocket", comment)
+	code._xy_rapid_safe_z_force(f, s)
 
 	is_laser = isinstance(tool, Tool_End_Mill) and tool._is_laser_get()
 	if is_laser:
-	    code._simple_pocket_helper(pocket, zero, s, f, zero, True)
+	    code._simple_pocket_helper(pocket, zero, s, f, zero, True, mount_translate_point)
 	else:
 	    # Compute the total number of rectangular paths needed:
 	    #call d@(form@("comment=%v% r=%i% t=%i%\n\") %
@@ -6039,12 +6040,13 @@ class Operation_Simple_Pocket(Operation):
 			    # and need to move out and cut material as we go:
 			    rapid_move = False
 
-			code._simple_pocket_helper(pocket, offset, s, f, z_plunge, rapid_move)
+			code._simple_pocket_helper(pocket,
+			  offset, s, f, z_plunge, rapid_move, mount_translate_point)
 		else:
 		    assert False, "Unknown pocket kind: {0}".format(pocket_kind)
 
 	# Return the tool to a safe location above the material:
-	code._z_safe_retract(f, s)
+	code._xy_rapid_safe_z_force(f, s)
 	code._line_comment("Simple Pocket Done")
 
 	# Wrap up any requested *tracing*:
@@ -12307,6 +12309,9 @@ class Part:
 	    bounding corners of *bottom_corner* and *top_corner*, a corner radius if *radius*.
 	"""
 
+	# Use *part* instead of *self*:
+	part = self
+
 	# Check argument types:
 	assert isinstance(comment, str)
 	assert isinstance(corner1, P)
@@ -12318,108 +12323,56 @@ class Part:
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}', {7:d}, '{8}')".
 	      format(indent, self._name,
 	      comment, corner1, corner2, radius, pocket_top, rotate, flags))
 
-	# Use *part* instead of *self:
-        part = self
-
-	# Make sure that the corners are diagonal from bottom south west to top north east:
-	x1 = min(corner1.x, corner2.x)
-	x2 = max(corner1.x, corner2.x)
-	y1 = min(corner1.y, corner2.y)
-	y2 = max(corner1.y, corner2.y)
-	z1 = min(corner1.z, corner2.z)
-	z2 = max(corner1.z, corner2.z)
-
-	# Verify that we have properly ordered coordinates:
-	update_count = EZCAD3.update_count_get()
-	if x1 >= x2 and update_count == 0:
-            print("Part.simple_pocket:x1={0} should be less than x2={1}".format(x1, x2))
-	if y1 >= y2 and update_count == 0:
-	    print("Part.simple_pocket:y1={0} should be less than y2={1}".format(y1, y2))
-	if z1 >= z2 and update_count == 0:
-            print("Part.simple_pocket:z1={0} should be less than z2={1}".format(z1, z2))
-
-	# Create the *bsw_corner* and *tne_corner* points:
-	bsw_corner = P(x1, y1, z1)
-	tne_corner = P(x2, y2, z2)
-
 	# Some constants:
 	zero = L()
-	
+
 	ezcad = self._ezcad
-	start_extra = L(mm = 1.0)
-	end_extra = zero
-	if flags == "t":
-	    end_extra = L(mm = 1.0)
-	#adjust = ezcad._adjust
-
-	if ezcad._stl_mode:
-	    if tracing >= 0:
-                print("{0}STL_MODE".format(indent))
-                #print("bsw_corner={0:m} tne_corner={1:m}".format(bsw_corner, tne_corner))
-
-	    # Compute the center points:
+	if ezcad._stl_mode or ezcad._cnc_mode:
+	    # *top_surface_transform* transform forces the part into the correct orientation
+            # for milling the simple pocket.  So now we need to figure out the *bsw_corner*
+            # and *tne_corner* with the part located immediately under the machine origin:
+	    top_surface_transform = part._top_surface_transform
+	    assert isinstance(top_surface_transform, Transform)
+	    transformed_corner1 = top_surface_transform * corner1
+	    transformed_corner2 = top_surface_transform * corner2
+	    x1, x2 = transformed_corner1.x.minimum_maximum(transformed_corner2.x)
+	    y1, y2 = transformed_corner1.y.minimum_maximum(transformed_corner2.y)
+	    z1, z2 = transformed_corner1.z.minimum_maximum(transformed_corner2.z)
 	    x_center = (x1 + x2) / 2
 	    y_center = (y1 + y2) / 2
-	    z_center = (z1 + z2) / 2
+	    bsw_corner = P(x1, y1, z1)
+	    tne_corner = P(x2, y2, z2)
 
-	    # Deal with *pocket_top* argument:
-	    if pocket_top == "t":
-		start = P(x_center, y_center, z2)
-		end =   P(x_center, y_center, z1)
-	    elif pocket_top == "b":
-		start = P(x_center, y_center, z1)
-		end =   P(x_center, y_center, z2)
-	    elif pocket_top == "n":
-		start = P(x_center, y2, z_center)
-		end =   P(x_center, y1, z_center)
-	    elif pocket_top == "s":
-		start = P(x_center, y1, z_center)
-		end =   P(x_center, y2, z_center)
-	    elif pocket_top == "e":
-		start = P(x2, y_center, z_center)
-		end =   P(x1, y_center, z_center)
-	    elif pocket_top == "w":
-		start = P(x1, y_center, z_center)
-		end =   P(x2, y_center, z_center)
-	    else:
-		assert False, \
-		  "pocket_top = '{0}' instead of 't', 'b', 'n', 's', 'e', or 'w'". \
-		  format(pocket_top)
-
+	if ezcad._stl_mode:
 	    # Compute *top_transform* and transform the two corners:
-	    top_transform = Transform.top_surface(comment, start, end, rotate, tracing + 1)
-	    transformed_bsw_corner = top_transform * bsw_corner
-	    transformed_tne_corner = top_transform * tne_corner
 
-	    # Now extract the X/Y/Z locatons of the corners:
-	    tx1 = transformed_bsw_corner.x
-	    ty1 = transformed_bsw_corner.y
-	    tz1 = transformed_bsw_corner.z
-	    tx2 = transformed_tne_corner.x
-	    ty2 = transformed_tne_corner.y
-	    tz2 = transformed_tne_corner.z
-
-	    # Now compute the minimum and maximum coordinates:
-	    x1 = min(tx1, tx2)
-	    y1 = min(ty1, ty2)
-	    z1 = min(tz1, tz2) - end_extra
-	    x2 = max(tx1, tx2)
-	    y2 = max(ty1, ty2)
-	    z2 = max(tz1, tz2) + start_extra
+	    # As usual with OpenScad, everthing is output in reverse order...
 
 	    # Generate the openscad stuff:
 	    difference_lines = self._scad_difference_lines
 	    pad = ' ' * 6
 
+	    # Now we compute the start the bottom of
+	    start_extra = L(mm = 1.0)
+	    end_extra = zero
+	    if flags == "t":
+	    	end_extra = L(mm = 1.0)
+
+	    start = P(x_center, y_center, z2 + start_extra)
+	    end =  P(x_center, y_center, z1 - end_extra)
+
             # Output the transform that will put everything in the correct location:
-	    top_transform_reverse = top_transform.reverse()
-	    top_transform_reverse._scad_lines_append(difference_lines, pad)
+	    top_surface_transform_reverse = top_surface_transform.reverse()
+	    top_surface_transform_reverse._scad_lines_append(difference_lines, pad)
 
 	    difference_lines.append(
 	      "{0}// Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}', {7:d}, '{8}')".
@@ -12432,6 +12385,7 @@ class Part:
 	    #  "{0}//transformed_tne_corner={1:m}".format(pad, transformed_tne_corner))
 
 	    # Translate the forthcoming polygon:
+	    #top_surface_transform.reverse()._scad_lines_append(difference_lines, pad)
 	    difference_lines.append("{0}translate([0, 0, {1:m}])".
 	      format(pad, -(z2 - z1) + start_extra))
 
@@ -12450,7 +12404,7 @@ class Part:
  	      P(x2 - radius, y1 + radius, zero)
             ]
 
-	    # This is where the compute the various angles need to have *corner_sides* sides
+	    # This is we the compute the various angles need to have *corner_sides* sides
             # in each pocket corner:
 	    corner_sides = 4
 	    degrees90 = Angle(deg=90)
@@ -12485,19 +12439,10 @@ class Part:
 	    polygon_command_parts.append("], paths = [{0}], convexity = 8);".
               format(range(len(polygon_points))))
 
-	    # Convert *polygon_command_parts* into *polygon_command* and append
-            #it to *difference_lines*:
+	    # Convert *polygon_command_parts* into a *polygon_command* and append
+	    # it to *difference_lines*:
 	    polygon_command = "".join(polygon_command_parts)
 	    difference_lines.append(polygon_command)
-
-	    # Lower the cube so that it cuts out the pocket.
-	    #difference_lines.append(
-	    #  "{0}translate([0, 0, {1:m}])".format(pad, -(z2 - z1)/2))
-
-	    # Finally, we can output the cube:
-	    #difference_lines.append(
-	    #  "{0}cube([{1:m}, {2:m}, {3:m}], center=true);".
-	    #  format(pad, x2 - x1, y2 - y1, z2 - z1))
 
 	if ezcad._cnc_mode:
 	    if tracing >= 0:
@@ -15328,7 +15273,7 @@ class Code:
 	# Set the S field of the *Code* object (i.e. *self*) to *s*:
 	code._s = s
 
-    def _simple_pocket_helper(self, pocket, offset, s, f, z, rapid_move):
+    def _simple_pocket_helper(self, pocket, offset, s, f, z, rapid_move, mount_translate_point):
 	""" *Code*: Perform one rectangular or rounded rectangular path of the currently
 	    mounted tool and output the commands to the *Code* object (i.e. *self*).
 	    *offset* specifies the distance inward from the nominal path specified by
@@ -15349,16 +15294,21 @@ class Code:
 	assert isinstance(f, Speed)
 	assert isinstance(z, L)
 	assert isinstance(rapid_move, bool)
+	assert isinstance(mount_translate_point, P)
+
+	mount_dx = mount_translate_point.x
+	mount_dy = mount_translate_point.y
+	mount_dz = mount_translate_point.z
 
 	# Extract the corners:
 	corner1 = pocket._corner1
 	corner2 = pocket._corner2
-	cx1 = corner1.x
-	cy1 = corner1.y
-	cz1 = corner1.z
-	cx2 = corner2.x
-	cy2 = corner2.y
-	cz2 = corner2.z
+	cx1 = corner1.x + mount_dx
+	cy1 = corner1.y + mount_dy
+	cz1 = corner1.z + mount_dz
+	cx2 = corner2.x + mount_dx
+	cy2 = corner2.y + mount_dy
+	cz2 = corner2.z + mount_dz
 
 	# Now order the arguments:
 	x1 = min(cx1, cx2)
@@ -15414,7 +15364,7 @@ class Code:
 	    code._xy_feed(f, s, start_x, start_y)
     
 	# Make sure we are at the depth *z*:
-	code._z_feed(f/2, s, z, "simple_pocket_helper")
+	code._z_feed(f/2, s, z + mount_dz, "simple_pocket_helper")
     
 	# Mill out either a square or rounded corners
 	if offset < corner_radius:
@@ -18291,7 +18241,7 @@ class Transform:
     #   [ r20 r21 r22 0 ]
     #   [ dx  dy  dz  1 ]
     #
-    # The afine point format is a 1x4 matrxi of the following format:
+    # The afine point format is a 1x4 matrix of the following format:
     #
     #   [ x y z 1 ]
     #
@@ -18397,6 +18347,7 @@ class Transform:
 
     @staticmethod
     def _zero_fix(value):
+
 	""" *Transform*: Return *value* rounding small values to zero and ensure that there
 	    is no -0.0.
 	"""
