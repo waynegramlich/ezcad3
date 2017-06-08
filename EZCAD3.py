@@ -78,7 +78,6 @@ import hashlib				# Used to create unique hash for `.scad` files
 import math				# Primarily used for trigonmic functions
 import numpy				# Used for 4x4 afine matrix transforms
 import os				# Used for operating system functions
-#import re				# FIXME: Is this used any more?!!!
 import subprocess			# Used to run `openscad` program.
 
 # Some stand-alone routine definitions:
@@ -97,7 +96,7 @@ def int_compare(left, right):
     return 1
 
 def float_compare(left, right):
-    """ *int*: Return -1, 0, or 1 depending upon whether *left* sorts before,
+    """ *float*: Return -1, 0, or 1 depending upon whether *left* sorts before,
 	at, or after *right*.
     """
 
@@ -3995,6 +3994,106 @@ class EZCAD3:
             assert False
 	return update_count
 
+class Mount:
+    """ *Mount*: Represents a part mounted on a machine for machining operations.
+    """
+
+    def __init__(self, name, part, top_surface_transform, mount_translate_point,
+      top_surface_safe_z, xy_rapid_safe_z, tracing=-1000000):
+	""" *Mount*: Initialize the *Mount* object (i.e. *self*) to contain *name*, *part*,
+	    *top_surface_transform*, and *mount_translate_point*.  *name* is provides a
+	    mount name for debugging purposes.  *part* is the *Part* object being mounted.
+	    *top_surface_translate* is *Transform* object that moves the part from 3D space
+	    to located such that entire part is located under the machine origin oriented
+	    properly for machining.  The machine origin should just touch the top surface of
+	    the part.  *mount_translate_point* is the final part translation to mount in a
+	    vice or on a tooling plate.  *top_surface_safe_z* is the machine Z axis altitude
+	    above which is safe to prerform rapid moves (i.e. G0) in the Z direction.
+	    *xy_rapid_safe_z* is the machine Z axis alitude above which it is safe to perform
+	    rapid moves in the X and Y direction.
+	"""
+
+	# Use *mount* instead of *self*:
+	mount = self
+        
+	# Verify argument types:
+	assert isinstance(name, str)
+	assert isinstance(part, Part)
+	assert isinstance(top_surface_transform, Transform)
+	assert isinstance(mount_translate_point, P)
+	assert isinstance(top_surface_safe_z, L)
+	assert isinstance(xy_rapid_safe_z, L)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i}".format(indent,
+	      name, part._name_get(), mount_translate_point, top_surface_safe_z, xy_rapid_safe_z))
+
+	# Create *cnc_transform*:
+	cnc_transform = top_surface_transform.translate("Vice Mount", mount_translate_point)
+
+	# Load up *mount*:
+	mount._cnc_transform = cnc_transform
+	mount._mount_translate_point = mount_translate_point
+        mount._name = name
+	mount._part = part
+	mount._top_surface_safe_z = top_surface_safe_z
+	mount._top_surface_transform = top_surface_transform
+	mount._xy_rapid_safe_z = xy_rapid_safe_z
+	
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i}".format(indent,
+	      name, part._name_get(), mount_translate_point, top_surface_safe_z, xy_rapid_safe_z))
+
+    def _cnc_transform_get(self):
+	""" *Mount*: Return the CNC *Transform* object associated with the *Mount* object
+	    (i.e. *self*).
+	"""
+
+	return self._cnc_transform
+
+    def _mount_translate_point_get(self):
+        """ *Mount*: Return the mount translate point (i.e. *P*) object associated with the
+	    *Mount* object (i.e. *self*.)
+	"""
+
+	return self._mount_translate_point
+
+    def _name_get(self):
+        """ *Mount*: Return the name string associated with the *Mount* object (i.e. *self*.)
+	"""
+
+	return self._name
+
+    def _part_get(self):
+        """ *Mount*: Return the *Part* object associated with the *Mount* object (i.e. *self*.)
+	"""
+
+	return self._part
+
+    def _top_surface_transform_get(self):
+        """ *Mount*: Return the top surface *Transform* object associated with the *Mount*
+	    object (i.e. *self*.)
+	"""
+
+	return self._top_surface_transform
+
+    def _top_surface_safe_z_get(self):
+        """ *Mount*: Return the top surface safe Z value associated with the *Mount*
+	    object (i.e. *self*.)
+	"""
+
+	return self._top_surface_safe_z
+
+    def _xy_rapid_safe_z_get(self):
+        """ *Mount*: Return the XY rapid safe Z value associated with the *Mount*
+	    object (i.e. *self*.)
+	"""
+
+	return self._xy_rapid_safe_z
+
 class Operation:
     """ *Operation* is a class that represents a manufacturing operation.
     """
@@ -4068,7 +4167,7 @@ class Operation:
 	operation._tool = tool
 	operation._feed_speed = feed_speed
 	operation._spindle_speed = spindle_speed
-	operation._mount = part._mount_get()
+	operation._mount = part._current_mount_get()
 	operation._cnc_program_number = -1
 
     def xxx_compare(self, operation2):
@@ -4834,7 +4933,8 @@ class Operation_Drill(Operation):
 	tool = operation_drill._tool
 
 	# Get *shop* and *code*:
-	cnc_transform = part._cnc_transform_get()
+	mount = part._current_mount_get()
+	cnc_transform = mount._cnc_transform_get()
 	shop = part._shop_get()
 
 	code = shop._code_get()
@@ -5053,7 +5153,8 @@ class Operation_Drill(Operation):
 
 	if size >= 3:
 	    part = operation_drill._part_get()
-	    cnc_transform = part._cnc_transform_get()
+	    mount = part._current_mount_get()
+	    cnc_transform = mount._cnc_transform_get()
 
 	    for current_index in range(size - 2):
 		current_drill = drill_operations[current_index]
@@ -5117,7 +5218,8 @@ class Operation_Drill(Operation):
 	part = operation_drill._part
 
         # Grab *cnc_transform* from *part*:
-        cnc_transform = part._cnc_transform_get()
+	mount = part._current_mount_get()
+        cnc_transform = mount._cnc_transform_get()
 
 	# Compute *cnc_start* and *cnc_stop*, the location of *start* and *stop* in CNC coordinates:
         cnc_start = cnc_transform * start
@@ -5141,16 +5243,10 @@ class Operation_Mount(Operation):
     """
 
     def __init__(self, part, comment,
-      top_surface_transform, mount_translate_point, top_surface_safe_z, xy_rapid_safe_z,
-      vice, jaws_spread, parallels_height, tooling_plate, spacers):
-      
+      mount, vice, jaws_spread, parallels_height, tooling_plate, spacers, tracing=-1000000):
 	""" *Operation_Mount*: Initialize the *Operation_Mount* object (i.e. *self*) to describe
 	    how *part* is mounted for CNC operations.  *comment* shows up in generated G-code.
-	    *top_surface_transform* specifies how to reorient *part* so that top surface is
-	    located at the machine origin with its "north" surface facing the back of the CNC
-	    machine (i.e. towards the back vice jaw.)  *top_surface_safe_z* specifies the Z
-	    altitude above with rapid moves (i.e. GO) in the Z axis are allowed.  *xy_rapids_save_z*
-	    specifies the Z altitude above with rapid moves in the X an Y axis ere allowed.
+	    *mount* specifies how the part is mounted onto the CNC machine.
 	    *vice* specifies which vice is being used; `None` is used if there is no vice.
 	    *jaws_spread* specifics the distance in Y between the two vice jaws (negative for
 	    no vice.)  If a vice is being used, parallels height specifies what height should
@@ -5168,10 +5264,7 @@ class Operation_Mount(Operation):
 	# Verify argument types:
 	assert isinstance(part, Part)
 	assert isinstance(comment, str)
-	assert isinstance(top_surface_transform, Transform)
-	assert isinstance(mount_translate_point, P)
-	assert isinstance(top_surface_safe_z, L)
-	assert isinstance(xy_rapid_safe_z, L)
+	assert isinstance(mount, Mount)
 	assert isinstance(vice, Vice) or vice == None
 	assert isinstance(jaws_spread, L)
 	assert isinstance(parallels_height, L)
@@ -5181,6 +5274,14 @@ class Operation_Mount(Operation):
 	    assert isinstance(spacer, tuple) and len(spacer) == 4
 	    for row_column in spacer:
 		assert isinstance(row_column, int) and row_column >= 0
+
+	# Perform any requested *tracing*:
+	if tracing >= 1:
+	    indent = ' ' * tracing
+	    print(("{0}=>Operation_Mount.__init__(*, '{1}', '{2}', '{3}', '{4}'," +
+	           " {5:i} {6:i}, '{7}', *))").
+ 	      format(indent, part._name_get(), comment, mount._name_get(), vice._name_get(),
+	      jaws_spread, parallels_height, tooling_plate._name_get()))
 
 	# Initialize the *Operation* super class:
 	sub_priority = 0
@@ -5192,23 +5293,19 @@ class Operation_Mount(Operation):
 	Operation.__init__(self, "Mount", Tool.KIND_MOUNT,
 	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
 
-	#part._top_surface_transform_set(top_surface_transform, "Operation_Mount.__init__")
-	#part._mount_translate_point_set(mount_translate_point)
-	#part._cnc_transform_set(cnc_transform)
-
-	# Compute *cnc_transform*:
-        cnc_transform = top_surface_transform.translate("mount_translate", mount_translate_point)
-
 	# Load up *operation_mount*:
-	operation_mount._cnc_transform = cnc_transform
 	operation_mount._jaws_spread = jaws_spread
-	operation_mount._mount_translate_point = mount_translate_point
+	operation_mount._mount = mount
 	operation_mount._parallels_height = parallels_height
 	operation_mount._tooling_plate = tooling_plate
-	operation_mount._top_surface_transform = top_surface_transform
-	operation_mount._top_surface_safe_z = top_surface_safe_z
 	operation_mount._vice = vice
-	operation_mount._xy_rapid_safe_z = xy_rapid_safe_z
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 1:
+	    print(("{0}<=Operation_Mount.__init__(*, '{1}', '{2}', '{3}', '{4}'," +
+	           " {5:i} {6:i}, '{7}', *))").
+ 	      format(indent, part._name_get(), comment, mount._name_get(), vice._name_get(),
+	      jaws_spread, parallels_height, tooling_plate._name_get()))
 
     def _cnc_generate(self, mount_wrl_file, tracing=-1000000):
         """ *Operation_Mount*: Generate the CNC operations for the *Operation_Mount* object
@@ -5231,19 +5328,14 @@ class Operation_Mount(Operation):
 	    print("{0}=>Operation_Mount._cnc_generate()".format(indent))
 
 	# Grab some values out *operation_mount*:
-	cnc_transform =         operation_mount._cnc_transform
-        mount_translate_point = operation_mount._mount_translate_point
 	jaws_spread =           operation_mount._jaws_spread
+	mount =                 operation_mount._mount
 	parallels_height =      operation_mount._parallels_height
 	tooling_plate =         operation_mount._tooling_plate
-        top_surface_transform = operation_mount._top_surface_transform
 	vice =                  operation_mount._vice
 
-	# Load up *part* transforms:
-	assert isinstance(mount_translate_point, P)
-	part._top_surface_transform_set(top_surface_transform, "Operation_Mount.__init__")
-        part._mount_translate_point_set(mount_translate_point)
-	part._cnc_transform_set(cnc_transform)
+	# Load up *mount* into *part*:
+        part._current_mount_set(mount)
 	
 	# Show the *parallels* in *mount_wrl_file*:
 	parallels = vice._parallels_get()
@@ -5263,7 +5355,8 @@ class Operation_Mount(Operation):
 	zero = L()
 	if extra_dx > zero or extra_dy > zero or extra_bottom_dx > zero or extra_top_dz > zero:
 	    # Yes let's visualize the extra material:
-	    cnc_transform = part._cnc_transform
+	    mount = part._current_mount_get()
+	    cnc_transform = mount._cnc_transform_get()
 	    bsw = part.bsw
 	    tne = part.tne
 	    cnc_bsw = cnc_transform * bsw - P(extra_dx/2, extra_dy/2, extra_bottom_dz)
@@ -5277,13 +5370,6 @@ class Operation_Mount(Operation):
 	    indent = ' ' * tracing
 	    print("{0}<=Operation_Mount._cnc_generate()".format(indent))
 
-    def _mount_translate_point_get(self):
-        """ *Operation_Mount*: Return the mount translate point from the *Operation_Mount* object
-	    (i.e. *self*.)
-	"""
-
-	return self._mount_translate_point
-
     def _parallels_height_get(self):
         """ *Operation_Mount*: Return the vice parallels heightfrom the *Operation_Mount* object
 	    (i.e. *self*.)
@@ -5291,26 +5377,6 @@ class Operation_Mount(Operation):
 
 	return self._parallels_height
 
-    def _xy_rapid_safe_z_get(self):
-        """ *Operation_Mount*: Return the Z at which XY rapids are from the *Operation_Mount*
-	    object (i.e. *self*.)
-	"""
-
-	return self._xy_rapid_safe_z
-
-    def _top_surface_transform_get(self):
-        """ *Operation_Mount*: Return the top surface transform from the *Operation_Mount* object
-	    (i.e. *self*.)
-	"""
-
-	return self._top_surface_transform
-
-    def _top_surface_safe_z_get(self):
-        """ *Operation_Mount*: Return the top surface safe Z from the *Operation_Mount* object
-	    (i.e. *self*.)
-	"""
-
-	return self._top_surface_safe_z
 
 class Operation_Round_Pocket(Operation):
     """ *Operation_Round_Pocket* is a class that implements a round pocket
@@ -5318,13 +5384,16 @@ class Operation_Round_Pocket(Operation):
     """
 
     def __init__(self, part, comment, sub_priority, tool, order, follows, diameter,
-      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
-      top_surface_transform, mount_translate_point, tracing):
-	""" *Operation_Round_Pocket* will intitialize an
+      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed, mount,
+      tracing=-100000):
+	""" *Operation_Round_Pocket*: will intitialize an
 	    *Operation_Round_Pocket* object (i.e. *self*) to contain
 	    *part*, *comment*, *sub_priority*, *tool*, *order*, *follows*,
-	    *diameter*, *hole_kind*, *start*, *stop*, *feed_speed*, and *spindle_speed*.
+	    *diameter*, *hole_kind*, *start*, *stop*, *feed_speed*, *spindle_speed*, and *mount*.
 	"""
+
+	# Use *operation_round_pocket* instead of *self*:
+	operation_round_pocket = self
 
 	# Verify argument types:
 	assert isinstance(part, Part)
@@ -5340,43 +5409,37 @@ class Operation_Round_Pocket(Operation):
 	assert isinstance(stop, P)
 	assert isinstance(feed_speed, Speed)
 	assert isinstance(spindle_speed, Hertz)
-	assert isinstance(tracing, int)
-	assert isinstance(top_surface_transform, Transform)
-	assert isinstance(mount_translate_point, P)
+	assert isinstance(mount, Mount)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print(("{0}=>Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
-	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, *, {14:i})").
+	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, '{14}'").
 	      format(indent, "Round_Pocket", part._name_get(), comment, sub_priority, tool, order,
 	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
-	      mount_translate_point))
+	      mount._name_get()))
 
 	# Initialize superclass:
 	Operation.__init__(self, "Round_Pocket", Operation.KIND_ROUND_POCKET,
 	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
 
-	# Load up *self*:
-	self._diameter = diameter
-	self._countersink_diameter = countersink_diameter
-	self.hole_kind = hole_kind
-	self._start = start
-	self._stop = stop
-	self._tracing = -1000000
-	#self._tracing = tracing
-	self._top_surface_transform = top_surface_transform
-	self._mount_translate_point = mount_translate_point
+	# Load up *operation_round_pocket*:
+	operation_round_pocket._diameter = diameter
+	operation_round_pocket._countersink_diameter = countersink_diameter
+	operation_round_pocket._hole_kind = hole_kind
+	operation_round_pocket._mount = mount
+	operation_round_pocket._start = start
+	operation_round_pocket._stop = stop
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    indent = ' ' * tracing
 	    print(("{0}<=Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
-	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, *, {14:i})").
+	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, '{14}')").
               format(indent,"Round_Pocket", part._name_get(), comment, sub_priority, tool, order,
 	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
-	      mount_translate_point))
+	      mount._name_get()))
 
     def _cnc_generate(self, mount_wrl_file, tracing=-1000000):
 	""" *Operation_Round_Pocket*: Generate the CNC G-code for an *Operation_Round_Pocket*
@@ -5406,8 +5469,9 @@ class Operation_Round_Pocket(Operation):
 	tool = round_pocket._tool
 
 	# The *top_surface_transform* has been previously set orient the material correctly for CNC:
-	top_surface_transform = round_pocket._top_surface_transform
-	mount_translate_point = round_pocket._mount_translate_point
+	mount = part._current_mount_get()
+	top_surface_transform = mount._top_surface_transform_get()
+	mount_translate_point = mount._mount_translate_point_get()
 	cnc_transform = top_surface_transform.translate("Mount translate", mount_translate_point)
 	mapped_start = cnc_transform * start
 	mapped_stop = cnc_transform * stop
@@ -5425,7 +5489,7 @@ class Operation_Round_Pocket(Operation):
 	comment = round_pocket._comment
 	f = tool._feed_speed_get()
 	s = tool._spindle_speed_get()
-	hole_kind = round_pocket.hole_kind
+	hole_kind = round_pocket._hole_kind
 
 	# Figure out if *tool* is a laser:
 	is_laser = tool._is_laser_get()
@@ -5441,8 +5505,8 @@ class Operation_Round_Pocket(Operation):
 	    code._dxf_circle(mapped_start.x, mapped_start.y, radius - tool_radius)
 	else:
 	    # We do all the work to mill out the round_pocket pocket;
-
-	    mount_translate_point = part._mount_translate_point_get()
+	    mount = part._current_mount_get()
+	    mount_translate_point = mount._mount_translate_point_get()
 
 	    # Deal with through holes:
 	    is_through = False
@@ -5851,8 +5915,8 @@ class Operation_Simple_Pocket(Operation):
 	f = tool._feed_speed_get()
 	s = tool._spindle_speed_get()
 
-	mount_translate_point = part._mount_translate_point
-	assert isinstance(mount_translate_point, P)
+	mount = part._current_mount_get()
+	mount_translate_point = mount._mount_translate_point_get()
 
 	# Start with {comment}:
 	code._line_comment(comment)
@@ -6415,7 +6479,8 @@ class Part:
 	part._color = None
 	part._center = P()
 	part._cnc_suppress = False
-	part._cnc_transform = None		# Orientation and translate transform for CNC vice
+	part._current_mount = None
+	#part._cnc_transform = None		# Orientation and translate transform for CNC vice
 	#part._dowel_x = zero
 	#part._dowel_y = zero
 	part._dx_original = zero
@@ -6432,8 +6497,7 @@ class Part:
 	part._is_part = False	
 	part._laser_preferred = False
 	part._material = Material("aluminum", "")
-	part._mount = -1			# Number of current mount (starts a 0 for 1st one)
-	part._mount_translate_point = P()	# Place to move top surface point to for a mount
+	#part._mount_translate_point = P()	# Place to move top surface point to for a mount
 	part._name = name
 	part._operations = []
 	#part._plunge_x = zero
@@ -6448,8 +6512,8 @@ class Part:
 	part._scad_union_lines = []
 	part._signature_hash = None
 	part._stl_file_name = None
-	part._top_surface_transform_from = "None"
-	part._top_surface_transform = None
+	#part._top_surface_transform_from = "None"
+	#part._top_surface_transform = None
 	#part._top_surface_set = False		# Scheduled to go away
 	part._tooling_plate_translate_point = P() # Vice transform for tooling plate.
 	part._tool_preferred = ""
@@ -6887,7 +6951,7 @@ class Part:
 	part_program_number = part._cnc_part_generate(part_program_number, tracing + 1)
 	assert part_program_number % 100 == 0
 	shop._program_base_set(part_program_number)
-	part._mount = -1
+	#part._mount = -1
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -6901,26 +6965,6 @@ class Part:
 
 	# Mark *part* for CNC suppression:
         part._cnc_suppress = True
-
-    def _cnc_transform_get(self):
-        """ *Part*: Return the CNC transform associated with the *Part* object (i.e. *self*.) """
-
-	cnc_transform = self._cnc_transform
-	assert isinstance(cnc_transform, Transform)
-	return cnc_transform
-
-    def _cnc_transform_set(self, cnc_transform):
-	""" *Part*: Set the CNC trnasform for the *Part* object (i.e. *self*) to *cnc_transform*.
-	"""
-
-	# Use *part* instead of *self*:
-	part = self
-        
-	# Verify argument types:
-	assert isinstance(cnc_transform, Transform)
-
-	# Set *cnc_transform* in *part*:
-	part._cnc_transform = cnc_transform
 
     def _color_material_update(self, color, material):
 	""" *Part*: Update *color* and *material* for *self*. """
@@ -7034,8 +7078,9 @@ class Part:
 	# Grab some values from *operation_mount*:
 	comment = operation_mount._comment_get()
 	tool = operation_mount._tool_get()
-	top_surface_safe_z = operation_mount._top_surface_safe_z_get()
-	xy_rapid_safe_z = operation_mount._xy_rapid_safe_z_get()
+	mount = operation_mount._mount_get()
+	#top_surface_safe_z = mount._top_surface_safe_z_get()
+	#xy_rapid_safe_z = mount._xy_rapid_safe_z_get()
 
 	# Now we can generate the *priority_operations* from *priority_groups*:
 	priority_program_number = mount_program_number
@@ -7049,8 +7094,7 @@ class Part:
 	    # Now output all the CNC code needed for *priority_operations*:
 	    #mount_wrl_file.write("# Before Part._cnc_priority_generate*()\n")
 	    priority_program_number = part._cnc_priority_generate(priority_operations,
-	      priority_program_number, mount_wrl_file, top_surface_safe_z, xy_rapid_safe_z,
-	      tracing=tracing + 1)
+	      priority_program_number, mount_wrl_file, mount, tracing=tracing + 1)
 	    #mount_wrl_file.write("# After Part._cnc_priority_generate*()\n")
 
 	# Write out the final G-code lines to *part_ngc_file*:
@@ -7059,9 +7103,10 @@ class Part:
 	part_ngc_file.close()
 
 	# Write the part out to the *mount_wrl_file*:
-	cnc_transform = part._cnc_transform
+	mount = part._current_mount_get()
+	cnc_transform = mount._cnc_transform_get()
 	#mount_wrl_file.write("# Before Write out part file\n")
-	part._wrl_write(mount_wrl_file, part._cnc_transform, 2,
+	part._wrl_write(mount_wrl_file, cnc_transform, 2,
 	  part._stl_file_name, parts_table={}, tracing=tracing + 1)
 	#mount_wrl_file.write("# After Write out part file\n")
 
@@ -7183,8 +7228,8 @@ class Part:
 	      format(indent, part_name, part_program_number, next_program_number))
 	return next_program_number
 
-    def _cnc_priority_generate(self, priority_operations, priority_program_number,
-      mount_wrl_file, top_surface_safe_z, xy_rapid_safe_z, tracing=-1000000):
+    def _cnc_priority_generate(self,
+      priority_operations, priority_program_number, mount_wrl_file, mount, tracing=-1000000):
         """ *Part*: Generate CNC code for each *Operation* in *priority_operations* for the *Part*
 	    object (i.e. *self*).  Each operation in *priority_operations* must have the same
 	    priority.  *mount_wrl_file* has VRML code added to show all of the CNC paths
@@ -7199,8 +7244,7 @@ class Part:
 	assert isinstance(priority_operations, list)
 	assert isinstance(priority_program_number, int)
 	assert isinstance(mount_wrl_file, file)
-	assert isinstance(top_surface_safe_z, L)
-        assert isinstance(xy_rapid_safe_z, L)
+	assert isinstance(mount, Mount)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -7210,8 +7254,8 @@ class Part:
 	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-            print("{0}=>Part._cnc_priority_generate('{1}', *, {2}, *, {3:i}, {4:i})".format(indent,
-	      part._name, priority_program_number, top_surface_safe_z, xy_rapid_safe_z))
+            print("{0}=>Part._cnc_priority_generate('{1}', *, {2}, *, '{3}')".
+	      format(indent, part._name, priority_program_number, mount._name_get()))
 	    trace_detail = 2
 
 	if trace_detail >= 2:
@@ -7300,27 +7344,26 @@ class Part:
 	assert len(tool_operations) > 0
 	for tool_operations in tool_groups:
 	    tool_operation0 = tool_operations[0]
-	    tool_operation0._reorder(tool_operations, tracing + 1)
+	    tool_operation0._reorder(tool_operations, tracing = tracing + 1)
 
 	# Now generate CNC for all the *tool_operations* list in *tool_groups*:
 	tool_program_number = priority_program_number
 	for index, tool_operations in enumerate(tool_groups):
 	    assert isinstance(tool_operations, list)
-            tool_program_number = part._cnc_tool_generate(tool_operations, tool_program_number,
-	      mount_wrl_file, top_surface_safe_z, xy_rapid_safe_z, tracing + 1)
+            tool_program_number = part._cnc_tool_generate(tool_operations,
+	      tool_program_number, mount_wrl_file, mount, tracing = tracing + 1)
 
 	# Compute *new_priority_program_number* (no change from *tool_program_number*):
 	new_priority_program_number = tool_program_number
 
 	# Wrap up any requested *tracing* and return *new_priority_program_number*:
 	if tracing >= 0:
-            print("{0}<=Part._cnc_priority_generate('{1}', *, {2}, *, {3:i}, {4:i})=>{5}".
-	      format(indent, part._name, priority_program_number, top_surface_safe_z,
-	      xy_rapid_safe_z, new_priority_program_number))
+            print("{0}<=Part._cnc_priority_generate('{1}', *, {2}, *, '{3}')=>{4}".format(indent,
+              part._name, priority_program_number, mount._name_get(), new_priority_program_number))
 	return new_priority_program_number
 
-    def _cnc_tool_generate(self, tool_operations, tool_program_number,
-      mount_wrl_file, top_surface_safe_z, xy_rapid_safe_z, tracing=-1000000):
+    def _cnc_tool_generate(self,
+      tool_operations, tool_program_number, mount_wrl_file, mount, tracing=-1000000):
         """ *Part*: Generate CNC code for each *operation* in in *tool_operations* using the
 	    *Part* object (i.e. *self*). The generated tool `.ngc` file is numbered with
 	    *tool_program_number*.  The *mount_wrl_file* is updated with path information.  
@@ -7334,8 +7377,7 @@ class Part:
 	assert isinstance(tool_operations, list)
 	assert isinstance(tool_program_number, int)
 	assert isinstance(mount_wrl_file, file)
-	assert isinstance(top_surface_safe_z, L)
-	assert isinstance(xy_rapid_safe_z, L)
+	assert isinstance(mount, Mount)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -7344,8 +7386,8 @@ class Part:
 	    tracing = part._tracing
 	if tracing >= 0:
             indent = ' ' * tracing
-            print("{0}=>Part._cnc_tool_generate('{1}', *, {2}, *, {3:i}, {4:i})".format(
-	      indent, part._name, tool_program_number, top_surface_safe_z, xy_rapid_safe_z))
+            print("{0}=>Part._cnc_tool_generate('{1}', *, {2}, *, '{3})".
+	     format(indent, part._name, tool_program_number, mount._name_get()))
 	    trace_detail = 1
 
 	# Grab the *tool* from the first operation:
@@ -7359,7 +7401,7 @@ class Part:
 	shop = part._shop_get()
 	code = shop._code_get()
 	code._start(part, tool, tool_program_number, spindle_speed, mount_wrl_file,
-	  part._stl_file_name, top_surface_safe_z, xy_rapid_safe_z, tracing=tracing + 1)
+	  part._stl_file_name, mount, tracing=tracing + 1)
 	code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
 
 	# Perform each *operation* in *tool_operations*:
@@ -7396,10 +7438,30 @@ class Part:
 
 	# Wrap up any requested *tracing* and return *new_tool_program_number*:
 	if tracing >= 0:
-            print("{0}=>Part._cnc_tool_generate('{1}', *, {2}, *, {3:i}, {4:i})=>{5}".format(
-	      indent, part._name, tool_program_number, top_surface_safe_z, xy_rapid_safe_z,
-	      new_tool_program_number))
+            print("{0}=>Part._cnc_tool_generate('{1}', *, {2}, *, '{3}')=>{4}".format(
+	     indent, part._name, tool_program_number, mount._name_get(), new_tool_program_number))
 	return new_tool_program_number
+
+    def _current_mount_get(self):
+	""" *Part*: Return the current mount associated with the *Part* object (i.e. *self*.)
+	"""
+
+	current_mount = self._current_mount
+        assert isinstance(current_mount, Mount)
+	return current_mount
+
+    def _current_mount_set(self, mount):
+	""" *Part*: Return the current mount associated with the *Part* object (i.e. *self*.)
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(mount, Mount)
+
+	# Load *mount* into *part*:
+	part._current_mount = mount
 
     def _dimensions_update(self, ezcad, tracing):
 	""" *Part*: Update the dimensions of the *Part* object (i.e. *self*)
@@ -8021,33 +8083,6 @@ class Part:
 
 	return self._material
 
-    def _mount_get(self):
-        """ *Part*: Return the mount number for the *Part* object (i.e. *self*.) """
-
-	return self._mount
-
-    def _mount_translate_point_get(self):
-	""" *Part*: Return the mount translate point for the *Part* object (i.e. *self*).
-	"""
-
-	mount_translate_point = self._mount_translate_point
-	assert isinstance(mount_translate_point, P)
-	return mount_translate_point
-
-    def _mount_translate_point_set(self, mount_translate_point):
-	""" *Part*: Set the mount translate point for the *Part* object (i.e. *self*)
-	    to *mount_translate_point*.
-	"""
-
-	# Use *part* instead of *self*:
-	part = self
-        
-	# Verify argument types:
-	assert isinstance(mount_translate_point, P)
-
-	# Set *mount_translate_point* in *part*:
-	part._mount_translate_point = mount_translate_point
-
     def _name_get(self):
 	""" *Part*: Return the name of the *Part* object (i.e. *self*). """
 
@@ -8213,7 +8248,6 @@ class Part:
 		if part._operation_regroup_check(part,
 		  tool1_last_index + 1, tool2_first_index - 1,
 		  tool2_first_index, tool2_last_index):
-		    #call d@("**************reorder possible\n\")
 		    part._operation_regroup_helper3(tool1_last_index + 1,
 		      tool2_first_index, tool2_last_index)
 		    elimination_count += 1
@@ -8474,7 +8508,7 @@ class Part:
 	if tracing >= 0:
 	    print("{0}<=Part._stl_manufacture('{1}')".format(indent, part._name))
 
-    def _top_surface_transform_get(self):
+    def xxx_top_surface_transform_get(self):
 	""" *Part*: Return the top surface *Trasform* object from the *Part* object (i.e. *self*).
 	"""
 
@@ -8482,7 +8516,7 @@ class Part:
 	assert isinstance(top_surface_transform, Transform)
 	return top_surface_transform
 
-    def _top_surface_transform_set(self, top_surface_transform, from_routine):
+    def xxx_top_surface_transform_set(self, top_surface_transform, from_routine):
 	""" *Part*: Set the top surface transform object for the *Part* object (i.e. *self*)
 	    to *top_surface_transform*.
 	"""
@@ -9189,14 +9223,15 @@ class Part:
 	    # This chunk of code figures how deep the part is in the mount position.
 	    # It relies on the fact that we know where machine origin lands on the top
 	    # surface and where the center of the *part* is from the bounding box:
-	    top_surface_transform = part._top_surface_transform_get()
+	    mount = part._current_mount_get()
+	    top_surface_transform = mount._top_surface_transform_get()
 	    center_point = part.c
 	    cnc_center_point = top_surface_transform * center_point
 	    half_part_dz = cnc_center_point.length()
 	    part_dz = 2 * half_part_dz
 
 	    # Compute *tip_z* which is how deep down the tip of the dowel pin is allowed to go:
-	    mount_translate_point = part._mount_translate_point
+	    mount_translate_point = mount._mount_translate_point_get()
 	    top_surface_z = mount_translate_point.z
 	    tip_z = top_surface_z - part_dz - tip_depth
 	    vice_safe_z = L(inch=0.100)
@@ -10907,12 +10942,12 @@ class Part:
 		end_mill_tool = part._tools_end_mill_search(hole_diameter,
 		  hole_z_depth, "countersink_hole", tracing + 1)
 		if end_mill_tool != None:
+		    mount = part._current_mount_get()
 		    operation_round_pocket = Operation_Round_Pocket(part, comment,
 		      0, end_mill_tool, Operation.ORDER_END_MILL_ROUND_POCKET, None,
 		      hole_diameter, countersink_diameter, hole_kind, start, stop,
 		      end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
-		      part._top_surface_transform_get(), part._mount_translate_point_get(),
-		      tracing + 1)
+		      mount, tracing + 1)
 		    part._operation_append(operation_round_pocket)
 
 	if ezcad._stl_mode:
@@ -12266,8 +12301,8 @@ class Part:
 	    # *top_surface_transform* transform forces the part into the correct orientation
             # for milling the simple pocket.  So now we need to figure out the *bsw_corner*
             # and *tne_corner* with the part located immediately under the machine origin:
-	    top_surface_transform = part._top_surface_transform
-	    assert isinstance(top_surface_transform, Transform)
+	    mount = part._current_mount_get()
+	    top_surface_transform = mount._top_surface_transform_get()
 	    transformed_corner1 = top_surface_transform * corner1
 	    transformed_corner2 = top_surface_transform * corner2
 	    x1, x2 = transformed_corner1.x.minimum_maximum(transformed_corner2.x)
@@ -12376,7 +12411,8 @@ class Part:
 
 	    # Grab the *top_surface_transform* from *part* that has been previously
             # set to orient the material properly for the CNC machine:
-	    top_surface_transform = part._top_surface_transform_get()
+	    mount = part._current_mount_get()
+	    top_surface_transform = mount._top_surface_transform_get()
 
 	    # Transform the corners
 	    transformed_corner1 = top_surface_transform * corner1
@@ -12694,7 +12730,8 @@ class Part:
             # *top_surface_transform* has been applied:
 	    bsw = part.bsw
 	    tne = part.tne
-	    top_surface_transform = part._top_surface_transform
+	    mount = part._current_mount_get()
+	    top_surface_transform = mount._top_surface_transform
 	    transformed_bsw = top_surface_transform * bsw
 	    transformed_tne = top_surface_transform * tne
 	    minimum_x, maximum_x = transformed_bsw.x.minimum_maximum(transformed_tne.x)
@@ -12820,6 +12857,11 @@ class Part:
 	    top_surface_safe_z = z
 	    xy_rapid_safe_z = top_surface_safe_z + L(inch=0.500)
 
+	    # Create the *tooling_plate_mount*:
+	    tooling_plate_mount = Mount("Tooling_Plate_Mount", part, top_surface_transform,
+	      tooling_plate_translate_point, top_surface_safe_z, xy_rapid_safe_z,
+	      tracing = tracing + 1)
+
 	    # Compute the *dowel_point*:
 	    extra_dx = part._extra_dx
 	    dowel_point = P(x - part_dx/2 - extra_dx/2, y, z - part_dz)
@@ -12840,13 +12882,11 @@ class Part:
 	    # Now remember where to mount the part with the tooling plate:
 	    tooling_plate._mount_reset()
 	    tooling_plate._dowel_point_set(dowel_point)
+	    tooling_plate._mount_set(tooling_plate_mount)
 	    tooling_plate._parallels_height_set(selected_parallel_height)
 	    if trace_detail >= 1:
 		print("{0}parallels_height_set({1:i})".format(indent, selected_parallel_height))
-	    tooling_plate._mount_translate_point_set(tooling_plate_translate_point)
 	    tooling_plate._spacers_set(spacers)
-	    tooling_plate._top_surface_transform_set(top_surface_transform)
-	    tooling_plate._top_surface_safe_z_set(top_surface_safe_z)
 	    tooling_plate._xy_rapid_safe_z_set(xy_rapid_safe_z)
 
 	# Wrap up any requested *tracing*:
@@ -12881,31 +12921,20 @@ class Part:
 	    tooling_plate = shop._tooling_plate_get()
 	    dowel_point = tooling_plate._dowel_point_get()
 	    dy = tooling_plate._dy_get()
-	    mount_translate_point = tooling_plate._mount_translate_point_get()
+	    mount = tooling_plate._mount_get()
+	    if trace_detail >= 1:
+		print("{0}mount='{1}'".format(indent, mount._name_get()))
 	    parallels_height = tooling_plate._parallels_height_get()
 	    spacers = tooling_plate._spacers_get()
-	    top_surface_safe_z = tooling_plate._top_surface_safe_z_get()
-	    top_surface_transform = tooling_plate._top_surface_transform_get()
-	    xy_rapid_safe_z = tooling_plate._xy_rapid_safe_z_get()
-
-	    # Grap the transforms from *tooling_plate* and stuff them into *part*:
-	    assert isinstance(top_surface_transform, Transform)
-	    assert isinstance(mount_translate_point, P)
-
-	    part._top_surface_transform = top_surface_transform
-	    part._mount_translate_point = mount_translate_point
-	    part._cnc_transform = top_surface_transform.translate("Mount", mount_translate_point)
-
-	    assert isinstance(part._top_surface_transform, Transform)
-	    assert isinstance(part._mount_translate_point, P)
-	    assert isinstance(part._cnc_transform, Transform)
 
 	    # Create *operation_mount* and add it to *part* operations list:
 	    vice = shop._vice_get()
-	    operation_mount = Operation_Mount(part, comment, top_surface_transform,
-	      mount_translate_point, top_surface_safe_z, xy_rapid_safe_z, vice, dy,
-	      parallels_height, tooling_plate, spacers)
+	    operation_mount = Operation_Mount(part, comment,
+	      mount, vice, dy, parallels_height, tooling_plate, spacers, tracing = tracing + 1)
 	    part._operation_append(operation_mount)
+
+	    # Record the new *mount* in *part*:
+            part._current_mount_set(mount)
 
 	    # Perform a dowel pin operation:
 	    zero = L()
@@ -13548,21 +13577,18 @@ class Part:
 	    cnc_top_surface_safe_z = cnc_top_surface_z + extra_top_dz
 	    cnc_xy_rapid_safe_z = cnc_top_surface_z + L(inch=0.500)
 	    
-	    # Remember mount transforms into *part*:
-	    cnc_transform = \
-	      top_surface_transform.translate("Mount in vice", mount_translate_point)
-	    part._cnc_transform_set(cnc_transform)
-	    part._top_surface_transform_set(top_surface_transform, "Part.vice_mount")
-	    part._mount_translate_point_set(mount_translate_point)
+	    # Create *mount* and stuff into *part*:
+	    mount = Mount("vice_mount", part, top_surface_transform,
+	      mount_translate_point, cnc_top_surface_safe_z, cnc_xy_rapid_safe_z)
+	    part._current_mount_set(mount)
 
 	    # Create *operation_mount* and add it to *part* operations list:
 	    vice = shop._vice_get()
 	    jaws_spread = part_dy + extra_dy
 	    tooling_plate = None
 	    spacers = []
-	    operation_mount = Operation_Mount(part, comment, top_surface_transform,
-	      mount_translate_point, cnc_top_surface_safe_z, cnc_xy_rapid_safe_z,
-	      vice, jaws_spread, selected_parallel_height, tooling_plate, spacers)
+	    operation_mount = Operation_Mount(part, comment,
+	      mount, vice, jaws_spread, selected_parallel_height, tooling_plate, spacers)
 	    part._operation_append(operation_mount)
 
 	    # Save extra material diminsions for visualization purposes:
@@ -13651,7 +13677,7 @@ class Part:
 	#    # computed using *angle_between*() routine for the *z_axis* and the *projection_axis*.
 	#    rotation_axis = z_axis.cross_product(projection_axis).normalize()
 	#    rotation_angle = z_axis.angle_between(projection_axis)
-	#    cnc_transform = cnc_transfrom.rotate("vice_mount rotate",
+	#    cnc_transform = cnc_transform.rotate("vice_mount rotate",
 	#      rotation_axis, rotation_angle)
 	#    if tracing >= 0:
 	#	print("{0}rotation_axis={1:m} rotation_angle{2:d}".
@@ -14136,7 +14162,6 @@ class Code:
 	zero = L()
 
 	# Load up *self*:
-	code._cnc_transform = None	# Transform for mapping part points into CNC space
 	code._code_stream = None	# Code stream to write G-codes to
 	code._command_started = False	# At begining of RS274 command line
 	code._command_chunks = []	# RS274 line broken into space separated chunks
@@ -14146,9 +14171,8 @@ class Code:
 	code._dxf_x_offset = zero	# DXF X offset
 	code._dxf_y_offset = zero	# DXF Y offset
 	code._is_laser = False		# True if tool is a laser
+	code._mount  = None		# *Mount* object to use for current batch of G-code
 	code._mount_wrl_file = None	# Place to write unified part path .wrl file
-	code._top_surface_safe_z = None	# Top surface of part in CNC coordinates
-	code._xy_rapid_safe_z = None	# CNC Z altitude where XY rapids are allowed
 
 	# Construct the *g1_table*:
 	g1_values_list = (0, 1, 2, 3, 33, 38, 73, 76, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89)
@@ -15053,7 +15077,7 @@ class Code:
 	code._z1 = zero
 
     def _start(self, part, tool, tool_program_number, spindle_speed, mount_wrl_file,
-      stl_file_name, top_surface_safe_z, xy_rapid_safe_z ,tracing=-1000000):
+      stl_file_name, mount, tracing=-1000000):
 	""" *Code*: Start writing out the G-code for *tool* (
 	"""
 
@@ -15067,15 +15091,11 @@ class Code:
 	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(mount_wrl_file, file)
 	assert isinstance(stl_file_name, str)
-	assert isinstance(top_surface_safe_z, L)
-	assert isinstance(xy_rapid_safe_z, L)
+	assert isinstance(mount, Mount)
+	assert isinstance(tracing, int)
 
 	# Reset *code*:
 	code._reset()
-
-	# Save *top_surface_safe_z*
-	code._top_surface_safe_z = top_surface_safe_z
-	code._xy_rapid_safe_z = xy_rapid_safe_z
 
 	# Grab some values from *part* and *tool*:
 	part_name = part._name_get()
@@ -15086,13 +15106,16 @@ class Code:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Code._start('{1}', '{2}', {3}, {4:rpm}, *, '{5}', {6:i}, {7:i})".
+	    print("{0}=>Code._start('{1}', '{2}', {3}, {4:rpm}, '{5}', '{6}')".
 	      format(indent, part_name, tool_name, tool_program_number, spindle_speed,
-	      stl_file_name, top_surface_safe_z, xy_rapid_safe_z))
+	      stl_file_name, mount._name_get()))
 	    trace_detail = 1
 
-	# Make sure that closed off any previous *code_stream*:
+	# Make sure that we closed off any previous *code_stream*:
 	assert code._code_stream == None
+
+	# Stuff some values into *code*:
+	code._mount = mount
 
 	# Open new *code_stream*:
 	ezcad = part._ezcad_get()
@@ -15139,17 +15162,18 @@ class Code:
 	vrml_file.write(" children [\n")
 
 	# Write out the part visualization:
+	cnc_transform = mount._cnc_transform_get()
 	part._wrl_write(vrml_file,
-	  part._cnc_transform, 2, stl_file_name, parts_table={}, tracing=tracing + 1)
+	  cnc_transform, 2, stl_file_name, parts_table={}, tracing=tracing + 1)
 
 	code._vrml_file = vrml_file
 	code._mount_wrl_file = mount_wrl_file
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Code._start('{1}', '{2}', {3}, {4:rpm}, *, '{5}', {6:i}, {7:i})".
+	    print("{0}<=Code._start('{1}', '{2}', {3}, {4:rpm}, '{5}', '{6}')".
 	      format(indent, part_name, tool_name, tool_program_number, spindle_speed,
-	      stl_file_name, top_surface_safe_z, xy_rapid_safe_z))
+	      stl_file_name, mount._name_get()))
 
 
     #FIXME: This is no longer used!!!
@@ -15916,7 +15940,8 @@ class Code:
 	# Only perform the rapid if we are not already there:
 	if code._x_value() != x or code._y_value() != y:
 	    # Make sure we are at a safe Z height prior to performing the rapid:
-	    assert code._z == code._xy_rapid_safe_z
+	    mount = code._mount
+	    assert code._z == mount._xy_rapid_safe_z_get()
 
 	    # Output a X/Y rapid command:
 	    code._command_begin()
@@ -15943,9 +15968,9 @@ class Code:
 	    print("{0}=>Code._xy_rapid_safe_z_force(*, {1:i}, {2:rpm})".format(indent, feed, speed))
 
 	# Make sure we are up at *xy_rapid_z_safe*:
-	xy_rapid_safe_z = code._xy_rapid_safe_z
-	assert isinstance(xy_rapid_safe_z, L)
-	code._z_feed(feed, speed, code._xy_rapid_safe_z, "xy_rapid_safe_z_force", tracing + 1)
+	mount = code._mount
+	xy_rapid_safe_z = mount._xy_rapid_safe_z_get()
+	code._z_feed(feed, speed, xy_rapid_safe_z, "xy_rapid_safe_z_force", tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -15991,8 +16016,9 @@ class Code:
 	# Hence, we can just clear *z_safe_pending*:
 	code._z_safe_pending = False
 
-	top_surface_safe_z = code._top_surface_safe_z
-	xy_rapid_safe_z = code._xy_rapid_safe_z
+	mount = code._mount
+	top_surface_safe_z = mount._top_surface_safe_z_get()
+	xy_rapid_safe_z = mount._xy_rapid_safe_z_get()
 	if trace_detail >= 1:
 	    print("{0}top_surface_safe_z={1:i} xy_rapid_safe_z={2:i}".
 	      format(indent, top_surface_safe_z, xy_rapid_safe_z))
@@ -16561,9 +16587,9 @@ class Shop:
 	no4_close_fit_diameter = L(inch=.1160)
 	no4_75_percent_thread_diameter = L(inch=.0890)
 	no4_50_percent_thread_diameter = L(inch=.0960)
-	tooling_plate = Tooling_Plate(L(inch=6.0), L(inch=6.0), L(inch=.250), 11, 11, L(inch=.500),
-	  no4_close_fit_diameter, no4_75_percent_thread_diameter, no4_50_percent_thread_diameter,
-	  L(inch=0.250), L(inch=0.500))
+	tooling_plate = Tooling_Plate("Wayne's TP", L(inch=6.0), L(inch=6.0), L(inch=.250),
+	  11, 11, L(inch=.500), no4_close_fit_diameter, no4_75_percent_thread_diameter,
+	  no4_50_percent_thread_diameter, L(inch=0.250), L(inch=0.500))
 
 	# Vice to use:
 	parallels = Parallels(L(inch=6.0), L(inch="1/8"), [
@@ -17759,7 +17785,7 @@ class Tooling_Plate:
     """ *Tooling_Plate*: A *Tooling_Plate* object represents a flat plate of holes
 	onto which parts can be mounted."""
 
-    def __init__(self, dx, dy, dz, rows, columns, hole_pitch,
+    def __init__(self, name, dx, dy, dz, rows, columns, hole_pitch,
       hole_diameter, soft_drill_diameter, steel_drill_diameter, spacer_width, spacer_dz):
         """ *Tooling_Plate*:  Initialize the *Tooling_Plate* object to contain
 	    *dx*, *dy*, *dz*, *rows*, *columns*, *hole_diameter*, *soft_drill_diameter*,
@@ -17770,6 +17796,7 @@ class Tooling_Plate:
         tooling_plate = self
 
         # Verify argument types:
+	assert isinstance(name, str)
         assert isinstance(dx, L)
         assert isinstance(dy, L)
         assert isinstance(dz, L)
@@ -17789,6 +17816,7 @@ class Tooling_Plate:
         tooling_plate._dz = dz
         tooling_plate._hole_diameter = hole_diameter
 	tooling_plate._hole_pitch = hole_pitch
+	tooling_plate._name = name
         tooling_plate._rows = rows
         tooling_plate._soft_drill_diameter = soft_drill_diameter
 	tooling_plate._spacer_dz = spacer_dz
@@ -17877,12 +17905,13 @@ class Tooling_Plate:
 
 	return self._hole_pitch
 
-    def _mount_translate_point_get(self):
-        """ *Tooling_Plate*: Return the mount translate point associated with the *Tooling_Plate*
-	    object (i.e. *self*.)
+    def _mount_get(self):
+        """ *Tooling_Plate*: Return the *Mount* from the *Tooling_Plate* object (i.e. *self*.)
 	"""
 
-	return self._mount_translate_point
+	mount = self._mount 
+	assert isinstance(mount, Mount)
+	return mount
 
     def _mount_reset(self):
         """ *Tooling_Plate*: Reset all the mount settings for the *Tooling_Plate* object
@@ -17894,26 +17923,28 @@ class Tooling_Plate:
 
 	# Reset all of the mount settings to invalid values:
 	tooling_plate._dowel_point           = None
-	tooling_plate._mount_translate_point = None
+	tooling_plate._mount                 = None
 	tooling_plate._parallels_height      = None
 	tooling_plate._spacers               = None
-	tooling_plate._top_surface_safe_z    = None
-	tooling_plate._top_surface_transform = None
-	tooling_plate._xy_rapid_safe_z       = None
 
-    def _mount_translate_point_set(self, mount_translate_point):
-        """ *Tooling_Plate*: Store a top surface transform into the *Tooling_Plate* object
-	    (i.e. *self*.)
+    def _mount_set(self, mount):
+        """ *Tooling_Plate*: Store mount into the *Tooling_Plate* object (i.e. *self*.)
 	"""
 
 	# Use *tooling_plate* instead of *self*:
         tooling_plate = self
 
 	# Verify argument types:
-	assert isinstance(mount_translate_point, P)
+	assert isinstance(mount, Mount)
 
 	# Stuff *mount_translate_point* into *tooling_plate*:
-	tooling_plate._mount_translate_point = mount_translate_point
+	tooling_plate._mount = mount
+
+    def _name_get(self):
+        """ *Tooling_Plate*: Return the *Name* from the *Tooling_Plate* object (i.e. *self*.)
+	"""
+
+	return self._name
 
     def _parallels_height_get(self):
         """ *Tooling_Plate*: Return the height of the parallels in the vice for the *Tooling_Plate*
@@ -17987,48 +18018,6 @@ class Tooling_Plate:
 	"""
 
 	return self._spacer_dz
-
-    def _top_surface_safe_z_get(self):
-        """ *Tooling_Plate*: Return the top surface transform previoulsy set for the *Tooling_Plate*
-	    object (i.e. *self*.)
-	"""
-
-	return self._top_surface_safe_z
-
-    def _top_surface_safe_z_set(self, top_surface_safe_z):
-        """ *Tooling_Plate*: Store a top surface transform into the *Tooling_Plate* object
-	    (i.e. *self*.)
-	"""
-
-	# Use *tooling_plate* instead of *self*:
-        tooling_plate = self
-
-	# Verify argument types:
-	assert isinstance(top_surface_safe_z, L)
-
-	# Stuff *top_surface_safe_z* into *tooling_plate*:
-	tooling_plate._top_surface_safe_z = top_surface_safe_z
-
-    def _top_surface_transform_get(self):
-        """ *Tooling_Plate*: Return the top surface transform previoulsy set for the *Tooling_Plate*
-	    object (i.e. *self*.)
-	"""
-
-	return self._top_surface_transform
-
-    def _top_surface_transform_set(self, top_surface_transform):
-        """ *Tooling_Plate*: Store a top surface transform into the *Tooling_Plate* object
-	    (i.e. *self*.)
-	"""
-
-	# Use *tooling_plate* instead of *self*:
-        tooling_plate = self
-
-	# Verify argument types:
-	assert isinstance(top_surface_transform, Transform)
-
-	# Stuff *top_surface_transform* into *tooling_plate*:
-	tooling_plate._top_surface_transform = top_surface_transform
 
     def _wrl_write(self, wrl_file, pad, corner, tracing = -1000000):
 	""" *Tooling_Plate*: Write out a VRML visulazation of *Tooling_Plate* (i.e. *self*)
@@ -18582,6 +18571,13 @@ class Vice:
 	"""
 
 	return self._volume
+
+    def _name_get(self):
+	""" *Vice*: Return the name of the *Vice* object (i.e. *self*.)
+	"""
+
+	return "NO VICE NAME YET"
+
 
     def _parallels_get(self):
 	""" *Vice*: Return the *Parallels* object for the *Vice* object (i.e. *self*).
