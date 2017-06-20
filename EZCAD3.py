@@ -586,6 +586,7 @@ class P:
     def __mul__(self, scalar):
 	""" P: Return the result of muliplying {self} by {scalar}. """
 
+	assert isinstance(scalar, float) or isinstance(scalar, int)
 	return P(self.x * scalar, self.y * scalar, self.z * scalar)
 
     def __rmul__(self, scalar):
@@ -4534,19 +4535,19 @@ class Mount_Operations:
 	vice = shop._vice_get()
 	vice._coordinates_vrml_append(mount_lines_vrml)
 
-	# Open the top-level *part_ngc_file* that lists both the tool table and
+	# Open the top-level *mount_ngc_file* that lists both the tool table and
 	# calls each tool operation from a single top level .ngc file:
 	ezcad = part._ezcad_get()
 	ngc_directory = ezcad._ngc_directory_get()
-	part_ngc_file_name = "O{0}.ngc".format(mount_program_number)
-	part_ngc_file = ngc_directory._write_open(part_ngc_file_name, tracing + 1)
-	assert part_ngc_file != None, "Unable to open {0}".format(part_ngc_file_name)
+	mount_ngc_file_name = "O{0}.ngc".format(mount_program_number)
+	mount_ngc_file = ngc_directory._write_open(mount_ngc_file_name, tracing + 1)
+	assert mount_ngc_file != None, "Unable to open {0}".format(mount_ngc_file_name)
 	if trace_detail >= 2:
-	    print("{0}part_ngc_file_name='{1}' opened".format(indent, part_ngc_file_name))
+	    print("{0}mount_ngc_file_name='{1}' opened".format(indent, mount_ngc_file_name))
 
-	# Output some heading lines for *part_ngc_file*:
-	part_ngc_file.write("( Part: {0})".format(part._name_get()))
-	part_ngc_file.write("( Tooling table: )\n")
+	# Output some heading lines for *mount_ngc_file*:
+	mount_ngc_file.write("( Part: {0})".format(part._name_get()))
+	mount_ngc_file.write("( Tooling table: )\n")
 
 	# Associated with each *Operation* is a priority field that stores the number of times
 	# that *Part.cnc_fence*() has been called for the associated *Part* object.  The rule
@@ -4585,17 +4586,11 @@ class Mount_Operations:
 	# Now we can generate the *priority_operations* from *priority_groups*:
 	#priority_program_number = mount_program_number
 	#for priority_operations in priority_groups:
-	#    # Output a couple of G-code lines *part_ngc_file*:
+	#    # Output a couple of G-code lines *mount_ngc_file*:
 	#    tool_number = tool._number_get()
 	#    tool_name = tool._name_get()
-	#    part_ngc_file.write("( T{0} {1} )\n".format(tool_number, tool_name))
-	#    part_ngc_file.write("O{0} call\n".format(priority_program_number))
-
-	# Read the *part* STL into *mount_stl_vrml*:
-	mount_wrl_file_name = "{0} STL".format(mount_operations._name)
-	mount_stl_vrml = VRML(mount_wrl_file_name)
-	cnc_transform = mount._cnc_transform_get()
-	mount_stl_vrml._stl_read(part, cnc_transform, tracing = tracing + 1)
+	#    mount_ngc_file.write("( T{0} {1} )\n".format(tool_number, tool_name))
+	#    mount_ngc_file.write("O{0} call\n".format(priority_program_number))
 
 	# Now generate all of the tool paths:
 	priority_program_number = mount_program_number
@@ -4607,16 +4602,17 @@ class Mount_Operations:
 	    # Now we can generate all the tool operations that are at the same pirority:
 	    priority_program_number = \
 	      priority_mount_operations._cnc_priority_generate(priority_program_number,
-	      mount_stl_vrml, mount_lines_vrml, tool_path_vrmls, tracing = tracing + 1)
+	      mount_ngc_file, mount_lines_vrml, tool_path_vrmls, tracing = tracing + 1)
 
 	# The *next_mount_program_number* must be divisible by 10:
 	next_mount_program_number = priority_program_number + 9
 	next_mount_program_number -= next_mount_program_number % 10
 
-	# Write out the final G-code lines to *part_ngc_file*:
-	part_ngc_file.write("G53 Y0.0 ( Move the work to the front )\n")
-	part_ngc_file.write("M2\n")
-	part_ngc_file.close()
+	# Write out the final G-code lines to *mount_ngc_file*:
+	mount_ngc_file.write("G53 Y0.0 ( Move the work to the front )\n")
+	mount_ngc_file.write("M2\n")
+	mount_ngc_file.write("(mount_ngc_file_closed in Mount_Operations._cnc_mount_generate)")
+	mount_ngc_file.close()
 	
 	# Now we write create the *mount_wrl_lines* to write out mount VRML into:
 	mount_wrl_lines = []
@@ -4646,7 +4642,9 @@ class Mount_Operations:
 	# these file names end in `.wrl` and are written into the *ngc_directory* to with
         # coexist with their similarly named `.ngc` counterparts:
 	ezcad = part._ezcad_get()
-	mount_wrl_file_name = "O{0}.wrl".format(mount_program_number)
+	part_name = part._name_get().replace(' ', '_')
+	mount_name = mount0._name_get().replace(' ', '_')
+	mount_wrl_file_name = "O{0}_{1}_{2}.wrl".format(mount_program_number, part_name, mount_name)
 	with ngc_directory._write_open(mount_wrl_file_name, tracing + 1) as mount_wrl_file:
 	    mount_wrl_file.writelines(mount_wrl_lines)
 
@@ -4656,8 +4654,8 @@ class Mount_Operations:
 	      indent, mount_operations._name, mount_program_number, next_mount_program_number))
         return next_mount_program_number
 
-    def _cnc_priority_generate(self,
-      priority_program_number, mount_stl_vrml, mount_lines_vrml, tool_path_vrmls, tracing=-1000000):
+    def _cnc_priority_generate(self, priority_program_number,
+      mount_ngc_file, mount_lines_vrml, tool_path_vrmls, tracing=-1000000):
         """ *Mount_Operations*: Generate CNC code for each *Operation* in the *Mount_Operations*
 	    object (i.e. *self*), where each *Operation* in the *Mount_Operations* object
 	    must have the same priority.  *mount_wrl_line* has VRML code added to show all
@@ -4671,7 +4669,7 @@ class Mount_Operations:
         
 	# Verify argument types:
 	assert isinstance(priority_program_number, int)
-	assert isinstance(mount_stl_vrml, VRML)
+	assert isinstance(mount_ngc_file, file)
 	assert isinstance(mount_lines_vrml, VRML)
 	assert isinstance(tool_path_vrmls, list)
 	assert isinstance(tracing, int)
@@ -4792,7 +4790,7 @@ class Mount_Operations:
 
 	    # Now generate the tool path for *reordered_tool_mount_operations*:
 	    tool_program_number = reordered_tool_mount_operations._cnc_tool_generate(
-	      tool_program_number, mount_stl_vrml, mount_lines_vrml, tool_path_vrmls,
+	        tool_program_number, mount_ngc_file, mount_lines_vrml, tool_path_vrmls,
  	      tracing = tracing + 1)
 
 	# Compute *new_priority_program_number* (no change from *tool_program_number*):
@@ -4805,7 +4803,7 @@ class Mount_Operations:
 	return new_priority_program_number
 
     def _cnc_tool_generate(self,
-      tool_program_number, mount_stl_vrml, mount_lines_vrml, tool_path_vrmls, tracing=-1000000):
+      tool_program_number, mount_ngc_file, mount_lines_vrml, tool_path_vrmls, tracing=-1000000):
         """ *Mount_Operations*: Generate CNC code for each *Operation* in *Mount_Operations*
 	    object (i.e. *self*.)  The generated tool `.ngc` file is numbered with
 	    *tool_program_number* and the next usable tool program number is returned.
@@ -4817,7 +4815,7 @@ class Mount_Operations:
 
 	# Verify argument types:
 	assert isinstance(tool_program_number, int)
-	assert isinstance(mount_stl_vrml, VRML)
+	assert isinstance(mount_ngc_file, file)
 	assert isinstance(mount_lines_vrml, VRML)
 	assert isinstance(tool_path_vrmls, list)
 	assert isinstance(tracing, int)
@@ -4840,6 +4838,11 @@ class Mount_Operations:
 	feed_speed = operation0._feed_speed_get()
 	spindle_speed = operation0._spindle_speed_get()
 	part = operation0._part_get()
+
+	# Output the call to *mount_ngc_file*:
+	tool_name = tool._name_get()
+	if tool_name != "None":
+	    mount_ngc_file.write("O{0} call ( {1} )\n".format(tool_program_number, tool_name))
 
 	# Grab the *code* object and start the code generation:
 	shop = part._shop_get()
@@ -4875,7 +4878,8 @@ class Mount_Operations:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed, tracing = tracing + 1)
 
 	    # Perform the CNC generation step for *operation*:
-	    tool_operation._cnc_generate(tool_mount, mount_lines_vrml, tracing = tracing + 1)
+	    tool_operation._cnc_generate(tool_mount,
+	      mount_lines_vrml, mount_ngc_file, tracing = tracing + 1)
 
 	    # Make darn we end at a safe height:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
@@ -4945,7 +4949,8 @@ class Mount_Operations:
 	    *Mount_Operations* object (i.e. *self*) with substituting in *to_mount* for
 	    each append.  If *flags* contains an 'M', mount operations will be stripped
 	    out during the copy.  If *flags* contains an 'D', dowel pin operations will
-	    be stripped out.  If *flags* contains an 'F', facing operations will be stripped
+	    be stripped out.  If *flags* contains a 'd', all but the first dowel pin operation
+	    will be stripped out.  If *flags* contains an 'F', facing operations will be stripped
 	    out of the copy.
 	"""
 
@@ -4970,8 +4975,8 @@ class Mount_Operations:
 	from_pairs = from_mount_operations._pairs
 
 	# Set the stripping flags:
-	strip_mounts = "M" in flags
-	strip_dowel_pins = "D" in flags
+	strip_mounts = 'M' in flags
+	strip_dowel_pins = 'D' in flags
 
 	# Transfer the from *from_pairs* to *to_pairs*:
 	for from_pair in from_pairs:
@@ -5336,11 +5341,11 @@ class Operation:
     POCKET_KIND_FLAT = 0
     POCKET_KIND_THROUGH = 1
 
-    def __init__(self, name, kind,
-      part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed):
+    def __init__(self, name, kind, part, comment, sub_priority, tool, order,
+      follows, feed_speed, spindle_speed, cnc_start):
 	""" *Operation*: Initialize an *Operation* object to contain
 	    *name*, *kind*, *part*, *comment*, *sub_priority*, *tool*,
-	    *order*, *follows*, *feed_speed*, and *spindle_speed*.
+	    *order*, *follows*, *feed_speed*, *spindle_speed*, *x_start*, and *y_start*.
 	"""
 
 	# Use *operation* instead of *self*:
@@ -5357,6 +5362,7 @@ class Operation:
 	assert isinstance(follows, Operation) or follows == None
 	assert isinstance(feed_speed, Speed)
 	assert isinstance(spindle_speed, Hertz)
+	assert isinstance(cnc_start, P)
 
 	# Load up *operation*:
 	operation._name = name
@@ -5373,6 +5379,7 @@ class Operation:
 	operation._feed_speed = feed_speed
 	operation._spindle_speed = spindle_speed
 	operation._cnc_program_number = -1
+	operation._cnc_start = cnc_start		# Point in 3D space where CNC starts.
 
     def xxx_compare(self, operation2):
 	""" *Operation*: Return -1, 0, or 1 depending upon whether *operation1*
@@ -5463,6 +5470,87 @@ class Operation:
 	return self._priority
 
     def _reorder(self, mount_operations, tracing=-1000000):
+	""" *Operation*: Reorder *mount_operations* to minimize tool travel time between operations.
+	"""
+
+	# Use *operation* instead of *self*:
+ 	operation = self
+
+	# Verify argument types:
+	assert isinstance(mount_operations, Mount_Operations)
+	assert isinstance(tracing, int)
+	
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+            indent = ' ' * tracing
+	    print("{0}=>Operation._reorder('{1}', *)".format(indent, operation._name))
+	    trace_detail = 2
+
+	# Make a copy of *pairs* so we can reorder them without damaging the original:
+	pairs = mount_operations._pairs_copy()
+	pairs_size = len(pairs)
+	if trace_detail >= 1:
+	    print("{0}operations size={1}".format(indent, pairs_size))
+	if trace_detail >= 2:
+	    mount_operations._show("before operations reorder", tracing = tracing + 1)
+
+	if pairs_size >= 3:
+	    for current_index in range(pairs_size - 2):
+		# Grab the *current_pair* and compute its X/Y start location:
+		current_pair = pairs[current_index]
+		current_mount = current_pair[0]
+		current_operation = current_pair[1]
+		current_cnc_transform = current_mount._cnc_transform_get()
+		current_cnc_start = current_cnc_transform * current_operation._cnc_start
+		current_x = current_cnc_start.x
+		current_y = current_cnc_start.y	
+		if trace_detail >= 2:
+		    print("{0}current[{1}]: x={2:i} y={3:i}".
+ 		      format(indent, current_index, current_x, current_y))
+
+		minimum_distance = L(mm=123456789.0)
+		match_index = -1
+		for search_index in range(current_index + 1, pairs_size):
+		    search_pair = pairs[search_index]
+		    search_mount = search_pair[0]
+		    search_operation = search_pair[1]
+		    search_cnc_transform = search_mount._cnc_transform_get()
+		    search_cnc_start = search_cnc_transform * search_operation._cnc_start
+		    search_x = search_cnc_start.x
+		    search_y = search_cnc_start.y
+		    search_distance = (search_x - current_x).distance(search_y - current_y)
+		    if trace_detail >= 2:
+			print("{0}search[{1}]: x:{2:i} y:{3:i} dist={4:i}".
+			  format(indent, search_index, search_x, search_y, search_distance))
+                    if search_distance < minimum_distance:
+			minimum_distance = search_distance
+			match_index = search_index
+
+		# Move *match_pair* be next after *current_pair* in *pairs*:
+		if match_index >= 0:
+		    # Swap the two operations:
+		    if trace_detail >= 2:
+                        print("{0}match_index={1}".format(indent, match_index))
+		    match_pair = pairs[match_index]
+		    pairs[match_index] = pairs[current_index + 1]
+		    pairs[current_index + 1] = match_pair
+
+	# Create *reordered_mount_operations* from *pairs*:
+	reordered_mount_operations = \
+	  Mount_Operations("reordered {0}".format(operation._name), tracing = tracing + 1)
+	reordered_mount_operations._pairs_extend(pairs)
+	if trace_detail >= 2:
+	    reordered_mount_operations._show("after reorder", tracing = tracing + 1)
+
+	# Wrap up any requested *tracing* and return *reordered_mount_operarions*:
+	if tracing >= 0:
+            indent = ' ' * tracing
+	    print("{0}<=Operation._reorder('{1}', *)=>'{2}'".
+	      format(indent, operation._name, reordered_mount_operations._name_get()))
+	return reordered_mount_operations
+
+    def xxx_reorder(self, mount_operations, tracing=-1000000):
 	""" *Operation*: This is a no operation super_class function for the *Operation* object
 	    (i.e. *self*) that is meant to be overriden by a sub-class function only if needed.
 	"""
@@ -5681,8 +5769,12 @@ class Operation_Contour(Operation):
 	      contour._name_get(), offset, effective_tool_radius, passes))
 
 	# Initialize super class:
-	Operation.__init__(operation_contour, "Contour", Operation.KIND_CONTOUR,
-	  part, comment, sub_priority, mill_tool, order, follows, feed_speed, spindle_speed)
+	bends = contour._bends_get()
+	assert len(bends) > 0
+	bend0 = bends[0]
+	cnc_start = bend0._point_get()
+	Operation.__init__(operation_contour, "Contour", Operation.KIND_CONTOUR, part, comment,
+	  sub_priority, mill_tool, order, follows, feed_speed, spindle_speed, cnc_start)
 
 	# Load up the rest of *self*:
 	operation_contour._z_start = z_start
@@ -5701,7 +5793,7 @@ class Operation_Contour(Operation):
 	      format(indent, feed_speed, spindle_speed, z_start, z_stop,
 	      contour._name_get(), offset, effective_tool_radius, passes))
 
-    def _cnc_generate(self, mount, mount_lines_vrml, tracing=-1000000):
+    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
 	""" *Operation_Contour*: Generate the CNC code for the *Operation_Contour* object
 	    (i.e. *self*).
 	"""
@@ -5712,6 +5804,7 @@ class Operation_Contour(Operation):
 	# Verify argument types:
 	assert isinstance(mount, Mount)
 	assert isinstance(mount_lines_vrml, VRML)
+	assert isinstance(mount_ngc_file, file)
 	assert isinstance(tracing, int)
 
 	# Grab some values from *contour*:
@@ -5867,9 +5960,10 @@ class Operation_Dowel_Pin(Operation):
 	      feed_speed, spindle_speed, diameter, dowel_point, plunge_point))
 
 	# Initialize super class:
-	Operation.__init__(operation_dowel_pin, "Dowel_Pin", Operation.KIND_DOWEL_PIN,
-	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
-
+	zero = L()
+	cnc_start = plunge_point
+	Operation.__init__(operation_dowel_pin, "Dowel_Pin", Operation.KIND_DOWEL_PIN, part,
+	  comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start)
 	# Load up the rest of *operation_dowel_pin*:
 	operation_dowel_pin._diameter = diameter	# Dowel pin diameter
 	operation_dowel_pin._dowel_point = dowel_point	# Location to move dowel to
@@ -5882,7 +5976,7 @@ class Operation_Dowel_Pin(Operation):
 	      pad, part_name, comment, sub_priority, tool._name_get(), follows_name,
 	      feed_speed, spindle_speed, diameter, dowel_point, plunge_point))
 
-    def _cnc_generate(self, mount, mount_lines_vrml, tracing=-1000000):
+    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
 	""" *Operation_Dowel_Pin*: Generate the CNC G-code for a an
 	    *Operation_Dowel_Pin* object (i.e. *self*.)
 	"""
@@ -5893,6 +5987,7 @@ class Operation_Dowel_Pin(Operation):
 	# Verify argument types:
 	assert isinstance(mount, Mount)
 	assert isinstance(mount_lines_vrml, VRML)
+	assert isinstance(mount_ngc_file, file)
 	assert isinstance(tracing, int)
 
 	# Perform any *tracing*:
@@ -6128,8 +6223,9 @@ class Operation_Drill(Operation):
 	assert isinstance(is_countersink, bool)
 
 	# Initialize the super class:
+	cnc_start = start
 	Operation.__init__(self, "Drill", Operation.KIND_DRILL, part, comment, sub_priority,
-	  tool, order, follows, tool._feed_speed_get(), tool._spindle_speed_get())
+	  tool, order, follows, tool._feed_speed_get(), tool._spindle_speed_get(), cnc_start)
 
 	# Load up *self*:
 	self._diameter = diameter
@@ -6138,7 +6234,7 @@ class Operation_Drill(Operation):
 	self._stop = stop
 	self._is_countersink = is_countersink
 
-    def _cnc_generate(self, mount, mount_lines_vrml, tracing=-1000000):
+    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
 	""" *Operation_Drill*: Generate the CNC G-code for an *Operation_Drill* object
 	    (i.e. *self*).
 	"""
@@ -6149,6 +6245,7 @@ class Operation_Drill(Operation):
 	# Verify argument types:
 	assert isinstance(mount, Mount)
 	assert isinstance(mount_lines_vrml, VRML)
+	assert isinstance(mount_ngc_file, file)
 	assert isinstance(tracing, int)
 
 	# Grab some values from *operation_drill*:
@@ -6354,91 +6451,6 @@ class Operation_Drill(Operation):
 
 	return result
 
-    def _reorder(self, drill_mount_operations, tracing=-1000000):
-	""" *Operation_Drill*: Reorder *drill_operations* to minimize tool travel time
-	    between drill sites.
-	"""
-
-	# Use *operation_drill* instead of *self*:
- 	operation_drill = self
-
-	# Verify argument types:
-	assert isinstance(drill_mount_operations, Mount_Operations)
-	assert isinstance(tracing, int)
-	
-	# Perform any requested *tracing*:
-	trace_detail = -1
-	if tracing >= 0:
-            indent = ' ' * tracing
-	    print("{0}=>Operation_Drill._reorder('{1}', *)".format(indent, operation_drill._name))
-	    trace_detail = 2
-
-	pairs = drill_mount_operations._pairs_copy()
-	pairs_size = len(pairs)
-	if trace_detail >= 1:
-	    print("{0}drill_operations size={1}".format(indent, pairs_size))
-	if trace_detail >= 2:
-	    drill_mount_operations._show("before drill reorder", tracing = tracing + 1)
-
-	if pairs_size >= 3:
-	    for current_index in range(pairs_size - 2):
-		# Grab the *current_pair* and compute its X/Y drill location:
-		current_pair = pairs[current_index]
-		current_mount = current_pair[0]
-		current_drill = current_pair[1]
-		current_cnc_transform = current_mount._cnc_transform_get()
-		assert isinstance(current_drill, Operation_Drill)
-		start = current_drill._start
-		cnc_current_start = current_cnc_transform * start
-		current_x = cnc_current_start.x
-		current_y = cnc_current_start.y	
-		if trace_detail >= 2:
-		    print("{0}current[{1}]: x={2:i} y={3:i}".
- 		      format(indent, current_index, current_x, current_y))
-
-		minimum_distance = L(mm=123456789.0)
-		match_index = -1
-		for search_index in range(current_index + 1, pairs_size):
-		    search_pair = pairs[search_index]
-		    search_mount = search_pair[0]
-		    search_drill = search_pair[1]
-		    assert isinstance(search_drill, Operation_Drill)
-		    search_cnc_transform = search_mount._cnc_transform_get()
-		    search_start = search_drill._start
-		    cnc_search_start = search_cnc_transform * search_start
-		    search_x = cnc_search_start.x
-		    search_y = cnc_search_start.y
-		    search_distance = (search_x - current_x).distance(search_y - current_y)
-		    if trace_detail >= 2:
-			print("{0}search[{1}]: x:{2:i} y:{3:i} dist={4:i}".
-			  format(indent, search_index, search_x, search_y, search_distance))
-                    if search_distance < minimum_distance:
-			minimum_distance = search_distance
-			match_index = search_index
-
-		# Move *match_pair* be next after *current_pair* in *pairs*:
-		if match_index >= 0:
-		    # Swap the two drill operations:
-		    if trace_detail >= 2:
-                        print("{0}match_index={1}".format(indent, match_index))
-		    match_pair = pairs[match_index]
-		    pairs[match_index] = pairs[current_index + 1]
-		    pairs[current_index + 1] = match_pair
-
-	# Create *reordered_drill_mount_operations* from *pairs*:
-	reordered_drill_mount_operations = \
-	  Mount_Operations("reordered drills", tracing = tracing + 1)
-	reordered_drill_mount_operations._pairs_extend(pairs)
-	if trace_detail >= 2:
-	    reordered_drill_mount_operations._show("after drill reorder", tracing = tracing + 1)
-
-	# Wrap up any requested *tracing* and return *reordered_drill_mount_operarions*:
-	if tracing >= 0:
-            indent = ' ' * tracing
-	    print("{0}<=Operation_Drill._reorder('{1}', *)=>'{2}'".
-	      format(indent, operation_drill._name, reordered_drill_mount_operations._name_get()))
-	return reordered_drill_mount_operations
-
     def _show(self, mount, tracing = -1000000):
         """ *Operation_Drill*: Return text showing the values of the *Operation_Drill* object
 	    (i.e. *self*) in a short 1 line format.
@@ -6535,8 +6547,8 @@ class Operation_Mount(Operation):
 	follows = None
 	feed_speed = Speed()
         spindle_speed = Hertz()
-	Operation.__init__(self, "Mount", Tool.KIND_MOUNT,
-	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
+	Operation.__init__(self, "Mount", Tool.KIND_MOUNT, part, comment,
+	  sub_priority, tool, order, follows, feed_speed, spindle_speed, part.c)
 
 	# Load up *operation_mount*:
 	operation_mount._jaws_spread = jaws_spread
@@ -6550,7 +6562,7 @@ class Operation_Mount(Operation):
 	      " {4:i} {5:i}, *, {6}))").format(indent, part._name_get(), comment, vice._name_get(),
 	      jaws_spread, parallels_height, spacers))
 
-    def _cnc_generate(self, mount, mount_lines_vrml, tracing=-1000000):
+    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
         """ *Operation_Mount*: Generate the CNC operations for the *Operation_Mount* object
 	    (i.e. *self*).
 	"""
@@ -6561,6 +6573,7 @@ class Operation_Mount(Operation):
 	# Verify argument types:
 	assert isinstance(mount, Mount)
 	assert isinstance(mount_lines_vrml, VRML)
+	assert isinstance(mount_ngc_file, file)
         assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -6610,13 +6623,18 @@ class Operation_Mount(Operation):
 
 	# See whether or not to visualize the extra material around *part*:
 	zero = L()
-	#if extra_dx > zero or extra_dy > zero or extra_bottom_dx > zero or extra_top_dz > zero:
 	if True:
 	    # Yes let's visualize the extra material:
 	    mount_translate_point = mount._mount_translate_point_get()
 	    cnc_bsw = extra_start_bsw + mount_translate_point
 	    cnc_tne = extra_start_tne + mount_translate_point
 	    mount_lines_vrml._box_outline("azure", cnc_bsw, cnc_tne)
+	    extra_start_dx = cnc_tne.x - cnc_bsw.x
+	    extra_start_dy = cnc_tne.y - cnc_bsw.y
+	    extra_start_dz = cnc_tne.z - cnc_bsw.z
+	    material = part._material_get()
+	    mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3} )\n".
+	      format(extra_start_dx, extra_start_dy, extra_start_dz, material))
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -6673,8 +6691,9 @@ class Operation_Multi_Mount(Operation):
 	follows = None
 	feed_speed = Speed()
         spindle_speed = Hertz()
+	cnc_start = part.c
 	Operation.__init__(self, "Mount", Tool.KIND_MOUNT,
-	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
+	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start)
 
 	# Load up *operation_multi_mount*:
 	operation_multi_mount._first_mount = first_mount
@@ -6690,7 +6709,7 @@ class Operation_Multi_Mount(Operation):
 	      " v='{4}' js={5:i} ph={5:i}, *, {6}))").format(indent,
 	      part._name_get(), comment, vice._name_get(), jaws_spread, parallels_height, spacers))
 
-    def _cnc_generate(self, mount, mount_lines_vrml, tracing=-1000000):
+    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
         """ *Operation_Multi_Mount*: Generate the CNC operations for the *Operation_Multi_Mount*
 	    object (i.e. *self*).
 	"""
@@ -6701,6 +6720,7 @@ class Operation_Multi_Mount(Operation):
 	# Verify argument types:
 	assert isinstance(mount, Mount)
 	assert isinstance(mount_lines_vrml, VRML)
+	assert isinstance(mount_ngc_file, file)
         assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -6752,6 +6772,11 @@ class Operation_Multi_Mount(Operation):
 	mount_extra_start_dy = mount_extra_start_tne.y - mount_extra_start_bsw.y	
 	mount_extra_start_dz = mount_extra_start_tne.z - mount_extra_start_bsw.z
 
+	# Write the *material* dimensions to *mount_ngc_file*:
+	material = part._material_get()
+	mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3} )\n".
+	  format(mount_extra_start_dx, mount_extra_start_dy, mount_extra_start_dz, material))
+
 	if tooling_plate == None:
 	    # Vice mount: Specify *corner1* X/Y/Z coordinates:
 	    zero = L()
@@ -6798,12 +6823,11 @@ class Operation_Round_Pocket(Operation):
     """
 
     def __init__(self, part, comment, sub_priority, tool, order, follows, diameter,
-      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed, mount,
-      tracing=-100000):
+      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed, tracing=-100000):
 	""" *Operation_Round_Pocket*: will intitialize an
 	    *Operation_Round_Pocket* object (i.e. *self*) to contain
 	    *part*, *comment*, *sub_priority*, *tool*, *order*, *follows*,
-	    *diameter*, *hole_kind*, *start*, *stop*, *feed_speed*, *spindle_speed*, and *mount*.
+	    *diameter*, *hole_kind*, *start*, *stop*, *feed_speed*, and *spindle_speed*.
 	"""
 
 	# Use *operation_round_pocket* instead of *self*:
@@ -6823,39 +6847,36 @@ class Operation_Round_Pocket(Operation):
 	assert isinstance(stop, P)
 	assert isinstance(feed_speed, Speed)
 	assert isinstance(spindle_speed, Hertz)
-	assert isinstance(mount, Mount)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print(("{0}=>Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
-	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, '{14}'").
+	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}").
 	      format(indent, "Round_Pocket", part._name_get(), comment, sub_priority, tool, order,
-	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
-	      mount._name_get()))
+	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed))
 
 	# Initialize superclass:
+	cnc_start = start
 	Operation.__init__(self, "Round_Pocket", Operation.KIND_ROUND_POCKET,
-	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
+	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start)
 
 	# Load up *operation_round_pocket*:
 	operation_round_pocket._diameter = diameter
 	operation_round_pocket._countersink_diameter = countersink_diameter
 	operation_round_pocket._hole_kind = hole_kind
-	operation_round_pocket._mount = mount
 	operation_round_pocket._start = start
 	operation_round_pocket._stop = stop
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print(("{0}<=Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
-	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}, '{14}')").
+	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm})").
               format(indent,"Round_Pocket", part._name_get(), comment, sub_priority, tool, order,
-	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed,
-	      mount._name_get()))
+	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed))
 
-    def _cnc_generate(self, mount, mount_lines_vrml, tracing=-1000000):
+    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
 	""" *Operation_Round_Pocket*: Generate the CNC G-code for an *Operation_Round_Pocket*
 	    object (i.e. *self*).
 	"""
@@ -6863,6 +6884,7 @@ class Operation_Round_Pocket(Operation):
 	# Verify argument types:
 	assert isinstance(mount, Mount)
 	assert isinstance(mount_lines_vrml, VRML)
+	assert isinstance(mount_ngc_file, file)
 	assert isinstance(tracing, int)
 
 	# Use *round_pocket* instead of *self*:
@@ -7090,7 +7112,7 @@ class Operation_Simple_Exterior(Operation):
 	self.corner_radius = corner_radius
 	self.tool_radius = tool_radius
 
-    def _cnc_generate(self, mount, mount_lines_vrml, tracing=-1000000):
+    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
 	""" *Operation_Simple_Exterior*: Generate the CNC G-code for an
 	    *Operation_Simple_Exterior* object (i.e. self).
 	"""
@@ -7098,6 +7120,7 @@ class Operation_Simple_Exterior(Operation):
 	# Verify argument types:
 	assert isinstnace(mount, Mount)
 	assert isinstance(mount_lines_vrml, VRML)
+	assert isinstance(mount_ngc_file, file)
 	assert isinstance(tracing, int)
 
 	shop = part._shop
@@ -7240,8 +7263,9 @@ class Operation_Simple_Pocket(Operation):
 
 	# Initialize superclass:
 	operation_kind = Operation.KIND_SIMPLE_POCKET
+	cnc_start = (corner1 + corner2)/2
 	Operation.__init__(self, "Simple_Pocket", operation_kind,
-	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed)
+	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start)
 
 	assert corner1.z < corner2.z
 
@@ -7259,7 +7283,7 @@ class Operation_Simple_Pocket(Operation):
 
 	return self._corner_radius
 
-    def _cnc_generate(self, mount, mount_lines_vrml, tracing = -1000000):
+    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing = -1000000):
 	""" *Operation_Simple_Pocket*: Generate the CNC G-code for a
 	    *Operation_Simple_Pocket* object (i.e. *self*).
 	"""
@@ -7267,6 +7291,7 @@ class Operation_Simple_Pocket(Operation):
 	# Verify argument types:
 	assert isinstance(mount, Mount)
 	assert isinstance(mount_lines_vrml, VRML)
+	assert isinstance(mount_ngc_file, file)
 	assert isinstance(tracing, int)
 
 	# Use *pocket* instead of *self*:
@@ -7609,13 +7634,14 @@ class Operation_Vertical_Lathe(Operation):
 	self.z_start = z_start
 	self.z_stop = z_stop
 
-    def _cnc_generate(self, mount, mount_lines_vrml, tracing=-1000000):
+    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
 	""" *Operation_Vertical_Lathe*:
 	"""
 
 	# Verify argument types:
 	assert isinstance(mount, Mount)
-	assert isisstance(mount_lines_vrml, VRML)
+	assert isinstance(mount_lines_vrml, VRML)
+	assert isinstance(mount_ngc_file, file)
 	assert isinstance(tracing, int)
 
 	shop = part._shop
@@ -7905,7 +7931,7 @@ class Part:
 	part._extra_stop_bsw = None		# BSW extra corner at part end
 	part._extra_stop_tne = None		# TNE extra corner at part end
 	part._ezcad = ezcad
-	part._is_part = False	
+	part._is_part = False
 	part._laser_preferred = False
 	part._material = Material("aluminum", "")
 	#part._mount_translate_point = P()	# Place to move top surface point to for a mount
@@ -7926,6 +7952,7 @@ class Part:
 	part._signature_hash = None
 	part._stl_file_name = None
  	part._stl = None
+	part._stl_vrmls = None			# List of *VRML* objects that visual *part*
 	#part._top_surface_transform_from = "None"
 	#part._top_surface_transform = None
 	#part._top_surface_set = False		# Scheduled to go away
@@ -9012,8 +9039,7 @@ class Part:
 
 	# First manufacture any child *Part*'s:
 	for attribute_name in dir(part):
-	    if not attribute_name.startswith("_") and \
-	      attribute_name.endswith("_"):
+	    if not attribute_name.startswith("_") and attribute_name.endswith("_"):
 		child_part = getattr(part, attribute_name)
 		assert isinstance(child_part, Part), \
 		  "{0}.{1} is not a Part".format(part.name, attribute_name)
@@ -10466,6 +10492,8 @@ class Part:
 	assert isinstance(welds, str)
 	assert isinstance(flags, str)
 
+	comment = comment.replace(' ', '_')
+
 	# Use *part* instead of *self*:
 	part = self
 	part._is_part = True
@@ -10575,7 +10603,9 @@ class Part:
 	    # Compute *tip_z* which is how deep down the tip of the dowel pin is allowed to go:
 	    mount_translate_point = mount._mount_translate_point_get()
 	    top_surface_z = mount_translate_point.z
-	    tip_z = top_surface_z - part_dz - tip_depth
+	    maximum_tip_z = top_surface_z - maximum_z_depth
+	    preferred_tip_z = top_surface_z - part_dz - tip_depth
+	    tip_z = maximum_tip_z.maximum(preferred_tip_z)
 	    vice_safe_z = L(inch=0.100)
 	    if tip_z < vice_safe_z:
                 tip_z = vice_safe_z
@@ -11295,6 +11325,88 @@ class Part:
 	# Update the position of the vice edge:
 	part.vice_y = vice_y
 
+    def round_pocket(self, comment, diameter, start, stop, flags, tracing=-1000000):
+	""" *Part*: Manufacture a round pocket in the *Part* object (i.e. *self*) that
+	    is *diameter* round, starts at *start* and ends at *end*.  Set *flags* to 't'
+	    if the round pocket is supposed to go through *part*.
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(diameter, L)
+	assert isinstance(start, P)
+	assert isinstance(stop, P)
+	assert isinstance(flags, str)
+	assert isinstance(tracing, int)
+
+	# Perform an requested *tracing*:
+	trace_detail = -1
+	if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
+	if tracing >= 0:
+	    indent = ' ' * tracing
+            print("{0}=>Part.round_pocket('{1}', {2:i}, {3:i} {4:i}, '{5}'".
+	      format(indent, comment, diameter, start, stop, flags))
+	    trace_detail = 2
+	if trace_detail >= 1:
+	    print("{0}start-stop={1:i}".format(indent, start - stop))
+
+	# Cut the round round pocket in the object:
+	ezcad = part._ezcad_get()
+	if ezcad._stl_mode:
+	    lines = part._scad_difference_lines
+	    pad = ' ' * 4
+	    lines.append("{0}// round_pocket('{1}, {2:i}, {3:i}, {4:i}, '{5}')".
+	      format(pad, comment, diameter, start, stop, flags))
+
+	    degrees0 = Angle()
+	    hole_axis = (start - stop).normalize()
+	    extra = L(inch=0.025).millimeters()
+	    assert(extra, float)
+	    new_start = start + hole_axis * extra
+	    new_stop = stop
+	    if 't' in flags:
+		new_stop = stop - hole_axis * extra
+	    if trace_detail >= 1:
+		print("{0}start={1:i} new_stop={2:i}".format(indent, start, stop))
+		print("{0}hole_axis={1:m} new_start={2:i} new_stop={3:i}".
+		  format(indent, hole_axis, new_start, new_stop))
+	    part._scad_cylinder(comment, Color("black"), diameter, diameter,
+	      new_start, new_stop, lines, pad, 24, degrees0, tracing = tracing + 1)
+
+	# Perform the CNC:
+	if ezcad._cnc_mode:
+	    hole_z_depth = start.distance(stop)
+	    end_mill_tool = part._tools_end_mill_search(diameter,
+	      hole_z_depth, "round_pocket", tracing + 1)
+	    assert end_mill_tool != None, \
+	      "Could not find end mill for '{0}' round pocket".format(comment)
+
+	    # Process the 't' flag to make the pocket go all the way through *part8:
+	    hole_kind = Part.HOLE_FLAT
+	    extra = L(inch=0.0250).millimeters()
+	    if 't' in flags:
+		# Extend *stop* so that it end .250inch further "down":
+		hole_axis = (start - stop).normalize()
+		stop -= hole_axis * extra
+		hole_kind = Part.HOLE_THROUGH
+
+	    # Create *operation_round_pocket* and stuff it into the *part* operation list:
+	    zero = L()
+	    operation_round_pocket = Operation_Round_Pocket(part, comment, 0, end_mill_tool,
+	      Operation.ORDER_END_MILL_ROUND_POCKET, None, diameter, zero, hole_kind, start, stop,
+	      end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
+	      tracing = tracing + 1)
+	    part._operation_append(operation_round_pocket)
+
+	# Wrap-up any requested *tracing*:
+	if tracing >= 0:
+            print("{0}<=Part.round_pocket('{1}', {2:i}, {3:i} {4:i}, '{5}'".
+	      format(indent, comment, diameter, start, stop, flags))
+
     def round_tube_extrude(self, comment, material, color,
       outer_diameter, inner_diameter, start, start_extra, end, end_extra, tracing = -1000000):
 	""" *Part*: Create an extrusion long the axis from *start* to *end* out of *material*
@@ -11372,6 +11484,12 @@ class Part:
 	      format(indent, self._name,  comment, material, color,
 	      outer_diameter, inner_diameter, start, start_extra, end, end_extra))
 
+    def tracing_enable(self):
+	""" *Part*: Enable tracing for the *Part* object (i.e. *self*).
+	"""
+
+	self._tracing = 0
+
     def translate(self, center):
 	""" *Part*: Move the origin of the *Part* object (i.e. *self*) by
 	    *center*.
@@ -11444,29 +11562,49 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._wrl_manufacture('{1}')".format(indent, part._name))
 
-	# Grab some values from *part*:
-	part_name = part._name
-	part_color = part._color
+	# Grab STL *VRML* objects in the children of *parrt* and stuff them into *stl_vrmls*:
+	stl_vrmls = []
+	for attribute_name in dir(self):
+	    if not attribute_name.startswith("_") and attribute_name.endswith("_"):
+		sub_part = getattr(self, attribute_name)
+		assert isinstance(sub_part, Part)
+		sub_part_stl_vrmls = sub_part._stl_vrmls
+		if sub_part_stl_vrmls == None:
+		    sub_part._wrl_manufacture(tracing = tracing + 1)
+		    sub_part_stl_vrmls = sub_part._stl_vrmls
+		stl_vrmls.extend(sub_part_stl_vrmls)
 
-	# Read the *part_stl_file_name* into *vrml*:
-	vrml = VRML(part._stl_file_name)
-	vrml._stl_read(part, Transform(), tracing = tracing + 1)
+	# Create the *stml_vrml* for *part* if it is an actual part:
+	if part._is_part:
+	    stl_vrml = VRML(part._stl_file_name)
+	    stl_vrml._stl_read(part, Transform(), tracing = tracing + 1)
+	    stl_vrmls.append(stl_vrml)
 
-	# Now extract *wrl_liens* from *vrml*:
+	# Stuff *stl_vrmls* into *part*:
+	part._stl_vrmls = stl_vrmls
+
+	# Now create *wrl_lines* which is a concatonation if *stl_vrmls*: 
 	wrl_lines = []
-	vrml._lines_extend(wrl_lines, 0, tracing + 1)
+	wrl_lines.append("#VRML V2.0 utf8\n")
+	wrl_lines.append("Group {\n")
+	wrl_lines.append(" children [\n")
+	for stl_vrml in stl_vrmls:
+	    stl_vrml._lines_extend(wrl_lines, 2, tracing + 1)
+	wrl_lines.append(" ]\n")
+	wrl_lines.append("}\n")
 
 	# Write *wrl_lines* out to the file *wrl_file_name*:
 	ezcad = part._ezcad
 	wrl_directory = ezcad._wrl_directory_get()
-	wrl_file_name = "{0}.wrl".format(part_name)
-	wrl_file = wrl_directory._write_open(wrl_file_name, tracing=tracing + 1)
+	wrl_file_name = "{0}.wrl".format(part._name)
+	wrl_file = wrl_directory._write_open(wrl_file_name, tracing = tracing + 1)
 	wrl_file.writelines(wrl_lines)
 	wrl_file.close()
 
-	# Wrap up any requested *tracing*:
+	# Wrap up any requested *tracing* and return *stl_vrmls*:
 	if tracing >= 0:
 	    print("{0}<=Part._wrl_manufacture('{1}')".format(indent, part._name))
+	return stl_vrmls
 
     def __str__(self):
 	""" Part: Return {self} as a formatted string. """
@@ -12056,7 +12194,7 @@ class Part:
 		      0, end_mill_tool, Operation.ORDER_END_MILL_ROUND_POCKET, None,
 		      hole_diameter, countersink_diameter, hole_kind, start, stop,
 		      end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
-		      mount, tracing + 1)
+		      tracing = tracing + 1)
 		    part._operation_append(operation_round_pocket)
 
 	if ezcad._stl_mode:
@@ -12073,7 +12211,6 @@ class Part:
 	    if tracing >= 0:
 		print("{0}drill_start_extra={1} drill_end_extra={2}".
 		  format(indent, drill_start_extra, drill_end_extra))
-
 	    lines = part._scad_difference_lines
 	    # For debugging:, set *lines* to *_scad_union_lines*:
 	    #lines = part._scad_union_lines
@@ -14374,7 +14511,7 @@ class Part:
 	      "{6:i}, {7:i}, {8:i}, {9:i})").format(indent,
 	      part._name, name, top_surface, jaw_surface, flags,
 	      extra_dx, extra_dy, extra_top_dz, extra_bottom_dz))
-	    trace_detail = 2
+	    trace_detail = 1
 
 	# We need the *top_surface_transform* for both STL and CNC mode
 	ezcad = part._ezcad_get()
@@ -14384,6 +14521,9 @@ class Part:
 	    x_axis = P(one, zero, zero).normalize()
 	    y_axis = P(zero, one, zero).normalize()
 	    z_axis = P(zero, zero, one).normalize()
+	    if trace_detail >= 3:
+		print("{0}x_axis={1:m} y_axis={2:m} z_axis={3:m}".
+		  format(indent, x_axis, y_axis, z_axis))
 
 	    # These are the two rotation constants used to reorient the bounding box:
 	    degrees90 = Angle(deg=90.0)
@@ -14504,7 +14644,7 @@ class Part:
 		# South surface of *bounding_box* facing up from vice:
 		top_point = s
 		top_axis = x_axis
-		top_angle = -degrees90
+		top_rotate_angle = -degrees90
 		if 't' in jaw_surface:
 		    jaw_point = t
 		    jaw_rotate_angle = None
@@ -14531,7 +14671,7 @@ class Part:
 		# East surface of *bounding_box* facing up from vice:
 		top_point = e
 		top_axis = y_axis
-		top_angle = -degrees90
+		top_rotate_angle = -degrees90
 		if 't' in jaw_surface:
 		    jaw_point = t
 		    jaw_rotate_angle = -degrees90
@@ -14558,7 +14698,7 @@ class Part:
 		# West surface of *bounding_box* facing up from vice:
 		top_point = w
 		top_axis = y_axis
-		top_angle = degrees90
+		top_rotate_angle = degrees90
 		if 't' in jaw_surface:
 		    jaw_point = t
 		    jaw_rotate_angle = -degree90
@@ -14585,6 +14725,11 @@ class Part:
 		assert False, "top_surface must be one of 't', 'b', 'n', 's', 'e', or 'w'"
 
 	    # Perform any requested *trace_detail*:
+	    if trace_detail >= 3:
+		print("{0}top_point={1:i} top_axis={2:m} top_rotate_angle={3}".
+                  format(indent, top_point, top_axis, top_rotate_angle))
+		print("{0}jaw_point={1:i} jaw_rotate_angle={2} left_dowel_point={3:i}".
+		  format(indent, jaw_point, jaw_rotate_angle, left_dowel_point))
 	    if trace_detail >= 2:
 		print("{0}center={1:i} top={2:i} jaw={3:i} left_dowel={4:i} right_dowel={5:i}".
 		  format(indent, center_point, top_point, jaw_point,
@@ -14639,12 +14784,6 @@ class Part:
 	    if trace_detail >= 1:
 		print("{0}vice_jaw_volume={1:i}".format(indent, vice_jaw_volume))
 
-	    # Grab the associated *parallels_heights* from *parallels* and get
-	    # *smallest_parallel_height* and *largest_parallel_height*:
-	    parallels_heights = sorted(parallels._heights_get())
-	    smallest_parallel_height = parallels_heights[0]
-	    largest_parallel_height = parallels_heights[-1]
-
 	    # Now compute the *half_part_dx*, *half_part_dy*, and *half_part_dz*:
 	    half_part_dx = center_point.distance(left_dowel_point)
 	    half_part_dy = center_point.distance(jaw_point)
@@ -14658,6 +14797,11 @@ class Part:
 		print("{0}part_dimensions: dx={1:i} dy={2:i} dz={3:i} volume={4:i}".
 		  format(indent, part_dx, part_dy, part_dz, bounding_box.volume_get()))
 
+	    # Grab the associated *parallels_heights* from *parallels* and get
+	    # *smallest_parallel_height*:
+	    parallels_heights = sorted(parallels._heights_get())
+	    smallest_parallel_height = parallels_heights[0]
+
 	    # Now figure out *top_surface_z*, which is the distance from the vice origin to the
 	    # center of the top surface of the *part*.  We want to mount such that the top surface
 	    # as near to the top jaw edge as possible.  However, sometimes the parallels will
@@ -14668,6 +14812,8 @@ class Part:
 		  parallel_height + part_dz + extra_bottom_dz <= vice_jaw_dz:
 	             selected_parallel_height = parallel_height
 	    if trace_detail >= 1:
+		print("{0}parallels_heights={1}".format(indent,
+		  [parallel_height.inches() for parallel_height in parallels_heights]))
 		print("{0}selected_parallel_height={1:i}".format(indent, selected_parallel_height))
 
 	    # Now we can compute *cnc_top_surface_z* and *cnc_xy_rapid_safe_z*:
@@ -15037,6 +15183,7 @@ class Part:
 	      operation_mount, tracing = tracing + 1)
 
 	    # Now visit each *multi_mount* in *multi_mounts*:
+	    extend_flags = "M"
 	    for index, multi_mount in enumerate(multi_mounts):
 		# Grab some values from *multi_mount*:
 		multi_mount_part = multi_mount._part_get()
@@ -15065,7 +15212,9 @@ class Part:
 
 		# Now copy *from_operations* into *combined_operations* using *new_mount*
 		# to *offset* the *multi_mount_part*:
-		combined_operations._extend(new_mount, from_operations, "M", tracing = tracing + 1)
+		combined_operations._extend(new_mount,
+		  from_operations, extend_flags, tracing = tracing + 1)
+		extend_flags = "MD"
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
@@ -15877,6 +16026,7 @@ class Code:
 	code._dxf_y_offset = zero	# DXF Y offset
 	code._is_laser = False		# True if tool is a laser
 	code._mount  = None		# *Mount* object to use for current batch of G-code
+	code._tool_program_number = -1	# Tool program number
 	code._tool_wrl_lines = None	# The lines to be written into the tool VRML file
 	code._mount_wrl_lines = None	# The lines to be written into the mount VRML file
 
@@ -16542,8 +16692,12 @@ class Code:
 	    indent = ' ' * tracing
 	    print("{0}=>Code._finish()".format(indent))
 
-	# Close *code_stream*:
+	# Write out "O# endsub" to *code_stream*:
 	code_stream = code._code_stream
+	code_stream.write("O{0} endsub\n".format(code._tool_program_number))
+	code._tool_program_number = -1
+
+	# Close *code_stream*:
 	assert isinstance(code_stream, file)
 	code_stream.close()
 	code._code_stream = None
@@ -16850,6 +17004,7 @@ class Code:
 
 	# Stuff some values into *code*:
 	code._vrml = vrml
+	code._tool_program_number = tool_program_number
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -17151,9 +17306,9 @@ class Code:
 	# Open the top-level *part_ngc_stream* file that invokes each tool operation
 	# in a separate .ngc file:
 	ngc_directory = ezcad._ngc_directory_get()
-	part_ngc_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
-	part_ngc_stream = open(part_ngc_file_name, "w")
-	assert part_ngc_stream != None, "Unable to open {0}".format(part_ngc_file_name)
+	mount_ngc_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
+	part_ngc_stream = open(mount_ngc_file_name, "w")
+	assert part_ngc_stream != None, "Unable to open {0}".format(mount_ngc_file_name)
 
     def _unsigned(self, field_name, value):
 	""" *Code*: This routine will format {value} for {field_name} to {code}.
