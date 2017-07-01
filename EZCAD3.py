@@ -793,7 +793,7 @@ class P:
 
     def triple(self):
         """ *P*: Return the *P* object (i.e. *self*) as an immutable tuple of 3 floats
-	    reprecented in millimeters.
+	    represented in millimeters.
 	"""
 	
 	p = self
@@ -883,7 +883,7 @@ class Angle:
 	radians = float(rad)
 	if deg != 0.0:
 	    radians += float(deg) * math.pi / 180.0
-	self.radians = radians
+	self._radians = radians
 	#print("Angle.__init__(deg={0}, rad={1})=>{2}".
 	#  format(deg, rad, radians))
 
@@ -898,7 +898,7 @@ class Angle:
 	""" Angle: Return *angle* added to *self*. """
 
 	assert isinstance(angle, Angle)
-	return Angle(rad = self.radians + angle.radians)
+	return Angle(rad = self._radians + angle._radians)
 
     ## @brief Divides an *Angle* by *divisor*.
     #  @param self is the *Angle* object to divide.
@@ -912,9 +912,9 @@ class Angle:
 
 	result = None
 	if isinstance(divisor, float) or isinstance(divisor, int):
-	    result = Angle(rad = self.radians / float(divisor))
+	    result = Angle(rad = self._radians / float(divisor))
 	elif isinstance(divisor, Angle):
-	    result = self.radians/divisor.radians
+	    result = self._radians/divisor._radians
 	else:
 	    assert False, "divisor is neither an Angle nor an integer/float"
 	return result
@@ -932,7 +932,7 @@ class Angle:
 	""" Angle: Return *True* if *self* is equal to *angle*. """
 
 	assert isinstance(angle, Angle)
-	return self.radians == angle.radians
+	return self._radians == angle._radians
 
     ## @brief Return a formatted version of *self* using *format* to
     #	 control formatting.
@@ -951,7 +951,7 @@ class Angle:
 
 	#print("Angle.__format__(*, '{0}')".format(format))
 
-	value = self.radians
+	value = self._radians
 	if format.endswith("r"):
 	    # Do radians:
 	    format = format[:-1]
@@ -982,7 +982,7 @@ class Angle:
 	    to *angle*. """
 
 	assert isinstance(angle, Angle)
-	return self.radians >= angle.radians
+	return self._radians >= angle._radians
 
     ## @brief Return *True* if *self* is greater than *angle*.
     #  @param self is the first *Angle* to compare.
@@ -995,7 +995,7 @@ class Angle:
 	""" Angle: Return *True* if *self* is greater than *angle*. """
 
 	assert isinstance(angle, Angle)
-	return self.radians > angle.radians
+	return self._radians > angle._radians
 
     ## @brief Return *True* if *self* is less than *angle*.
     #  @param self is the first *Angle* to compare.
@@ -1008,7 +1008,7 @@ class Angle:
 	""" Angle: Return *True* if *self* is less than or equal to *angle*. """
 
 	assert isinstance(angle, Angle)
-	return self.radians <= angle.radians
+	return self._radians <= angle._radians
 
     ## @brief Return *True* if *self* is less than or equal to *angle*.
     #  @param self is the first *Angle* to compare.
@@ -1021,7 +1021,7 @@ class Angle:
 	""" Angle: Return *True* if *self* is less than *angle*. """
 
 	assert isinstance(angle, Angle)
-	return self.radians < angle.radians
+	return self._radians < angle._radians
 
     ## @brief Return *self* &times; *multiplier*.
     #  @param self is the *Angle* object to multiply.
@@ -1033,7 +1033,7 @@ class Angle:
 	""" Angle: Return *self* divided by *multiplier*. """
 
 	assert isinstance(multiplier, float) or isinstance(multiplier, int)
-	return Angle(rad = self.radians * multiplier)
+	return Angle(rad = self._radians * multiplier)
 
     ## @brief Return *True* if angles are equal.
     #  @param self is the first *Angle* to compare.
@@ -1046,7 +1046,7 @@ class Angle:
 	""" Angle: Return {True} if {self} is not equal to {angle}. """
 
 	assert isinstance(angle, Angle)
-	return self.radians != angle.radians
+	return self._radians != angle._radians
 
     ## @brief Returns -*self*.
     #  @param self is the *Angle* object to negate.
@@ -1055,7 +1055,7 @@ class Angle:
     def __neg__(self):
 	""" Angle: Return negative of {self}. """
 
-	return Angle(rad = -self.radians)
+	return Angle(rad = -self._radians)
 
     ## @brief Return *self* &times; *multiplier*.
     #  @param self is the *Angle* object to multiply.
@@ -1067,7 +1067,7 @@ class Angle:
 	""" Angle: Return {self} multiplied by {multiplier}. """
 
 	assert isinstance(multiplier, float) or isinstance(multiplier, int)
-	return Angle(rad = self.radians * multiplier)
+	return Angle(rad = self._radians * multiplier)
 
     ## @brief Returns *self* converted to degrees.
     #  @param self is the *Angle* object to convert to degrees.
@@ -1077,7 +1077,7 @@ class Angle:
     def __str__(self):
 	""" Angle: Return {self} as a string. """
 
-	return str(self.radians * 180.0 / Angle.pi)
+	return str(self._radians * 180.0 / Angle.pi)
 
     ## @brief Returns *self* - *angle*.
     #  @param self is the *Angle* object to subtract from.
@@ -1089,14 +1089,14 @@ class Angle:
 	""" Angle: Return {angle} subtracted from {self}. """
 
 	assert isinstance(angle, Angle)
-	return Angle(rad = self.radians - angle.radians)
+	return Angle(rad = self._radians - angle._radians)
 
     def absolute(self):
 	""" *Angle*: Return absolution value of *Angle* object(i.e. *self*).
 	"""
 
 	result = self
-	if self.radians < 0.0:
+	if self._radians < 0.0:
 	    result = -self
 	return result
 
@@ -1108,7 +1108,7 @@ class Angle:
     def cosine(self):
 	""" Angle: Return the cosine of {self}. """
 
-	return math.cos(self.radians)
+	return math.cos(self._radians)
 
     ## @brief Returns *scalar_degrees* as an *Angle* object.
     #  @param scalar_degrees is the number to convert into an *Angle*.
@@ -1131,7 +1131,7 @@ class Angle:
     def degrees(self):
 	""" Angle: Convert {self} back into degrees and return it. """
 
-	return self.radians * 180.0 / math.pi
+	return self._radians * 180.0 / math.pi
 
     ## @brief Returns *self*/2.
     #  @param self is the *Angle* object to divide by 2.
@@ -1141,7 +1141,7 @@ class Angle:
     def half(self):
 	""" Angle: Return half of {self}. """
 
-	return Angle(self.radians / 2.0)
+	return Angle(self._radians / 2.0)
 
     ## @brief Return a normalized value between -&pi; and &pi;.
     #  @param self is the *Angle* to normalize.
@@ -1151,7 +1151,7 @@ class Angle:
     def normalize(self):
 	""" Angle: Return a normalized angle. """
 
-	radians = self.radians
+	radians = self._radians
 	pi = math.pi
 	double_pi = pi + pi
 	while (radians > pi):
@@ -1166,7 +1166,7 @@ class Angle:
 	assert isinstance(angle2, Angle)
 
 	result = self
-	if angle2.radians < result.radians:
+	if angle2._radians < result._radians:
 	    result = angle2
 	return result
 
@@ -1190,7 +1190,7 @@ class Angle:
     def radians(self):
 	""" Angle: Convert *self* into radians and return it. """
 
-	return self.radians
+	return self._radians
 
     ## @brief Returns the sine of *self*.
     #  @param self is the *Angle* to compute the sine of
@@ -1200,7 +1200,7 @@ class Angle:
     def sine(self):
 	""" Angle: Return the sine of {self}. """
 
-	return math.sin(self.radians)
+	return math.sin(self._radians)
 
     ## @brief Returns the tangent of *self*.
     #  @param self is the *Angle* to compute the tangent of
@@ -1210,7 +1210,7 @@ class Angle:
     def tangent(self):
 	""" Angle: Return the tangent of {self}. """
 
-	return math.tan(self.radians)
+	return math.tan(self._radians)
 
     ## @brief Returns *self* times 2.
     #  @param self is the *Angle* to double.
@@ -2702,10 +2702,11 @@ class Color:
 	    alpha = 1.0
 
 	# Load up *self*:
-	self.red = red
-	self.green = green
-	self.blue = blue
-	self.alpha = alpha
+	self._red = red
+	self._green = green
+	self._blue = blue
+	self._alpha = alpha
+	self._name = name
 
 	#print("Color({0}, {1}, {2}, {3})".
 	#  format(self.red, self.green, self.blue, self.alpha))
@@ -2715,24 +2716,30 @@ class Color:
 
 	if format == "s":
 	    result = "[{0:.2f}, {1:.2f}, {2:.2f}, {3:.2f}]".format(
-	      self.red, self.green, self.blue, self.alpha)
+	      self._red, self._green, self._blue, self._alpha)
 	else:
 	    result = "[r={0:.2f}, g={1:.2f}, b={2:.2f}, a={3:.2f}]".format(
-	      self.red, self.green, self.blue, self.alpha)
+	      self._red, self._green, self._blue, self._alpha)
 	return result
 
-    def alpha_get(self):
+    def _alpha_get(self):
         """ *Color*: Return the alpha value of the *Color* object (i.e. *self*.)
 	"""
 
-	return self.alpha
+	return self._alpha
+
+    def _name_get(self):
+	""" *Color*: Return the name associated with the *Color* object (i.e. *self*.)
+	"""
+
+	return self._name
 
     def _red_green_blue_get(self):
         """ *Color*: Return the red, green, and blue components of the *Color* object
 	    (i.e. *self*).
 	"""
 
-	return self.red, self.green, self.blue
+	return self._red, self._green, self._blue
 
 # Are these classes are unused???
 
@@ -4088,13 +4095,22 @@ class Mount:
 	assert isinstance(is_tooling_plate_mount, bool)
 
 	# Perform any requested *tracing*:
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i}".format(indent,
+	    print("{0}=>Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i})".format(indent,
 	      name, part._name_get(), mount_translate_point, top_surface_safe_z, xy_rapid_safe_z))
+	    trace_detail = 1
 
 	# Create *cnc_transform*:
-	cnc_transform = top_surface_transform.translate("Vice Mount", mount_translate_point)
+	if trace_detail >= 2:
+	    print("{0}top_surface_transform={1:v} mount_translate_point={2:i}".
+	      format(indent, top_surface_transform, mount_translate_point))
+	cnc_transform = top_surface_transform.translate("Vice Mount",
+	  mount_translate_point, tracing = tracing + 1)
+	if trace_detail >= 2:
+	    print("{0}top_surface_transform={1:v}".format(indent, top_surface_transform))
+	    print("{0}cnc_transform={1:v}".format(indent, cnc_transform))
 
 	# Load up *mount*:
 	zero = L()
@@ -4184,7 +4200,7 @@ class Mount:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}<=Mount._extra_start_store('{1}', *, {2:i}, {3:i})".
+	    print("{0}=>Mount._extra_start_store('{1}', *, {2:i}, {3:i})".
 	      format(indent, mount._name, extra_start_bsw, extra_start_tne))
 	    trace_detail = 2
 
@@ -4345,7 +4361,7 @@ class Mount:
 	mount._spacers = spacers
 
     def _stl_vrml_get(self, tracing=-1000000):
-	""" *Mount*: Return the *VRML* object that representes `.stl` file associated with the
+	""" *Mount*: Return the *VRML* object that represents `.stl` file associated with the
 	    *Mount* object (i.e. *self*).
 	"""
 
@@ -4370,7 +4386,7 @@ class Mount:
 	    cnc_transform = mount._cnc_transform
 	    stl_vrml_name = "{0}_{1}".format(mount._name, part_name)
 	    stl = part._stl_get(tracing = tracing + 1)
-	    triangles = stl._triangles_get(cnc_transform, tracing = tracing + 1)
+	    triangles = stl._triangles_get()
 	    stl_vrml = VRML(stl_vrml_name)
 	    comment = stl_vrml_name
 	    stl_vrml._stl_write(comment, part_color, triangles, tracing = tracing + 1)
@@ -4519,6 +4535,7 @@ class Mount_Operations:
 	mount0 = pair0[0]
 	operation0 = pair0[1]
 	part = operation0._part_get()
+	part_name = part._name_get()
 
 	# For now the first *operation0* must always be an *Operation_Mount* or an
 	# *Operation_Multi_Mount*: 
@@ -4528,12 +4545,13 @@ class Mount_Operations:
 	  format(operation.__class__.__name__)
 
 	# Create the *mount_vrml* for drawing lines into:
-	mount_lines_vrml = VRML("{0} Lines".format(mount_operations._name))
+	mount_vrml_lines_name = "{0}_{1}".format(part_name, mount0._name_get())
+	mount_vrml_lines = VRML_Lines(mount_vrml_lines_name)
 
 	# Output a coordinate axis shape to *mount_wrl_file*:
 	shop = part._shop_get()
 	vice = shop._vice_get()
-	vice._coordinates_vrml_append(mount_lines_vrml)
+	vice._coordinates_vrml_append(mount_vrml_lines)
 
 	# Open the top-level *mount_ngc_file* that lists both the tool table and
 	# calls each tool operation from a single top level .ngc file:
@@ -4592,9 +4610,16 @@ class Mount_Operations:
 	#    mount_ngc_file.write("( T{0} {1} )\n".format(tool_number, tool_name))
 	#    mount_ngc_file.write("O{0} call\n".format(priority_program_number))
 
+	# Create *mount_vrml_stl* and *mount_vrml_lines*:
+	mount_name = mount0._name_get()
+	mount_vrml_stl_name = "{0}__{1}__STL".format(part_name, mount_name)
+	mount_vrml_stl = VRML_Group(mount_vrml_stl_name)
+	mount_vrml_lines_name = "{0}__{1}__Lines".format(part_name, mount_name)
+	mount_vrml_lines = VRML_Lines(mount_vrml_lines_name)
+
 	# Now generate all of the tool paths:
 	priority_program_number = mount_program_number
-	tool_path_vrmls = []
+	mount_vrml = VRML_Group(part._name_get())
 	for index, priority_mount_operations in enumerate(priority_mount_operations_list):
 	    if trace_detail >= 2:
 		priority_mount_operations._show("Priority {0}".format(index), tracing = tracing + 1)
@@ -4602,7 +4627,7 @@ class Mount_Operations:
 	    # Now we can generate all the tool operations that are at the same pirority:
 	    priority_program_number = \
 	      priority_mount_operations._cnc_priority_generate(priority_program_number,
-	      mount_ngc_file, mount_lines_vrml, tool_path_vrmls, tracing = tracing + 1)
+	      mount_ngc_file, mount_vrml, mount_vrml_lines, mount_vrml_stl, tracing = tracing + 1)
 
 	# The *next_mount_program_number* must be divisible by 10:
 	next_mount_program_number = priority_program_number + 9
@@ -4614,29 +4639,22 @@ class Mount_Operations:
 	mount_ngc_file.write("(mount_ngc_file_closed in Mount_Operations._cnc_mount_generate)")
 	mount_ngc_file.close()
 	
-	# Now we write create the *mount_wrl_lines* to write out mount VRML into:
-	mount_wrl_lines = []
-
-	# Append the header VRML code to *mount_wrl_lines* for a group of VRML children:
-	mount_wrl_lines.append("#VRML V2.0 utf8\n")
-	mount_wrl_lines.append("Group {\n")
-	mount_wrl_lines.append(" children [\n")
-
-	# Now append *mount_lines_vrml* to *mount_wrl_lines*:
-	mount_lines_vrml._lines_extend(mount_wrl_lines, 2, tracing = tracing + 1)
+	# Now append *mount_vrml_lines* to *mount_vrml*:
+	mount_vrml._append(mount_vrml_lines)
+	mount_vrml._append(mount_vrml_stl)
 
 	# Now append *mount_stl_vrml* to *mount_wrl_lines*:
-	mount_stl_vrmls = mount_operations._stl_vrmls_get(tracing = tracing + 1)
-	for mount_stl_vrml in mount_stl_vrmls:
-	    mount_stl_vrml._lines_extend(mount_wrl_lines, 2, tracing = tracing + 1)
+	#mount_stl_vrmls = mount_operations._stl_vrmls_get(tracing = tracing + 1)
+	#for mount_stl_vrml in mount_stl_vrmls:
+	#    mount_stl_vrml._lines_extend(mount_wrl_lines, 2, tracing = tracing + 1)
 
 	# Now append the tool paths for each tool to *mount_wrl_lines*:
-	for tool_path_vrml in tool_path_vrmls:
-	    tool_path_vrml._lines_extend(mount_wrl_lines, 2, tracing = tracing + 1)
+	#for tool_path_vrml in tool_path_vrmls:
+	#    tool_path_vrml._lines_extend(mount_wrl_lines, 2, tracing = tracing + 1)
 
 	# Close out the *mount_wrl_lines* with the closing VRML brackets that match the header:
-	mount_wrl_lines.append(" ]\n")
-	mount_wrl_lines.append("}\n")
+	#mount_wrl_lines.append(" ]\n")
+	#mount_wrl_lines.append("}\n")
 
 	# Output *mount_wrl_lines* to the *mount_wrl_file_name* file.  Please note that
 	# these file names end in `.wrl` and are written into the *ngc_directory* to with
@@ -4646,7 +4664,8 @@ class Mount_Operations:
 	mount_name = mount0._name_get().replace(' ', '_')
 	mount_wrl_file_name = "O{0}_{1}_{2}.wrl".format(mount_program_number, part_name, mount_name)
 	with ngc_directory._write_open(mount_wrl_file_name, tracing + 1) as mount_wrl_file:
-	    mount_wrl_file.writelines(mount_wrl_lines)
+	    mount_vrml_text = mount_vrml._text_pad(0)
+	    mount_wrl_file.write(mount_vrml_text)
 
 	# Wrap up any requested *tracing* and return the *next_mount_program_number*:
 	if tracing >= 0:
@@ -4655,13 +4674,15 @@ class Mount_Operations:
         return next_mount_program_number
 
     def _cnc_priority_generate(self, priority_program_number,
-      mount_ngc_file, mount_lines_vrml, tool_path_vrmls, tracing=-1000000):
+      mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
         """ *Mount_Operations*: Generate CNC code for each *Operation* in the *Mount_Operations*
 	    object (i.e. *self*), where each *Operation* in the *Mount_Operations* object
-	    must have the same priority.  *mount_wrl_line* has VRML code added to show all
-	    of the CNC paths for all of the operartions.  This routine is responsible for
-	    regrouping tools to minimize tool changes.  *priority_program_number* is the
-	    CNC program number to start using.  The next program number to use is returned.
+	    must have the same priority.  This routine is responsible for regrouping tools to
+	    minimize tool changes.  *priority_program_number* is the CNC program number to
+	    start using.  When the done, the next program number to use is returned.
+	    *mount_ngc_file* is the open file into which mount mount level G codes are written
+	    (These are usually just a call to the tool routine.)  The tool path visualization
+	    is recorded into *cnc_vrml*.
 	"""
 
 	# Use *mount_operations* instead of *self*:
@@ -4670,8 +4691,7 @@ class Mount_Operations:
 	# Verify argument types:
 	assert isinstance(priority_program_number, int)
 	assert isinstance(mount_ngc_file, file)
-	assert isinstance(mount_lines_vrml, VRML)
-	assert isinstance(tool_path_vrmls, list)
+	assert isinstance(cnc_vrml, VRML_Group)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -4679,8 +4699,8 @@ class Mount_Operations:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-            print("{0}=>Part._cnc_priority_generate('{1}', {2}, *')".
-	      format(indent, mount_operations._name, priority_program_number))
+            print("{0}=>Part._cnc_priority_generate('{1}', {2}, *, '{3}')".format(indent,
+	      mount_operations._name, priority_program_number, cnc_vrml._name_get()))
 	    trace_detail = 2
 
 	# This is where we regroup tools in *priority_operations*.  We move tools forward
@@ -4788,26 +4808,35 @@ class Mount_Operations:
 		label = "Tool[{0}] after reorder".format(index)
 		tool_mount_operations._show(label, tracing = tracing + 1)
 
+	    # Create *tool_vrml_lines* to record the tool path into:
+	    part = operation0._part_get()
+	    part_name = part._name_get()
+	    mount_name = mount._name_get()
+	    tool_name = operation0._tool_get()._name_get()
+	    tool_vrml_lines_name = \
+	      "{0}_{1}_{2}_Ops{3}]".format(part_name, mount_name, tool_name, index)
+	    tool_vrml_lines = VRML_Lines(tool_vrml_lines_name)
+
 	    # Now generate the tool path for *reordered_tool_mount_operations*:
 	    tool_program_number = reordered_tool_mount_operations._cnc_tool_generate(
-	        tool_program_number, mount_ngc_file, mount_lines_vrml, tool_path_vrmls,
- 	      tracing = tracing + 1)
+	      tool_program_number, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl,
+              tracing = tracing + 1)
 
 	# Compute *new_priority_program_number* (no change from *tool_program_number*):
 	new_priority_program_number = tool_program_number
 
 	# Wrap up any requested *tracing* and return *new_priority_program_number*:
 	if tracing >= 0:
-	    print("{0}<=Mount_Operations._cnc_priority_generate('{1}', {2}, *')".
-	      format(indent, mount_operations._name, priority_program_number))
+            print("{0}<=Part._cnc_priority_generate('{1}', {2}, *, '{3}')".format(indent,
+	      mount_operations._name, priority_program_number, cnc_vrml._name_get()))
 	return new_priority_program_number
 
-    def _cnc_tool_generate(self,
-      tool_program_number, mount_ngc_file, mount_lines_vrml, tool_path_vrmls, tracing=-1000000):
+    def _cnc_tool_generate(self, tool_program_number,
+      mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
         """ *Mount_Operations*: Generate CNC code for each *Operation* in *Mount_Operations*
 	    object (i.e. *self*.)  The generated tool `.ngc` file is numbered with
 	    *tool_program_number* and the next usable tool program number is returned.
-	    The generated tool path *VRML* object is appended *tool_path_vrmls*.
+	    The generated CNC tool path visualiztion is recorded in *cnc_vrml*.
 	"""
 
 	# Use *tool_mount_operations* instead of *self*:
@@ -4816,16 +4845,17 @@ class Mount_Operations:
 	# Verify argument types:
 	assert isinstance(tool_program_number, int)
 	assert isinstance(mount_ngc_file, file)
-	assert isinstance(mount_lines_vrml, VRML)
-	assert isinstance(tool_path_vrmls, list)
+	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Mount_Operations._cnc_tool_generate('{1}', {2}, *)".
-	      format(indent, tool_mount_operations._name, tool_program_number))
+	    print("{0}=>Mount_Operations._cnc_tool_generate('{1}', {2}, *, '{3}')".format(indent,
+	      tool_mount_operations._name, tool_program_number, cnc_vrml._name_get()))
 	    trace_detail = 1
 
 	# Grap some values from *tool_mount_operations*:
@@ -4833,6 +4863,7 @@ class Mount_Operations:
 	assert len(pairs) > 0
 	pair0 = pairs[0]
 	mount0 = pair0[0]
+	mount0_cnc_transform = mount0._cnc_transform_get()
 	operation0 = pair0[1]
 	tool = operation0._tool_get()
 	feed_speed = operation0._feed_speed_get()
@@ -4844,24 +4875,34 @@ class Mount_Operations:
 	if tool_name != "None":
 	    mount_ngc_file.write("O{0} call ( {1} )\n".format(tool_program_number, tool_name))
 
-	# Grab the *code* object and start the code generation:
+	# Create *cnc_tool_vrml* for recording just this *tool*:
+	part_name = part._name_get()
+	mount_name = mount0._name_get()
+	tool_name = tool._name_get()
+	cnc_tool_vrml_name = "{0}__{1}__{2}__Tool".format(part_name, mount_name, tool_name)
+	cnc_tool_vrml = VRML_Group(cnc_tool_vrml_name)
+
+	# Create *cnc_vrml_lines* to record the tool path visualation:
+	cnc_vrml_lines_name = "{0}__{1}__{2}__Tool_Path".format(part_name, mount_name, tool_name)
+	cnc_vrml_lines = VRML_Lines(cnc_vrml_lines_name)
+	cnc_tool_vrml._append(cnc_vrml_lines)
+
+	# Reset the *code* object and feed it *cnc_vrml_lines* to record tool path visualization:
 	shop = part._shop_get()
 	code = shop._code_get()
-	tool_path_vrml = VRML(tool._name_get())
-	tool_path_vrmls.append(tool_path_vrml)
 	code._start(part, tool, tool_program_number,
-	  spindle_speed, mount0, tool_path_vrml, tracing = tracing + 1)
+	  spindle_speed, mount0, cnc_vrml_lines, tracing = tracing + 1)
 	code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
 
 	# We need to output a *Part* VRML for each unique (*Part*, *Mount*) combination.
 	# This is done by keeping track of whenever a new pair comes along.
 	part_mount_table = {}
-	mount_stl_vrmls = []
 
 	# Perform each *operation* in *tool_operations*:
 	for index, pair in enumerate(pairs):
 	    # Grab the *tool* and its associated *feed_speed* and *spindle_speed*:
 	    tool_mount = pair[0]
+	    tool_mount_name = tool_mount._name_get()
 	    tool_operation = pair[1]
 	    tool_operation_name = tool_operation._name_get()
 	    tool = tool_operation._tool_get()
@@ -4878,8 +4919,8 @@ class Mount_Operations:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed, tracing = tracing + 1)
 
 	    # Perform the CNC generation step for *operation*:
-	    tool_operation._cnc_generate(tool_mount,
-	      mount_lines_vrml, mount_ngc_file, tracing = tracing + 1)
+	    tool_operation._cnc_generate(tool_mount, mount_ngc_file,
+	      cnc_tool_vrml, mount_vrml_lines, mount_vrml_stl, tracing = tracing + 1)
 
 	    # Make darn we end at a safe height:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
@@ -4895,53 +4936,40 @@ class Mount_Operations:
 		    print("{0}part_mount_key is new".format(indent, part_mount_key))
 		part_mount_table[part_mount_key] = True
 
-		# Read in the `.stl` file:
-		mount_stl_vrml_name = "{0}_{1}_STL".format(mount_name, part_name)
-		mount_stl_vrml = VRML(mount_stl_vrml_name)
-		cnc_transform = tool_mount._cnc_transform_get()
-		mount_stl_vrml._stl_read(part, cnc_transform, tracing = tracing + 1)
-		mount_stl_vrmls.append(mount_stl_vrml)
-	    if trace_detail >= 1:
-		print("{0}len(mount_stl_vrmls)={1}".format(indent, len(mount_stl_vrmls)))
-
 	# Safe the tool and shut down *code*:
 	zero = L()
 	code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 	code._dxf_xy_offset_set(zero, zero)
 	code._finish(tracing + 1)
 
-	# Now we can write out the `.wrl` file for this tool path:
-	tool_wrl_lines = []
+	cnc_tool_vrml._append(mount_vrml_lines)
+	cnc_tool_vrml._append(mount_vrml_stl)
 
-	# Append the header VRML code to *tool_wrl_lines* for a group of VRML children:
-	tool_wrl_lines.append("#VRML V2.0 utf8\n")
-	tool_wrl_lines.append("Group {\n")
-	tool_wrl_lines.append(" children [\n")
+	# Now output *cnc_tool_vrml* to the *ngc_directory* if it is not a mount operation:
+	if trace_detail >= 3:
+	    print("{0}operation0='{1}' is_mount={2}".
+	      format(indent, operation0._name_get(), operation0._is_mount_get()))
+	if not operation0._is_mount_get():
+	    ezcad = part._ezcad_get()
+	    ngc_directory = ezcad._ngc_directory_get()
+	    cnc_tool_vrml_padded_text = cnc_tool_vrml._text_pad(0)
+	    wrl_file_name = "O{0}.wrl".format(tool_program_number)
+	    with ngc_directory._write_open(wrl_file_name) as tool_wrl_file:
+	      tool_wrl_file.write(cnc_tool_vrml_padded_text)
+	    if trace_detail >= 2:
+		print("{0}Wrote file '{1}'".format(indent, wrl_file_name))
 
-	# Append the STL visualization of *part* to: *tool_wrl_lines*:
-	for mount_stl_vrml in mount_stl_vrmls:
-	    mount_stl_vrml._lines_extend(tool_wrl_lines, 2, tracing = tracing + 1)
-
-	# Append the tool path to to *tool_wrl_lines*:
-	tool_path_vrml._lines_extend(tool_wrl_lines, 2, tracing = tracing + 1)
-
-	# Close out the *mount_wrl_lines* with the closing VRML brackets that match the header:
-	tool_wrl_lines.append(" ]\n")
-	tool_wrl_lines.append("}\n")
-
-	# Now we can write *mount_wrl_lines* out to *tool_wrl_file_name*:
-	ezcad = part._ezcad_get()
-	ngc_directory = ezcad._ngc_directory_get()
-	with ngc_directory._write_open("O{0}.wrl".format(tool_program_number)) as tool_wrl_file:
-	    tool_wrl_file.writelines(tool_wrl_lines)
+	# *cnc_tool_vrml* got closed as a result of calling *_text_pad*.  However, we can still
+	# append it to *cnc_vrml* where all of the tools for given mount are visualized:
+	cnc_vrml._append(cnc_vrml_lines)
 
 	# Compute *new_tool_program_number* for return; it just increments by one:
 	new_tool_program_number = tool_program_number + 1
 
 	# Wrap up any requested *tracing* and return *new_tool_program_number*:
 	if tracing >= 0:
-	  print("{0}<=Mount_Operations._cnc_tool_generate('{1}', {2}, *)".
-	    format(indent, tool_mount_operations._name, tool_program_number))
+	    print("{0}<=Mount_Operations._cnc_tool_generate('{1}', {2}, *, '{3}')".format(indent,
+	      tool_mount_operations._name, tool_program_number, cnc_vrml._name_get()))
 	return new_tool_program_number
 
     def _extend(self, to_mount, from_mount_operations, flags, tracing=-1000000):
@@ -5123,7 +5151,7 @@ class Mount_Operations:
 		pass
 	    else:
 		# Long format lists the *mount_name* name on every line:
-                mount_name = "m='{0:>8}".format(mount._name_get())
+                mount_name = "m='{0:>8}'".format(mount._name_get())
 
 	    # Extract values from *operation* and *tool*:
 	    #operation_show = operation._show(tracing = tracing + 1)
@@ -5380,6 +5408,14 @@ class Operation:
 	operation._spindle_speed = spindle_speed
 	operation._cnc_program_number = -1
 	operation._cnc_start = cnc_start		# Point in 3D space where CNC starts.
+
+    def _is_mount_get(self):
+        """ *Operation*: Return whether or not the *Operation* object (i.e. *self*) is
+	    a mount operation or not.  This method returns *False* and is overridden to
+	    return *True* in the appropation mount operations.
+	"""
+
+	return False
 
     def xxx_compare(self, operation2):
 	""" *Operation*: Return -1, 0, or 1 depending upon whether *operation1*
@@ -5793,7 +5829,8 @@ class Operation_Contour(Operation):
 	      format(indent, feed_speed, spindle_speed, z_start, z_stop,
 	      contour._name_get(), offset, effective_tool_radius, passes))
 
-    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
+    def _cnc_generate(self,
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
 	""" *Operation_Contour*: Generate the CNC code for the *Operation_Contour* object
 	    (i.e. *self*).
 	"""
@@ -5803,8 +5840,10 @@ class Operation_Contour(Operation):
 
 	# Verify argument types:
 	assert isinstance(mount, Mount)
-	assert isinstance(mount_lines_vrml, VRML)
 	assert isinstance(mount_ngc_file, file)
+	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
 	assert isinstance(tracing, int)
 
 	# Grab some values from *contour*:
@@ -5817,7 +5856,8 @@ class Operation_Contour(Operation):
 	# Perform an requested *tracing*:
 	if tracing >= 0:
 	    indent = " " * tracing
-	    print("{0}=>Operation_Contour._cnc_generate()".format(indent))
+	    print("{0}=>Operation_Contour._cnc_generate('{1}', *, '{2}', '{3}')".
+	      format(indent, operation_contour._name, mount._name_get(), cnc_vrml._name_get()))
 
 	# Record *comment* into *code*:
 	code._line_comment(comment)
@@ -5873,7 +5913,8 @@ class Operation_Contour(Operation):
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Operation_Contour._cnc_generate()".format(indent))
+	    print("{0}<=Operation_Contour._cnc_generate('{1}', *, '{2}', '{3}')".
+	      format(indent, operation_contour._name, mount._name_get(), cnc_vrml._name_get()))
 
     def compare(self, contour2):
 	""" *Operation_Contour* will return -1, 0, 1 depending upon whether
@@ -5976,7 +6017,8 @@ class Operation_Dowel_Pin(Operation):
 	      pad, part_name, comment, sub_priority, tool._name_get(), follows_name,
 	      feed_speed, spindle_speed, diameter, dowel_point, plunge_point))
 
-    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
+    def _cnc_generate(self,
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
 	""" *Operation_Dowel_Pin*: Generate the CNC G-code for a an
 	    *Operation_Dowel_Pin* object (i.e. *self*.)
 	"""
@@ -5986,13 +6028,17 @@ class Operation_Dowel_Pin(Operation):
 
 	# Verify argument types:
 	assert isinstance(mount, Mount)
-	assert isinstance(mount_lines_vrml, VRML)
 	assert isinstance(mount_ngc_file, file)
+	assert isinstance(cnc_vrml, VRML)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
 	assert isinstance(tracing, int)
 
 	# Perform any *tracing*:
 	if tracing >= 0:
-	    print("{0}=>Operation_Dowel_Pin._cnc_generate()".format(' ' * tracing))
+	    indent = ' ' * tracing
+	    print("{0}=>Operation_Dowel_Pin._cnc_generate('{1}', '{2}', '{3}')".
+	      format(indent, operation_dowel_pin._name, mount._name_get(), cnc_vrml._name_get()))
 
 	# Grab the *part*, *shop*, *code*, *vice*, and *jaw_volume* from *operation_dowel_pin*:
 	part = operation_dowel_pin._part_get()
@@ -6062,11 +6108,18 @@ class Operation_Dowel_Pin(Operation):
 	code._xy_rapid_safe_z_force(ipm10, rpm0)
 
 	# Visualize *tool* into *mount_vrml*:
-	tool._vrml_append(mount_lines_vrml, 2, cnc_dowel_point, tip_depth, tracing + 1)
+	part_name = part._name_get()
+	mount_name = mount._name_get()
+	tool_name = tool._name_get()
+	tip_vrml_lines_name = "{0}__{1}__{2}_Dowel_Tip".format(part_name, mount_name, tool_name)
+	tip_vrml_lines = VRML_Lines(tip_vrml_lines_name)
+	tool._vrml_append(tip_vrml_lines, 2, cnc_dowel_point, tip_depth, tracing + 1)
+	cnc_vrml._append(tip_vrml_lines)
 
 	# Wrap-up any *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Operation_Dowel_Pin._cnc_generate()".format(' ' * tracing))
+	    print("{0}<=Operation_Dowel_Pin._cnc_generate('{1}', '{2}', '{3}')".
+	      format(indent, operation_dowel_pin._name, mount._name_get(), cnc_vrml._name_get()))
 
     def compare(self, dowel_pin2):
 	""" *Operation_Dowel_Pin*: Return -1, 0, or 1 depending upon whether
@@ -6234,7 +6287,8 @@ class Operation_Drill(Operation):
 	self._stop = stop
 	self._is_countersink = is_countersink
 
-    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
+    def _cnc_generate(self,
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
 	""" *Operation_Drill*: Generate the CNC G-code for an *Operation_Drill* object
 	    (i.e. *self*).
 	"""
@@ -6244,9 +6298,17 @@ class Operation_Drill(Operation):
 
 	# Verify argument types:
 	assert isinstance(mount, Mount)
-	assert isinstance(mount_lines_vrml, VRML)
 	assert isinstance(mount_ngc_file, file)
+	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
 	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Operation_Drill._cnc_generate('{1}', *, '{2}', '{3}')".
+	      format(indent, operation_drill._name, mount._name_get(), cnc_vrml._name_get()))
 
 	# Grab some values from *operation_drill*:
 	comment = operation_drill._comment
@@ -6301,6 +6363,12 @@ class Operation_Drill(Operation):
 	    code._z_feed(feed_speed, spindle_speed, z_stop, "drill", tracing = tracing + 1)
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 
+	# Wrap-up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Operation_Drill._cnc_generate('{1}', *, '{2}', '{3}')".
+	      format(indent, operation_drill._name, mount._name_get(), cnc_vrml._name_get()))
+
+	    # OLD CODE:
 	    #diameter_divisor = 3.0
 	    #material = part._material_get()
 	    #switch material.named_material
@@ -6547,7 +6615,7 @@ class Operation_Mount(Operation):
 	follows = None
 	feed_speed = Speed()
         spindle_speed = Hertz()
-	Operation.__init__(self, "Mount", Tool.KIND_MOUNT, part, comment,
+	Operation.__init__(operation_mount, "Mount", Tool.KIND_MOUNT, part, comment,
 	  sub_priority, tool, order, follows, feed_speed, spindle_speed, part.c)
 
 	# Load up *operation_mount*:
@@ -6562,7 +6630,8 @@ class Operation_Mount(Operation):
 	      " {4:i} {5:i}, *, {6}))").format(indent, part._name_get(), comment, vice._name_get(),
 	      jaws_spread, parallels_height, spacers))
 
-    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
+    def _cnc_generate(self,
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
         """ *Operation_Mount*: Generate the CNC operations for the *Operation_Mount* object
 	    (i.e. *self*).
 	"""
@@ -6572,21 +6641,22 @@ class Operation_Mount(Operation):
 
 	# Verify argument types:
 	assert isinstance(mount, Mount)
-	assert isinstance(mount_lines_vrml, VRML)
 	assert isinstance(mount_ngc_file, file)
+	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
         assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Operation_Mount._cnc_generate('{1}', '{2}', *, *)".
-	      format(indent, operation_mount._name, mount._name_get()))
+	    print("{0}=>Operation_Mount._cnc_generate('{1}', '{2}', *, '{3}')".
+	      format(indent, operation_mount._name, mount._name_get(), cnc_vrml._name_get()))
 	    trace_detail = 1
 
 	# Write out the part visualization:
 	part = operation_mount._part
-	stl_file_name = part._stl_file_name_get()
 	top_surface_transform = mount._top_surface_transform_get()
 	cnc_transform = mount._cnc_transform_get()
 	comment = "Operation_Mount._cnc_generate: Mount='{0}' cnc_transform={1:m}".format(
@@ -6595,32 +6665,39 @@ class Operation_Mount(Operation):
 	    print("{0}cnc_transform={1:s}".format(indent, cnc_transform))
 				
 	# Grab some values out *operation_mount*:a
-	#jaws_spread =           operation_mount._jaws_spread
 	parallels_height =      operation_mount._parallels_height
 	tooling_plate =         operation_mount._tooling_plate
 	vice =                  operation_mount._vice
 
+	# Grab the extra material conners:
 	extra_start_bsw, extra_start_tne = \
 	  mount._extra_start_fetch(top_surface_transform, tracing = tracing + 1)
+	if trace_detail >= 1:
+	    print("{0}extra_start_bsw={1:i} extra_start_tne={2:i}".
+	      format(indent, extra_start_bsw, extra_start_tne))
 
-	# If there is a tooling plate, show that as well:
+	# If there is a tooling plate, visualize that into *cnc_vrml_lines*:
 	jaws_spread = extra_start_tne.y - extra_start_bsw.y
 	if tooling_plate != None:
 	    zero = L()
 	    corner = P(zero, zero, parallels_height)
 	    spacers = mount._spacers_get()
-	    tooling_plate._vrml_append(mount_lines_vrml, corner, spacers, tracing = tracing + 1)
+	    tooling_plate._vrml_append(mount_vrml_lines, corner, spacers, tracing = tracing + 1)
 	    jaws_spread = tooling_plate._dx_get()
+	if trace_detail >= 1:
+	    print("{0}jaws_spread={1:i}".format(indent, jaws_spread))
 
-	# Show the *parallels* in *mount_wrl_file*:
+	# Show the *parallels* in *cnc_vrml_linew*:
 	parallels = vice._parallels_get()
-	parallels._vrml_append(mount_lines_vrml,
+	parallels._vrml_append(mount_vrml_lines,
 	  parallels_height, jaws_spread, tracing = tracing + 1)
 
-	if trace_detail >= 1:
-	    print("{0}extra_start_bsw={1:i} extra_start_tne={2:i} jaws_spread={3:i}".
-	      format(indent, extra_start_bsw, extra_start_tne, jaws_spread))
-
+	# Show the coordinate axes:
+	ezcad = part._ezcad_get()
+	shop = ezcad._shop_get()
+	vice = shop._vice_get()
+	vice._coordinates_vrml_append(mount_vrml_lines)
+	
 	# See whether or not to visualize the extra material around *part*:
 	zero = L()
 	if True:
@@ -6628,7 +6705,7 @@ class Operation_Mount(Operation):
 	    mount_translate_point = mount._mount_translate_point_get()
 	    cnc_bsw = extra_start_bsw + mount_translate_point
 	    cnc_tne = extra_start_tne + mount_translate_point
-	    mount_lines_vrml._box_outline("azure", cnc_bsw, cnc_tne)
+	    mount_vrml_lines._box_outline("azure", cnc_bsw, cnc_tne)
 	    extra_start_dx = cnc_tne.x - cnc_bsw.x
 	    extra_start_dy = cnc_tne.y - cnc_bsw.y
 	    extra_start_dz = cnc_tne.z - cnc_bsw.z
@@ -6636,14 +6713,27 @@ class Operation_Mount(Operation):
 	    mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3} )\n".
 	      format(extra_start_dx, extra_start_dy, extra_start_dz, material))
 
+	# Read in the `.stl` file associated with *part* and append to *mount_vrml_stl*:
+	stl_vrml = part._stl_vrml_get()
+	cnc_transform = mount._cnc_transform_get()
+	transformed_stl_vrml = cnc_transform._vrml(stl_vrml, tracing = tracing + 1)
+	mount_vrml_stl._append(transformed_stl_vrml)
+
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}<=Operation_Mount._cnc_generate('{1}', '{2}', *, *)".
-	      format(indent, operation_mount._name, mount._name_get()))
+	    print("{0}<=Operation_Mount._cnc_generate('{1}', '{2}', *, '{3}')".
+	      format(indent, operation_mount._name, mount._name_get(), cnc_vrml._name_get()))
+
+    def _is_mount_get(self):
+        """ *Operation_Mount*: Return whether or not the *Operation* object (i.e. *self*) is
+	    a mount operation or not.  This method returns *True*.
+	"""
+
+	return True
 
     def _parallels_height_get(self):
-        """ *Operation_Mount*: Return the vice parallels heightfrom the *Operation_Mount* object
+        """ *Operation_Mount*: Return the vice parallels height from the *Operation_Mount* object
 	    (i.e. *self*.)
 	"""
 
@@ -6654,7 +6744,7 @@ class Operation_Multi_Mount(Operation):
     """ *Operation_Multi_Mount* is a class that manages multiple parts in the same operation.
     """
 
-    def __init__(self, part, first_mount, comment,
+    def __init__(self, part, multi_mounts, comment,
       vice, jaws_spread, parallels_height, tooling_plate, spacers, tracing=-1000000):
 	""" *Operation_Multi_Mount*: Initialize the *Operation_Muili_Mount* object (i.e. *self*)
 	    to describe...
@@ -6665,7 +6755,7 @@ class Operation_Multi_Mount(Operation):
 
 	# Verify argument types:
 	assert isinstance(part, Part)
-	assert isinstance(first_mount, Mount)
+	assert isinstance(multi_mounts, list)
 	assert isinstance(comment, str)
 	assert isinstance(vice, Vice) or vice == None
 	assert isinstance(jaws_spread, L)
@@ -6692,12 +6782,12 @@ class Operation_Multi_Mount(Operation):
 	feed_speed = Speed()
         spindle_speed = Hertz()
 	cnc_start = part.c
-	Operation.__init__(self, "Mount", Tool.KIND_MOUNT,
+	Operation.__init__(self, "Multi_Mount", Tool.KIND_MOUNT,
 	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start)
 
 	# Load up *operation_multi_mount*:
-	operation_multi_mount._first_mount = first_mount
 	operation_multi_mount._jaws_spread = jaws_spread
+	operation_multi_mount._multi_mounts = multi_mounts
 	operation_multi_mount._parallels_height = parallels_height
 	operation_multi_mount._spacers = spacers
 	operation_multi_mount._tooling_plate = tooling_plate
@@ -6709,100 +6799,141 @@ class Operation_Multi_Mount(Operation):
 	      " v='{4}' js={5:i} ph={5:i}, *, {6}))").format(indent,
 	      part._name_get(), comment, vice._name_get(), jaws_spread, parallels_height, spacers))
 
-    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
-        """ *Operation_Multi_Mount*: Generate the CNC operations for the *Operation_Multi_Mount*
-	    object (i.e. *self*).
+    def _cnc_generate(self, combined_mount,
+      mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
+        """ *Operation_Multi_Mount*: Perform CNC visualization the *Operation_Multi_Mount* object
+	    (i.e. *self*).  This ultimate results in mount tooling being rendered into
+	    *mount_vrml_lines* and parts being rendering into *mount_vrml_stl*.
 	"""
 
 	# Use *operation_multi_mount* instead of *self*:
 	operation_multi_mount = self
 
 	# Verify argument types:
-	assert isinstance(mount, Mount)
-	assert isinstance(mount_lines_vrml, VRML)
+	assert isinstance(combined_mount, Mount)
 	assert isinstance(mount_ngc_file, file)
+	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
         assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Operation_Multi_Mount._cnc_generate('{1}', '{2}', *, *)".
-	      format(indent, operation_multi_mount._name, mount._name_get()))
-	    trace_detail = 1
+	    print("{0}=>Operation_Multi_Mount._cnc_generate('{1}', '{2}', *, '{3}')".format(indent,
+	      operation_multi_mount._name, combined_mount._name_get(), cnc_vrml._name_get()))
+	    trace_detail = 3
 
 	# Grab some values out *operation_multi_mount*:
-	jaws_spread =      operation_multi_mount._jaws_spread
+	jaws_spread      = operation_multi_mount._jaws_spread
+	multi_mounts     = operation_multi_mount._multi_mounts
 	parallels_height = operation_multi_mount._parallels_height
-	tooling_plate =    operation_multi_mount._tooling_plate
-	vice =             operation_multi_mount._vice
-	first_mount =      operation_multi_mount._first_mount
+	spacers          = operation_multi_mount._spacers
+	tooling_plate    = operation_multi_mount._tooling_plate
+	vice             = operation_multi_mount._vice
 
-	top_surface_transform = first_mount._top_surface_transform_get()
-	cnc_transform = first_mount._cnc_transform_get()
-	extra_start_bsw, extra_start_tne = \
-	  mount._extra_start_fetch(top_surface_transform, tracing = tracing + 1)
-	#jaws_spread = extra_start_tne.y - extra_start_bsw.y
-	if trace_detail >= 1:
-	    print("{0}extra_start_bsw={1:i} extra_start_tne={2:i} jaws_spread={3:i}".
-	      format(indent, extra_start_bsw, extra_start_tne, jaws_spread))
+	# Now visualize each *multi_mount*:
+	zero = L()
+	first_mount = None
+	first_part = None
+	for index, multi_mount in enumerate(multi_mounts):
+	    # Unpack *multi_mount* enough to get the associated *mount_operations* as well as the
+	    # *dx* and *dy* offsets:
+	    dx = multi_mount._dx_get()
+	    dy = multi_mount._dy_get()
+	    part = multi_mount._part_get()
+	    mount_name = multi_mount._mount_name_get()
+	    mount_operations = part._mount_operations_lookup(mount_name)
 
-	# If there is a tooling plate, show that as well:
-	if tooling_plate != None:
-	    zero = L()
-	    jaws_spread = tooling_plate._dy_get()
-	    corner = P(zero, zero, parallels_height)
-	    spacers = operation_multi_mount._spacers
-	    if trace_detail >= 1:
-		print("{0}spacers={1}".format(indent, spacers))
-	    tooling_plate._vrml_append(mount_lines_vrml, corner, spacers, tracing = tracing + 1)
+	    # Create *vrml_triangles* that is associated with *part8*:
+	    part_color_name = part._color_get()._name_get()
+	    part_name = part._name_get()
+	    part_stl = part._stl_get()
+	    part_triangles = part_stl._triangles_get()
+	    vrml_triangles_name = "{0}_Multi_Mount[{1}]".format(part_name, index)
+	    vrml_triangles = VRML_Triangles(vrml_triangles_name,
+	      part_color_name, part_triangles, tracing = tracing + 1)
 
-	# Show the *parallels* in *mount_wrl_file*:
+	    # Now unpack the first *pair* from *mount_operations*:
+	    pair = mount_operations._fetch(0)
+	    pair_mount = pair[0]
+	    assert isinstance(pair_mount, Mount)
+
+	    # The first time through the loop we remember *first_mount* and *first_part*:
+	    if first_mount == None:
+		first_mount = pair_mount
+		first_part = part
+
+	    # Now translate *mount_cnc_transform* by (*dx*, *dy*, 0):
+	    mount_cnc_transform = pair_mount._cnc_transform_get()
+	    mount_dx_dy_cnc_transform = mount_cnc_transform.translate("dx_dy", P(dx, dy, zero))
+
+	    # Now place *vrml_triangles* into the CNC visualization *mount_vrml_stl*
+	    # with the correct *dx*/*dy* offset:
+	    mount_vrml_triangles = \
+	      mount_dx_dy_cnc_transform._vrml(vrml_triangles, tracing = tracing + 1)
+	    mount_vrml_stl._append(mount_vrml_triangles)
+	assert isinstance(first_mount, Mount) and isinstance(first_part, Part)
+
+	# Create *cnc_vrml_lines* to visualize the multi mount:
+	first_part_name = first_part._name_get()
+	combined_mount_name = combined_mount._name_get()
+	cnc_vrml_lines_name = "{0}__{1}__Multi_Mount".format(first_part_name, combined_mount_name)
+	cnc_vrml_lines = VRML_Lines(cnc_vrml_lines_name)
+	cnc_vrml._append(cnc_vrml_lines)
+
+	# Show the *parallels* in *mount_vrml_lines*:
 	parallels = vice._parallels_get()
-	parallels._vrml_append(mount_lines_vrml,
+	parallels._vrml_append(mount_vrml_lines,
 	  parallels_height, jaws_spread, tracing = tracing + 1)
 
 	# Visualize the extra material:
 	part = operation_multi_mount._part
-	top_surface_transform = mount._top_surface_transform_get()
-	cnc_transform = mount._cnc_transform_get()
+	top_surface_transform = combined_mount._top_surface_transform_get()
+	cnc_transform = combined_mount._cnc_transform_get()
 	mount_extra_start_bsw, mount_extra_start_tne = \
-          mount._extra_start_fetch(top_surface_transform)
+	  combined_mount._extra_start_fetch(cnc_transform)
 	mount_extra_start_dx = mount_extra_start_tne.x - mount_extra_start_bsw.x
 	mount_extra_start_dy = mount_extra_start_tne.y - mount_extra_start_bsw.y	
 	mount_extra_start_dz = mount_extra_start_tne.z - mount_extra_start_bsw.z
 
-	# Write the *material* dimensions to *mount_ngc_file*:
+	# Write the *material* dimensions out to *mount_ngc_file*:
 	material = part._material_get()
 	mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3} )\n".
 	  format(mount_extra_start_dx, mount_extra_start_dy, mount_extra_start_dz, material))
 
+	# Figure out where the *tooling_plate* goes (only if it exists):
 	if tooling_plate == None:
-	    # Vice mount: Specify *corner1* X/Y/Z coordinates:
-	    zero = L()
+	    # No *tooling_plate*, so just specify *corner* X/Y/Z coordinates:
 	    x1 = zero
 	    y1 = zero
 	    z1 = parallels_height
 	else:
 	    # Tooling Plate Mount: Figure out where to put the extra material *corner1*:
 	    first_mount_translate_point = first_mount._mount_translate_point_get()
-	    part_extra_start_bsw, part_extra_start_tne = part._extra_start_fetch(cnc_transform)
-	    part_extra_start_dx = part_extra_start_tne.x - part_extra_start_bsw.x
-	    part_extra_start_dy = part_extra_start_tne.y - part_extra_start_bsw.y	
-	    part_extra_start_dz = part_extra_start_tne.z - part_extra_start_bsw.z
+	    first_part_extra_start_bsw, first_part_extra_start_tne = \
+	      first_part._extra_start_fetch(cnc_transform)
+	    first_part_extra_start_dx = first_part_extra_start_tne.x - first_part_extra_start_bsw.x
+	    first_part_extra_start_dy = first_part_extra_start_tne.y - first_part_extra_start_bsw.y
+	    first_part_extra_start_dz = first_part_extra_start_tne.z - first_part_extra_start_bsw.z
 	    if trace_detail >= 1:
-		print("{0}mount='{1}' first_mount='{2}' part='{3}'".
-		format(indent, mount._name_get(), first_mount._name_get(), part._name_get()))
-		print("{0}part_extra_start_bsw={1:i} part_extra_start_tne={2:i}".
-		  format(indent, part_extra_start_bsw, part_extra_start_tne))
-		print(("{0}part_extra_start_dx={1:i} " +
-		  "part_extra_start_dy={2:i} part_extra_start_dy={3:i}").format(indent,
-		  part_extra_start_dx, part_extra_start_dy, part_extra_start_dz))
+		print("{0}combined_mount='{1}' first_mount='{2}' part='{3}'".format(indent,
+		  combined_mount._name_get(), first_mount._name_get(), part._name_get()))
+		print("{0}first_part_extra_start_bsw={1:i} first_part_extra_start_tne={2:i}".
+		  format(indent, first_part_extra_start_bsw, first_part_extra_start_tne))
+		print(("{0}first_part_extra_start_dx={1:i} " +
+		  "first_part_extra_start_dy={2:i} first_part_extra_start_dy={3:i}").format(indent,
+		  first_part_extra_start_dx, first_part_extra_start_dy, first_part_extra_start_dz))
 
 	    # Now specify *corner1* X/Y/Z coordinates:
-	    x1 = first_mount_translate_point.x - part_extra_start_dx/2
-	    y1 = first_mount_translate_point.y + part_extra_start_dy/2
-	    z1 = first_mount_translate_point.z - part_extra_start_dz
+	    x1 = first_mount_translate_point.x - first_part_extra_start_dx/2
+	    y1 = first_mount_translate_point.y + first_part_extra_start_dy/2
+	    z1 = first_mount_translate_point.z - first_part_extra_start_dz
+
+	    # Now draw in the *tooling_plate*:
+	    corner = P(zero, zero, parallels_height)
+	    tooling_plate._vrml_append(mount_vrml_lines, corner, spacers, tracing = tracing + 1)
 
 	# Draw the extra material outline:
 	corner1 = P(x1, y1, z1)
@@ -6810,12 +6941,21 @@ class Operation_Multi_Mount(Operation):
 	y2 = y1 - mount_extra_start_dy
 	z2 = z1 + mount_extra_start_dz
 	corner2 = P(x2, y2, z2)
-	mount_lines_vrml._box_outline("azure", corner1, corner2)
+	if trace_detail >= 2:
+	    print("{0}corner1={1:i} corner2={2:i}".format(indent, corner1, corner2))
+	mount_vrml_lines._box_outline("azure", corner1, corner2)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Operation_Multi_Mount._cnc_generate('{1}', '{2}', *, *)".
-	      format(indent, operation_multi_mount._name, mount._name_get()))
+	    print("{0}<=Operation_Multi_Mount._cnc_generate('{1}', '{2}', *, '{3}')".format(indent,
+	      operation_multi_mount._name, combined_mount._name_get(), cnc_vrml._name_get()))
+
+    def _is_mount_get(self):
+        """ *Operation_Multi_Mount*: Return whether or not the *Operation* object (i.e. *self*) is
+	    a mount operation or not.  This method returns *True*.
+	"""
+
+	return True
 
 class Operation_Round_Pocket(Operation):
     """ *Operation_Round_Pocket* is a class that implements a round pocket
@@ -6876,15 +7016,18 @@ class Operation_Round_Pocket(Operation):
               format(indent,"Round_Pocket", part._name_get(), comment, sub_priority, tool, order,
 	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed))
 
-    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
+    def _cnc_generate(self,
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
 	""" *Operation_Round_Pocket*: Generate the CNC G-code for an *Operation_Round_Pocket*
 	    object (i.e. *self*).
 	"""
 
 	# Verify argument types:
 	assert isinstance(mount, Mount)
-	assert isinstance(mount_lines_vrml, VRML)
 	assert isinstance(mount_ngc_file, file)
+	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
 	assert isinstance(tracing, int)
 
 	# Use *round_pocket* instead of *self*:
@@ -6893,8 +7036,8 @@ class Operation_Round_Pocket(Operation):
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Operation_Round_Pocket._cnc_generate('{1}')".
-	     format(indent, round_pocket._name))
+	    print("{0}=>Operation_Round_Pocket._cnc_generate('{1}', '{2}', *, '{3}')".
+	      format(indent, round_pocket._name, mount._name_get(), cnc_vrml._name_get()))
 
 	# Extract some values from *round_pocket*:
 	part = round_pocket._part
@@ -7024,8 +7167,8 @@ class Operation_Round_Pocket(Operation):
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Operation_Round_Pocket._cnc_generate('{1}')".
-	      format(indent, round_pocket._name))
+	    print("{0}<=Operation_Round_Pocket._cnc_generate('{1}', '{2}', *, '{3}')".
+	      format(indent, round_pocket._name, mount._name_get(), cnc_vrml._name_get()))
 
     def compare(self, pocket2):
 	""" *Operation_Pocket*: Return -1, 0, 1 if *pocket1* (i.e. *self*)
@@ -7112,15 +7255,20 @@ class Operation_Simple_Exterior(Operation):
 	self.corner_radius = corner_radius
 	self.tool_radius = tool_radius
 
-    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
+    def _cnc_generate(self,
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
 	""" *Operation_Simple_Exterior*: Generate the CNC G-code for an
 	    *Operation_Simple_Exterior* object (i.e. self).
 	"""
 
+	assert False, "This code should be deleted"
+
 	# Verify argument types:
 	assert isinstnace(mount, Mount)
-	assert isinstance(mount_lines_vrml, VRML)
 	assert isinstance(mount_ngc_file, file)
+	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
 	assert isinstance(tracing, int)
 
 	shop = part._shop
@@ -7283,15 +7431,18 @@ class Operation_Simple_Pocket(Operation):
 
 	return self._corner_radius
 
-    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing = -1000000):
+    def _cnc_generate(self,
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
 	""" *Operation_Simple_Pocket*: Generate the CNC G-code for a
 	    *Operation_Simple_Pocket* object (i.e. *self*).
 	"""
 
 	# Verify argument types:
 	assert isinstance(mount, Mount)
-	assert isinstance(mount_lines_vrml, VRML)
 	assert isinstance(mount_ngc_file, file)
+	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
 	assert isinstance(tracing, int)
 
 	# Use *pocket* instead of *self*:
@@ -7300,8 +7451,8 @@ class Operation_Simple_Pocket(Operation):
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Operation_Simple_Pocket._cnc_generate('{1}')".
-	      format(indent, pocket._comment))
+	    print("{0}=>Operation_Simple_Pocket._cnc_generate('{1}', '{2}', *, '{3}')".
+	      format(indent, pocket._comment, mount._name_get(), cnc_vrml._name_get()))
 
 	# Grap some values from *pocket*:
 	corner1 = pocket._corner1
@@ -7516,8 +7667,8 @@ class Operation_Simple_Pocket(Operation):
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}<=Operation_Simple_Pocket._cnc_generate('{1}')".
-	      format(indent, pocket._comment))
+	    print("{0}<=Operation_Simple_Pocket._cnc_generate('{1}', '{2}', *, '{3}')".
+	      format(indent, pocket._comment, mount._name_get(), cnc_vrml._name_get()))
 
     @staticmethod
     def _compare(simple_pocket, simple_pocket2):
@@ -7634,14 +7785,19 @@ class Operation_Vertical_Lathe(Operation):
 	self.z_start = z_start
 	self.z_stop = z_stop
 
-    def _cnc_generate(self, mount, mount_lines_vrml, mount_ngc_file, tracing=-1000000):
+    def _cnc_generate(self,
+      mount, mount_ngc_file, cnc_vrml, mount_cnc_lines, mount_cnc_stl, tracing=-1000000):
 	""" *Operation_Vertical_Lathe*:
 	"""
 
+	assert False, "This code needs to be fixed"
+
 	# Verify argument types:
 	assert isinstance(mount, Mount)
-	assert isinstance(mount_lines_vrml, VRML)
 	assert isinstance(mount_ngc_file, file)
+	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_cnc_lines, VRML_Lines)
+	assert isinstance(mount_cnc_stl, VRML_Group)
 	assert isinstance(tracing, int)
 
 	shop = part._shop
@@ -7851,7 +8007,7 @@ class Parallels:
 	parallels = self
 
 	# Verify argument types:
-	assert isinstance(vrml, VRML)
+	assert isinstance(vrml, VRML_Lines)
 	assert isinstance(height, L)
 	assert isinstance(dy, L)
 	assert isinstance(tracing, int)
@@ -7910,10 +8066,10 @@ class Part:
 	z_axis = P(zero, zero, one)
 
 	ezcad = EZCAD3.ezcad
-	part._axis = z_axis
+	part._axis = z_axis			# Scheduled to go away
 	part._bounding_box = Bounding_Box()
 	part._color = None
-	part._center = P()
+	part._center = P()			# Is this used anymore
 	part._cnc_suppress = False
 	part._current_mount = None
 	#part._cnc_transform = None		# Orientation and translate transform for CNC vice
@@ -7926,18 +8082,18 @@ class Part:
 	part._dz_original = zero
 	part._dxf_scad_lines = []
 	part._extra_start_stop_available = False # *True* when values are in extra start/stop fields
-	part._extra_start_bsw = None		# BSW extra corner at part start
-	part._extra_start_tne = None		# TNE extra corner at part start
-	part._extra_stop_bsw = None		# BSW extra corner at part end
-	part._extra_stop_tne = None		# TNE extra corner at part end
-	part._ezcad = ezcad
-	part._is_part = False
+	part._extra_start_bsw = None		# BSW extra material corner at part construct start
+	part._extra_start_tne = None		# TNE extra material corner at part construct start
+	part._extra_stop_bsw = None		# BSW extra material corner at part construct end
+	part._extra_stop_tne = None		# TNE extra material corner at part construct end
+	part._ezcad = ezcad			# Top level *EZCAD3* object
+	part._is_part = False			# *True* => physical part made; *False* => assembly
 	part._laser_preferred = False
-	part._material = Material("aluminum", "")
+	part._material = Material("plastic", "abs")
 	#part._mount_translate_point = P()	# Place to move top surface point to for a mount
 	part._mount_operations_table = {}
-	part._mount_operations_list = []
-	part._name = name
+	part._mount_operations_list = []	# List of operations that construct part
+	part._name = name			# Part name
 	#part._operations = []
 	#part._plunge_x = zero
 	#part._plunge_y = zero
@@ -7951,15 +8107,13 @@ class Part:
 	part._scad_union_lines = []
 	part._signature_hash = None
 	part._stl_file_name = None
- 	part._stl = None
-	part._stl_vrmls = None			# List of *VRML* objects that visual *part*
-	#part._top_surface_transform_from = "None"
-	#part._top_surface_transform = None
-	#part._top_surface_set = False		# Scheduled to go away
+ 	part._stl = None			# *STL* object associated with *part* (not assembly)
+	part._stl_vrml = None			# *VRML_STL* object for this *part* only
+	part._stl_vrmls = None			# *VRML_Group* objects for this *part* and children
 	part._tooling_plate_translate_point = P() # Vice transform for tooling plate.
 	part._tool_preferred = ""
 	part._tracing = -1000000
-	part._translate = None
+	part._translate = None			# Scheduled to go away
 	part._visible = True
 	#part._vice_x = None			# Vice X origin relative to part X origin
 	#part._vice_y = None			# Vice Y origin relative to part Y origin
@@ -9025,18 +9179,6 @@ class Part:
 	shop = ezcad._shop_get()
 	code = shop._code_get()
 
-	# Figure out the *mode_name* and do any requested *tracing*::
-	#mode = ezcad._mode
-	#mode_name = "?mode?"
-	#if mode == EZCAD3.VISUALIZATION_MODE:
-	#    mode_name = "Visual"
-	#elif mode == EZCAD3.STL_MODE:
-	#    mode_name = "STL"
-	#elif mode == EZCAD3.CNC_MODE:
-	#    mode_name = "CNC"
-	#if tracing >= 0:
-	#    print("{0}mode='{1}'".format(indent, mode_name))
-
 	# First manufacture any child *Part*'s:
 	for attribute_name in dir(part):
 	    if not attribute_name.startswith("_") and attribute_name.endswith("_"):
@@ -9070,6 +9212,7 @@ class Part:
 	# Force the `.ngc` and `.wrl` files for the `ngc` directory to be generated:
 	part._cnc_manufacture(tracing = tracing + 1)
 
+	# This code may be needed for DXF mode:
 	#if part._cnc_suppress:
 	#    print("Part '{0}' is suppressing CNC".format(part._name))
 	#if mode == EZCAD3.CNC_MODE and not part._cnc_suppress:
@@ -9673,8 +9816,42 @@ class Part:
 
 	# Wrap up any requested *tracing* and return *stl:
 	if tracing >= 0:
-	    print("{0}<=Part._stl_get('{1}')".format(indent, part._name))
+	    print("{0}<=Part._stl_get('{1}')=>*".format(indent, part._name))
 	return stl
+
+    def _stl_vrml_get(self, tracing=-1000000):
+	""" *Part*: Return the *VRML_Triangles* object for the *Part* object (i.e. *self*).
+	    This only work if the *Part* object is not an assembly.
+	"""
+
+	# Use *part* instea of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part._stml_vrml_get('{1}')".format(indent, part._name))
+
+	# Verify that *part* is not an assembly:
+	assert part._is_part
+
+	# Get the *stl* object:
+	stl_vrml = part._stl_vrml
+	if stl_vrml == None:
+	    # It does not exist yet, so create it:
+	    stl = part._stl_get(tracing = tracing + 1)	
+	    triangles = stl._triangles_get()
+	    color_name = part._color._name_get()
+	    stl_vrml = VRML_Triangles(part._name, color_name, colors, tracing = tracing + 1)
+	    part._stl_vrml = stl_vmrl
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part._stml_vrml_get('{1}')=>'{2}'".
+	      format(indent, part._name, stl_vrml._name_get()))
 
     def _stl_manufacture(self, tracing=-1000000):
 	""" *Part*: Force the generation of the `.stl` file for the *Part* object (i.e. *self*).
@@ -9875,6 +10052,41 @@ class Part:
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Part._stl_manufacture('{1}')".format(indent, part._name))
+
+    def _stl_vrml_get(self, tracing=-1000000):
+        """ *Part*: Return the *VRML* object that renders the *Part* object (i.e. *self*).
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}Part._stl_vrml_get('{1}')".format(indent, part._name))
+
+	# See whether or not we need to create a *VRML* object:
+	stl_vrml = part._stl_vrml
+	if stl_vrml == None:
+	    # Grap the *STL* object and its associated *stl_triangles*:
+	    stl = part._stl_get()
+	    stl_triangles = stl._triangles_get()
+
+	    # Create the *stl_vrml* object:
+	    part_name = part._name
+	    color_name = part._color._name_get()
+	    stl_vrml = VRML_Triangles(part_name, color_name, stl_triangles, tracing + 1)
+	    part._stl_vrml = stl_vrml
+
+	# Wrap up any requested *tracing* and return *stl_vrml*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=Part._stl_vrml_get('{1}')=>'{2}'".
+	      format(indent, part._name, stl_vrml._name_get()))
+	return stl_vrml
 
     def xxx_top_surface_transform_get(self):
 	""" *Part*: Return the top surface *Trasform* object from the *Part* object (i.e. *self*).
@@ -10441,8 +10653,10 @@ class Part:
 	    pad = ' ' * 6
 	    union_lines.append("{0}translate([{1:m}, {2:m}, {3:m}])".
 	      format(pad, (x1 + x2)/2, (y1 + y2)/2, (z1 + z2)/2))
+	    red, green, blue = color._red_green_blue_get()
+	    alpha = color._alpha_get()
 	    union_lines.append("{0}color([{1}, {2}, {3}, {4}])".
-	      format(pad, color.red, color.green, color.blue, color.alpha))
+	      format(pad, red, green, blue, alpha))
 	    union_lines.append("{0}cube([{1:m}, {2:m}, {3:m}], center=true); // {4}".
 	      format(pad, x2 - x1, y2 - y1, z2 - z1, comment))
 
@@ -10771,6 +10985,7 @@ class Part:
 	  Transform.top_surface("extrude", start, end, rotate, tracing + 1)
 	if trace_detail >= 2:
 	    print("{0}top_surface_transform={1:s}".format(indent, top_surface_transform))
+	    print("{0}top_surface_transform={1:v}".format(indent, top_surface_transform))
 
 	# Remember *top_surface_transform* for other operations:
 	part._top_surface_transform_set(top_surface_transform, "extrude")
@@ -11365,7 +11580,7 @@ class Part:
 	    degrees0 = Angle()
 	    hole_axis = (start - stop).normalize()
 	    extra = L(inch=0.025).millimeters()
-	    assert(extra, float)
+	    #assert isinstance(extra, float)
 	    new_start = start + hole_axis * extra
 	    new_stop = stop
 	    if 't' in flags:
@@ -11563,7 +11778,7 @@ class Part:
 	    print("{0}=>Part._wrl_manufacture('{1}')".format(indent, part._name))
 
 	# Grab STL *VRML* objects in the children of *parrt* and stuff them into *stl_vrmls*:
-	stl_vrmls = []
+	stl_vrmls = VRML_Group(part._name)
 	for attribute_name in dir(self):
 	    if not attribute_name.startswith("_") and attribute_name.endswith("_"):
 		sub_part = getattr(self, attribute_name)
@@ -11572,34 +11787,27 @@ class Part:
 		if sub_part_stl_vrmls == None:
 		    sub_part._wrl_manufacture(tracing = tracing + 1)
 		    sub_part_stl_vrmls = sub_part._stl_vrmls
-		stl_vrmls.extend(sub_part_stl_vrmls)
+		    assert isinstance(sub_part_stl_vrmls, VRML_Group)
+		stl_vrmls._append(sub_part_stl_vrmls)
 
 	# Create the *stml_vrml* for *part* if it is an actual part:
 	if part._is_part:
-	    stl_vrml = VRML(part._stl_file_name)
-	    stl_vrml._stl_read(part, Transform(), tracing = tracing + 1)
-	    stl_vrmls.append(stl_vrml)
+	    stl = part._stl_get()
+	    stl_triangles = stl._triangles_get()
+	    color_name = part._color._name_get()
+	    stl_vrml = VRML_Triangles(part._name, color_name, stl_triangles, tracing = tracing + 1)
+	    stl_vrmls._append(stl_vrml)
 
 	# Stuff *stl_vrmls* into *part*:
 	part._stl_vrmls = stl_vrmls
 
-	# Now create *wrl_lines* which is a concatonation if *stl_vrmls*: 
-	wrl_lines = []
-	wrl_lines.append("#VRML V2.0 utf8\n")
-	wrl_lines.append("Group {\n")
-	wrl_lines.append(" children [\n")
-	for stl_vrml in stl_vrmls:
-	    stl_vrml._lines_extend(wrl_lines, 2, tracing + 1)
-	wrl_lines.append(" ]\n")
-	wrl_lines.append("}\n")
-
-	# Write *wrl_lines* out to the file *wrl_file_name*:
+	# Write *stl_vrmls* out to the file *wrl_file_name*:
 	ezcad = part._ezcad
 	wrl_directory = ezcad._wrl_directory_get()
 	wrl_file_name = "{0}.wrl".format(part._name)
-	wrl_file = wrl_directory._write_open(wrl_file_name, tracing = tracing + 1)
-	wrl_file.writelines(wrl_lines)
-	wrl_file.close()
+	wrl_file_text = stl_vrmls._text_pad(0)
+	with wrl_directory._write_open(wrl_file_name, tracing = tracing + 1) as wrl_file:
+	    wrl_file.write(wrl_file_text)
 
 	# Wrap up any requested *tracing* and return *stl_vrmls*:
 	if tracing >= 0:
@@ -14726,10 +14934,25 @@ class Part:
 
 	    # Perform any requested *trace_detail*:
 	    if trace_detail >= 3:
-		print("{0}top_point={1:i} top_axis={2:m} top_rotate_angle={3}".
-                  format(indent, top_point, top_axis, top_rotate_angle))
-		print("{0}jaw_point={1:i} jaw_rotate_angle={2} left_dowel_point={3:i}".
-		  format(indent, jaw_point, jaw_rotate_angle, left_dowel_point))
+		if isinstance(top_point, P):
+		    print("{0}top_point={1:i}".format(indent, top_point))
+		else:
+		    print("{0}top_point=None".format(indent))
+		if isinstance(top_axis, P):
+		    print("{0}top_axis={1:m}".format(indent, top_axis))
+		else:
+		    print("{0}top_axis=None".format(indent))
+		print("{0}top_rotate_angle={1}".format(indent, top_rotate_angle))
+
+		if isinstance(jaw_point, P):
+		    print("{0}jaw_point={1:i}".format(indent, jaw_point))
+		else:
+		    print("{0}jaw_point=None".format(indent))
+		if isinstance(jaw_axis, P):
+		    print("{0}jaw_axis={1:m}".format(indent, jaw_axis))
+		else:
+		    print("{0}jaw_axis=None".format(indent))
+		print("{0}jaw_rotate_angle={1}".format(indent, jaw_rotate_angle))
 	    if trace_detail >= 2:
 		print("{0}center={1:i} top={2:i} jaw={3:i} left_dowel={4:i} right_dowel={5:i}".
 		  format(indent, center_point, top_point, jaw_point,
@@ -14739,16 +14962,25 @@ class Part:
 	    # so that it is oriented correctly for the vice with the top surface located at
 	    # *cnc_top_surface_z*:
 	    top_surface_transform = Transform()
+	    if trace_detail >= 3:
+		print("{0}top_surface_transform 0 = {1:v}".format(indent, top_surface_transform))
 	    top_surface_transform = top_surface_transform.translate(
-	      "move to vice origin", -top_point)
+	      "move to vice origin", -top_point, tracing = tracing + 1)
+	    if trace_detail >= 3:
+		print("{0}top_surface_transform 1 = {1:v}".format(indent, top_surface_transform))
 	    if isinstance(top_rotate_angle, Angle):
 		top_surface_transform = top_surface_transform.rotate(
-		  "rotate top surface to point up in vice", top_axis, top_rotate_angle)
+		"rotate top surface to point up in vice", top_axis, top_rotate_angle,
+		tracing = tracing + 1)
+	    if trace_detail >= 3:
+		print("{0}top_surface_transform 2 = {1:v}".format(indent, top_surface_transform))
 	    if isinstance(jaw_rotate_angle, Angle):
 		top_surface_transform = top_surface_transform.rotate(
-		  "rotate jaw surface to point north in vice", jaw_axis, jaw_rotate_angle)
+		"rotate jaw surface to point north in vice", jaw_axis, jaw_rotate_angle,
+		tracing = tracing + 1)
 	    if trace_detail >= 2:
-		print("P{0}top_surface_transform={1:s}".format(indent, top_surface_transform))
+		print("{0}top_surface_transform 2={1:s}".format(indent, top_surface_transform))
+		print("{0}top_surface_transform 2={1:v}".format(indent, top_surface_transform))
 
 	    # Now start dealing with the extra material arguments:
 	    bounding_box_bsw, bounding_box_tne = \
@@ -14868,13 +15100,15 @@ class Part:
 	    cnc_xy_rapid_safe_z = cnc_top_surface_z + L(inch=0.500)
 	    
 	    # Create *mount* and stuff into *part*:
-	    mount = Mount(name, part, top_surface_transform,
-	      mount_translate_point, cnc_top_surface_safe_z, cnc_xy_rapid_safe_z, False)
+	    mount = Mount(name, part, top_surface_transform, mount_translate_point,
+	      cnc_top_surface_safe_z, cnc_xy_rapid_safe_z, False, tracing = tracing + 1)
 	    mount._extra_start_store(reverse_top_surface_transform,
 	      extra_start_bsw, extra_start_tne, tracing = tracing + 1)
 	    mount._extra_stop_store(reverse_top_surface_transform,
 	      extra_start_bsw, extra_start_tne, tracing = tracing + 1)
 	    part._mount_register(mount, tracing = tracing + 1)
+	    if trace_detail >= 1:
+		print("{0}cnc_transform={1:s}".format(indent, mount._cnc_transform_get()))
 
 	    # Create *operation_mount* and add it to *part* operations list:
 	    vice = shop._vice_get()
@@ -15117,6 +15351,8 @@ class Part:
 		print("{0}final_extra_start_bsw={1:i} final_extra_start_tne={2:i}".
 		  format(indent, final_extra_start_bsw, final_extra_start_tne))
 
+	    # Use *Part._vice_mount_helper* to determine what parallel height to use and
+	    # where the center of the top surface of the extera material is:
 	    mount_translate_point, parallel_height = part._vice_mount_helper(
 	      final_extra_start_bsw, final_extra_start_tne, is_tooling_plate_mount,
 	      tracing = tracing + 1)
@@ -15131,14 +15367,18 @@ class Part:
 		print("{0}combined_multi_mount: name='{1}'".
 		  format(indent, combined_multi_mount._name_get()))
 
+	    # Store the extra material information into *combined_multi_mount*:
 	    reverse_top_surface_transform = top_surface_transform.reverse()
 	    combined_multi_mount._extra_start_store(reverse_top_surface_transform,
 	      final_extra_start_bsw, final_extra_start_tne, tracing = tracing + 1)
 	    combined_multi_mount._extra_stop_store(reverse_top_surface_transform,
 	      final_extra_start_bsw, final_extra_start_tne, tracing = tracing + 1)
 
+	    # Start *combined_operations* which will have all of the operations needed
+	    # for the multi mount merged in:
 	    combined_operations = part._mount_register(combined_multi_mount)
 
+	    # Now iterate throug
 	    ezcad = part._ezcad_get()
 	    shop = ezcad._shop_get()
 	    vice = shop._vice_get()
@@ -15148,15 +15388,20 @@ class Part:
 	    if is_tooling_plate_mount:
 		tooling_plate = shop._tooling_plate_get()
 		jaws_spread = tooling_plate._dy_get()
-	    spacers = []
+
+	    # Iterate through *multi_mounts* to build up the *first_mount* and *spacers* lists:
 	    first_mounts = []
+	    spacers = []
 	    for multi_mount in multi_mounts:
+		# Determine *first_mount* and tack onto *first_mounts* list:
 		multi_mount_part = multi_mount._part_get()
 		multi_mount_name = multi_mount._mount_name_get()
 		mount_operations = \
 		  part._mount_operations_lookup(multi_mount_name, tracing = tracing + 1)
 		first_mount = mount_operations._first_mount_get()
 		first_mounts.append(first_mount)
+
+		# For a tooling plate, figure out what *new spacer*'s to append to *spacers*:
 		if is_tooling_plate_mount:
 		    column, row = multi_mount._column_row_get()
 		    first_mount_spacers = first_mount._spacers_get()
@@ -15176,13 +15421,14 @@ class Part:
 		#    assert False
 	    assert len(first_mounts) > 0
 
-	    operation_mount = Operation_Multi_Mount(part, first_mounts[0], comment, vice,
+	    # Now construct the *operation_multi_mount* and stuff it into *combined_operations*
+	    # as the first operation:
+	    operation_multi_mount = Operation_Multi_Mount(part, multi_mounts, comment, vice,
 	      jaws_spread, parallel_height, tooling_plate, spacers, tracing = tracing + 1)
-
 	    combined_operations._append(combined_multi_mount,
-	      operation_mount, tracing = tracing + 1)
+	      operation_multi_mount, tracing = tracing + 1)
 
-	    # Now visit each *multi_mount* in *multi_mounts*:
+	    # Now visit each *multi_mount* and append its operations to *compbined_operations*:
 	    extend_flags = "M"
 	    for index, multi_mount in enumerate(multi_mounts):
 		# Grab some values from *multi_mount*:
@@ -15204,6 +15450,7 @@ class Part:
 		  new_mount_translate_point, from_top_surface_safe_z, from_xy_rapid_safe_z,
 		  is_tooling_plate_mount, tracing = tracing + 1)
 
+		# Update the extra material bondaries for *new_material*:
 		reverse_from_top_surface_transform = from_top_surface_transform.reverse()
 		new_mount._extra_start_store(reverse_from_top_surface_transform,
 		  final_extra_start_bsw, final_extra_start_tne, tracing = tracing + 1)
@@ -15219,73 +15466,6 @@ class Part:
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Part.multi_mount(p='{1}', n='{2}', *)".format(indent, part._name, name))
-
-
-	# This is the old code that is no longer used in this routine
-	##FIXME: What does this do?!!!
-	## Before we get too far, flush any pending screw holes from the previous mounting:
-	##if part._top_surface_set:
-	##    part.screw_holes(True)
-	#
-	## Let's create the *z_axis*:
-	#one = L(mm=1.0)
-	#z_axis = P(zero, zero, one)
-	#
-	## We need to create a *cnc_transform* matrix that will translate points from the
-	## conceptual design orientation into an orientation that is horizontal to the
-	## vice plane.  We start by making *top_surface_point* the virtual origin of the
-	## vice orientation:
-	#cnc_transform = Transform()
-	#cnc_transform = cnc_transform.translate("vice_mount top translate", -top_surface_point)
-	#
-	## Compute the *projection_axis* that is the axis of projection used to project
-	## X/Y/Z points in the conceptual design orientation into a planar X/Y orientation
-	## for the vice.  This is done be creating a *north_axis* and a *west_axis* and
-	## using the cross product operation to create *projection_axis*:
-	#north_axis = north_point - surface_point
-	#west_axis = west_point - surface_point
-	#unnormalized_projection_axis = north_axis.cross_product(west_axis)
-	#projection_axis = unnormalized_projection_axis.normalize()
-	#if tracing >= 0:
-	#    print("{0}north_axis={1:m} west_axis={2:m} unnormalized projection_axis={3:m}".
-	#      format(indent, north_axis, west_axis, unnormalized_projection_axis))
-	#    print("{0}normailized projection_axis={1:m}".format(indent, projection_axis))
-	#
-	## Now that we have the *projection_axis* we need to decide whether or not the
-	## points in the conceptual design orientation need to be rotated to be in the
-	## vice orientation.  This only needs to be done if *projection_axis* is *NOT*
-	## aligned with *z_axis*:
-	#if projection_axis != z_axis:
-	#    # Now we want to adjust the *cnc_transform* to rotate from *projection_axis*
-	#    # orientation to *z_axis* orientation.  To do this we need a *rotation_axis*
-	#    # a *rotation_angle*.  The *rotation_axis* is computed using a cross product
-	#    # between the *projection_axis* and the *z_axis*.  The *rotation_angle* is
-	#    # computed using *angle_between*() routine for the *z_axis* and the *projection_axis*.
-	#    rotation_axis = z_axis.cross_product(projection_axis).normalize()
-	#    rotation_angle = z_axis.angle_between(projection_axis)
-	#    cnc_transform = cnc_transform.rotate("vice_mount rotate",
-	#      rotation_axis, rotation_angle)
-	#    if tracing >= 0:
-	#	print("{0}rotation_axis={1:m} rotation_angle{2:d}".
-	#	  format(' ' * tracing, rotation_axis, rotation_angle))
-	#if tracing >= 0 and trace_detail >= 1:
-	#    print("{0}position=\n{1}".format(indent, position))
-	#
-	## Now do the the final translation of *cnc_transform*:
-	#half_dx = surface_point.distance(north_point)
-	#half_dy = surface_point.distance(west_point)
-	#cnc_transform = cnc_transform.translate("vice position translate",
-	#  P(half_dx + extra_dx/2, half_dy + extra_dy/2, zero))
-	#
-	##FIXME: We need to figure out how deep the bounding box is in this orientation!!!
-	#bounding_box = part._bounding_box
-	#half_dz = surface_point.distance(bounding_box.c_get())
-	#
-	## Save the *cnc_transform* into *code*:
-	#shop = part._shop_get()
-	#code = shop._code_get()
-	#code._cnc_transform_set(cnc_transform)
-	# Wrap up any *tracing*:
 
 # Hang onto this code, it will need to be reworked for assembly .wrl file geneation:
 #
@@ -16942,7 +17122,7 @@ class Code:
 	assert isinstance(tool_program_number, int)
 	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(mount, Mount)
-	assert isinstance(vrml, VRML)
+	assert isinstance(vrml, VRML_Lines)
 	assert isinstance(tracing, int)
 
 	# Reset *code*:
@@ -18966,85 +19146,17 @@ class STL:
 
 	# Load *triangles* into *stl*:
 	stl._stl_file_name = stl_file_name
-	stl._triangles = triangles
+	stl._triangles = tuple(triangles)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=STL.__init__(*, '{1}')".format(indent, part._name_get()))
 
-    def _triangles_get(self, transform, tracing=-1000000):
-	""" *STL*: Return a list of triangles from the *STL* object (i.e. *self*) where
-	    each point point in a triangle has be relocated by *transform*:
+    def _triangles_get(self):
+	""" *STL*: Return a list of triangles from the *STL* object (i.e. *self*).
 	"""
 
-	# Use *stl* instead of *self*:
-	stl = self
-
-	# Verify argument types:
-	assert isinstance(transform, Transform)
-	assert isinstance(tracing, int)
-
-	# Perform any requested *tracing*:
-	trace_detail = -1
-	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print("{0}=>STL._triangles_get('{1}', *)".format(indent, stl._stl_file_name))
-	    trace_detail = 2
-
-	# Iterate through *triangles* and generate *transformed_triangles*:
-	triangles = stl._triangles
-	transformed_triangles = []
-	for triangle in triangles:
-	    # Grab the 3 triangle tuples:
-	    tuple1 = triangle[0]
-	    tuple2 = triangle[1]
-	    tuple3 = triangle[2]
-	    if trace_detail >= 3:
-		print("{0}tuples:{1} {2} {3}".format(indent, tuple1, tuple2, tuple3))
-
-	    # Convert each tuple into a point (i.e. *P* object):
-	    point1 = P( L(mm=tuple1[0]), L(mm=tuple1[1]), L(mm=tuple1[2]) )
-	    point2 = P( L(mm=tuple2[0]), L(mm=tuple2[1]), L(mm=tuple2[2]) )
-	    point3 = P( L(mm=tuple3[0]), L(mm=tuple3[1]), L(mm=tuple3[2]) )
-	    if trace_detail >= 3:
-		print("{0}points:{1:m} {2:m} {3:m}".format(indent, point1, point2, point3))
-
-	    # Perform the *transform* on all three points:
-	    transformed_point1 = transform * point1
-	    transformed_point2 = transform * point2
-	    transformed_point3 = transform * point3
-	    if trace_detail >= 3:
-		print("{0}transformed_points:{1:m} {2:m} {3:m}".
-		  format(indent, transformed_point1, transformed_point2, transformed_point3))
-
-	    # Convert the transforms back into transformed tupples:
-	    transformed_tuple1 = (
-	      transformed_point1.x.millimeters(),
-	      transformed_point1.y.millimeters(),
-	      transformed_point1.z.millimeters() )
-	    transformed_tuple2 = (
-	      transformed_point2.x.millimeters(),
-	      transformed_point2.y.millimeters(),
-	      transformed_point2.z.millimeters() )
-	    transformed_tuple3 = (
-	      transformed_point3.x.millimeters(),
-	      transformed_point3.y.millimeters(),
-	      transformed_point3.z.millimeters() )
-	    if trace_detail >= 3:
-		print("{0}transformed_tuples:{1} {2} {3}".
-		  format(indent, transformed_tuple1, transformed_tuple2, transformed_tuple3))
-
-	    # Create *transformed_triangle* and append it to *transformed_triangles*:
-	    transformed_triangle = ( transformed_tuple1, transformed_tuple2, transformed_tuple3 )
-	    transformed_triangles.append(transformed_triangle)
-	    if trace_detail >= 3:
-		print("{0}transformed_triangle:{1}".format(indent, transformed_triangle))
-		assert False
-
-	# Wrap up any requested *tracing* and return *transformed_triangles* object:
-	if tracing >= 0:
-	    print("{0}<=STL._triangles_get('{1}', *)=>*".format(indent, stl._stl_file_name))
-	return transformed_triangles
+	return self._triangles
             
 class Time:
     def __init__(self, sec=0.0, min=0.0):
@@ -20145,7 +20257,7 @@ class Transform:
     # A Transform object is immutable:
     # It should have its inverse matrix computed.
     # It should point to the previous matrix and the transform object.
-    # This allows us to use the Transform object to set up openscad.
+    # This allows us to use the Transform object to set up openscad and VRML.
 
     def __init__(self):
 	""" *Transform*: Initialize the *Transform* object (i.e. *self*) to be the identity
@@ -20163,6 +20275,8 @@ class Transform:
 	self._reverse_matrix = reverse_matrix
 	self._forward_scad_lines = ()
 	self._reverse_scad_lines = ()
+	self._forward_vrmls = ()
+	self._reverse_vrmls = ()
 
     def __format__(self, format):
 	""" *Transform*: Return a formatted version of the *Transform* object"""
@@ -20175,6 +20289,18 @@ class Transform:
 	    result = result.replace("\n", " ").replace("  ", " ").replace("[ ", "[")
 	    if format.endswith("N"):
 		result = "np.array(" + result.replace(" ", ",") + ")"
+	elif format.startswith("v"):
+	    forward_vrmls = self._forward_vrmls
+	    for forward_vrml in forward_vrmls:
+		if len(forward_vrml) == 3:
+		    # Translate:
+		    result += " Translate[{0}, {1}, {2}]". \
+                      format(forward_vrml[0], forward_vrml[1], forward_vrml[2])
+		elif len(forward_vrml) == 4:
+		    result += " Translate[{0}, {1}, {2}]". \
+                      format(forward_vrml[0], forward_vrml[1], forward_vrml[2], forward_vrml[3])
+		else:
+		    assert False, "Bad forward_vrml: {0}".format(forward_vrml)
 	else:
 	    assert False, "Bad format '{0}'".format(format)
 	return result
@@ -20257,8 +20383,11 @@ class Transform:
 	result._reverse_matrix = self._forward_matrix
 	result._forward_scad_lines = self._reverse_scad_lines
 	result._reverse_scad_lines = self._forward_scad_lines
+	result._forward_vrmls = self._reverse_vrmls
+	result._reverse_vrmls = self._forward_vrmls
 
 	assert len(result._forward_scad_lines) == len(result._reverse_scad_lines)
+	assert len(result._forward_vrmls) == len(result._reverse_vrmls)
 
 	return result
 
@@ -20267,22 +20396,28 @@ class Transform:
 	    by *angle* around *axis*.  *comment* shows up in the .scad file
 	"""
 
+	# Use *transform* instead of *self*:
+	transform = self
+
 	# Verify argument_types:
 	assert isinstance(comment, str)
 	assert isinstance(axis, P)
 	assert isinstance(angle, Angle)
+	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Transform.rotate('{1}', {2:m}, {3:d})".format(indent, comment, axis, angle))
+	    trace_detail = 3
 
 	# Is this a null rotation?:
 	if angle == Angle():
-	    # Yes it is a null rotation, so we can return *self*:
+	    # Yes it is a null rotation, so we can return *transform*:
 	    if tracing >= 0:
 		print("{0}null rotation: {1:d}".format(indent, angle))
-	    result = self
+	    result = transform
 	else:
 	    # This is a non-null rotation, we have to compute both the *forward_matix* and
 	    # the *reverse_matrix*:
@@ -20350,22 +20485,35 @@ class Transform:
 
 	    # Create the new transform *result*:
 	    result = Transform()
-	    result._forward_matrix = self._forward_matrix.dot(forward_matrix)
+	    result._forward_matrix = transform._forward_matrix.dot(forward_matrix)
 	    result._reverse_matrix = numpy.linalg.inv(result._forward_matrix)
 
+	    # Create the *forward_scad_line* and the *reverse_scad_line*
 	    forward_scad_line =                               \
 	      ("rotate(a={0:d}, v=[{1}, {2}, {3}]) //F: {4}". \
 	      format( angle, nx, ny, nz, comment), )
 	    reverse_scad_line =                               \
 	      ("rotate(a={0:d}, v=[{1}, {2}, {3}]) //R: {4}". \
 	      format(-angle, nx, ny, nz, comment), )
-	    result._forward_scad_lines = forward_scad_line + self._forward_scad_lines
-	    result._reverse_scad_lines = self._reverse_scad_lines + reverse_scad_line
+	    result._forward_scad_lines = forward_scad_line + transform._forward_scad_lines
+	    result._reverse_scad_lines = transform._reverse_scad_lines + reverse_scad_line
 
-	# Wrap-up any requested *tracing*:
+	    # Create the *forward_vrml* and the *reverse_vrml*:
+	    angle_radians = angle.radians()
+	    forward_vrml = (nx, ny, nz,  angle_radians )
+	    reverse_vrml = (nx, ny, nz, -angle_radians )
+	    if trace_detail >= 3:
+		print("{0}before forward_vrmls={1}".format(indent, transform._forward_vrmls))
+		print("{0}before reverse_vrmls={1}".format(indent, transform._reverse_vrmls))
+	    result._forward_vrmls = transform._forward_vrmls + ( forward_vrml, )
+	    result._reverse_vrmls = ( reverse_vrml, ) + transform._reverse_vrmls
+	    if trace_detail >= 3:
+		print("{0}before forward_vrmls={1}".format(indent, result._forward_vrmls))
+		print("{0}before reverse_vrmls={1}".format(indent, result._reverse_vrmls))
+
+	# Wrap-up any requested *tracing* and return *result*:
 	if tracing >= 0:
 	    print("{0}<=Transform.rotate('{1}', {2:m}, {3:d})".format(indent, comment, axis, angle))
-
 	return result
 
     @staticmethod
@@ -20475,15 +20623,27 @@ class Transform:
 
 	return transform
 
-    def translate(self, comment, dx_dy_dz):
+    def translate(self, comment, dx_dy_dz, tracing=-1000000):
 	""" Transform*: Perform a translate of the *Transform* object (i.e. *self*) by *dx_dy_dz*.
 	    *comment* will show up in the .scad file.
 	"""
+
+	# Use *transform* instead of *self*:
+	transform = self
 
 	# Verify argument types:
 	assert isinstance(comment, str)
 	assert isinstance(dx_dy_dz, P)
 
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Transform.translate(*, '{1}', {2:i})".format(indent, comment, dx_dy_dz))
+	    trace_detail = 1
+
+	if trace_detail >= 1:
+	    print("{0}transform={1:v}".format(indent, transform))
 
 	# Extract *dx*, *dy*, and *dz*:
 	zf = Transform._zero_fix
@@ -20498,8 +20658,8 @@ class Transform:
 
 	# Is the translate null?
 	if dx == 0.0 and dy == 0.0 and dz == 0.0:
-	    # The translate is null, so we can return *self*:
-	    result = self
+	    # The translate is null, so we can return *transform*:
+	    result = transform
 	else:
 	    # The translate is non-null, so we have to compute both *forward_matrix* and
 	    # *reverse_matrix*:
@@ -20516,18 +20676,82 @@ class Transform:
 	      [ndx, ndy, ndz, 1.0]
 	    ])
 
-	    # Now we can create the new *result*:
+	    # Now we can create the new *result*; start with matrix representation:
 	    result = Transform()
-	    result._forward_matrix = self._forward_matrix.dot(forward_matrix)
+	    result._forward_matrix = transform._forward_matrix.dot(forward_matrix)
 	    result._reverse_matrix = numpy.linalg.inv(result._forward_matrix)
+
+	    # Now do the openscad representation:
 	    forward_scad_line = \
 	      ("translate([{0}, {1}, {2}]) //F: {3}".format( dx,  dy,  dz, comment), )
 	    reverse_scad_line = \
 	      ("translate([{0}, {1}, {2}]) //R: {3}".format(ndx, ndy, ndz, comment), )
-	    result._forward_scad_lines = forward_scad_line + self._forward_scad_lines
-	    result._reverse_scad_lines = self._reverse_scad_lines + reverse_scad_line
+	    result._forward_scad_lines = forward_scad_line + transform._forward_scad_lines
+	    result._reverse_scad_lines = transform._reverse_scad_lines + reverse_scad_line
+
+	    # Now do the VRML representation:
+	    forward_vrml = ( dx,  dy,  dz)
+	    reverse_vrml = (-dx, -dy, -dz)
+	    if trace_detail >= 3:
+		print("{0}before forward_vrmls={1}".format(indent, transform._forward_vrmls))
+		print("{0}before reverse_vrmls={1}".format(indent, transform._reverse_vrmls))
+	    result._forward_vrmls = transform._forward_vrmls + ( forward_vrml, )
+	    result._reverse_vrmls = ( reverse_vrml, ) + transform._reverse_vrmls
+	    if trace_detail >= 3:
+		print("{0}before forward_vrmls={1}".format(indent, result._forward_vrmls))
+		print("{0}before reverse_vrmls={1}".format(indent, result._reverse_vrmls))
 	
+	# Wrap up any requested *tracing* and return *result*:
+	if tracing >= 0:
+	    print("{0}<=Transform.translate(*, '{1}', {2:i})=>*".format(indent, comment, dx_dy_dz))
 	return result
+
+    def _vrml(self, vrml, tracing=-1000000):
+	""" *Transform*: Return a new *VRML* object where *vrml* has has the *Transform* object
+	    (i.e. *self*) applied to it.
+	"""
+
+	# Use *transform* instead of *self*:
+	transform = self
+
+	# Verify argument types:
+	assert isinstance(vrml, VRML)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Transform._vrml(*, '{1}')".format(indent, vrml._name_get()))
+
+	# Iterate through each of the *forward_transforms*:
+	new_vrml = vrml
+	for forward_vrml in transform._forward_vrmls:
+	    old_vrml = new_vrml
+	    old_vrml_name = old_vrml._name_get()
+	    if len(forward_vrml) == 3:
+		# We have a translate:
+		dx = L(mm=forward_vrml[0])
+		dy = L(mm=forward_vrml[1])
+		dz = L(mm=forward_vrml[2])
+		translate = P(dx, dy, dz)
+		new_vrml_name = "{0}__Translate".format(old_vrml_name)
+		new_vrml = VRML_Translate(new_vrml_name, translate, old_vrml, tracing = tracing + 1)
+	    elif len(forward_vrml) == 4:
+		# We have a rotation:
+		nx = L(mm=forward_vrml[0])
+		ny = L(mm=forward_vrml[1])
+		nz = L(mm=forward_vrml[2])
+		axis = P(nx, ny, nz)
+		amount = Angle(rad=forward_vrml[3])
+		new_vrml_name = "{0}__Rotate".format(old_vrml_name)
+		new_vrml = VRML_Rotate(new_vrml_name, axis, amount, old_vrml, tracing = tracing + 1)
+	    else:
+		assert False, "Bad VRML transform"
+	
+	# Wrap up any requested *tracing* and return *new_vrml*:
+	if tracing >= 0:
+	    print("{0}<=Transform._vrml(*, '{1}')".format(indent, vrml._name_get()))
+	return new_vrml
 
 class Vice:
 
@@ -20573,7 +20797,7 @@ class Vice:
 	"""
 
 	# Verify argument types:
-	assert isinstance(vrml, VRML)
+	assert isinstance(vrml, VRML_Lines)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -20621,19 +20845,80 @@ class VRML:
 	# Verify argument types:
 	assert isinstance(name, str)
 
-	# Load up *vrml*:
-	vrml._color_lines = []			# Lines for the color[...] VRML
-	vrml._colors_table = {}			# Table for making 
-	vrml._coordinate_lines = []		#...
-	vrml._coordinate_index_lines = []
-	vrml._coordinates_table = {}
-	vrml._color_index_lines = []
-	vrml._header_lines = []
-	vrml._lines = None			# Temporary for *_lines_extend*()
-	vrml._name = name			# Name of VRML segment
-	vrml._padding = None			# Temporary for *_lines_extend*()
+	# 
+	lines = []
+	lines.append("")
+	lines.append("#VRML V2.0 utf8\n")
+	lines.append("# {0}\n".format(name))
 
-    def _box_outline(self, color, corner1, corner2):
+	# Load up *vrml*:
+	vrml._is_open = True
+	vrml._lines = lines
+	vrml._name = name.replace(' ', '_')
+	vrml._pad_table = {}
+
+    def _close(self):
+	""" *VRML*: Make sure that the *VRML* object (i.e. *self*) is closed.  This routoine
+	    is overridden by a sub-class as needed:
+	"""
+
+	self._is_open = False
+
+    def _name_get(self):
+	""" *VRML*: Return the name of the *VRML* object (i.e. *self*).
+	"""
+
+	return self._name
+
+    def _text_pad(self, pad, tracing=-1000000):
+	""" *VRML*: Return a string of VRML text for the *VRML* object (i.e. *self*.)
+	"""
+
+	assert False, "No _text_pad() routine for {0}".format(self.__class__.__name__)
+
+    def _text_pad_helper(self, pad, tracing=-1000000):
+	""" *VRML*: Return a string of VRML text for the *VRML* object (i.e. *self*.)
+	"""
+
+	# Use *vrml* instead of *self*:
+	vrml = self
+	
+	# Verify argument types:
+	assert isinstance(pad, int)
+	assert isinstance(tracing, int)
+
+	# Perform an requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>VRML.write(*, *)".format(indent))
+	    trace_detail = 2
+
+	# Make sure all *vrml* is closed:
+	if vrml._is_open:
+	    vrml._close()
+	    assert not vrml._is_open
+
+	# Convert *lines* to *text*:
+	pad_table = vrml._pad_table
+	if not pad in pad_table:
+	    lines = vrml._lines
+	    if trace_detail >= 2:
+		print("{0}lines[0]='{1}' lines[2]='{2}' lines[3]='{3}".
+		  format(indent, lines[0], lines[1], lines[2]))
+
+	    # This is the first time at this padding level; remember the result:
+	    padding = ' ' * pad
+	    text = padding.join(lines)
+	    pad_table[pad] = text
+	text = pad_table[pad]
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}=>VRML.write({1}, *)".format(indent, pad))
+	return text
+
+    def xxx_box_outline(self, color, corner1, corner2):
 	""" *VRML*: Draw a box outline that touches *corner1* and *corner2* using the
 	    *VRML* object (i.e. *self*).  The lines will be drawn in *color*.
 	"""
@@ -20667,7 +20952,7 @@ class VRML:
 	vrml._poly_line(color, [p2, p7])
 	vrml._poly_line(color, [p3, p6])
 
-    def _line_append(self, line):
+    def xxx_line_append(self, line):
 	""" *VRML*: Append *line* to lines list associated with the *VRML* object (i.e. *self*).
 	"""
 
@@ -20683,7 +20968,7 @@ class VRML:
 	assert not line.endswith("\n"), "Line '{0}' ends with new-line".format(line)
 	lines.append("{0}{1}\n".format(padding, line))
 
-    def _lines_extend(self, vrml_lines, pad, tracing = -1000000):
+    def xxx_lines_extend(self, vrml_lines, pad, tracing = -1000000):
 	""" *VRML*: Append a VRML content of the *VRML* object (i.e. *self*) by extending
 	    the *vrml_lines* list of lines with with each line indented by *pad* spaces.
 	"""
@@ -20766,13 +21051,13 @@ class VRML:
 	if tracing >= 0:
 	    print("{0}<=VRML._lines_extend('{1}', *, {2})".format(indent, vrml._name, pad))
 
-    def _name_get(self):
+    def xxx_name_get(self):
 	""" *VRML*: Return the name of the *VRML* object (i.e. *self*):
 	"""
 
 	return self._name
 
-    def _poly_line(self, color_name, points):
+    def xxx_poly_line(self, color_name, points):
 	""" *VRML*: Draw a *color* poly line between *points* in the *VRML_Lines* object
 	    (i.e. *self*).
 	"""
@@ -20837,7 +21122,7 @@ class VRML:
 	color_index_lines = vrml._color_index_lines
 	color_index_lines.append("   {0}".format(color_index))
 
-    def _stl_write(self, comment, color, triangles, tracing=-1000000):
+    def xxx_stl_write(self, comment, color, triangles, tracing=-1000000):
 	""" *VRML*: Write the visualization for *triangles* into the *VRML* object (i.e. *self*).
 	    All of the triangle will be rendered in *color*.
 	"""
@@ -20937,15 +21222,13 @@ class VRML:
 	if tracing >= 0:
 	    print("{0}<=VRML._stl_write('{1}', {2}, *)".format(indent, comment, color))
 
-    def _stl_read(self, part, transform, tracing = -1000000):
-	""" *VRML*: Read the `.stl` associated with *part* into the *VRML* object (i.e. *self*)
-	    transforming each encountered point using *transform*.  *color* will be used
-	    for the rendering color.
+    def xxx_stl_read(self, part, from_routine, tracing = -1000000):
+	""" *VRML*: Read the `.stl` associated with *part* into the *VRML* object (i.e. *self*).
 	"""
 
 	# Check argument types:
 	assert isinstance(part, Part)
-	assert isinstance(transform, Transform)
+	assert isinstance(from_routine, str)
 	assert isinstance(tracing, int)
 
 	# Use *vrml* instead of *self*:
@@ -20955,8 +21238,8 @@ class VRML:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>VRML._stl_read('{1}', '{2}', *)".
-	      format(indent, vrml._name, part._name_get()))
+	    print("{0}=>VRML._stl_read('{1}', '{2}', *, '{3}')".
+	      format(indent, vrml._name, part._name_get(), from_routine))
 	    trace_detail = 1
 
 	# Grab some values from *part*:
@@ -20983,23 +21266,11 @@ class VRML:
 	while index + 4 < size:
 	    #  Extract *point1*, *point2*, and *point3* from *stl_lines*:
 	    xlist1 = stl_lines[index + 2].split()
-	    point1 = P(L(float(xlist1[1])), L(float(xlist1[2])), L(float(xlist1[3])))
+	    vertex1 = ( float(xlist1[1]), float(xlist1[2]), float(xlist1[3]) )
 	    xlist2 = stl_lines[index + 3].split()
-	    point2 = P(L(float(xlist2[1])), L(float(xlist2[2])), L(float(xlist2[3])))
+	    vertex2 = ( float(xlist2[1]), float(xlist2[2]), float(xlist2[3]) )
 	    xlist3 = stl_lines[index + 4].split()
-	    point3 = P(L(float(xlist3[1])), L(float(xlist3[2])), L(float(xlist3[3])))
-
-	    # Transform *point1*, *point2*, and *point3*:
-	    point1 = transform * point1
-	    point2 = transform * point2
-	    point3 = transform * point3
-
-	    # Now convert the transformed *point1*, *point2*, and *point3*, back
-	    # back into immutable Python tuples that  can be used to index into
-	    # a Python dictionary:
-	    vertex1 = point1.triple()
-	    vertex2 = point2.triple()
-	    vertex3 = point3.triple()
+	    vertex3 = ( float(xlist3[1]), float(xlist3[2]), float(xlist3[3]) )
 
 	    # Get *offset1* for *vertex1*:
 	    if vertex1 in vertices:
@@ -21061,8 +21332,685 @@ class VRML:
     
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=VRML._stl_read('{1}', '{2}', *)".
-	      format(indent, vrml._name, part._name_get()))
+	    print("{0}<=VRML._stl_read('{1}', '{2}', *, '{3}')".
+	      format(indent, vrml._name, part._name_get(), from_routine))
+
+class VRML_Group(VRML):
+    """ *VRML_Group*: Represents a VRML Group node.
+    """
+
+    def __init__(self, name):
+	""" *VRML_Group*: Initialize the *VRML_Group* object (i.e. *self*):
+	"""
+
+	# Initliaze super-class:
+	VRML.__init__(self, name)
+
+	# Create *children* lists:
+	self._children = []
+
+    def _append(self, vrml):
+	""" *VRML_Group*: Append *vrml* to the *VRML_Group* object (i.e. *self*):
+	"""
+
+	# Use *vrml_group* instead of *self*:
+	vrml_group = self
+
+	# Verify argument types:
+	assert isinstance(vrml, VRML)
+
+	# Make sure that *vrml_group* is still open:
+	assert vrml_group._is_open
+
+	# Append *vrml* to *children*:
+	vrml_group._children.append(vrml)
+
+    def _text_pad(self, pad, tracing=-1000000):
+	""" *VRML_Group*: Return the *VRML_Group* object (i.e. *self*) as a single string 
+	"""
+
+	# Use *vrml_group* instead of *self*:
+	vrml_group = self
+
+	# Verify argument types:
+	assert isinstance(pad, int)	
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>VRML_Group._text_pad('{1}', {2})".format(indent, vrml_group._name, pad))
+	    trace_detail = 2
+
+	# Mark this group as *closed*:
+	vrml_group._is_open = False
+
+	# Construct the content
+	pad_table = vrml_group._pad_table
+	if pad in pad_table:
+	    # This padding level has been previously computed:
+	    text = pad_table[pad]
+	else:
+	    # Put all the needed text pieces into *lines*:
+	    lines = []
+	    lines.append("")
+	    lines.append("#VRML V2.0 utf8\n")
+	    lines.append("### VRML_Group\n")
+	    lines.append("Group {\n")
+	    lines.append(" children [\n")
+	    for index, vrml_child in enumerate(vrml_group._children):
+		if trace_detail >= 2:
+		    print("{0}[{1}] '{2}'".format(indent, index, vrml_child.__class__.__name__))
+		vrml_child_text = vrml_child._text_pad(pad + 2, tracing = tracing + 1)
+		assert isinstance(vrml_child_text, str), \
+		  "Bad return for {0}".format(vrml_child.__class__.__name__)
+		lines.append(vrml_child_text)
+	    lines.append(" ]\n")
+	    lines.append("}\n")
+
+	    # Concatenate all of lines into one big string of *text* padded with *padding*::
+	    padding = ' ' * pad
+	    text = padding.join(lines)
+
+	    # Stuff *text* into *pad_table*:
+	    pad_table[pad] = text
+
+	# Wrap up any requested *tracing* and return *text*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=VRML_Group._text_pad('{1}', {2})".format(indent, vrml_group._name, pad))
+	return text
+
+class VRML_Lines(VRML):
+    """ *VRML_Lines* represents a bunch of colored VRML lines.
+    """
+
+    def __init__(self, name):
+	""" *VRML_Lines*: 
+	"""
+
+	# Use *vrml_lines* instead of *self*:
+	vrml_lines = self
+
+	# Verify argument types:
+	assert isinstance(name, str)
+
+	# Initialize *VRML* super-class:
+	VRML.__init__(vrml_lines, name)
+
+	# Intialize *vrml_lines*:
+	vrml_lines._color_lines = []
+	vrml_lines._colors_offset_table = {}
+	vrml_lines._point_lines = []
+	vrml_lines._points_offset_table = {}
+	vrml_lines._poly_line_color_offset_lines = []
+	vrml_lines._poly_line_point_offsets_lines = []
+
+    def _close(self):
+        """ *VRML_Lines*: Close the *VRML_Lines* to further polyline additions:
+	"""
+
+	# Use *vrml_lines* instead of *self*:
+        vrml_lines = self
+
+	# Grab *lines* from *VRML* super-class object:
+	lines = vrml_lines._lines
+	
+	# Start the Shape and geometry:
+	lines.append("### VRML_Lines\n")
+	lines.append("Shape {\n")
+	lines.append(" geometry IndexedLineSet {\n")
+
+	# Append the "color" section to *lines*:
+	lines.append("  colorPerVertex FALSE\n")
+	lines.append("  color Color {\n")
+	lines.append("   color [\n")
+	color_lines = vrml_lines._color_lines
+	for color_line in color_lines:
+	    lines.append(color_line)
+	lines.append("   ]\n")
+	lines.append("  }\n")
+
+	# Append the "coord" section to *lines:
+	lines.append("  coord Coordinate {\n")
+	lines.append("   point [\n")
+	point_lines = vrml_lines._point_lines
+	for point_line in point_lines:
+	    lines.append(point_line)
+	lines.append("   ]\n")
+	lines.append("  }\n")
+	
+	# Append the "coordIndex" section to *lines*:
+	poly_line_point_offsets_lines= vrml_lines._poly_line_point_offsets_lines
+	lines.append("  coordIndex [\n")
+	for poly_line_point_offsets_line in poly_line_point_offsets_lines:
+	    lines.append(poly_line_point_offsets_line)
+	lines.append("  ]\n")
+
+	# Append "colorIndex" section to *lines*:
+	lines.append("  colorIndex [\n")
+	poly_line_color_offset_lines = vrml_lines._poly_line_color_offset_lines
+	for poly_line_color_offset_line in poly_line_color_offset_lines:
+	    lines.append(poly_line_color_offset_line)
+	lines.append("  ]\n")
+
+	# Wrap up the Shape and geometry:
+	lines.append(" }\n")
+	lines.append("}\n")
+
+	# Mark that we are closed for additional polylines:
+	vrml_lines._is_open = False
+
+    def _box_outline(self, color_name, corner1, corner2):
+	""" *VRML_Lines*: Draw a box outline that touches *corner1* and *corner2* using the
+	    *VRML_Lines* object (i.e. *self*).  The lines will be drawn in *color_name*.
+	"""
+
+	# Use *vrml_lines* instead of *self*:
+	vrml_lines = self
+
+	# Verify argument types:
+	assert isinstance(color_name, str)
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
+
+	# Make sure *vrml_lines* is still open:
+	assert vrml_lines._is_open
+
+	# Figure out the X/Y/Z coordinates:
+	x1, x2 = corner1.x.minimum_maximum(corner2.x)
+	y1, y2 = corner1.y.minimum_maximum(corner2.y)
+	z1, z2 = corner1.z.minimum_maximum(corner2.z)
+
+	# Create the 8 box corners:
+	p1 = P(x1, y1, z1)	# BSW
+	p2 = P(x2, y1, z1)	# BSE
+	p3 = P(x2, y2, z1)	# BNE
+	p4 = P(x1, y2, z1)	# BNW
+	p5 = P(x1, y2, z2)	# TNW
+	p6 = P(x2, y2, z2)	# TNE
+	p7 = P(x2, y1, z2)	# TSE
+	p8 = P(x1, y1, z2)	# TSW
+
+	# Draw the box lines:
+	vrml_lines._poly_line(color_name, [p1, p2, p3, p4, p5, p6, p7, p8, p1, p4])
+	vrml_lines._poly_line(color_name, [p5, p8])
+	vrml_lines._poly_line(color_name, [p2, p7])
+	vrml_lines._poly_line(color_name, [p3, p6])
+
+    def _poly_line(self, color_name, points, tracing=-1000000):
+	""" *VRML_Lines*: Draw a *color* poly line between *points* in the *VRML_Lines* object
+	    (i.e. *self*).
+	"""
+
+	# Use *vrml_lines* instead of *self*:
+	vrml_lines = self
+	 
+	# Verify argument types:
+	assert isinstance(color_name, str) and color_name != ""
+	assert isinstance(points, list)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>VRML_Lines._poly_line('{1}', '{2}', *)".
+	      format(indent, vrml_lines._name, color_name))
+
+	# Make sure that *vrml_lines* is still open:
+	assert vrml_lines._is_open
+
+	# Figure out the *color_index* for *color*; create one if not there already:
+	color_lines = vrml_lines._color_lines
+	colors_offset_table = vrml_lines._colors_offset_table
+	if color_name in colors_offset_table:
+	    # Color was previously created; reuse it:
+	    color_offset = colors_offset_table[color_name]
+	else:
+	    # Color not previously created: create it:
+	    color = Color(color_name)
+	    red, green, blue = color._red_green_blue_get()
+	    color_offset = len(color_lines)
+	    colors_offset_table[color_name] = color_offset
+	    color_lines.append("    {0} {1} {2} # {3}\n".format(red, green, blue, color_name))
+	assert 0 <= color_offset < len(color_lines)
+
+	# This is the padding needed for *poly_line_point_offsets_lines* below:
+	line_offsets = [ "  " ]
+
+	# Make sure we have a *coordinate_index* for each *point* in *points*:
+	point_lines = vrml_lines._point_lines
+	points_offset_table = vrml_lines._points_offset_table
+	for index, point in enumerate(points):
+	    # Create a *coordinate* tuple key using imutuable *float* types:
+	    assert isinstance(point, P), "points[{0}] is not a Point".format(index)
+	    point_tuple = point.triple()
+
+	    # Make sure we have a *coordinate_index*:
+	    if point_tuple in points_offset_table:
+		# The coordinate has already been entered; reuse it: 
+		point_offset = points_offset_table[point_tuple]
+	    else:
+		# The coordinate is new and must be created:
+		point_offset = len(point_lines)
+		points_offset_table[point_tuple] = point_offset
+		point_lines.append("    {0} {1} {2}\n".
+		  format(point_tuple[0], point_tuple[1], point_tuple[2]))
+
+	    # Now we can append *coordinate_index* to *line_offsets*:
+	    line_offsets.append(" {0}".format(point_offset))
+
+	# Indicate the end of the poly-line with -1:
+	line_offsets.append(" -1\n")
+	poly_line_point_offsets_line = "".join(line_offsets)
+	poly_line_point_offsets_lines = vrml_lines._poly_line_point_offsets_lines
+	poly_line_point_offsets_lines.append(poly_line_point_offsets_line)
+
+	# Associate the *color_index* for *color_name* with this poly-line:
+	poly_line_color_offset_line = "  {0}\n".format(color_offset)
+	poly_line_color_offset_lines = vrml_lines._poly_line_color_offset_lines
+	poly_line_color_offset_lines.append(poly_line_color_offset_line)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=VRML_Lines._poly_line('{1}', '{2}', *)".
+	      format(indent, vrml_lines._name, color_name))
+
+    def _text_pad(self, pad, tracing=-1000000):
+	""" *VRML_Lines*:
+	"""
+
+	# Use *vrml_lines* inestead of *self*:
+	vrml_lines = self
+
+	# Verify argument types:
+	assert isinstance(pad, int)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>VRML_Lines._text_pad('{1}', {2})".format(indent, vrml_lines._name, pad))
+
+	# Convert *vrml_lines* into one big string of *text*:
+	text = vrml_lines._text_pad_helper(pad)
+
+	# Wrap up any requested *tracing* and return *text*:
+	if tracing >= 0:
+	    print("{0}<=VRML_Lines._text_pad('{1}', {2})".format(indent, vrml_lines._name, pad))
+	return text
+
+
+class VRML_Rotate(VRML):
+    """ *VRML_Rotate*: Represents a VRML Rotatiation Transform node.
+    """
+
+    def __init__(self, name, axis, amount, child_vrml, tracing=-1000000):
+	""" *VRML_Rotate*: Initialize the *VRML_Rotate* node object (i.e. *self*) to
+	    represent a rotation of *amount* around *axis*.
+	"""
+	
+	# Use *vrml_rotate* instead of *self*:
+	vrml_rotate = self
+
+	# Verify argument types:
+	assert isinstance(name, str)
+	assert isinstance(axis, P)
+	assert isinstance(amount, Angle)
+	assert isinstance(child_vrml, VRML)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>VRML_Rotate.__init__(*, '{1}', {2}, {3:d}, '{4}')".
+	      format(indent, name, axis, amount, child_vrml._name))
+
+	# Intialize the super class:
+	VRML.__init__(vrml_rotate, name)
+
+	# Load values into *vrml_rotate*:
+	vrml_rotate._axis = axis.normalize()
+	vrml_rotate._amount = amount
+	vrml_rotate._child_vrml = child_vrml
+	vrml_rotate._is_open = False
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=VRML_Rotate.__init__(*, '{1}', {2}, {3:d}, '{4}')".
+	      format(indent, name, axis, amount, child_vrml._name))
+
+    def _text_pad(self, pad, tracing=-1000000):
+	""" *VRML_Rotate*: Return the *VRML_Rotate* object (i.e. *self*) as a single text
+	    string where each line is indented by *pad* spaces.
+	"""
+
+	# Use *vrml_rotate* instead of *self*:
+	vrml_rotate = self
+	
+	# Verify argument types:
+	assert isinstance(pad, int)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>VRML_Rotate._text_pad('{1}', {2})".format(indent, vrml_rotate._name, pad))
+
+	assert isinstance(vrml_rotate._name, str)
+
+	# Figure out if we have already done this *pad* before:
+	pad_table = vrml_rotate._pad_table
+	if pad in pad_table:
+	    text = pad_table[pad]
+	else:
+	    # Grab values out of *vrml_rotate*:
+	    axis = vrml_rotate._axis
+	    axis_x, axis_y, axis_z = axis.triple()
+	    amount = vrml_rotate._amount
+	    angle = amount.radians()
+	    lines = vrml_rotate._lines
+
+	    # Construct all the *lines* that are needed for a VRML rotate:
+	    lines.append("### VRML_Rotate\n")
+	    lines.append("Transform {\n")
+	    lines.append(" rotation {0} {1} {2} {3}\n".format(axis_x, axis_y, axis_z, angle))
+	    lines.append(" children [\n")
+	    lines.append(   vrml_rotate._child_vrml._text_pad(pad + 2))
+	    lines.append(" ]\n")
+	    lines.append("}\n")
+	    
+	    # Convert *lines* into one big *text* string where each lines is prepended by *padding*:
+	    padding = ' ' * pad
+	    text = padding.join(lines)
+
+	    # Stuff *text* back into *pad_table*:
+	    pad_table[pad] = text
+
+	# Wrap up any requested *tracing* and return *text*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=VRML_Rotate._text_pad('{1}', {2})".format(indent, vrml_rotate._name, pad))
+	return text
+
+class VRML_Translate(VRML):
+    """ *VRML_Translate*: Represents a VRML Rotatiation Transform node.
+    """
+
+    def __init__(self, name, translate, child_vrml, tracing=-1000000):
+	""" *VRML_Translate*: Initialize the *VRML_Translate* node object (i.e. *self*) to
+	    represent a translation by *translate* for *child_vrml*.
+	"""
+	
+	# Use *vrml_translate* instead of *self*:
+	vrml_translate = self
+
+	# Verify argument types:
+	assert isinstance(name, str)
+	assert isinstance(translate, P)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>VRML_Translate.__init__(*, '{1}', {2:i}, '{3}')".
+	      format(indent, name, translate, child_vrml._name))
+
+	# Intialize the *VRML* super class:
+	VRML.__init__(vrml_translate, name)
+
+	# Load values into *vrml_translate*:
+	vrml_translate._child_vrml = child_vrml
+	vrml_translate._is_open = False
+	vrml_translate._translate = translate
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=VRML_Translate.__init__(*, '{1}', {2:i}, '{3}')".
+	      format(indent, name, translate, child_vrml._name))
+
+    def _text_pad(self, pad, tracing=-1000000):
+	""" *VRML_Translate* Return the *VRM_Translate* object (i.e. *self*) as a string
+	    where each line is preceeded by *pad* spaces.
+	"""
+
+	# Use *vrml_translate* instead of *self*:
+	vrml_translate = self
+
+	# Verify argument types:
+	assert isinstance(pad, int)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}VRML_Translate._text_pad('{1}', {2})".
+	      format(indent, vrml_translate._name, pad))
+	    trace_detail = 2
+
+	# Figure out if we have already done this *pad* before:
+	pad_table = vrml_translate._pad_table
+	if pad in pad_table:
+	    text = pad_table[pad]
+	else:
+	    # Grab the values out of *vrml_translate*:
+	    translate = vrml_translate._translate
+	    dx, dy, dz = translate.triple()
+	    if trace_detail >= 2:
+		print("{0}dx={1} dy={2} dz={3} translate={4:i}in={4:m}mm".
+		  format(indent, dx, dy, dz, translate))
+
+	    # Construct all the *lines* that are needed for a VRML Transform:
+	    lines = []
+	    lines.append("")
+	    lines.append("#VRML V2.0 utf8\n")
+	    lines.append("# {0}\n".format(vrml_translate._name))
+	    lines.append("### VRML_Translate\n")
+	    lines.append("Transform {\n")
+	    lines.append(" translation {0} {1} {2}\n".format(dx, dy, dz))
+	    lines.append(" children [\n")
+	    lines.append(   vrml_translate._child_vrml._text_pad(pad + 2))
+	    lines.append(" ]\n")
+	    lines.append("}\n")
+	    
+	    # Convert *lines* into one big *text* string where each lines is prepended by *padding*:
+	    padding = ' ' * pad
+	    text = padding.join(lines)
+
+	    # Stuff *text* back into *pad_table*:
+	    pad_table[pad] = text
+
+	# Wrap up any requested *tracing* and return text:
+	if tracing >= 0:
+	    print("{0}VRML_Translate._text_pad('{1}', {2})".
+	      format(indent, vrml_translate._name, pad))
+	return text
+
+    def xxx_append(self, vrml):
+	""" *VRML_Translate*: Append *vrml* to the children of the *VRML_Translate*
+	    object (i.e. *self*).
+	"""
+
+	# Use *vrml_translate* instead of *self*:
+	vrml_translate = self
+
+	# Verify argument types:
+	assert isinstance(vrml, VRML)
+
+	# Append *vrml* to *children*:
+	vrml._children.append(vrml)
+
+    def padded_write(self, vrml_file, pad):
+	""" *VRML_Translate*: Write the *VRML_Translate* object out to *vrml_file* with each line
+	    indented by *pad* spaces.
+	"""
+
+	# Use *vrml_translate* instead of *self*:
+	vrml_translate = self
+	
+	# Verify argument types:
+	assert isinstance(vrml_file, file)
+	assert isinstnace(pad, int)
+
+	# Write out the header:
+	vrml_translate._header_write(vrml_file, pad)
+	
+	# Grab some values from *vrml_translate*:
+	translate = vrml_translate._translate
+	children = vrml_translate._children
+
+	# Write out the transform lines:
+	padding = ' ' * pad
+	vrml_file.write("{0}Transform {{\n".format(padding))
+	vrml_file.write("{0} translation {1:m} {2:m} {3:m}\n".
+	  format(padding, translate.x, translate.y, translate.z))
+
+	# Write out the *children*:
+	vrml_file.write("{0} children [\n".format(padding))
+	for child_vrml in children:
+	    child_vrml.padded_write(vrml_file, pad + 2)
+	vrml_file_write("{0} ]\n")
+
+	# Close up final curly brace for Transform:
+	vrml_file.write("{0}}}".format(pad))
+
+class VRML_Triangles(VRML):
+    """ *VRML_Triangles*: Represent a VRML shape that consists of colored triangles.
+    """
+
+    def __init__(self, name, color_name, triangles, tracing=-1000000):
+	""" *VRML_Triangles*: Initialize the *VRML_Triangles* object (i.e. *self*) so that 
+	    will render a list of *triangles* in *color*.
+	"""
+
+	# Use *vrml_triangles* instead of *self*:
+	vrml_triangles = self
+
+	# Verify argument types:
+	assert isinstance(name, str)
+	assert isinstance(color_name, str)
+	assert isinstance(triangles, list) or isinstance(triangles, tuple)
+	assert isinstance(tracing, int)
+
+	# Perform any *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>VRML_Triangles.__init__(*, '{1}, '{2}', *)".
+	      format(indent, name, color_name))
+
+	# Initialize the super class of *vrml_triangles*:
+	VRML.__init__(vrml_triangles, name)
+
+	# In VRML, the triangles are represented as a list of triangle vertices (i.e. a triangle
+	# corner) and then triples that index into this array.
+
+	# *corners_table* and *corners* are used to generate a unique indiex for each triangle
+	# corner.  *corner_offset_triangle* is collects 3 corner indices together before appended
+        # to *corner_offset_triangles* as an immutable tuple.
+	corners_table = {}
+	corners = []
+	corner_offset_triangle = []
+	corner_offset_triangles = []
+	for triangle in triangles:
+	    assert isinstance(triangle, tuple)
+
+	    # Make sure *corner_offset_triangle* is empty:
+	    del corner_offset_triangle[:]
+	    for corner in triangle:
+		assert isinstance(corner, tuple)
+
+		# If *corner* has occurred previously, it will already be in *corners_table*:
+		if corner in corners_table:
+		    # Reuse the previously allocated *corner_offset*:
+		    corner_offset = corners_table[corner]
+		else:
+		    # Allocate a new *corner_offset* for *corner* an remember it in *corners_table*:
+		    corner_offset = len(corners)
+		    corners_table[corner] = corner_offset
+		    corners.append(corner)
+
+		# Collect three *corner_offset*'s in *corner_offset_triangle*:
+		corner_offset_triangle.append(corner_offset)
+
+	    # Record *corner_offset_triangle* into *corner_offset_triangles* as an immutable tuple:
+	    corner_offset_triangles.append(tuple(corner_offset_triangle))
+
+	# Mark *vrml_triangles* as closed from the start:
+	vrml_triangles._is_open = False
+
+	# Grab the super class *lines* list:
+	lines = vrml_triangles._lines
+
+	# Append the Shape and appearance VRML to *lines*:
+	lines.append("### VRML_Triangles\n")
+	lines.append("Shape {\n")
+	lines.append(" appearance Appearance {\n")
+	lines.append("  material Material {\n")
+	color = Color(color_name)
+	red, green, blue = color._red_green_blue_get()
+	lines.append("   diffuseColor {0} {1} {1}\n".format(red, green, blue))
+	alpha = color._alpha_get()
+	if alpha < 1.0:
+	    lines.append("   transparency {0}\n".format(1.0 - alpha))
+	lines.append("  }\n")
+	lines.append(" }\n")
+
+	# Now start the geometry portion of *lines*.  It consists of point coordinates
+	lines.append(" geometry IndexedFaceSet {\n")
+
+	# Append the *corners* to *lines*:
+	lines.append("  coord Coordinate {\n")
+	lines.append("   point [\n")
+	for corner in corners:
+	    lines.append("    {0} {1} {2}\n".format(corner[0], corner[1], corner[2]))
+	lines.append("   ]\n")
+	lines.append("  }\n")
+
+	# Append the *corner_offset_triangles* to *lines*:
+	lines.append("  coordIndex [\n")
+	for corner_offset_triangle in corner_offset_triangles:
+	    lines.append("   {0} {1} {2} -1\n".format(corner_offset_triangle[0],
+	      corner_offset_triangle[1], corner_offset_triangle[2]))
+	lines.append("  ]\n")
+
+	# Wrap up the VRML *shape*:
+	lines.append(" }\n")
+	lines.append("}\n")
+
+	# Wrap up any *tracing*:
+	if tracing >= 0:
+	    print("{0}<=VRML_Triangles.__init__(*, '{1}', '{2}', *)".
+	      format(indent, name, color_name))
+
+    def _text_pad(self, pad, tracing=-1000000):
+	""" *VRML_Triangles*: Return the *VRML_Triangles* object (i.e. *self*) as single
+	    string where each line is preceeded by *pad* spaces.
+	"""
+
+	# Use *vrml_triangles* instead of *self*:
+	vrml_triangles = self
+	
+	# Verify argument types:
+	assert isinstance(pad, int)
+	assert isinstance(tracing, int)
+
+	#tracing = 0
+
+	# Perform an requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * pad
+	    print("{0}VRML_Triangles._text_pad('{1}', {2})".
+	      format(indent, vrml_triangles._name, pad))
+
+	# Convert *vrml_triangles* to padded *text*:
+	text = vrml_triangles._text_pad_helper(pad, tracing = tracing + 1)
+
+	# Wrap up any requested *tracing* and return text:
+	if tracing >= 0:
+	    print("{0}VRML_Triangles._text_pad('{1}', {2})".
+	      format(indent, vrml_triangles._name, pad))
+	return text
 
 #    #FIXME: This Part routine appears to be no longer used!!!
 #    def _flush(self, program_number):
