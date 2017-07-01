@@ -3941,30 +3941,6 @@ class EZCAD3:
 
 	EZCAD3.ezcad = self
 
-    def xxx_directory_create(self, sub_directory, clear):
-        """ *EZCAD3*: Force directory named *directory*/*sub_directory* into existence, where
-	    *directory* comes for the *EZCAD3* object (i.e. *self.*)  If *clear* is *True*,
-	    the directory is cleared.  The resulting directory path is returned. """
-
-	# Create the *full_directory_path*:
-	ezcad3 = self
-	directory = ezcad3._directory
-	full_directory_path = os.path.join(directory, sub_directory)
-
-	# See whether or not the directory already exists:
-	if os.path.exists(full_directory_path):
-	    # Directory exists:
-	    if clear:
-		# Clear out  each individual file in the directory using glob style
-   		# file matching expression (e.g. `.../wrl/*`):
-		for file_name in glob.glob(os.path.join(full_directory_path, "*")):
-		    os.remove(file_name)
-	else:
-	    # Directory does not exist, so create it:
-            os.makedirs(full_directory_path)
-
-	return full_directory_path
-
     def _directory_get(self):
 	""" *EZCAD3*: Return the directory to read/write files from/into from the *EZCAD3* object
 	    (i.e. *self*).
@@ -4015,12 +3991,6 @@ class EZCAD3:
         """
 
 	return self._wrl_directory
-
-    def xxx_mode_get(self):
-	""" *EZCAD3*: Return the mode of the *EZCAD3* object (i.e. *self*). """
-
-	return self._mode
-
 
     def process(self, part, tracing = -1000000):
 	""" *EZCAD3*: Perform all of the processing starting at *part*.
@@ -4412,33 +4382,6 @@ class Mount:
 	"""
 
 	return self._top_surface_safe_z
-
-    def xxx_vrml_clear(self):
-	""" *Mount*: Clear the *VRML* object associated with the *Mount* object (i.e. *self*)
-	"""
-
-	self._vrml = None
-
-    def xxx_vrml_get(self):
-	""" *Mount*: Return the *VRML* object associated with the *Mount* object (i.e. *self*.)
-	"""
-
-	vrml = self._vrml
-	assert isinstance(vrml, VRML)
-	return vrml
-
-    def xxx_vrml_set(self, vrml):
-	""" *Mount*: Store *vrml into the *Mount* object (i.e. *self*.)
-	"""
-
-	# Use *mount* instead of *self*:
-	mount = self
-
-	# Verify argument types:
-	assert isinstance(vrml, VRML)
-	
-	# Stash *vrml* into *mount*:
-	mount._vrml = vrml
 
     def _xy_rapid_safe_z_get(self):
         """ *Mount*: Return the XY rapid safe Z value associated with the *Mount*
@@ -5417,54 +5360,6 @@ class Operation:
 
 	return False
 
-    def xxx_compare(self, operation2):
-	""" *Operation*: Return -1, 0, or 1 depending upon whether *operation1*
-	    (i.e. *self*) should sort before, at, or after *operation2*.
-	"""
-
-	# Use *operation1* instead of *self*:
-	operation1 = self
-
-	# Verify argument types:
-	assert isinstance(operation2, Operation)
-
-	# Sort by *mount* first:
-        result = int_compare(operation1._mount, operation2._mount)
-        if result != 0:
-            return result
-
-	# Sort by *priority* second:
-	result = int_compare(operation1._priority, operation2._priority)
-	if result != 0:
-	    return result
-
-	# Sort by *sub_priority* third:
-	result = int_compare(operation1._sub_priority, operation2._sub_priority)
-	if result != 0:
-	    return result
-
-	# Sort by *tool* forth:
-	result = operation1._tool._compare(operation2._tool)
-	if result != 0:
-	    return result
-
-	# Sort by *order* fifth:
-	result = int_compare(operation1._order, operation2._order)
-	if result != 0:
-	    return result
-
-	# Sort by *kind* fifth:
-	result = int_compare(operation1._kind, operation2._kind)
-	if result != 0:
-	    return result
-
-	# If we reach this point, we need to compare at the sub-class
-	# level.  Since this routine is called from the sub-class
-	# *compare* method, the desired comparison occurs next.
-	assert type(operation1) == type(operation2)
-
-	return result
-
     def _comment_get(self):
 	""" *Operation*: Return the comment field of the *Operation* object (i.e. *self*). """
 
@@ -5585,36 +5480,6 @@ class Operation:
 	    print("{0}<=Operation._reorder('{1}', *)=>'{2}'".
 	      format(indent, operation._name, reordered_mount_operations._name_get()))
 	return reordered_mount_operations
-
-    def xxx_reorder(self, mount_operations, tracing=-1000000):
-	""" *Operation*: This is a no operation super_class function for the *Operation* object
-	    (i.e. *self*) that is meant to be overriden by a sub-class function only if needed.
-	"""
-
-	# Use *operation* instead of *self*:
-	operation = self
-
-	# Verify argument types:
-	assert isinstance(mount_operations, Mount_Operations)
-	assert isinstance(tracing, int)
-
-	# Perform any requested *tracing*:
-	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print("{0}=>Operation._reorder('{1}', '{2}')".
-	      format(indent, operation._name, mount_operations._name_get()))
-
-	# This routine does nothing:
-	pass
-
-	# Wrap up any requested *tracing* and return *mount_operations*: 
-	if tracing >= 0:
-	    mount_operations_name = mount_operations._name_get()
-	    print("{0}<=Operation._reorder('{1}', '{2}')=>'{3}'".format(indent,
-	      operation._name, operation._name, mount_operations_name, mount_operations_name))
-
-	# Do not do anything to *mount_operations*:
-	return mount_operations
 
     def _show(self, mount, tracing = -1000000):
         """ *Operation*: Return a one line string represenation of the *Operation* object
@@ -6481,43 +6346,6 @@ class Operation_Drill(Operation):
 	    #	code._unsigned("G11", 4)
 	    #	code._time("P", Code_Time(seconds=8.0))
 	    #	code._command_end()
-
-    def xxx_compare(self, drill2):
-	""" *Operation_Drill*: Return -1, 0, 1 if *drill1* (i.e. *self*)
-	    should sort before, at, or after *drill2*.
-	"""
-
-	# Verify argument types:
-	assert isinstance(drill2, Operation)
-
-	# Use *drill1* instead of *self*:
-	drill1 = self
-
-	# Perform superclass comparison first:
-	result = Operation.compare(drill1, drill2)
-	if result != 0:
-	    return result
-
-	# Perform *diameter* comparison second:
-	result = drill1.diameter.compare(drill2.diameter)
-	if result != 0:
-	    return result
-
-	# The remaining comparisons are for disambiguation only:
-	result = drill1.x.compare(drill2.x)
-	if result != 0:
-	    return result
-	result = drill1.y.compare(drill2.y)
-	if result != 0:
-	    return result
-	result = -drill1.z_start.compare(drill2.z_start)
-	if result != 0:
-	    return result
-	result = -drill1.z_stop.compare(drill2.z_stop)
-	if result != 0:
-	    return result
-
-	return result
 
     def _show(self, mount, tracing = -1000000):
         """ *Operation_Drill*: Return text showing the values of the *Operation_Drill* object
@@ -8141,150 +7969,6 @@ class Part:
 		assert isinstance(sub_part, Part)
 		sub_part._bounding_box_check(indent + 1)
 
-    def xxxxxx_bounding_box_set(self, bounding_box):
-	""" *Part*: For the *Part* object (i.e. *self*), set the bounding
-	    box to *bounding_box*.
-	"""
-
-	# Verify argument types:
-	assert isinstance(bounding_box, Bounding_Box)
-	assert not bounding_box.is_empty()
-
-	# Grab *tne* and *bsw* from *bounding_box*:
-	tne = bounding_box._tne
-	bsw = bounding_box._bsw
-
-	# Grab the 6 X/Y/Z coordinates:
-	self.tz = tz = tne.z
-	self.ny = ny = tne.y
-	self.ex = ex = tne.x
-	self.bz = bz = bsw.z
-	self.sy = sy = bsw.y
-	self.wx = wx = bsw.x
-
-	# Compute the center coordinates:
-	self.cx = cx = (ex + wx) / 2
-	self.cy = cy = (ny + sy) / 2
-	self.cz = cz = (tz + bz) / 2
-
-	# Fill in the slices:
-	#      tnw--tn---tne     nw----n----ne     bnw--bn---bne
-	#      |     |     |     |     |     |     |     |     |
-	#      tw----t----te     w-----c-----e     bw----b----be
-	#      |     |     |     |     |     |     |     |     |
-	#      tsw--ts---tse     sw----s----se     bsw--bs---bse
-	#       (Top Slice)      (Center Slice)    (Bottom Slice)
-
-	# Top Slice:
-	#      tnw--tn---tne
-	#      |     |     |
-	#      tw----t----te
-	#      |     |     |
-	#      tsw--ts---tse
-	self.tnw = P(wx, ny, tz)
-	self.tn =  P(cx, ny, tz)
-	self.tne = P(ex, ny, tz)
-	self.tw =  P(wx, cy, tz)
-	self.t  =  P(cx, cy, tz)
-	self.te  = P(ex, cy, tz)
-	self.tsw = P(wx, sy, tz)
-	self.ts =  P(cx, sy, tz)
-	self.tse = P(ex, sy, tz)
-
-	# Center slice:
-	#      nw----n----ne
-	#      |     |     |
-	#      w-----c-----e
-	#      |     |     |
-	#      sw----s----se
-	#      (Center Slice)
-	self.nw = P(wx, ny, cz)
-	self.n =  P(cx, ny, cz)
-	self.ne = P(ex, ny, cz)
-	self.w =  P(wx, cy, cz)
-	self.c  = P(cx, cy, cz)
-	self.e  = P(ex, cy, cz)
-	self.sw = P(wx, sy, cz)
-	self.s =  P(cx, sy, cz)
-	self.se = P(ex, sy, cz)
-
-	# Bottom slice:
-	#      bnw--bn---bne
-	#      |     |     |
-	#      bw----b----be
-	#      |     |     |
-	#      bsw--bs---bse
-	#      (Bottom Slice)
-	self.bnw = P(wx, ny, bz)
-	self.bn =  P(cx, ny, bz)
-	self.bne = P(ex, ny, bz)
-	self.bw =  P(wx, cy, bz)
-	self.b  =  P(cx, cy, bz)
-	self.be  = P(ex, cy, bz)
-	self.bsw = P(wx, sy, bz)
-	self.bs =  P(cx, sy, bz)
-	self.bse = P(ex, sy, bz)
-
-	# Save the *boundig_box*:
-	self._bounding_box = bounding_box
-
-    def xxxxxxx___bounding_box_update(self, bounding_box, comment, place,
-      trace = -1000000):
-	""" *Part*: Updated *self* with *bounding_box*, *place* and
-	    *comment*. """
-
-	if trace >= 0:
-	    print("{0}=>Part._bounding_box_update(comment={1})".
-	      format(trace * ' ', comment))
-
-	# Check argument types:
-	assert isinstance(bounding_box, Bounding_Box)
-	assert isinstance(comment, str)
-	assert isinstance(place, Place)
-
-	# Grab some values from *bounding_box*:
-	ex = bounding_box.ex
-	wx = bounding_box.wx
-	ny = bounding_box.ny
-	sy = bounding_box.sy
-	tz = bounding_box.tz
-	bz = bounding_box.bz
-
-	# Grab *forward_matrix* from *place*:
-	forward_matrix = place._forward_matrix
-
-	# Compute the bounding box points before rotation and translation:
-	tne = P(ex, ny, tz)
-	tnw = P(wx, ny, tz)
-	tse = P(ex, sy, tz)
-	tsw = P(wx, sy, tz)
-	bne = P(ex, ny, bz)
-	bnw = P(wx, ny, bz)
-	bse = P(ex, sy, bz)
-	bsw = P(wx, sy, bz)
-
-	# Compute bounding box after rotation and translation:
-	self._box_point_update(comment + "[TNE]",
-	  forward_matrix.point_multiply(tne), trace = trace + 1)
-	self._box_point_update(comment + "[TNW]",
-	  forward_matrix.point_multiply(tnw), trace = trace + 1)
-	self._box_point_update(comment + "[TSE]",
-	  forward_matrix.point_multiply(tse), trace = trace + 1)
-	self._box_point_update(comment + "[TSW]",
-	  forward_matrix.point_multiply(tsw), trace = trace + 1)
-	self._box_point_update(comment + "[BNE]",
-	  forward_matrix.point_multiply(bne), trace = trace + 1)
-	self._box_point_update(comment + "[BNW]",
-	  forward_matrix.point_multiply(bnw), trace = trace + 1)
-	self._box_point_update(comment + "[BSE]",
-	  forward_matrix.point_multiply(bse), trace = trace + 1)
-	self._box_point_update(comment + "[BSW]",
-	  forward_matrix.point_multiply(bsw), trace = trace + 1)
-
-	if trace >= 0:
-	    print("{0}<=Part._bounding_box_update(comment={1})".
-	      format(trace * ' ', comment))
-
     ## @brief Updates *name*'d *point* in *self* for bounding box calcuation.
     #  @param self is the *Part* to update.
     #  @param name is the name of the *P* object.
@@ -8667,27 +8351,6 @@ class Part:
 	    print("{0}<=Part._cnc_part_generate('{1}', prog_no={2}) =>{3}".
 	      format(indent, part._name, part_program_number, next_part_program_number))
 	return next_part_program_number
-
-    def xxx_current_mount_get(self):
-	""" *Part*: Return the current mount associated with the *Part* object (i.e. *self*.)
-	"""
-
-	current_mount = self._current_mount
-        assert isinstance(current_mount, Mount)
-	return current_mount
-
-    def xxx_current_mount_set(self, mount):
-	""" *Part*: Return the current mount associated with the *Part* object (i.e. *self*.)
-	"""
-
-	# Use *part* instead of *self*:
-	part = self
-
-	# Verify argument types:
-	assert isinstance(mount, Mount)
-
-	# Load *mount* into *part*:
-	part._current_mount = mount
 
     def _dimensions_update(self, ezcad, tracing):
 	""" *Part*: Update the dimensions of the *Part* object (i.e. *self*)
@@ -9604,11 +9267,6 @@ class Part:
 	    index += 1
 	return True
 
-    def xxx_operations_get(self):
-	""" *Part*: Return the operations list for the *Part* object (i.e. *self*). """
-        
-	return self._operations
-
     def _operations_index(self):
 	""" *Part*: Sweep through each operation in the *Part* object
 	    (i.e. *self*) and make sure the index field matches the index.
@@ -10088,30 +9746,6 @@ class Part:
 	      format(indent, part._name, stl_vrml._name_get()))
 	return stl_vrml
 
-    def xxx_top_surface_transform_get(self):
-	""" *Part*: Return the top surface *Trasform* object from the *Part* object (i.e. *self*).
-	"""
-
-	top_surface_transform = self._top_surface_transform
-	assert isinstance(top_surface_transform, Transform)
-	return top_surface_transform
-
-    def xxx_top_surface_transform_set(self, top_surface_transform, from_routine):
-	""" *Part*: Set the top surface transform object for the *Part* object (i.e. *self*)
-	    to *top_surface_transform*.
-	"""
-
-	# Use *part* instead of *self*:
-	part = self
-        
-	# Verify argument types:
-	assert isinstance(top_surface_transform, Transform)
-	assert isinstance(from_routine, str)
-
-	# Set *top_surface_transform* in *part*:
-	part._top_surface_transform = top_surface_transform
-	part._top_sufrace_transform_from = from_routine
-
     def _tools_dowel_pin_search(self, tracing):
 	""" *Part*: Find and return a *Tool_Dowel_Pin* object. """
 
@@ -10441,68 +10075,6 @@ class Part:
 	      format(indent, part._name, parameter1, parameter2, from_routine, tool_name))
 
 	return best_tool
-
-    def xxx_vice_x_get(self):
-	""" *Part*: Return the vice X field of the *Part* object (i.e. *self*)
-	"""
-
-	return self._vice_x
-
-
-    def xxx_vice_y_get(self):
-	""" *Part*: Return the vice Y field of the *Part* object (i.e. *self*)
-	"""
-
-	return self._vice_y
-
-
-    def xxx_z_safe_get(self):
-	""" *Part*: Return the Z safe height for vertical air plunging for *Part* (i.e. *self*.)
-	"""
-	
-	# Use *part* instead of *self*:
-	part = self
-
-	return part._z_safe
-
-    def xxx_z_rapid_set(self, z_safe):
-	""" *Part*: Set the Z safe height for vertical air plunging for *Part*
-	    (i.e. *self*) to *z_save*.
-	"""
-	
-	# Verify argument types:
-	assert isintance(z_safe, L)
-
-	# Load *z_rapid* into the *Part* object (i.e. *self*):
-	self._z_rapid = z_safe
-
-    def xxx_z_rapid_get(self):
-	""" *Part*: Return the Z rapid height for horizontal movement above hold-down tooling
-	    for *Part* (i.e. *self*.)
-	"""
-
-	# Use *part* instead of *self*:
-	part = self
-
-	# Check the *z_rapid* is valid:
-	z_rapid = part._z_rapid
-
-	# Return z_rapid regardless:
-	return z_rapid
-
-    def xxx_z_rapid_set(self, z_rapid):
-	""" *Part*: Set the Z rapid height for horizontal movement above hold-down tooling
-	    for *Part* (i.e. *self*) to *z_rapid*
-	"""
-	
-	if not isinstance(z_rapid, L):
-            z_rapid = L(inch=0.5)
-
-	# Verify argument types:
-	assert isinstance(z_rapid, L)
-
-	# Load *z_rapid* into the *Part* object (i.e. *self*):
-	self._z_rapid = z_rapid
 
     # Public methods come here:
 
@@ -11186,60 +10758,6 @@ class Part:
 
 	assert isinstance(invisible, bool)
 	self._visible = not invisible
-
-    def xxx_mount(self, comment, top_surface_transform, mount_translate_point,
-      top_surface_safe_z, xy_rapid_safe_z, tracing=-1000000):
-	""" *Part*: Mount the *Part* object (i.e. *self*) so that *top_surface_transform*
-	    will orient the part at the CNC machine origin with the part top surface
-	    abutting the XY plane and *mount_translate_point* translating from there
-	    to final machine mount point.  *top_surface_safe_z* specifies the CNC altitude
-	    above which vertical rapids are safe.  *xy_rapid_safe_z* specifies the CNC altitude
-	    above which rapids in X and Y are safe.  This operation is for experts.  Most people
-	    should be using either *vice_mount()* or *tooling_plate_mount()* instead.
-	"""
-
-	# Use *part* instead of *self*:
-	part = self
-
-	# Verify argument types:
-	assert isinstance(top_surface_transform, Transform)
-	assert isinstance(mount_translate_point, P)
-	assert isinstance(top_surface_safe_z, L)
-	assert isinstance(xy_rapid_safe_z, L)
-
-	# Perform any requested *tracing*:
-        if tracing < 0 and part._tracing >= 0:
-	    tracing = part._tracing
-	if tracing >= 0:
-	    indent = ' ' * tracing
-            print("{0}=>Part.mount('{1}', '{2}', *, {3:i})".
-	      format(indent, part._name, comment, mount_translate_point))
-
-	# Compute *cnc_transform*:
-	cnc_transform = \
-	  top_surface_transform.translate("translate to  mount point", mount_translate_point)
-
-	# Stuff everything into *part*:
-	part._top_surface_transform_set(top_surface_transform, "mount")
-	part._mount_translate_point = mount_translate_point
-	part._cnc_transform = cnc_transform
-
-	ezcad = part._ezcad
-	if ezcad._cnc_mode:
-	    # Increment the mount number for *part*:
-	    part._mount += 1
-
-	    # Create *operation_mount* and add it to *part* operations list:
-	    vice = shop._vice_get()
-	    operation_mount = Operation_Mount(part, comment, top_surface_transform,
-	      mount_translate_point, top_surface_safe_z, xy_rapid_safe_z,
-	      vice, jaws_spread, tooling_plate)
-	    part._operation_append(operation_mount)
-
-	# Wrap up any requested *tracing*:
-	if tracing >= 0:
-            print("{0}<=Part.mount('{1}', '{2}', *, {3:i})".
-	      format(indent, part._name, comment, mount_translate_point))
 
     def process(self, ezcad, tracing = -1000000):
 	""" *Part*: Perform all the manufacturing processing for a *Part*
@@ -13919,44 +13437,6 @@ class Part:
 	    print("{0}<=Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
 	      format(indent, self._name, comment, corner1, corner2, radius, flags))
 
-    def xxx_simple_pocket(self, comment, \
-      corner1_point, corner2_point, radius, flags):
-	""" Part construct: Mill a pocket in {self} where {corner1_point}
-	    and {corner2_point} specify a diagonal across the pocket.  The
-	    radius of the inside corners is {radius}.  {flags} can have
-	    the character 't' for a pocket that goes {self} and 'u' to
-	    specify that an upper chamfer is requested.  {comment} will
-	    show up in error messages and any generated G-code. """
-
-	# Perform argument type checking:
-	assert isinstance(comment, str)
-	assert isinstance(corner1_point, P)
-	assert isinstance(corner2_point, P)
-	assert isinstance(radius, L)
-	assert isinstance(flags, str)
-
-	# Verify that each flag in {flags} is OK:
-	for flag in flags:
-	    assert flag == 'u' or flag == 't', \
-	      'simple_pocket("{0}"): Bad flag "{1}" in "{2}" for part {3}'. \
-	      format(comment, flag, flags, self.name)
-
-	# Extract some values from {ezcad}:
-	ezcad = self._ezcad
-	xml_indent = ezcad._xml_indent
-	xml_stream = ezcad._xml_stream
-
-	if xml_stream != None:
-	    # <Simple_Pocket C1X= C1Y= C1Z= C2X= C2Y= C2Z= ...
-	    #  ... Radius= Flags= Comment= />:
-	    xml_stream.write('{0}<Simple_Pocket'.format(" " * xml_indent))
-	    xml_stream.write(' C1X="{0}" C1Y="{1}" C1Z="{2}"'. \
-	      format(corner1_point.x, corner1_point.y, corner1_point.z))
-	    xml_stream.write(' C2X="{0}" C2Y="{1}" C2Z="{2}"'. \
-	      format(corner2_point.x, corner2_point.y, corner2_point.z))
-	    xml_stream.write(' Radius="{0}" Flags="{1}" Comment="{2}"/>\n'. \
-	      format(radius, flags, comment))
-
     def manufacture(self):
 	""" Part: Override this method to do any manufacturing steps. """
 
@@ -13983,138 +13463,6 @@ class Part:
 	assert isinstance(tool_name, str)
 
 	self._tool_preferred = tool_name
-
-    def xxx_tooling_plate(self, comment, flags, trace = False):
-	""" Part construct: Cause a grid of tooling plate holes to be
-	drilled into {self}.  {flags} are used to adjust the position
-	the tooling plate holes.  The grid is 2 row by 2 column
-	(i.e. 2 by 2) but {flags} can be modified to specifically
-	set the number of rows and/or columns.  For example,
-	"3r 4c" establishes a grid that 3 rows by 4 columns.
-	The grid holes are initially distributed to just fill
-	the {sefl} bounding box in the X and Y dimensions.
-	Additional flags can be specified to move the holes
-	around a little.  Tooling plate holes are specified by
-	row and column 	where a number specifies the row and an
-	upper case letter specifies the column.  The row numbers
-	start with 1 on the "north" side and move southwards.
-	The column letters start with the letter 'A' on the "west"
-	and move eastwards.  Lower case letters 'e' (for East),
-	'n' (for North), 's' (for South), and 'w' (for west) are used
-	to move a tooling plate hole east, north, south, or west
-	respectively.  The lower case letter 'x' (for eXclude)
-	can be used to remove a tooling hole  A tooling hole
-	can be moved by following it by one or more movement letters.
-	The following example "5r 5c 2Bnw 2Dne 3Cx 4Bsw 4Dse" creates
-	a 5x5 grid of tooling holes, the middle hole is removed "3Cr"
-	and 4 of the tooling holes on the inside are moved outward
-	from the center. """
-
-	#if self.construct_mode():
-	if True:
-	    # Parse {flags}:
-
-	    # {adjusts} lists any holes that have been moved:
-	    adjusts = {}
-
-	    # {removes} lists any holes that been removed or ignored:
-	    removes = {}
-
-	    # Initialize some variables for the parsing process:
-	    column = 0
-	    columns = 2
-	    number = 0
-	    row = 0
-	    row_column = (0, 0)
-	    rows = 2
-	    adjusts[row_column] = (0, 0)
-
-	    # Iterate across {flags}:
-	    for flag in flags:
-		if '0' <= flag and flag <= '9':
-		    # We have a decimal digit, add it to {number}:
-		    number = number * 10 + ord(flag) - ord('0')
-		else:
-		    # We have something other than a decimal digit:
-		    if 'A' <= flag and flag <= 'Z':
-			# We have a column letter
-			column = ord(flag) - ord('A')
-			row = number - 1
-			row_column = (row, column)
-			if not (row_column in adjusts):
-			    adjusts[row_column] = (0, 0)
-		    elif flag == 'c':
-			columns = number
-			if trace:
-			    print "columns=", columns
-		    elif flag == 'e':
-			adjust = adjusts[row_column]
-			adjusts[row_column] = (adjust[0] + 1, adjust[1])
-		    elif flag == 'i':
-			removes[row_column] = 'i'
-		    elif flag == 'n':
-			adjust = adjusts[row_column]
-			adjusts[row_column] = (adjust[0], adjust[1] + 1)
-		    elif flag == 'r':
-			rows = number
-			if trace:
-			    print "rows=", rows
-		    elif flag == 's':
-			adjust = adjusts[row_column]
-			adjusts[row_column] = (adjust[0], adjust[1] - 1)
-		    elif flag == 'w':
-			adjust = adjusts[row_column]
-			adjusts[row_column] = (adjust[0] - 1, adjust[1])
-		    elif flag == 'x':
-			removes[row_column] = 'x'
-		    elif flag == ' ':
-		        number = 0
-		    else:
-			assert False, \
-			  "Bad flag letter '{0}' in flags '{1}'". \
-			  format(flag, flags)
-
-		    # All non-digit operations reset {number} at the end:
-		    number = 0
-
-	    if trace:
-		print "removes=", removes
-		print "adjusts=", adjusts
-
-	    #ezcad = self._ezcad
-	    #xml_stream = ezcad._xml_stream
-	    #if xml_stream != None:
-	    #	xml_stream.write('{0}<Tooling_Plate Rows="{1}" '. \
-	    #	  format(" " * ezcad._xml_indent, rows))
-	    #	xml_stream.write('Columns="{0}" Comment="{1}">\n'. \
-	    #	  format(columns, comment))
-	    #    
-	    #	ezcad.xml_indent_push()
-	    #	for row in range(0, rows):
-	    #	    for column in range(0, columns):
-	    #		row_column = (row, column)
-	    #		adjust = (0, 0)
-	    #		if row_column in adjusts:
-	    #		    adjust = adjusts[row_column]
-	    #		remove = ""
-	    #		if row_column in removes:
-	    #		    remove = removes[row_column]
-	    #
-	    #		if trace:
-	    #		    print "[{0},{1}] = {2}{3}". \
-	    #		      format(row, column, adjust, remove)
-	    #
-	    #		xml_stream.write('{0}<Tooling_Hole'. \
-	    #		  format(" " * ezcad._xml_indent))
-	    #		xml_stream.write(' Row="{0}" Column="{1}"'. \
-	    #		  format(row, column))
-	    #		xml_stream.write(' Adjust_X="{0}" Adjust_Y="{1}"'. \
-	    #		  format(adjust[0], adjust[1]))
-	    #		xml_stream.write(' Flags="{0}"/>\n'. format(remove))
-	    #	    
-	    #	ezcad.xml_indent_pop()
-	    #	xml_stream.write('{0}</Tooling_Plate>\n'. \
-	    #	  format(" " *ezcad._xml_indent))
 
     def tooling_plate_drill(self, tooling_plate_mount_name, columns, rows, skips, tracing=-1000000):
 	""" *Part*: Force the drilling of tooling plate mounting holes in the *Part* object
@@ -18826,21 +18174,6 @@ class Shop:
 
 	return self._code
 
-    def xxx_cnc_generate_get(self):
-	""" *Shop*: Return the CNC generate field associated with the *Shop* object
-	    (i.e. *self*.)
-	"""
-
-	return self._cnc_generate
-
-    def xxx_cnc_generate_set(self, cnc_generate):
-	""" *Shop*: Set the CNC generate field associated with the *Shop* object (i.e. *self*)
-	    to *cnc_generate*.
-	"""
-
-	assert isinstance(cnc_generate, bool)
-	self._cnc_generate = cnc_generate
-
     def _double_angle_append(self,
       name, number, material, diameter, flutes, maximum_z_depth, angle, inside_diameter, thickness):
 	"""
@@ -19233,26 +18566,6 @@ class Tool:
 	""" *Tool*: Return the *Tool* object (i.e. *self*) formatted as a string. """
 
 	return self._name
-
-    def xxx_compare(self, tool2):
-	""" *Tool*:  This routine will return -1 or 1 depending upon whether *tool1*
- 	    should be used before or after *tool2*.  0 is returned if *tool1*
-	    and *tool2* are equal.
-	"""
-
-	# Verify argument_types:
-	assert isinstance(tool2, Tool)
-
-	# Use *tool1* instead of *self*:
-	tool1 = self
-
-	# Do the comparisons:
-	result = int_compare(tool1._kind, tool2._kind)
-	if result == 0:
-	    result = tool1._diameter.compare(tool2._diameter)
-	    if result == 0:
-		result = int_compare(tool1._number, tool2._number)
-	return result
 
     def _diameter_get(self):
 	""" *Tool*: Return the diameter of the *Tool* object (i.e. *self*). 	"""
@@ -20918,423 +20231,6 @@ class VRML:
 	    print("{0}=>VRML.write({1}, *)".format(indent, pad))
 	return text
 
-    def xxx_box_outline(self, color, corner1, corner2):
-	""" *VRML*: Draw a box outline that touches *corner1* and *corner2* using the
-	    *VRML* object (i.e. *self*).  The lines will be drawn in *color*.
-	"""
-
-	# Use *vrml_lines* instead of *self*:
-	vrml = self
-
-	# Verify argument types:
-	assert isinstance(color, str)
-	assert isinstance(corner1, P)
-	assert isinstance(corner2, P)
-
-	# Figure out the X/Y/Z coordinates:
-	x1, x2 = corner1.x.minimum_maximum(corner2.x)
-	y1, y2 = corner1.y.minimum_maximum(corner2.y)
-	z1, z2 = corner1.z.minimum_maximum(corner2.z)
-
-	# Create the 8 box corners:
-	p1 = P(x1, y1, z1)	# BSW
-	p2 = P(x2, y1, z1)	# BSE
-	p3 = P(x2, y2, z1)	# BNE
-	p4 = P(x1, y2, z1)	# BNW
-	p5 = P(x1, y2, z2)	# TNW
-	p6 = P(x2, y2, z2)	# TNE
-	p7 = P(x2, y1, z2)	# TSE
-	p8 = P(x1, y1, z2)	# TSW
-
-	# Draw the box lines:
-	vrml._poly_line(color, [p1, p2, p3, p4, p5, p6, p7, p8, p1, p4])
-	vrml._poly_line(color, [p5, p8])
-	vrml._poly_line(color, [p2, p7])
-	vrml._poly_line(color, [p3, p6])
-
-    def xxx_line_append(self, line):
-	""" *VRML*: Append *line* to lines list associated with the *VRML* object (i.e. *self*).
-	"""
-
-	# Use *vrml* instead of *self*:
-	vrml = self
-
-	# Verify argument types:
-	assert isinstance(line, str)
-
-	lines = vrml._lines
-	padding = vrml._padding
-	assert isinstance(lines, list)
-	assert not line.endswith("\n"), "Line '{0}' ends with new-line".format(line)
-	lines.append("{0}{1}\n".format(padding, line))
-
-    def xxx_lines_extend(self, vrml_lines, pad, tracing = -1000000):
-	""" *VRML*: Append a VRML content of the *VRML* object (i.e. *self*) by extending
-	    the *vrml_lines* list of lines with with each line indented by *pad* spaces.
-	"""
-	
-	# Use *vrml_lines* instead of *self*:
-	vrml = self
-
-	# Verify argument types:
-	assert isinstance(vrml_lines, list)
-	assert isinstance(pad, int) and pad >= 0
-	assert isinstance(tracing, int)
-
-	# Perform any requested *tracing*:
-	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print("{0}=>VRML._lines_extend('{1}', *, {2})".format(indent, vrml._name, pad))
-	
-	# Temporarily store *padding* and *vrml_lines* into *vrml* object.  These are reset
-	# to *None* at the end of the routine:
-	vrml._padding = ' ' * pad
-	vrml._lines = vrml_lines
-
-	# Append the header to *vrml*:
-	vrml._line_append("#VRML V2.0 utf8")
-	vrml._line_append("## {0}".format(vrml._name))
-	vrml._line_append("Shape {")
-
-	# Append *header_lines* to *vrml*:
-	header_lines = vrml._header_lines
-	if len(header_lines) > 0:
-	    for header_line in header_lines:
-		vrml._line_append(header_line)
-
-	# Append *color_lines* to *vrml*:
-	color_lines = vrml._color_lines
-	if len(color_lines) > 0:
-	    vrml._line_append("  colorPerVertex FALSE")
-	    vrml._line_append("  color Color {")
-	    vrml._line_append("   color [")
-	    for color_line in color_lines:
-		vrml._line_append(color_line)
-	    vrml._line_append("   ]")
-	    vrml._line_append("  }")
-
-	# Append *coordinate_lines* to *vrml*:
-	coordinate_lines = vrml._coordinate_lines
-	if len(coordinate_lines) > 0:
-	    vrml._line_append("  coord Coordinate {")
-	    vrml._line_append("   point [")
-	    for coordinate_line in coordinate_lines:
-		vrml._line_append(coordinate_line)
-	    vrml._line_append("   ]")
-	    vrml._line_append("  }")
-
-	# Append *coordinate_index_lines* to *vrml*:
-	coordinate_index_lines = vrml._coordinate_index_lines
-	assert len(coordinate_index_lines) > 0
-	vrml._line_append("  coordIndex [")
-	for coordinate_index_line in coordinate_index_lines:
-	    vrml._line_append(coordinate_index_line)
-	vrml._line_append("  ]")
-
-	# Append the *color_index_lines* to *vrml*:
-	color_index_lines = vrml._color_index_lines
-	if len(color_index_lines) > 0:
-	    vrml._line_append("  colorIndex [")
-	    for color_index_line in color_index_lines:
-		vrml._line_append(color_index_line)
-	    vrml._line_append("  ]")
-
-	# Append the wrap up lines to *vrml*:
-	vrml._line_append(" }")
-	vrml._line_append("}")
-
-	# Reset *padding* and *vrml_lines* from *vrml* object:
-	vrml._padding = None
-	vrml._lines = None
-
-	# Wrap up any requested *tracing*:
-	if tracing >= 0:
-	    print("{0}<=VRML._lines_extend('{1}', *, {2})".format(indent, vrml._name, pad))
-
-    def xxx_name_get(self):
-	""" *VRML*: Return the name of the *VRML* object (i.e. *self*):
-	"""
-
-	return self._name
-
-    def xxx_poly_line(self, color_name, points):
-	""" *VRML*: Draw a *color* poly line between *points* in the *VRML_Lines* object
-	    (i.e. *self*).
-	"""
-
-	# Use *vrml* instead of *self*:
-	vrml = self
-	 
-	# Verify argument types:
-	assert isinstance(color_name, str) and color_name != ""
-	assert isinstance(points, list)
-	for point in points:
-	     assert isinstance(point, P)
-
-	# Fill in *header_lines*:
-	header_lines = vrml._header_lines
-	if len(header_lines) == 0:
-	    header_lines.append(" geometry IndexedLineSet {")
-
-	# Figure out the *color_index* for *color*; create one if not there already:
-	colors_table = vrml._colors_table
-	if color_name in colors_table:
-	    # Color was previously created; reuse it:
-	    color_index = colors_table[color_name]
-	else:
-	    # Color not previously created: create it:
-	    color = Color(color_name)
-	    red, green, blue = color._red_green_blue_get()
-	    color_index = len(colors_table)
-	    colors_table[color_name] = color_index
-	    color_lines = vrml._color_lines
-	    color_lines.append("    {0} {1} {2} # {3}".format(red, green, blue, color_name))
-	assert 0 <= color_index < len(colors_table)
-
-	# Make sure we have a *coordinate_index* for *point*::
-	coordinates_table = vrml._coordinates_table
-	line_indices = [" "]
-	for point in points:
-	    # Create a *coordinate* tuple key using imutuable *float* types:
-	    x_mm = point.x.millimeters()
-	    y_mm = point.y.millimeters()
-	    z_mm = point.z.millimeters()
-	    coordinate_key = (x_mm, y_mm, z_mm)
-
-	    # Make sure we have a *coordinate_index*:
-	    if coordinate_key in coordinates_table:
-		# The coordinate has already been entered; reuse it: 
-		coordinate_index = coordinates_table[coordinate_key]
-	    else:
-		# The coordinate is new and must be created:
-		coordinate_index = len(coordinates_table)
-		coordinates_table[coordinate_key] = coordinate_index
-		coordinate_lines = vrml._coordinate_lines
-		coordinate_lines.append("    {0} {1} {2}".format(x_mm, y_mm, z_mm))
-
-	    # Now we can append *coordinate_index* to *line_indices*:
-	    line_indices.append("{0}".format(coordinate_index))
-
-	# Indicate the end of the poly-line with -1:
-	line_indices.append("-1")
-	coordinate_index_lines = vrml._coordinate_index_lines
-	coordinate_index_lines.append(" " + ' '.join(line_indices))
-	color_index_lines = vrml._color_index_lines
-	color_index_lines.append("   {0}".format(color_index))
-
-    def xxx_stl_write(self, comment, color, triangles, tracing=-1000000):
-	""" *VRML*: Write the visualization for *triangles* into the *VRML* object (i.e. *self*).
-	    All of the triangle will be rendered in *color*.
-	"""
-
-	# Check argument types:
-	assert isinstance(comment, str)
-	assert isinstance(color, Color)
-	assert isinstance(triangles, list)
-	assert isinstance(tracing, int)
-
-	# Use *vrml* instead of *self*:
-	vrml = self
-
-	# Perform any requested *tracing*:
-	trace_detail = -1
-	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print("{0}=>VRML._stl_write('{1}', {2}, *)".format(indent, comment, color))
-	    trace_detail = 1
-
-	# Extract the *triangles* and *vertices* from the read
-	# in content:
-	offsets = []
-	vertices = {}
-
-	# Convert *triangles* into *offset_triangles*:
-	offset_triangles = []
-	for triangle in triangles:
-	    if trace_detail >= 3:
-		print("{0}triangle={1}".format(indent, triangle))
-	    vertex1 = triangle[0]
-	    vertex2 = triangle[1]
-	    vertex3 = triangle[2]
-	    if trace_detail >= 3:
-		print("{0}vertices={1} {2} {3}".format(indent, vertex1, vertex2, vertex3))
-
-	    # Get *offset1* for *vertex1*:
-	    if vertex1 in vertices:
-		offset1 = vertices[vertex1]
-	    else:
-		offset1 = len(offsets)
-		offsets.append(vertex1)
-		vertices[vertex1] = offset1
-
-	    # Get *offset2* for *vertex2*:
-	    if vertex2 in vertices:
-		offset2 = vertices[vertex2]
-	    else:
-		offset2 = len(offsets)
-		offsets.append(vertex2)
-		vertices[vertex2] = offset2
-   
-	    # Get *offset3* for *vertex3*:
-	    if vertex3 in vertices:
-		offset3 = vertices[vertex3]
-	    else:
-		offset3 = len(offsets)
-		offsets.append(vertex3)
-		vertices[vertex3] = offset3
-
-	    # Create a triangle using the offsets:
-	    offset_triangle = (offset1, offset2, offset3)
-	    offset_triangles.append(offset_triangle)
-	    if trace_detail >= 3:
-		print("{0}offset_triangle:{1}".format(indent, offset_triangle))
-
-	# Load up *header_lines* with the *color* information:
-	header_lines = vrml._header_lines
-	header_lines.append(" appearance Appearance {")
-	header_lines.append("  material Material {")
-	red, green, blue = color._red_green_blue_get()
-	header_lines.append("   diffuseColor {0} {1} {1}".format(red, green, blue))
-	alpha = color.alpha_get()
-	if alpha < 1.0:
-	    header_lines.append("   transparency {0}".format(1.0 - alpha))
-	header_lines.append("  }")
-	header_lines.append(" }")
-	header_lines.append(" geometry IndexedFaceSet {")
-
-	# Load up *coordinate_lines* with *vertices*:
-	coordinate_lines = vrml._coordinate_lines
-	for offset in offsets:
-	    coordinate_lines.append("    {0} {1} {2}".format(offset[0], offset[1], offset[2]))
-	    if trace_detail >= 3:
-		print("{0}offset:{1}".format(indent, offset))
-
-	# Output the *coordinate_indices*:
-	assert len(offset_triangles) > 0
-	coordinate_index_lines = vrml._coordinate_index_lines
-	for offset_triangle in offset_triangles:
-	    offset1 = offset_triangle[0]
-	    offset2 = offset_triangle[1]
-	    offset3 = offset_triangle[2]
-	    coordinate_index_lines.append("   {0} {1} {2} -1".format(offset1, offset2, offset3))
-
-	# Wrap up any *tracing*:
-	if tracing >= 0:
-	    print("{0}<=VRML._stl_write('{1}', {2}, *)".format(indent, comment, color))
-
-    def xxx_stl_read(self, part, from_routine, tracing = -1000000):
-	""" *VRML*: Read the `.stl` associated with *part* into the *VRML* object (i.e. *self*).
-	"""
-
-	# Check argument types:
-	assert isinstance(part, Part)
-	assert isinstance(from_routine, str)
-	assert isinstance(tracing, int)
-
-	# Use *vrml* instead of *self*:
-	vrml = self
-
-	# Perform any requested *tracing*:
-	trace_detail = -1
-	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print("{0}=>VRML._stl_read('{1}', '{2}', *, '{3}')".
-	      format(indent, vrml._name, part._name_get(), from_routine))
-	    trace_detail = 1
-
-	# Grab some values from *part*:
-	ezcad = part._ezcad_get()
-	part_stl_file_name = part._stl_file_name_get()
-	part_color = part._color_get()
-
-	# Read in the .stl file that was generated by OpenSCAD:
-	stl_directory = ezcad._stl_directory_get()
-	full_stl_file_name = stl_directory._full_path(part_stl_file_name)
-	stl_file = open(full_stl_file_name, "r")
-	stl_lines = stl_file.readlines()
-	stl_file.close()
-	if trace_detail >= 1:
-	    print("{0}len(stl_lines)={1}".format(indent, len(stl_lines)))
-    
-	# Extract the *triangles* and *vertices* from the read in content:
-	triangles = []
-	offsets = []
-	vertices = {}
-	size = len(stl_lines)
-	assert stl_lines[0][:5] == "solid"
-	index = 1
-	while index + 4 < size:
-	    #  Extract *point1*, *point2*, and *point3* from *stl_lines*:
-	    xlist1 = stl_lines[index + 2].split()
-	    vertex1 = ( float(xlist1[1]), float(xlist1[2]), float(xlist1[3]) )
-	    xlist2 = stl_lines[index + 3].split()
-	    vertex2 = ( float(xlist2[1]), float(xlist2[2]), float(xlist2[3]) )
-	    xlist3 = stl_lines[index + 4].split()
-	    vertex3 = ( float(xlist3[1]), float(xlist3[2]), float(xlist3[3]) )
-
-	    # Get *offset1* for *vertex1*:
-	    if vertex1 in vertices:
-		offset1 = vertices[vertex1]
-	    else:
-		offset1 = len(offsets)
-		offsets.append(vertex1)
-		vertices[vertex1] = offset1
-
-	    # Get *offset2* for *vertex2*:
-	    if vertex2 in vertices:
-		offset2 = vertices[vertex2]
-	    else:
-		offset2 = len(offsets)
-		offsets.append(vertex2)
-		vertices[vertex2] = offset2
-   
-	    # Get *offset3* for *vertex3*:
-	    if vertex3 in vertices:
-		offset3 = vertices[vertex3]
-	    else:
-		offset3 = len(offsets)
-		offsets.append(vertex3)
-		vertices[vertex3] = offset3
-
-	    # Create a triangle using the offsets:
-	    triangles.append( (offset1, offset2, offset3,) )
-
-	    # Now skip over 7 lines in *stl_lines*:
-	    index += 7
-
-	# We are done with *stl_lines*:
-	stl_lines = None
-
-	# Fill *header_lines*:
-	header_lines = vrml._header_lines
-	if len(header_lines) == 0:
-	    header_lines.append(" appearance Appearance {")
-	    header_lines.append("  material Material {")
-	    header_lines.append("   diffuseColor {0} {1} {1}".
-	      format(part_color.red, part_color.green, part_color.blue))
-	    if part_color.alpha < 1.0:
-		header_lines.append("   transparency {0}\n".format(1.0 - part_color.alpha))
-	    header_lines.append("  }")
-	    header_lines.append(" }")
-	    header_lines.append(" geometry IndexedFaceSet {")
-
-	# Output the triangle coordinates:
-	coordinate_lines = vrml._coordinate_lines
-	for offset in offsets:
-	    coordinate_lines.append(
-	      "    {0} {1} {2}".format(offset[0], offset[1], offset[2]))
-    
-	# Output the *triangles* in a "coordIndex [...]"::
-	coordinate_index_lines = vrml._coordinate_index_lines
-	for triangle in triangles:
-	    coordinate_index_lines.append(
-	      "   {0} {1} {2} -1 #".format(triangle[0], triangle[1], triangle[2]))
-    
-	# Wrap up any requested *tracing*:
-	if tracing >= 0:
-	    print("{0}<=VRML._stl_read('{1}', '{2}', *, '{3}')".
-	      format(indent, vrml._name, part._name_get(), from_routine))
-
 class VRML_Group(VRML):
     """ *VRML_Group*: Represents a VRML Group node.
     """
@@ -21826,20 +20722,6 @@ class VRML_Translate(VRML):
 	    print("{0}VRML_Translate._text_pad('{1}', {2})".
 	      format(indent, vrml_translate._name, pad))
 	return text
-
-    def xxx_append(self, vrml):
-	""" *VRML_Translate*: Append *vrml* to the children of the *VRML_Translate*
-	    object (i.e. *self*).
-	"""
-
-	# Use *vrml_translate* instead of *self*:
-	vrml_translate = self
-
-	# Verify argument types:
-	assert isinstance(vrml, VRML)
-
-	# Append *vrml* to *children*:
-	vrml._children.append(vrml)
 
     def padded_write(self, vrml_file, pad):
 	""" *VRML_Translate*: Write the *VRML_Translate* object out to *vrml_file* with each line
