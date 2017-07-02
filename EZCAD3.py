@@ -725,14 +725,13 @@ class P:
 	zero = L()
 	if length == 0.0:
             normalized = self
-	    if EZCAD3.update_count_get() == 0:
+	    if EZCAD3._update_count_get() > 0:
 		print("P.normailize() was passed all zeros.")
         else:
             normalized = P(L(mm = x / length), L(mm = y / length), L(mm = z / length))
 
 	#print("x={0} y={1} z={2} length={3} nomalized={4:m}".format(x, y, z, length, normalized))
 	return normalized
-	
 
     def points(self, dx, dy, dz):
 	""" Part construct: Return a list of points centered around
@@ -3863,10 +3862,11 @@ class Directory:
 class EZCAD3:
     """ EZCAD3 is the top level engine that executes the design. """
 
-    DIMENSIONS_MODE = 0
-    CNC_MODE = 1
-    STL_MODE = 2
-    VISUALIZATION_MODE = 3
+    #DIMENSIONS_MODE = 0
+    #CNC_MODE = 1
+    #STL_MODE = 2
+    #VISUALIZATION_MODE = 3
+
     def __init__(self, minor = None, adjust = L(), directory="."):
 	""" *EZCAD*: Initialize the contents of {self} to contain
 	    *major* and *minor* version numbers. """
@@ -4023,12 +4023,11 @@ class EZCAD3:
 	    print("{0}<=EZCAD3.preocess('{1}')".format(indent, part._name_get()))
 
     @staticmethod
-    def update_count_get():
+    def _update_count_get():
 	update_count = 123456789
 	try:
 	    ezcad = EZCAD3.ezcad
-	    if ezcad._mode != EZCAD3.DIMENSIONS_MODE:
-		update_count = ezcad._update_count
+	    update_count = ezcad._update_count
         except:
             assert False
 	return update_count
@@ -6122,12 +6121,15 @@ class Operation_Drill(Operation):
     #     build-up. This treatment also improves toughness.
 
     def __init__(self, part, comment, sub_priority, tool, order, follows,
-      diameter, hole_kind, start, stop, is_countersink):
+      diameter, hole_kind, start, stop, is_countersink, tracing=-1000000):
 	""" *Operation_Drill*: Initialize *Operation_Drill* to contain
 	    *diameter*, *hole_kind*, *start*, *stop*, and *countersink*.
 	"""
 
-	# Initialize super class:
+	# Use *operation_drill* instead of *self*:
+	operation_drill = self
+
+	# Verify argument types:
 	assert isinstance(part, Part)
 	assert isinstance(comment, str)
 	assert isinstance(sub_priority, int)
@@ -6139,18 +6141,36 @@ class Operation_Drill(Operation):
 	assert isinstance(start, P)
 	assert isinstance(stop, P)
 	assert isinstance(is_countersink, bool)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(("{0}=>Operation_Drill.__init__(*, p='{1}', c='{2}', t='{3}', o={4}, *," +
+              " d={5:i}, hk={6}, start={7:i}, stop={8:i}, i={9})").
+              format(indent, part._name_get(), comment, tool._name_get(),
+              order, diameter, hole_kind, start, stop, is_countersink))
 
 	# Initialize the super class:
 	cnc_start = start
-	Operation.__init__(self, "Drill", Operation.KIND_DRILL, part, comment, sub_priority,
-	  tool, order, follows, tool._feed_speed_get(), tool._spindle_speed_get(), cnc_start)
+	Operation.__init__(operation_drill, "Drill", Operation.KIND_DRILL, part, comment,
+	  sub_priority, tool, order, follows, tool._feed_speed_get(), tool._spindle_speed_get(),
+          cnc_start)
 
-	# Load up *self*:
-	self._diameter = diameter
-	self._hole_kind = hole_kind
-	self._start = start
-	self._stop = stop
-	self._is_countersink = is_countersink
+	# Load up *operation_drill*:
+	operation_drill._diameter = diameter
+	operation_drill._hole_kind = hole_kind
+	operation_drill._start = start
+	operation_drill._stop = stop
+	operation_drill._is_countersink = is_countersink
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(("{0}<=Operation_Drill.__init__(*, p='{1}', c='{2}', t='{3}', o={4}, *," +
+              " d={5:i}, hk={6}, start={7:i}, stop={8:i}, i={9})").
+              format(indent, part._name_get(), comment, tool._name_get(),
+              order, diameter, hole_kind, start, stop, is_countersink))
 
     def _cnc_generate(self,
       mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
@@ -8243,6 +8263,17 @@ class Part:
 	      format(indent, part._name, final_bsw, final_tne))
 	return final_bsw, final_tne
 
+    def _current_mount_get(self):
+	""" *Part*: Return the current mount for the *Part* object (i.e. *self*.)
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	current_mount = part._current_mount
+	assert isinstance(current_mount, Mount)
+	return current_mount
+
     def _color_get(self):
 	""" *Part*: Return the color associated with the *Part* object (i.e. *self*.)
 	"""
@@ -8729,6 +8760,39 @@ class Part:
 
 	return self._ezcad
 
+    def fasten(self, comment, fastener, select, tracing=-1000000):
+	""" *Part*: Use *fastener* to drill a hole from the *Part* object (i.e. *self*).
+	    *select* is one of "thread", "close", or "free" to specify the desired hole
+	    diameter for the hole.  *comment* may
+	"""
+
+	# Use *part* instead of *self*:
+        part = self
+
+	# Verify argument types:
+        assert isinstance(comment, str)
+	assert isinstance(select, str)
+        assert isinstance(fastener, Fastener)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.fasten('{1}', '{2}', '{3}')".
+	      format(indent, part._name, comment, fastener._name_get()))
+	    trace_detail = 2
+
+	# Perform the fasten operation:
+	fastener._fasten(comment, part, select, tracing = tracing + 1)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part.fasten('{1}', '{2}', '{3}')".
+	      format(indent, part._name, comment, fastener._name_get()))
+
     ## @brief Formats *self* into a string and returns it.
     #  @param format is the format control string (currently ignored).
     #  @returns a string representation of *self*.
@@ -8814,8 +8878,7 @@ class Part:
 	    raise AttributeError(
 	      "Part instance has no attribute '{0}' count={1}".
 	      format(name, update_count))
-	raise AttributeError("Part instance has no attribute named '{0}'". \
-	  format(name))
+	raise AttributeError("Part instance has no attribute named '{0}'".format(name))
 
     def _manufacture(self, ezcad, tracing=-1000000):
 	""" *Part*: Visit the *Part* object (i.e. *self*) and all is the children *Part*'s
@@ -9783,21 +9846,26 @@ class Part:
 	assert isinstance(tracing, int)
 	
 	# Perform any requested *tracing*:
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_drill_search('{1}', {2:i}, {3:i})".
 	      format(indent, self._name, diameter, maximum_z_depth))
+	    trace_detail = 2
 
+	# Seach for a *drill_tool* that matches our requirements:
 	drill_tool = \
 	  self._tools_search(Tool_Drill._match, diameter, maximum_z_depth, "drill", tracing + 1)
+	if trace_detail >= 2:
+	    print("{0}is_drill_tool={1}".format(indent, isinstance(drill_tool, Tool_Drill)))
 
+	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    tool_name = "NONE"
-	    if drill_tool != None:
-		toll_name = drill_tool._name_get()
+	    if isinstance(drill_tool, Tool_Drill):
+		tool_name = drill_tool._name_get()
 	    print("{0}<=Part._tools_drill_search('{1}', {2:i}, {3:i}) => {4}".
 	      format(indent, self._name, diameter, maximum_z_depth, tool_name))
-
 	return drill_tool
 
     def _tools_end_mill_search(self, maximum_diameter, maximum_z_depth, from_routine, tracing):
@@ -9816,11 +9884,10 @@ class Part:
 	# Perform any requested *tracing*:
 	detail_level = -1
 	if tracing >= 0:
-	    detail_level = 1
 	    indent = ' ' * tracing
-	if detail_level >= 0:
 	    print("{0}=>Part._tools_end_mill_search('{1}', {2:i}, {3:i}, '{4}')".
 	      format(indent, self._name, maximum_diameter, maximum_z_depth, from_routine))
+	    detail_level = 1
 
 	# Search for a matching *end_mill_tool*:
 	search_tracing = -1000000
@@ -9829,14 +9896,13 @@ class Part:
 	end_mill_tool = self._tools_search(Tool_End_Mill._match,
 	  maximum_diameter, maximum_z_depth, from_routine, search_tracing)
 
-	# Wrap up any requested *tracing*:
-	if detail_level >= 0:
+	# Wrap up any requested *tracing* and return *end_mill_tool*:
+	if tracing >= 0:
 	    tool_name = "NONE"
             if end_mill_tool != None:
 		tool_name = end_mill_tool._name_get()
 	    print("{0}<=Part._tools_end_mill_search('{1}', {2:i}, {3:i}, '{4}') => '{5}'".format(
 	      indent, self._name, maximum_diameter, maximum_z_depth, from_routine, tool_name))
-
 	return end_mill_tool
 
     def _shop_get(self):
@@ -9927,7 +9993,7 @@ class Part:
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
-	    trace_detail = 1
+	    trace_detail = 3
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_search('{1}', *, {2:i}, {3:i}, '{4}')".
 	      format(indent, part._name, parameter1, parameter2, from_routine))
@@ -10049,7 +10115,7 @@ class Part:
 	    closest_tool = None
 	    largest_success_count = 0
 	    for tool in tools:
-		# Check {tool} to see if it is exceptable:
+		# Check {tool} to see if it is acceptable:
 		success_count = 0
 		search_results = tool._search_results_get()
 		search_results_size = len(search_results)
@@ -11770,7 +11836,7 @@ class Part:
 	     format(' ' * tracing, part._name, comment, start_point, end_point, extra, flags))
 
     def countersink_hole(self, comment, hole_diameter, countersink_diameter,
-      start, stop, flags, sides = -1, sides_angle=Angle(), tracing = -1000000):
+      start, stop, flags, sides = -1, sides_angle=Angle(), tracing=-1000000):
 	""" *Part*: Put a *hole_diameter* hole into the *Part* object (i.e. *self*) starting
 	    at *start* to an end depth of *end*.  If *countersink_diameter* is non-zero,
 	    the part will be have a 90 degree countersink of *countersink_diameter* at *start*.
@@ -11802,11 +11868,11 @@ class Part:
 	    tracing = part._tracing
 	trace_detail = -1
 	if tracing >= 0:
-	    trace_detail = 1
 	    indent = ' ' * tracing
-	    print("{0}=>Part.countersink_hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, {6:i}, '{7}'".
+	    print("{0}=>Part.countersink_hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, {6:i}, '{7}')".
 	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
 	      start, stop, flags))
+	    trace_detail = 2
     
 	# Compute the radii:
 	hole_radius = hole_diameter/2
@@ -11893,8 +11959,8 @@ class Part:
 			operation_countersink = Operation_Drill(part, countersink_comment,
 			  sub_priority, tool_mill_drill, Operation.ORDER_MILL_DRILL_COUNTERSINK,
 			  None, countersink_diameter, Part.HOLE_TIP,
-			  start, countersink_stop, True)
-			part._operation_append(operation_countersink)
+			  start, countersink_stop, True, tracing = tracing + 1)
+			part._operation_append(operation_countersink, tracing = tracing + 1)
 
 			# Now focus on drilling:
 			if is_through_hole:
@@ -11906,7 +11972,8 @@ class Part:
 			operation_drill = Operation_Drill(part, comment, sub_priority, tool_drill,
 			  Operation.ORDER_DRILL, operation_countersink, hole_diameter, hole_kind,
 			  start, hole_stop, False)
-			part._operation_append(operation_drill)
+			part._operation_append(operation_drill, tracing = tracing + 1)
+
 		    else:
 			try_flat = True
 
@@ -11942,9 +12009,11 @@ class Part:
 	    #lines = part._scad_union_lines
 
 	    pad = ' ' * 4
-	    lines.append("{0}// countersink_hole('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".
-	      format(pad, part._name, comment, hole_diameter, countersink_diameter,
-	      start, stop, flags))
+	    line = "{0}// countersink_hole('{1}' '{2}' {3:i} {4:i} {5:i} {6:i} '{7}'".format(pad,
+              part._name, comment, hole_diameter, countersink_diameter, start, stop, flags)
+	    lines.append(line)
+	    if trace_detail >= 2:
+		print("{0}line='{1}'".format(indent, line))
 
 	    # Perform the drill with a cylinder:
 	    drill_direction = (stop - start).normalize()
@@ -11968,7 +12037,7 @@ class Part:
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Part.countersink_hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, {6:i}, '{7}'".
+	    print("{0}<=Part.countersink_hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, {6:i}, '{7}')".
 	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
 	      start, stop, flags))
 
@@ -12290,11 +12359,11 @@ class Part:
 	# Perform the hole using the richer *countesink_hole* operation:
 	zero = L()
 	self.countersink_hole(comment, diameter, zero, start, stop, flags,
-	   sides=sides, sides_angle=sides_angle, tracing=tracing + 1)
+	   sides=sides, sides_angle=sides_angle, tracing = tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}=>hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
+	    print("{0}<=hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
 	      format(indent, self._name, comment, diameter, start, stop, flags))
 
     def lathe(self, comment, material, color, start, end, contour, faces, tracing = -1000000):
@@ -15084,7 +15153,7 @@ class Part:
 #	      format(indent, part._name, comment, transform, stl_file_name))
 
 class Fastener(Part):
-    """ *Fastener*: """
+    """ *Fastener*: Represent a fastener (i.e. screw, bolt, etc.) to attach parts.  """
 	 
     # Imperial/Metric hole equivalents:
     #
@@ -15105,7 +15174,12 @@ class Fastener(Part):
     # M6.0x1.00 ~= 1/4-20	  0.2570*	6.4 = 0.2520
 
     def __init__(self, up, name):
-	""" *Fastener*: """
+	""" *Fastener*: Initialize the *Fastener* object (i.e. *self*) to have a parent of *up*
+	    and a name of *name*.
+	"""
+
+	# Use *fastener* instead of *self*
+	fastener = self
 
 	# Verify argument types:
 	assert isinstance(up, Part) or up == None
@@ -15115,56 +15189,66 @@ class Fastener(Part):
 	Part.__init__(self, up, name)
 	
 	# Disable CNC generation:
-	self.cnc_suppress()
+	fastener.cnc_suppress()
 
 	zero = L()
-	self.comment_s = name
-	self.color = Color("black")
-	self.material = Material("steel", "stainless")
-	self.start_p = P()
-	self.end_p = P()
-	self.flags_s = ""
-	self.major_diameter_l = zero
-	self.pitch_l = zero
-	self.thread75_l = zero
-	self.thread50_l = zero
-	self.close_fit_l = zero
-	self.free_fit_l = zero	
-	self.flat_head_diameter_l = zero
-	self.hex_insert_b = False
-	self.nut_height_l = zero
-	self.hex_nut_edge_width_l = zero
-	self.hex_nut_tip_width_l = zero
-	self.sides_angle_a = Angle()
-	self.flat_head_point_angle_a = Angle()
+	fastener.comment_s = name
+	fastener.color = Color("black")
+	fastener.material = Material("steel", "stainless")
+	fastener.start_p = P()
+	fastener.end_p = P()
+	fastener.flags_s = ""
+	fastener.major_diameter_l = zero
+	fastener.pitch_l = zero
+	fastener.thread75_l = zero
+	fastener.thread50_l = zero
+	fastener.close_fit_l = zero
+	fastener.free_fit_l = zero	
+	fastener.flat_head_diameter_l = zero
+	fastener.hex_insert_b = False
+	fastener.nut_height_l = zero
+	fastener.hex_nut_edge_width_l = zero
+	fastener.hex_nut_tip_width_l = zero
+	fastener.sides_angle_a = Angle()
+	fastener.flat_head_point_angle_a = Angle()
 
     def configure(self, comment = None, material = None, color = None,
       flags = None, start = None, end = None, sides_angle = None,
       head_washer_diameter = None, tail_washer_diameter = None):
-     	""" *Fastener*: """
+     	""" *Fastener*: Confitugure the *Fastener* object (i.e. *self*).
+	    *comment* shows up in generated CNC.  *material* specifies the fastener material.
+	    *color* specifies the rendering color.  *start* and *end* specify the end points
+	    of the fastener.  *flags* specifies one or more flag options separated by a
+	    colon (':').  The basic fastener class flags are "#0-80", "#1-72", "#2-56",
+	    "#4-40", "#6-32", "#10-24", "M3x.05", etc.  {more description needed.}
+	"""
 
-	# Check argument types:
-	none_type = type(None)
-	assert type(comment) == none_type or isinstance(comment, str)
-	assert type(material) == none_type or isinstance(material, Material)
-	assert type(color) == none_type or isinstance(color, Color)
-	assert type(flags) == none_type or isinstance(flags, str)
-	assert type(start) == none_type or isinstance(start, P)
-	assert type(end) == none_type or isinstance(end, P)
-	assert type(sides_angle) == none_type or isinstance(sides_angle, Angle)
-	
+	# Use *fastener* instead of *self:
+	fastener = self
+
+	# Verify argument types:
+	assert isinstance(comment, str) or comment == None
+	assert isinstance(material, Material) or material == None
+	assert isinstance(color, Color) or color == None
+	assert isinstance(flags, str) or flags == None
+	assert isinstance(start, P) or start == None
+	assert isinstance(end, P) or end == None
+	assert isinstance(sides_angle, Angle) or sides_angle == None
+	assert isinstance(head_washer_diameter, L) or head_washer_diameter == None
+	assert isinstance(tail_washer_diameter, L) or tail_washer_diameter == None
+
 	major_diameter = None
 
 	if isinstance(comment, str):
-	    self.comment_s = comment
+	    fastener.comment_s = comment
 	if isinstance(material, Material):
-	    self.material = material
+	    fastener.material = material
 	if isinstance(color, Color):
-	    self.color = color
+	    fastener.color = color
 	if isinstance(sides_angle, Angle):
-	    self.sides_angle_a = sides_angle
+	    fastener.sides_angle_a = sides_angle
 	if isinstance(flags, str):
-	    self.flags_s = flags
+	    fastener.flags_s = flags
 	    for flag in flags.split(':'):
 		if flag == "#0-80":
 		    major_diameter = L(inch = .0600)
@@ -15257,40 +15341,43 @@ class Fastener(Part):
 		    flat_head_diameter = L(mm = 6.30)
 		elif flag == "fh":
 		    #print("Fastener.drill(): flat_head")
-		    self.flat_head_point_angle_a = Angle(deg = 81)
+		    fastener.flat_head_point_angle_a = Angle(deg = 81)
 		elif flag == "hi":
 		    # Hex insert
-		    self.hex_insert_b = True
+		    fastener.hex_insert_b = True
 		else:
 		    assert False, \
 		      "Unrecognized flag ('{0}') in flags('{1}')". \
 		      format(flag, flags)
 
 	if isinstance(major_diameter, L):
-	    self.major_diameter_l = major_diameter
-	    self.pitch_l = pitch
-	    self.thread75_l = thread75
-	    self.thread50_l = thread50
-	    self.close_fit_l = close_fit
-	    self.free_fit_l = free_fit
-	    self.nut_height_l = nut_height
-	    self.hex_nut_edge_width_l = hex_nut_edge_width
-	    self.hex_nut_tip_width_l = hex_nut_tip_width
-	    self.flat_head_diameter_l = flat_head_diameter
+	    fastener.major_diameter_l = major_diameter
+	    fastener.pitch_l = pitch
+	    fastener.thread75_l = thread75
+	    fastener.thread50_l = thread50
+	    fastener.close_fit_l = close_fit
+	    fastener.free_fit_l = free_fit
+	    fastener.nut_height_l = nut_height
+	    fastener.hex_nut_edge_width_l = hex_nut_edge_width
+	    fastener.hex_nut_tip_width_l = hex_nut_tip_width
+	    fastener.flat_head_diameter_l = flat_head_diameter
 
 	if isinstance(start, P):
-	    self.start_p = start
+	    fastener.start_p = start
 	if isinstance(end, P):
-	    self.end_p = end
+	    fastener.end_p = end
 
     def construct(self):
 	""" *Fastener*: """
 
-	assert self.comment_s != "NO_COMMENT", \
+	# Use *fastener* inested of *self*:
+	fastener = self
+
+	assert fastener.comment_s != "NO_COMMENT", \
 	  "Fastener name is not set (not configured!)"
-	diameter = self.major_diameter_l
-	self.cylinder(self.comment_s, self.material, self.color,
-	  diameter, diameter, self.start_p, self.end_p, 16, Angle(deg=0.0), "", "")
+	diameter = fastener.major_diameter_l
+	fastener.cylinder(fastener.comment_s, fastener.material, fastener.color,
+	  diameter, diameter, fastener.start_p, fastener.end_p, 16, Angle(deg=0.0), "", "")
 
     def nut_ledge(self, part = None, flags = ""):
 	""" *Fastener*: Cut out ledge for a screw and a nut. """
@@ -15406,43 +15493,80 @@ class Fastener(Part):
 	      format(dx, dy, dz))
 	    difference_lines.append("")
 	
+    def _fasten(self, comment, part, select, tracing=-1000000):
+	""" *Fastener*: Use  the *Fastener* object (i.e. *self*) to drill a hole in *part*
+	    using its current mount for *part*.  *select* should be "thread* for a threaded
+	    hole, "close* for a close fit hole, "free" for a looser fit hole.
+	"""
 
-    def drill(self, part = None, select = None, trace = -1000000):
-	""" *Fastener*: """
+	# Use *fastener* instead of *self*:
+	fastener = self
 
-	if trace >= 0:
-	    print("{0}=>Fastener.drill({1}, select='{2}', start={3}, end={4})".
-	      format(' ' * trace, part, select, self.start_p, self.end_p))
-
-	# Check argument types:
-	none_type = type(None)
-	assert type(part) == none_type or isinstance(part, Part)
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(part, Part)
 	assert isinstance(select, str)
+	assert isinstance(tracing, int)
 
-	# Drill the hole:
-	if isinstance(part, Part):
-	    start = self.start_p
-	    end = self.end_p
+	# Perform any requested *tracing*;
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Fastener._fasten('{1}', '{2}', '{3}', '{4}')".
+	      format(indent, comment, fastener._name, part._name_get(), select))
+	    trace_detail = 2
 
+	# No need to do anything until we are past dimensions mode:
+	ezcad = part._ezcad_get()
+	if ezcad._stl_mode or ezcad._cnc_mode:
+	    # Process the *select* argument:
 	    if select == "thread":
-		material = self._material
-		generic = material._generic
-		if generic == "steel" or generic == "iron":
-		    diameter = self.thread50_l
-		else:
-		    diameter = self.thread75_l
+		#material = part._material
+		#generic = material._generic
+		#if generic == "steel" or generic == "iron":
+		#    diameter = fastener.thread50_l
+		#else:
+		#    diameter = fastener.thread75_l
+	        diameter = fastener.thread75_l
 	    elif select == "close":
-		diameter = self.close_fit_l
+		diameter = fastener.close_fit_l
 	    elif select == "free":
-		diameter = self.free_fit_l
+		diameter = fastener.free_fit_l
 	    else:
 		assert False, "select='{0}', not 'thread', 'close' or 'free'".\
 		  format(select)
 
-	    part.hole("'{0} Drill'".format(self.comment_s), diameter, start, end, "t")
+	    # Grab *start* and *end* from *fastener*:
+	    start = fastener.start_p
+	    end = fastener.end_p
+	    assert isinstance(start, P), \
+	      "No start point specified for fastener '{0}'".fastener._name
+	    assert isinstance(end, P), \
+	      "No end point specified for fastener '{0}'".fastener._name
+	    if trace_detail >= 2:
+		print("{0}start={1} end={2}".format(indent, start, end))
 
+	    # Clip *start* and *end* to be within the bounding box of *part* to create
+	    # *new_start* and *new_end*:
+	    part_bsw = part.bsw
+	    part_tne = part.tne
+	    new_start_x = start.x.maximum(part_bsw.x).minimum(part_tne.x)
+	    new_end_x   =   end.x.maximum(part_bsw.x).minimum(part_tne.x)
+	    new_start_y = start.y.maximum(part_bsw.y).minimum(part_tne.y)
+	    new_end_y   =   end.y.maximum(part_bsw.y).minimum(part_tne.y)
+	    new_start_z = start.z.maximum(part_bsw.y).minimum(part_tne.z)
+	    new_end_z   =   end.z.maximum(part_bsw.y).minimum(part_tne.z)
+	    new_start   = P(new_start_x, new_start_y, new_start_z)
+	    new_end     = P(new_end_x,   new_end_y,   new_end_z)
+
+	    # Now we can drill the hole in *part* with *new_start* and *new_end*:
+	    hole_name = "{0} Hole".format(comment)
+	    part.hole(hole_name, diameter, new_start, new_end, "t", tracing = tracing + 1)
+
+	#FIXME: This code is a little old an needs some work!!!
+	if False:
 	    zero = L()
-	    flat_head_point_angle = self.flat_head_point_angle_a
+	    flat_head_point_angle = fastener.flat_head_point_angle_a
 	    if flat_head_point_angle > Angle():
 		# Most flat head screws have an 80 degree point angle.
 		# Thus, in the crude diagram below.  The head diameter
@@ -15462,7 +15586,7 @@ class Fastener(Part):
 		#   V  |/
 		#  --- D
 	 	#
-		# What we need is the distance CB.  Triagle ABC is a right
+		# What we need is the distance CB.  Triangle ABC is a right
 		# triangle.  We know angle <CBA is 40 degrees, and thus angle
 		# <CAB is 90 - 40 = 50 degrees.
 		#
@@ -15480,7 +15604,7 @@ class Fastener(Part):
 		#    h = w * sin(a)/sin(b)       (5)
 		#    h = w * sin(90-b)/sin(b)    (6)
 
-		flat_head_diameter = self.flat_head_diameter_l
+		flat_head_diameter = fastener.flat_head_diameter_l
 		w = flat_head_diameter / 2
 		b = flat_head_point_angle / 2
 		h = w * ((Angle(deg = 90) - b).sine() / b.sine())
@@ -15497,14 +15621,14 @@ class Fastener(Part):
 		    flat_head_start = start - normalized_direction * h._mm
 		    flat_head_end = start + normalized_direction * h._mm
 		    #print(
-	     	#    "Part[{0}]:start={1} end={2} normalize={3} fh_end={4}".
+		    #	 "Part[{0}]:start={1} end={2} normalize={3} fh_end={4}".
 		    #    format(part._name,
 		    #    start, end, normalized_direction, flat_head_end))
-		    part.hole("Flat Head:" + self.comment_s,
+		    part.hole("Flat Head:" + fastener.comment_s,
 		      2 * flat_head_diameter, flat_head_start,
 		      flat_head_end, "", tracing = trace + 1)
 
-	    if self.hex_insert_b:
+	    if fastener.hex_insert_b:
 		direction = end - start
 		direction_length = direction.length()
 		if direction_length <= zero and EZCAD3.update_count_get() == 0:
@@ -15512,20 +15636,20 @@ class Fastener(Part):
 		      format(part))
 		else:
 		    normalized_direction = direction.normalize()
-		    nut_height = self.nut_height_l
+		    nut_height = fastener.nut_height_l
 		    insert_end = end - (normalized_direction * nut_height._mm)
 		    #print("end={0} start={1} dir={2} dir_len={3} nut_hght={4}".
 		    #  format(end, start, direction, direction_len, nut_hght))
 		    #print("insert_end = {0}".format(insert_end))
 
-		    part.hole("Hex Insert:" + self.comment_s,
-		      self.hex_nut_tip_width_l, end, insert_end, "f",
-	               sides=6, sides_angle=self.sides_angle_a)
+		    part.hole("Hex Insert:" + fastener.comment_s,
+		      fastener.hex_nut_tip_width_l, end, insert_end, "f",
+	               sides=6, sides_angle=fastener.sides_angle_a)
 
-	if trace >= 0:
-	    print("{0}<=Fastener.drill({1}, select='{2}')".
-	      format(' ' * trace, part, select))
-
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Fastener._fasten('{1}', '{2}', '{3}', '{4}')".
+	      format(indent, comment, fastener._name, part._name_get(), select))
 
 # *Code* class:
 
@@ -18868,8 +18992,6 @@ class Tool_Drill(Tool):
 	    *material*, *diameter*, *flutes_count*, *maximum_z_depth*, *point_angle*, and
 	    *drill_style*.
 	"""
-
-	# 
 
 	# Verify argument types:
 	zero = L()
