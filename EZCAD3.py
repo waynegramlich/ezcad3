@@ -725,7 +725,7 @@ class P:
 	zero = L()
 	if length == 0.0:
             normalized = self
-	    if EZCAD3._update_count_get() > 0:
+	    if not EZCAD3.ezcad._dimensions_mode:
 		print("P.normailize() was passed all zeros.")
         else:
             normalized = P(L(mm = x / length), L(mm = y / length), L(mm = z / length))
@@ -3062,11 +3062,13 @@ class Contour:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
+	    print("{0}=>Contour._project('{1}', *)".format(indent, self._name))
 	    trace_detail = 3
-	    print("{0}=>Contour._project('{1}', {2:s})".format(indent, self._name, transform))
 
 	# For each *bend* in bends, perform the project from 3D down to 2D:
 	zero = L()
+	if trace_detail >= 2:
+	    print("{0}transform={1:v}".format(indent, transform))
 	for bend in self._bends:
 	    # Grab the X/Y/Z coordinates for *point*:
 	    name = bend._name_get()
@@ -3075,7 +3077,7 @@ class Contour:
 	    projected_point = P(transformed_point.x, transformed_point.y, zero)
 	    bend._projected_point_set(projected_point)
 	    if trace_detail >= 2:
-		print("{0}name='{1}' point={2:m} projected_point={3:m} transform={4:s}".
+		print("{0}name='{1}' point={2:m} projected_point={3:m}".
 		  format(indent, name, point, projected_point, transform))
 
 	# Remember that we have performed the projection:
@@ -3086,7 +3088,7 @@ class Contour:
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Contour._project('{1}', {2:s})".format(indent, self._name, transform))
+	    print("{0}<=Contour._project('{1}', *)".format(indent, self._name,))
 
     def _radius_center_and_tangents_compute(self, tracing):
 	""" *Contour*: """
@@ -3132,7 +3134,7 @@ class Contour:
 	if tracing >= 0:
 	    trace_detail = 3
 	    indent = ' ' * tracing
-	    print("{0}=>Contour._scad_lines_polygon_append('{1}', *, '{2}, {3})".
+	    print("{0}=>Contour._scad_lines_polygon_append('{1}', *, '{2}', {3})".
 	      format(indent, contour._name, pad, box_enclose))
 
 	# Grab *bends* from *contour*:
@@ -3286,7 +3288,7 @@ class Contour:
 
 	# Wrap up any *tracing*:
 	if tracing >= 0:
-	    print("{0}=>Contour._scad_lines_polygon_append('{1}', *, '{2}, {3})".
+	    print("{0}<=Contour._scad_lines_polygon_append('{1}', *, '{2}', {3})".
 	      format(indent, contour._name, pad, box_enclose))
 
     def _smallest_inner_radius_compute(self, tracing):
@@ -3862,10 +3864,7 @@ class Directory:
 class EZCAD3:
     """ EZCAD3 is the top level engine that executes the design. """
 
-    #DIMENSIONS_MODE = 0
-    #CNC_MODE = 1
-    #STL_MODE = 2
-    #VISUALIZATION_MODE = 3
+    ezcad = None
 
     def __init__(self, minor = None, adjust = L(), directory="."):
 	""" *EZCAD*: Initialize the contents of {self} to contain
@@ -3892,10 +3891,9 @@ class EZCAD3:
 	self._adjust = adjust
 	self._bases_table = {}
 	self._cnc_mode = False
-	self._dxf_directory = dxf_directory
+	self._dimensions_mode = False
 	self._directory = directory
-	#self._mode = EZCAD3.DIMENSIONS_MODE
-	#self._mode = None
+	self._dxf_directory = dxf_directory
 	self._major = 3
 	self._minor = minor
 	self._ngc_directory = ngc_directory
@@ -9219,7 +9217,8 @@ class Part:
 	# Lookup *
 	mount_operations_table = part._mount_operations_table
 	assert mount_name in mount_operations_table, \
-	  "Could not find '{0}' in operations table of Part '{1}'".format(mount_name, part._name)
+	  "Could not find '{0}' in operations table of Part '{1}'; should be one of {2}".format(
+	  mount_name, part._name, sorted(mount_operations_table.keys()))
 	mount_operations = mount_operations_table[mount_name]
 
 	# Wrap up any requested *tracing* and return *mount_operations*:
@@ -9993,10 +9992,10 @@ class Part:
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
-	    trace_detail = 3
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_search('{1}', *, {2:i}, {3:i}, '{4}')".
 	      format(indent, part._name, parameter1, parameter2, from_routine))
+	    trace_detail = 1
 
 	# For now grab the material of the first part and assume the
 	# rest are compatible.  In reality, what we want is to grab
@@ -10910,9 +10909,9 @@ class Part:
 	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Part.rectangular_contour('{1}', '{2}', {3:i}".
+	    print("{0}=>Part.rectangular_contour('{1}', '{2}', {3:i})".
 	      format(indent, part._name, comment, radius))
-	    trace_detail = 1
+	    trace_detail = 2
 
 	# We only need to do stuff in CNC mode:
 	ezcad = part._ezcad_get()
@@ -10920,14 +10919,14 @@ class Part:
 	    # We need to figure out where the four corners are in 3D space.  To do this we first
 	    # figure out where everything landed after *top_surface_transform* is applied.  After
 	    # that we can reverse the points back into 3D space.  So first we compute the bounding
-	    # box coordinaes of the *part* after it has been transformed to CNC machine coordinates
+	    # box coordinates of the *part* after it has been transformed to CNC machine coordinates
 	    # with the top surface touching the machine origin:
 	    mount = part._current_mount
 	    assert isinstance(mount, Mount)
 	    top_surface_transform = mount._top_surface_transform_get()
 	    assert isinstance(top_surface_transform, Transform)
 	    if tracing >= 0:
-		print("{0}top_surface_transform".format(indent), top_surface_transform)
+		print("{0}top_surface_transform={1:v}".format(indent, top_surface_transform))
 
 	    bsw, tne = part._bounding_box_get(top_surface_transform, tracing = tracing + 1)
 	    x0 = bsw.x
@@ -10945,6 +10944,13 @@ class Part:
 	    corner4 = reverse_top_surface_transform * P(x1, y0, z1)
 	    start = reverse_top_surface_transform * P(x0, (y0 + y1)/2, z1)
 	    stop = reverse_top_surface_transform * P(x0, (y0 + y1)/2, z0 - L(inch=0.020))
+	    if trace_detail >= 2:
+		print("{0}corner1={1:i}".format(indent, corner1))
+		print("{0}corner2={1:i}".format(indent, corner2))
+		print("{0}corner3={1:i}".format(indent, corner3))
+		print("{0}corner4={1:i}".format(indent, corner4))
+		print("{0}start={1:i}".format(indent, start))
+		print("{0}stop={1:i}".format(indent, stop))
 
 	    # Create the *exterior_contour*:
 	    exterior_contour = Contour("Exterior Contour")
@@ -11568,14 +11574,14 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*:
-	#if tracing == -1000000:
-	#    tracing = part._tracing
 	trace_detail = -1
+	if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
 	if tracing >= 0:
-	    #trace_detail = 0
 	    indent = ' ' * tracing
 	    print("{0}=>Part.contour('{1}, '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
 	     format(indent, part._name, comment, start_point, end_point, extra, flags))
+	    trace_detail = 2
 
 	# Before we do anything else, we need to update the bounding box for *part*:
 	bounding_box = part._bounding_box
@@ -11586,11 +11592,14 @@ class Part:
 	cnc_mode = ezcad._cnc_mode
 	stl_mode = ezcad._stl_mode
 
-	if stl_mode:
+	if stl_mode or cnc_mode:
 	    # Perform all of the *contour* massaging:
 	    mount = part._current_mount
 	    assert isinstance(mount, Mount)
 	    top_surface_transform = mount._top_surface_transform_get()
+	    if trace_detail >= 2:
+		print("{0}mount='{1}'".format(indent, mount._name_get() ))
+		print("{0}top_surface_transform={1:v}".format(indent, top_surface_transform))
 	    contour._project(top_surface_transform, tracing + 1)
 	    contour._inside_bends_identify(tracing + 1)
 	    contour._radius_center_and_tangents_compute(tracing + 1)
@@ -11602,237 +11611,242 @@ class Part:
 	    top_surface_transform_reverse._scad_lines_append(difference_lines, pad)
 
 	    # Output the linear_extrude to *difference_lines*:
-	    extra = L(mm=1.0)
-	    difference_lines.append("{0}// Contour {1}".format(pad, contour._name_get()))
-	    height = (end_point - start_point).length()
-	    difference_lines.append("{0}translate([0, 0, {1:m}])".format(pad, -height - extra))
-	    difference_lines.append("{0}linear_extrude(height = {1:m}) {{".
-	     format(pad, height + 2.0 * extra))
-	    contour._scad_lines_polygon_append(difference_lines, pad, True, tracing + 1)
-	    difference_lines.append("{0}}} // linear_extrude".format(pad))
+	    if stl_mode:
+		extra = L(mm=1.0)
+		difference_lines.append("{0}// Contour {1}".format(pad, contour._name_get()))
+		height = (end_point - start_point).length()
+		difference_lines.append("{0}translate([0, 0, {1:m}])".format(pad, -height - extra))
+		difference_lines.append("{0}linear_extrude(height = {1:m}) {{".
+		 format(pad, height + 2.0 * extra))
+		contour._scad_lines_polygon_append(difference_lines, pad, True, tracing + 1)
+		difference_lines.append("{0}}} // linear_extrude".format(pad))
 
-	# Do any requested CNC generation:
-	if cnc_mode:
-	    # Grab the previously computed *top_surface_transform* that reorients the
-	    # material properly for the CNC machine:
-	    mount = part._current_mount
-	    assert isinstance(mount, Mount)
-	    top_surface_transform = mount._top_surface_transform_get()
-	    mount_translate_point = mount._mount_translate_point_get()
-	    assert isinstance(mount_translate_point, P)
+	    # Do any requested CNC generation:
+	    if cnc_mode:
+		# Grab the previously computed *top_surface_transform* that reorients the
+		# material properly for the CNC machine:
+		#mount = part._current_mount
+		#assert isinstance(mount, Mount)
+		#top_surface_transform = mount._top_surface_transform_get()
+		#mount_translate_point = mount._mount_translate_point_get()
+		#assert isinstance(mount_translate_point, P)
 
-	    # Perform all of the *contour* massaging:
-	    contour._project(top_surface_transform, tracing + 1)
-	    contour._inside_bends_identify(tracing + 1)
-	    contour._radius_center_and_tangents_compute(tracing + 1)
+		# Perform all of the *contour* massaging:
+		#contour._project(top_surface_transform, tracing + 1)
+		#contour._inside_bends_identify(tracing + 1)
+		#contour._radius_center_and_tangents_compute(tracing + 1)
 
-	    # Project all of the points in *contour* onto a plane normal to *projection_axis*
-	    # and then rotate that plane to be the X/Y plane:
-	    contour._project(top_surface_transform, tracing + 1)
+		# Project all of the points in *contour* onto a plane normal to *projection_axis*
+		# and then rotate that plane to be the X/Y plane:
+		contour._project(top_surface_transform, tracing + 1)
 
-	    # The returned value from *_smallest_inner_diameter_compute*() will be either
-	    # negative (for no smallest inner corner radius), or positive for the smallest
-	    # inner corner radius.  Either value will find the correct end-mill or mill-drill
-	    # tool for searching purposes:
-	    zero = L()
-	    contour._inside_bends_identify(tracing + 1)
-	    smallest_inner_radius = contour._smallest_inner_radius_compute(tracing + 1)
-	    smallest_inner_diameter = smallest_inner_radius * 2
+		# The returned value from *_smallest_inner_diameter_compute*() will be either
+		# negative (for no smallest inner corner radius), or positive for the smallest
+		# inner corner radius.  Either value will find the correct end-mill or mill-drill
+		# tool for searching purposes:
+		zero = L()
+		contour._inside_bends_identify(tracing + 1)
+		smallest_inner_radius = contour._smallest_inner_radius_compute(tracing + 1)
+		smallest_inner_diameter = smallest_inner_radius * 2
 
-	    transformed_start_point = top_surface_transform * start_point
-	    transformed_end_point = top_surface_transform * end_point
+		transformed_start_point = top_surface_transform * start_point
+		transformed_end_point = top_surface_transform * end_point
 
-	    # Find a *Tool* to use for edge milling.  For non-through contours, we should use
-	    # a mill drill in preference to an end-mill because that way we can overlap
-	    # with any top chamfering hole countersinking (i.e. one fewer tool change).
-	    # Otherwise use an end mill:
-	    z_stop = transformed_start_point.z - transformed_end_point.z
-	    if tracing >= 0:
-		print("{0}z_stop={1:i}".format(indent, z_stop))
-	    mill_drill_tool = \
-	      part._tools_mill_drill_side_search(smallest_inner_diameter, z_stop, tracing + 1)
-	    have_mill_drill = isinstance(mill_drill_tool, Tool_Mill_Drill)
-	    end_mill_tool = \
-	      part._tools_end_mill_search(smallest_inner_diameter, z_stop, "contour", tracing + 1)
-	    have_end_mill = isinstance(end_mill_tool, Tool_End_Mill)
-	    if tracing >= 0:
-		print("{0}mill_drill_tool='{1}'".format(indent, mill_drill_tool))
-		print("{0}end_mill_tool='{1}'".format(indent, end_mill_tool))
-		print("{0}have_mill_drill={1} have_end_mill={2}".
-		  format(indent, have_mill_drill, have_end_mill))
+		# Find a *Tool* to use for edge milling.  For non-through contours, we should use
+		# a mill drill in preference to an end-mill because that way we can overlap
+		# with any top chamfering hole countersinking (i.e. one fewer tool change).
+		# Otherwise use an end mill:
+		z_stop = transformed_start_point.z - transformed_end_point.z
+		if tracing >= 0:
+		    print("{0}z_stop={1:i}".format(indent, z_stop))
+		mill_drill_tool = \
+		  part._tools_mill_drill_side_search(smallest_inner_diameter, z_stop, tracing + 1)
+		have_mill_drill = isinstance(mill_drill_tool, Tool_Mill_Drill)
+		end_mill_tool = part._tools_end_mill_search(smallest_inner_diameter,
+		  z_stop, "contour", tracing + 1)
+		have_end_mill = isinstance(end_mill_tool, Tool_End_Mill)
+		if tracing >= 0:
+		    print("{0}mill_drill_tool='{1}'".format(indent, mill_drill_tool))
+		    print("{0}end_mill_tool='{1}'".format(indent, end_mill_tool))
+		    print("{0}have_mill_drill={1} have_end_mill={2}".
+		      format(indent, have_mill_drill, have_end_mill))
 
-	    # Expand the *flags* into *do_upper_chamfer*, *do_lower_chamfer* and *do_through*:
-	    do_upper_chamfer = False
-	    do_lower_chamfer = False
-	    do_through = False
-	    for flag in flags:
-		if flag == 't':
-		    do_through = True
-		elif flag == 'l':
-		    do_through = True
-		elif flag == 'u':
-		    do_through = True
+		# Expand the *flags* into *do_upper_chamfer*, *do_lower_chamfer* and *do_through*:
+		do_upper_chamfer = False
+		do_lower_chamfer = False
+		do_through = False
+		for flag in flags:
+		    if flag == 't':
+			do_through = True
+		    elif flag == 'l':
+			do_through = True
+		    elif flag == 'u':
+			do_through = True
 
-	    # Now select which *mill_tool* to use from either *mill_drill_tool* or *end_mill_tool*:
-	    mill_tool = None
-	    if do_through:
-		mill_drill_tool = None
-		have_mill_drill = False
-	    if have_end_mill and have_mill_drill:
-		# We have both *end_mill_tool* and *mill_drill_tool*.  Select based on priority:
-		if mill_drill_tool._priority_get() >= end_mill_tool._priority_get():
-		    # The *mill_drill_tool* won on priority:
-		    mill_tool = mill_drill_tool
-		    have_end_mill = False
-		else:
-		    # The *end_mill_tool* won on priority:
-		    mill_tool = end_mill_tool
+		# Now select which *mill_tool* to use from either *mill_drill_tool* or
+		# *end_mill_tool*:
+		mill_tool = None
+		if do_through:
+		    mill_drill_tool = None
 		    have_mill_drill = False
-	    elif have_mill_drill:
-		# The only *mill_tool* available is *mill_drill_tool*:
-		mill_tool = mill_drill_tool
-	    elif have_end_mill:
-		# The only *mill_tool* available is *end_mill_tool*:
-		mill_tool = end_mill_tool
+		if have_end_mill and have_mill_drill:
+		    # We have both *end_mill_tool* and *mill_drill_tool*.  Select based on priority:
+		    if mill_drill_tool._priority_get() >= end_mill_tool._priority_get():
+			# The *mill_drill_tool* won on priority:
+			mill_tool = mill_drill_tool
+			have_end_mill = False
+		    else:
+			# The *end_mill_tool* won on priority:
+			mill_tool = end_mill_tool
+			have_mill_drill = False
+		elif have_mill_drill:
+		    # The only *mill_tool* available is *mill_drill_tool*:
+		    mill_tool = mill_drill_tool
+		elif have_end_mill:
+		    # The only *mill_tool* available is *end_mill_tool*:
+		    mill_tool = end_mill_tool
 
-	    assert isinstance(mill_tool, Tool), \
-	      "{0}:{1} no contour tool: smallest diameter={2:i} z_stop={3:i}".format(
-	       part._name, comment, smallest_inner_diameter, z_stop)
+		assert isinstance(mill_tool, Tool), \
+		  "{0}:{1} no contour tool: smallest diameter={2:i} z_stop={3:i}".format(
+		   part._name, comment, smallest_inner_diameter, z_stop)
 
-	    # Figure out *point_angle* and *tip_depth*:
-	    point_angle = Angle(deg=180)	# End-mills are flat
-	    tip_depth = zero			# End-mills have no tip
-	    if isinstance(mill_tool, Tool_Mill_Drill):
-		# Alternatively, mill drills have both a *point_angle* and a *tip_depth*:
-		point_angle = mill_drill._point_angle_get()
-		tip_depth = mill_tool.tip_depth(point_angle)
+		# Figure out *point_angle* and *tip_depth*:
+		point_angle = Angle(deg=180)	# End-mills are flat
+		tip_depth = zero			# End-mills have no tip
+		if isinstance(mill_tool, Tool_Mill_Drill):
+		    # Alternatively, mill drills have both a *point_angle* and a *tip_depth*:
+		    point_angle = mill_drill._point_angle_get()
+		    tip_depth = mill_tool.tip_depth(point_angle)
 
-	    # Schedule the operation if we found a tool, otherwise error:
-	    mill_operation = None
-	    if True:
-		# Compute *depth_maximum* as a function of *diameter* and *extra*:
-		#	{cutter_engagement}	{depth_maximum}
-		#	=======================================
-		#	1.00 (100%)		{diameter}/4
-		#	0.50 (50%)		{diameter}/2
-		#	0.25 (25%)		{diameter}/1
-		diameter = mill_tool._diameter_get()
-		assert diameter > zero
-
-		depth_maximum = zero
-
-		is_laser = mill_tool._is_laser_get()
-		if is_laser:
-		    # We always cut to maximum depth with the laser:
-		    depth_maximum = mill_tool._maximum_z_depth_get()
-		else:
-		    # When *diameter* equals *extra* the ratio of *diameter*
-		    # to *extra* is 1.0.   When *extra* is 1/4th of *diameter*
-		    # the ratio of *diameter* over *extra* is 4.0:
-		    ratio = diameter / extra
-
-		    # Cap {ratio} between 1.0 and 4.0:
-		    if ratio < 1.0:
-			ratio = 1.0
-		    elif ratio > 4.0:
-			ratio = 4.0
-
-		    # *depth_maximum* is *diameter* * *ratio* / 4:
-		    depth_maximum = diameter * (ratio / 4.0)
-		    if tracing >= 0:
-			print("{0}diameter={1:i} extra={2:i} ratio={3} depth_max={4:i}".
-			  format(indent, diameter, extra, ratio, depth_maximum))
-
-		# Figure out how many *passes* using *depth_maximum*, *z_start*, *z_stop*,
-		# and *z_extra:
-		z_start = transformed_start_point.z
-		z_end = transformed_end_point.z
-		z_extra = zero
-		z_depth = (z_start - z_end).absolute() + z_extra
-
-		if tracing >= 0:
-		    print("{0}z_depth={1} depth_maximum={2}".format(indent, z_depth, depth_maximum))
-		passes = int(z_depth / depth_maximum) + 1
-
-		if tracing >= 0:
-		    print("{0}zstt={1:i} zend={2:i} depmax={3:i} zxtr={4:i} zdpth={5:i} pss={6}".
-		      format(indent, z_start, z_end, depth_maximum, z_extra, z_depth, passes))
-	
-		# Set {sub_priority} to 0 to force this operation before
-		# top/bottom chamfers:
-		sub_priority = 0
-		follows = None
-		offset = zero
-		corners = None
-		bends = contour._bends_get()
-		mill_feed_speed = mill_tool._feed_speed_get()
-		mill_spindle_speed = mill_tool._spindle_speed_get()
-		mill_operation_contour = Operation_Contour(part, comment,
-		  sub_priority, mill_tool, Operation.ORDER_MILL_DRILL_EXTERIOR,
-		  follows, mill_feed_speed, mill_spindle_speed,
-		  z_start - tip_depth, z_start - z_depth - tip_depth,
-		  contour, offset, diameter/2, passes, tracing + 1)
-		part._operation_append(mill_operation_contour)
-
-		if tracing >= 1:
-		    print("{0}zstt-td={1:i} zstt-zdep-td={2:i}".format(
-		      indent, z_start - tip_depth, z_start - z_depth - tip_depth))
-
-	    # Deal with *do_upper_chamfer*:
-	    if do_upper_chamfer:
-		# We need to do an upper chamfer that is *top_chamfer* wide:
-		# Find a mill drill tool that can do {smallest_inner_radius}:
-		top_chamfer_tool = part._tools_mill_drill_chamfer_search(
-		  smallest_inner_diameter, z_stop)
-		assert not op_chamfer_tool is None, \
-		  "No top chamfer tool for '{0}' (diameter={1:i}".format(
-		  comment, smallest_inner_diameter)
-
+		# Schedule the operation if we found a tool, otherwise error:
+		mill_operation = None
 		if True:
-		    # Tool found, schedule the operation:
-		    assert isinstance(top_chamfer_tool, Tool_Mill_Drill)
-		    tip_depth = mill_drill._tip_depth_get()
-		    top_chamfer_comment = "'{0}' top chamfer".format(comment)
-		    nominal_tool_radius = top_chamfer_tool._diameter_get() / 4.0
-		    z_stop_top_chamfer = z_start - tip_depth/2 - top_chamfer
+		    # Compute *depth_maximum* as a function of *diameter* and *extra*:
+		    #	{cutter_engagement}	{depth_maximum}
+		    #	=======================================
+		    #	1.00 (100%)		{diameter}/4
+		    #	0.50 (50%)		{diameter}/2
+		    #	0.25 (25%)		{diameter}/1
+		    diameter = mill_tool._diameter_get()
+		    assert diameter > zero
 
-		    #print("top_ch={0:i} tip_depth={1:i} ntr={2:i} zs={3:i} zstc={4:i}".format(
-		    #  top_chamfer, tip_depth, nominal_tool_radius, z_start, z_stop_top_chamfer))
+		    depth_maximum = zero
 
-		    # Set {sub_priority} to 1, to be after main contour:
-		    sub_priority = 1
-		    top_chamfer_operation_contour = Operation_Contour(top_chamfer_comment,
-		      sub_priority, top_chamfer_tool,
-		      Operation.MILL_DRILL_CHAMFER,
-		      mill_operation, z_start, z_stop_top_chamfer, corners,
-		      -top_chamfer, nominal_tool_radius, 1)
-		    part.operation_append(top_chamfer_operation_contour)
+		    is_laser = mill_tool._is_laser_get()
+		    if is_laser:
+			# We always cut to maximum depth with the laser:
+			depth_maximum = mill_tool._maximum_z_depth_get()
+		    else:
+			# When *diameter* equals *extra* the ratio of *diameter*
+			# to *extra* is 1.0.   When *extra* is 1/4th of *diameter*
+			# the ratio of *diameter* over *extra* is 4.0:
+			ratio = diameter / extra
 
-	    # Deal with bottom chamfers:
-	    if do_lower_chamfer:
-		# We need to do a lower chamfer that is {bottom_chamfer} wide:
-		# Find a dove tail tool that can do the {smallest_inner_radius}:
-		bottom_chamfer_tool = part.tools_dove_tail_search(smallest_inner_diameter, z_stop)
+			# Cap {ratio} between 1.0 and 4.0:
+			if ratio < 1.0:
+			    ratio = 1.0
+			elif ratio > 4.0:
+			    ratio = 4.0
 
-		if bottom_chamfer_tool == None:
-		    # Tool not found, let the user know:
-		    assert False, "No bottom chamfer tool for '{0}' (diameter={1:i})".format(
+			# *depth_maximum* is *diameter* * *ratio* / 4:
+			depth_maximum = diameter * (ratio / 4.0)
+			if tracing >= 0:
+			    print("{0}diameter={1:i} extra={2:i} ratio={3} depth_max={4:i}".
+			      format(indent, diameter, extra, ratio, depth_maximum))
+
+		    # Figure out how many *passes* using *depth_maximum*, *z_start*, *z_stop*,
+		    # and *z_extra:
+		    z_start = transformed_start_point.z
+		    z_end = transformed_end_point.z
+		    z_extra = zero
+		    z_depth = (z_start - z_end).absolute() + z_extra
+
+		    if tracing >= 0:
+			print("{0}z_depth={1} depth_maximum={2}".
+		          format(indent, z_depth, depth_maximum))
+		    passes = int(z_depth / depth_maximum) + 1
+
+		    if tracing >= 0:
+			print("{0}zstart={1:i} zend={2:i} dmax={3:i} zx={4:i} zd={5:i} pss={6}".
+			  format(indent, z_start, z_end, depth_maximum, z_extra, z_depth, passes))
+	
+		    # Set {sub_priority} to 0 to force this operation before
+		    # top/bottom chamfers:
+		    sub_priority = 0
+		    follows = None
+		    offset = zero
+		    corners = None
+		    bends = contour._bends_get()
+		    mill_feed_speed = mill_tool._feed_speed_get()
+		    mill_spindle_speed = mill_tool._spindle_speed_get()
+		    mill_operation_contour = Operation_Contour(part, comment,
+		      sub_priority, mill_tool, Operation.ORDER_MILL_DRILL_EXTERIOR,
+		      follows, mill_feed_speed, mill_spindle_speed,
+		      z_start - tip_depth, z_start - z_depth - tip_depth,
+		      contour, offset, diameter/2, passes, tracing + 1)
+		    part._operation_append(mill_operation_contour)
+
+		    if tracing >= 1:
+			print("{0}zstt-td={1:i} zstt-zdep-td={2:i}".format(
+			  indent, z_start - tip_depth, z_start - z_depth - tip_depth))
+
+		# Deal with *do_upper_chamfer*:
+		if do_upper_chamfer:
+		    # We need to do an upper chamfer that is *top_chamfer* wide:
+		    # Find a mill drill tool that can do {smallest_inner_radius}:
+		    top_chamfer_tool = part._tools_mill_drill_chamfer_search(
+		      smallest_inner_diameter, z_stop)
+		    assert not op_chamfer_tool is None, \
+		      "No top chamfer tool for '{0}' (diameter={1:i}".format(
 		      comment, smallest_inner_diameter)
-		else:
-		    # Tool found, schedule the operation:
-		    bottom_chamfer_comment = "%f% bottom chamfer".format(comment)
-		    nominal_tool_radius = bottom_chamfer_tool.diameter / 4.0
-		    # Set {sub_priority} to 1, to be after main contour:
-		    sub_priority = 1
-		    bottom_chamfer_operation_contour = Operation_Contour(part,
-		       bottom_chamfer_comment,
-		      sub_priority, bottom_chamfer_tool,
-		      Operation.DOVE_TAIL_CHAMFER,
-		      z_start, z_stop - nominal_tool_radius + bottom_chamfer,
-		      corners, -bottom_chamfer, nominal_tool_radius, 1)
+
+		    if True:
+			# Tool found, schedule the operation:
+			assert isinstance(top_chamfer_tool, Tool_Mill_Drill)
+			tip_depth = mill_drill._tip_depth_get()
+			top_chamfer_comment = "'{0}' top chamfer".format(comment)
+			nominal_tool_radius = top_chamfer_tool._diameter_get() / 4.0
+			z_stop_top_chamfer = z_start - tip_depth/2 - top_chamfer
+
+			#print("top_ch={0:i} tip_depth={1:i} ntr={2:i} zs={3:i} zstc={4:i}".
+                        #  format(top_chamfer, tip_depth, nominal_tool_radius,
+                        #  z_start, z_stop_top_chamfer))
+
+			# Set {sub_priority} to 1, to be after main contour:
+			sub_priority = 1
+			top_chamfer_operation_contour = Operation_Contour(top_chamfer_comment,
+			  sub_priority, top_chamfer_tool,
+			  Operation.MILL_DRILL_CHAMFER,
+			  mill_operation, z_start, z_stop_top_chamfer, corners,
+			  -top_chamfer, nominal_tool_radius, 1)
+			part.operation_append(top_chamfer_operation_contour)
+
+		# Deal with bottom chamfers:
+		if do_lower_chamfer:
+		    # We need to do a lower chamfer that is {bottom_chamfer} wide:
+		    # Find a dove tail tool that can do the {smallest_inner_radius}:
+		    bottom_chamfer_tool = \
+		      part.tools_dove_tail_search(smallest_inner_diameter, z_stop)
+
+		    if bottom_chamfer_tool == None:
+			# Tool not found, let the user know:
+			assert False, "No bottom chamfer tool for '{0}' (diameter={1:i})".format(
+			  comment, smallest_inner_diameter)
+		    else:
+			# Tool found, schedule the operation:
+			bottom_chamfer_comment = "%f% bottom chamfer".format(comment)
+			nominal_tool_radius = bottom_chamfer_tool.diameter / 4.0
+			# Set {sub_priority} to 1, to be after main contour:
+			sub_priority = 1
+			bottom_chamfer_operation_contour = Operation_Contour(part,
+			   bottom_chamfer_comment,
+			  sub_priority, bottom_chamfer_tool,
+			  Operation.DOVE_TAIL_CHAMFER,
+			  z_start, z_stop - nominal_tool_radius + bottom_chamfer,
+			  corners, -bottom_chamfer, nominal_tool_radius, 1)
 
 	if tracing >= 0:
-	    print("{0}<=Part.contour('{1}, '{2}', '{3:i}', {4:i}', {5:i}, '{6}')".
+	    print("{0}<=Part.contour('{1}, '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
 	     format(' ' * tracing, part._name, comment, start_point, end_point, extra, flags))
 
     def countersink_hole(self, comment, hole_diameter, countersink_diameter,
@@ -14814,7 +14828,7 @@ class Part:
 		multi_mount_part = multi_mount._part_get()
 		multi_mount_name = multi_mount._mount_name_get()
 		mount_operations = \
-		  part._mount_operations_lookup(multi_mount_name, tracing = tracing + 1)
+		  multi_mount_part._mount_operations_lookup(multi_mount_name, tracing = tracing + 1)
 		first_mount = mount_operations._first_mount_get()
 		first_mounts.append(first_mount)
 
@@ -15874,6 +15888,8 @@ class Code:
 
 	# Verify argument types:
 	zero = L()
+	speed0 = Speed()
+	hertz0 = Hertz()
 	assert isinstance(contour, Contour)
 	assert isinstance(plunge_offset, L) and plunge_offset >= zero
 	assert isinstance(contour_offset, L) and contour_offset >= zero
@@ -15881,19 +15897,17 @@ class Code:
 	assert isinstance(clockwise, bool)
 	assert isinstance(mount_translate_point, P)
 	assert isinstance(z, L)
-	assert isinstance(feed_speed, Speed)
-	assert isinstance(spindle_speed, Hertz)
+	assert isinstance(feed_speed, Speed) and feed_speed > speed0
+	assert isinstance(spindle_speed, Hertz) and spindle_speed > hertz0
 	assert isinstance(tracing, int)
-
-	assert feed_speed != Speed()
 
 	# Start performing any *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
-	    trace_detail = 0
 	    indent = ' ' * tracing
 	    print("{0}=>Code._contour(*, po={1:i} co={2:i} tr={3:i} cl={4} z={5:i} *)".format(
 	      indent, plunge_offset, contour_offset, tool_radius, clockwise, z))
+	    trace_detail = 1
 
 	mount_translate_x = mount_translate_point.x
 	mount_translate_y = mount_translate_point.y
@@ -15906,62 +15920,58 @@ class Code:
 	# Add in *tool_radius* to the exising *contour_offset*:
 	total_offset = contour_offset + tool_radius
 
-	# Search for *west_most_bend* with the X coordinate:
-	west_most_index = 0
-	west_most_bend = bends[west_most_index]
-	west_most_x = west_most_bend._point_get().x
+	# Find the *first_outside_bend* in *bends*::
+	first_outside_bend_index = -1
+	first_outside_bend = None
 	for index, bend in enumerate(bends):
-	    bend_point_x = bend._point_get().x
-	    if bend_point_x < west_most_x:
-		west_most_index = index
-		west_most_bend = bend
-		west_most_x = bend_point_x
-	west_most_x += mount_translate_x
+	    if not bend._is_inside_get():
+		first_outside_bend = bend
+		first_outside_bend_index = index
+		break;
+	assert first_outside_bend_index >= 0
 	if trace_detail >= 1:
-	    print("{0}".format(indent, west_most_x))
+	    print("{0}first_outside_bend='{1}' first_outside_bend_index={2}".
+	      format(indent, first_outside_bend._name_get(), first_outside_bend_index))
 
-	# Make sure that *west_most_bend* is not an inside bend (i.e. it should be impossible):
-	assert not west_most_bend._is_inside_get(), \
-	  "west_most_bed of contour '{0}' is inside".format(contour._name_get())
-
-	# Compute the X/Y location to drop the mill bit down:
-	contour_is_clockwise = contour._is_clockwise_get()
-	west_most_radius = west_most_bend._radius_get()
-	start_offset = total_offset + west_most_radius
+	# Now compute *plunge_tangent* and *start_tangent* where the tool respectively plunges
+        # and first starts cutting the contour:
+	first_outside_bend_radius = first_outside_bend._radius_get()
+	start_offset = total_offset + first_outside_bend_radius
 	plunge_arc_offset = start_offset + plunge_offset
+	contour_is_clockwise = contour._is_clockwise_get()
 	if contour_is_clockwise == clockwise:
-	    start_tangent = west_most_bend._incoming_tangent_compute(start_offset)
-	    plunge_tangent = west_most_bend._incoming_tangent_compute(plunge_arc_offset)
+	    start_tangent = first_outside_bend._incoming_tangent_compute(start_offset)
+	    plunge_tangent = first_outside_bend._incoming_tangent_compute(plunge_arc_offset)
 	else:
-	    start_tangent = west_most_bend._outgoing_tangent_compute(-start_offset)
-	    plunge_tangent = west_most_bend._outgoing_tangent_compute(-plunge_arc_offset)
+	    start_tangent = first_outside_bend._outgoing_tangent_compute(-start_offset)
+	    plunge_tangent = first_outside_bend._outgoing_tangent_compute(-plunge_arc_offset)
 	start_tangent += mount_translate_point
 	plunge_tangent += mount_translate_point
 	if trace_detail >= 1:
 	    print("{0}plunge_x={1:i}, plunge_y={2:i}".
 	      format(indent, plunge_tangent.x, plunge_tangent.y))
     
-	# This routine starts and ends at (*plunge_x*, *plunge_y*).
-	# If we are not already at (*plunge_x*, *plunge_y*) we need
-	# to get there safely:
-	code._xy_rapid(plunge_tangent.x, plunge_tangent.y)
+	# This routine starts and ends at (*plunge_tangent_x*, *plunge_tangent_y*).  If we are
+        # not already at (*plunge_tangent_x*, *plunge_tangent_y*) we need to get there safely:
+	plunge_tangent_x = plunge_tangent.x
+	plunge_tangent_y = plunge_tangent.y
+	code._xy_rapid(plunge_tangent_x, plunge_tangent_y)
 
 	# Now we get to down to the correct Z level:
 	code._z_feed(feed_speed/2, spindle_speed, z + mount_translate_z, "Contour")
 
 	# Now feed to the start point using a circular motion so that there is no divit
 	# at the plunge point:
+	start_tangent_x = start_tangent.x
+	start_tangent_y = start_tangent.y
 	if contour_is_clockwise == clockwise:
 	    code._xy_ccw_feed(feed_speed, spindle_speed,
-	      tool_radius * 1.001, start_tangent.x, start_tangent.y)
+	      tool_radius * 1.001, start_tangent_x, start_tangent_y)
 	else:
 	    code._xy_cw_feed(feed_speed, spindle_speed,
- 	      tool_radius * 1.001, start_tangent.x, start_tangent.y)
+ 	      tool_radius * 1.001, start_tangent_x, start_tangent_y)
 
-	# We iterate across all of the corners.  We need to visit
-	# the first corner one last time at the end; hence we
-	# iterate *size* + 1 times through the loop regardless of
-	# whether we go clockwise or count-clockwise:
+	# Visit each *bend* in the correct order:
 	if contour_is_clockwise == clockwise:
 	    # Clockwise (climb) Cut:
 	    if trace_detail >= 0:
@@ -15971,7 +15981,7 @@ class Code:
 	    for bends_index in range(bends_size):
 
 		# Fetch a {bend}:
-		index = bends_index % bends_size
+		index = (bends_index + first_outside_bend_index) % bends_size
 		bend = bends[index]
 		bend_radius = bend._radius_get()
 
@@ -16004,9 +16014,10 @@ class Code:
 		    code._xy_cw_feed(feed_speed, spindle_speed, arc_radius, arc_end.x, arc_end.y)
 
 		if trace_detail >= 1:
-		    print("{0}arc_radius={1:i} arc_start={1:2} arc_end={3:i}".
-		      format(indent, arc_radius, arc_start, arc_end))
-		    print("")
+		    trace_line = "CW[{0}]: aradius={1:i} astart={2:i} aend={3:i}". \
+		      format(bends_index, arc_radius, arc_start, arc_end)
+		    print("{0}{1}".format(indent, trace_line))
+		    code._comment(trace_line)
 	else:
 	    # Counter clockwise:
 	    if trace_detail >= 1:
@@ -16044,21 +16055,22 @@ class Code:
 		    code._xy_cw_feed(feed_speed, spindle_speed, arc_radius, arc_end.x, arc_end.y)
 
 		if trace_detail >= 1:
-		    print("{0}arc_radius={1:i} arc_start={1:2} arc_end={3:i}".
-		      format(indent, arc_radius, arc_start, arc_end))
-		    print("")
+		    trace_line = "CCW[{0}]: arc_radius={1:i} arc_start={2:i} arc_end={3:i}". \
+		      format(bends_index, arc_radius, arc_start, arc_end)
+		    print("{0}{1}".format(indent, trace_line))
+		    code._comment(trace_line)
 	    
 	# Return back to the (*start_tangent.x*, *start_tangent.y*):
-	code._xy_feed(feed_speed, spindle_speed, start_tangent.x, start_tangent.y)
+	code._xy_feed(feed_speed, spindle_speed, start_tangent_x, start_tangent_y)
 
 	# Now feed to back to the plunge point in a circular motion to avoid diviting the
 	# contour as we retract:
 	if contour_is_clockwise == clockwise:
 	    code._xy_ccw_feed(feed_speed, spindle_speed,
-	      tool_radius * 1.001, plunge_tangent.x, plunge_tangent.y)
+	      tool_radius * 1.001, plunge_tangent_x, plunge_tangent_y)
 	else:
 	    code._xy_cw_feed(feed_speed, spindle_speed,
-	      tool_radius * 1.001, plunge_tangent.x, plunge_tangent.y)
+	      tool_radius * 1.001, plunge_tangent_x, plunge_tangent_y)
 
 	if tracing >= 0:
 	    print("{0}=>Code._contour(*, po={1:i} co={2:i} tr={3:i} cl={4} z={5:i} *)".format(
@@ -19729,11 +19741,12 @@ class Transform:
 	    for forward_vrml in forward_vrmls:
 		if len(forward_vrml) == 3:
 		    # Translate:
-		    result += " Translate[{0}, {1}, {2}]". \
+		    result += " Translate[{0} {1} {2}]". \
                       format(forward_vrml[0], forward_vrml[1], forward_vrml[2])
 		elif len(forward_vrml) == 4:
-		    result += " Translate[{0}, {1}, {2}]". \
-                      format(forward_vrml[0], forward_vrml[1], forward_vrml[2], forward_vrml[3])
+		    result += " Rotate[{0} {1} {2}  {3}]". \
+                      format(forward_vrml[0], forward_vrml[1], forward_vrml[2],
+		             forward_vrml[3] * 180.0 / math.pi)
 		else:
 		    assert False, "Bad forward_vrml: {0}".format(forward_vrml)
 	else:
