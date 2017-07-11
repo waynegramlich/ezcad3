@@ -427,6 +427,10 @@ class L:
 	    # We are already in millimeters:
 	    format = format[:-1]
 
+	# Round small values to zero:
+	if -.0000000001 <= value <= .0000000001:
+	    value = 0.0
+
 	# Now do the final format:
 	if len(format) == 0:
 	    result = "{0}".format(value)
@@ -725,6 +729,12 @@ class P:
 
 	assert isinstance(point, P)
 	return P(self.x - point.x, self.y - point.y, self.z - point.z)
+
+    def absolute(self):
+        """ *P*: Return the the *P* object (i.e. *self*) with all positive coordinate values.
+	"""
+
+	return P(self.x.absolute(), self.y.absolute(), self.z.absolute())
 
     def angle_between(self, point):
 	""" P dimensions: Return the angle between {self} and {point}. """
@@ -2291,8 +2301,9 @@ class Bounding_Box:
 	return P(self._east.average(self._west), self._north, self._top)
 
     def tne_get(self):
-	""" *Bounding_Box*: Return the center of the top/north/east corner of the
-	    *Bounding_Box* object (i.e. *self*) as a point (i.e. *P*) object. """
+	""" *Bounding_Box*: Return the top/north/east corner of the *Bounding_Box* object
+	    (i.e. *self*) as a point (i.e. *P*) object.
+	"""
 
 	return P(self._east, self._north, self._top)
 
@@ -2348,7 +2359,7 @@ class Bounding_Box:
 	# Deal with an empty bounding box first:
 	if self._is_empty:
 	    # The *Bounding_Box* object (i.e. *self*) so mark it as non_empty and make
-    	# exactly enclose *point*:
+	    # exactly enclose *point*:
 	    self._east = x
 	    self._west = x
 	    self._north = y
@@ -2363,6 +2374,11 @@ class Bounding_Box:
 	    self._south =  y.minimum(self._south)
 	    self._top =    z.maximum(self._top)
 	    self._bottom = z.minimum(self._bottom)
+
+	# Make sure the *bounding_box* is not broken:
+	assert self._west <= self._east
+	assert self._south <= self._north
+	assert self._bottom <= self._top
 
 	# Sure that we mark everything as not empty:
 	self._is_empty = False
@@ -4240,9 +4256,14 @@ class Mount:
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Mount._extra_start_get('{1}')".format(indent, mount._name))
+	    trace_detail = 3
+
+	if trace_detail >= 2:
+	    print("{0}part='{1}'".format(indent, mount._part._name_get()))
 
 	# Grab the values from *mount*:
 	extra_start_bsw = mount._extra_start_bsw
@@ -4254,8 +4275,8 @@ class Mount:
 
 	# Wrap up any requested *tracing* and return both *final_bsw* and *final_tne*:
 	if tracing >= 0:
-	    print("{0}<=Mount._extra_start_fetch('{1}')=>{2:i},{3:i}".
-	      format(indent, mount._name, extra_start_bsw, extra_start_tne, origin))
+	    print("{0}<=Mount._extra_start_get('{1}')=>{2:i},{3:i}".
+	      format(indent, mount._name, extra_start_bsw, extra_start_tne))
 	return extra_start_bsw, extra_start_tne
 
     def _extra_start_set(self, extra_start_bsw, extra_start_tne, tracing=-1000000):
@@ -5386,6 +5407,8 @@ class Multi_Mount:
 	multi_mount._combined_mount = None
 	multi_mount._dx = -big
 	multi_mount._dy = -big
+	multi_mount._extra_bsw = None
+	multi_mount._extra_tne = None
 	multi_mount._mount_name = mount_name
 	multi_mount._part = part
 	multi_mount._rotate = rotate
@@ -5447,7 +5470,6 @@ class Multi_Mount:
 	multi_mount._dy += dy
 
 	return multi_mount
-
     def _dx_get(self):
 	""" *Multi_Mount*: Return the dx associated with the *Multi_Mount* object (i.e. *self*).
 	"""
@@ -5461,6 +5483,33 @@ class Multi_Mount:
 
 	return self._dy
 
+    def _extra_get(self):
+	""" *Multi_Mount*: Return *extra_bsw* and *extra_tne* from the *Multi_Mount* object
+	    (i.e. *self*.)
+	"""
+
+	# Use *multi_mount* instead of *self*:
+	multi_mount = self
+
+	# Return the results:
+	return multi_mount._extra_bsw, multi_mount._extra_tne
+
+    def _extra_set(self, extra_bsw, extra_tne):
+	""" *Multi_Mount*: Save *extra_bsw* and *extra_tne* into the *Multi_Mount* object
+	    (i.e. *self*.)
+	"""
+
+	# Use *multi_mount* instead of *self*:
+	multi_mount = self
+
+	# Verify argument types:
+	assert isinstance(extra_bsw, P)
+	assert isinstance(extra_tne, P)
+
+	# Stuff values into *multi_mount*:
+	multi_mount._extra_bsw = extra_bsw
+	multi_mount._extra_tne = extra_tne
+
     def _is_tooling_plate_get(self):
 	""" *Multi_Mount*: Return *True* if the *Multi_Mount* object (i.e. *self*) has an
 	    offset specificed using tooling plate column and row numbers and *False* otherwise.
@@ -5469,7 +5518,9 @@ class Multi_Mount:
 	# Use *multi_mount* instead of *self:
 	multi_mount = self
 
-	return multi_mount._row >= 0
+	# Grab some values from *multi_mount*:
+	mount = multi_mount._mount_get()
+	return mount._is_tooling_plate_mount_get()
 
     def _mount_get(self):
         """ *Multi_Mount*: Return the *Mount* object associate with the *Multi_Mount* object
@@ -5605,6 +5656,72 @@ class Multi_Mounts:
 
 	# Append to the *list*:
 	multi_mounts._multi_mounts_list.append(multi_mount)
+
+    def _extra_start_dowel_pin_get(self, tooling_plate, tracing=-1000000):
+	""" *Multi_Mounts*: Return the extra material corners and dowel pin location for
+	    the *Multi_Mounts* object (i.e. *self*.)  The extra material corners are relative
+	    to the (0, 0) hole of *tooling_plate*.  The dowel pin
+	"""
+
+	# Use *multi_mounts* instead of *self*:
+	multi_mounts = self
+
+	# Verify argument types:
+	assert isinstance(tooling_plate, Tooling_Plate)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Multi_Mounts._extra_start_get('{1}')".
+	      format(indent, tooling_plate._name_get()))
+	    trace_detail = 2
+
+	zero = L()
+	bounding_box = Bounding_Box()
+	left_most_edge = L(inch=123456789.0)
+	left_most_index = -1
+	multi_mounts_list = multi_mounts._multi_mounts_list
+	for index, multi_mount in enumerate(multi_mounts_list):
+	    # Grab some values from *multi_mount*:
+	    mount       = multi_mount._mount_get()
+	    column, row = multi_mount._column_row_get()
+	    rotate      = multi_mount._rotate_get()
+
+	    # Compute the extra material corners centered on hole (0, 0) of the *tooling_plate*:
+	    extra_start_bsw, extra_start_tne = \
+	      tooling_plate._extra_material_get(mount, column, row, rotate, tracing = tracing + 1)
+
+	    # Save the results into *multi_mount* (for debugging):
+	    multi_mount._extra_set(extra_start_bsw, extra_start_tne)
+
+	    # Expand the *bounding_box* to enclose the extra material assocaiated
+	    # with *multi_mount*:
+	    bounding_box.point_expand(extra_start_bsw)
+	    bounding_box.point_expand(extra_start_tne)
+
+	    # Figure out where the *left_most_edge* is:
+	    if extra_start_bsw.x < left_most_edge:
+		left_most_edge = extra_start_bsw.x
+		left_most_index = index
+		left_most_bsw = extra_start_bsw
+		left_most_tne = extra_start_tne
+	assert index >= 0, \
+	  "No left most edge found for Multi_Mounts '{0}'".format(multi_mounts._name)
+
+	# Create the *dowel_pin* point:
+	dowel_pin = P(left_most_bsw.x, (left_most_bsw.y + left_most_tne.y)/2, left_most_bsw.x)
+
+	# Grab the final values from *bounding_box*:
+	final_bsw = bounding_box.bsw_get()
+	final_tne = bounding_box.tne_get()
+
+	# Perform any requested *tracing* and return the final corners and the left-most index:
+	if tracing >= 0:
+	    print("{0}=>Multi_Mounts._extra_start_get('{1}')=>{2:i}, {3:i}, {4:i}".
+	      format(indent, tooling_plate._name_get(), final_bsw, final_tne, dowel_pin))
+	return final_bsw, final_tne, dowel_pin
 
     def _is_tooling_plate_get(self, tracing=-1000000):
 	""" *Multi_Mounts*: Return *True* if the *Multi_Mounts* object (i.e. *self*) only
@@ -6887,8 +7004,8 @@ class Operation_Mount(Operation):
     """ *Operation_Mount* is a class that indicates that the part mount position has changed.
     """
 
-    def __init__(self, part, comment,
-      vice, jaws_spread, parallels_height, tooling_plate, spacers, tracing=-1000000):
+    def __init__(self, part, comment, vice, jaws_spread,
+      parallels_height, tooling_plate, spacers, tooling_plate_present, tracing=-1000000):
 	""" *Operation_Mount*: Initialize the *Operation_Mount* object (i.e. *self*) to describe
 	    how *part* is mounted for CNC operations.  *comment* shows up in generated G-code.
 	    *vice* specifies which vice is being used; `None` is used if there is no vice.
@@ -6913,6 +7030,8 @@ class Operation_Mount(Operation):
 	assert isinstance(parallels_height, L)
 	assert isinstance(tooling_plate, Tooling_Plate) or tooling_plate == None
 	assert isinstance(spacers, list)
+	assert isinstance(tooling_plate_present, bool)
+	assert isinstance(tracing, int)
 	for spacer in spacers:
 	    assert isinstance(spacer, tuple) and len(spacer) == 4
 	    for row_column in spacer:
@@ -6922,8 +7041,8 @@ class Operation_Mount(Operation):
 	if tracing >= 1:
 	    indent = ' ' * tracing
 	    print(("{0}=>Operation_Mount.__init__(*, '{1}', '{2}', '{3}'," +
-	      " {4:i} {5:i}, *, {6}))").format(indent, part._name_get(), comment, vice._name_get(),
-	      jaws_spread, parallels_height, spacers))
+	      " {4:i} {5:i}, *, {6}, {7}))").format(indent, part._name_get(), comment,
+	      vice._name_get(), jaws_spread, parallels_height, spacers, tooling_plate_present))
 
 	# Initialize the *Operation* super class:
 	sub_priority = 0
@@ -6936,16 +7055,17 @@ class Operation_Mount(Operation):
 	  sub_priority, tool, order, follows, feed_speed, spindle_speed, part.c)
 
 	# Load up *operation_mount*:
-	operation_mount._jaws_spread = jaws_spread
-	operation_mount._parallels_height = parallels_height
-	operation_mount._tooling_plate = tooling_plate
-	operation_mount._vice = vice
+	operation_mount._jaws_spread           = jaws_spread
+	operation_mount._parallels_height      = parallels_height
+	operation_mount._tooling_plate         = tooling_plate
+	operation_mount._tooling_plate_present = tooling_plate_present
+	operation_mount._vice                  = vice
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 1:
 	    print(("{0}<=Operation_Mount.__init__(*, '{1}', '{2}', '{3}'," +
-	      " {4:i} {5:i}, *, {6}))").format(indent, part._name_get(), comment, vice._name_get(),
-	      jaws_spread, parallels_height, spacers))
+	      " {4:i} {5:i}, *, {6}, {7}))").format(indent, part._name_get(), comment,
+	      vice._name_get(), jaws_spread, parallels_height, spacers, tooling_plate_present))
 
     def _cnc_generate(self,
       mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
@@ -6981,10 +7101,10 @@ class Operation_Mount(Operation):
 	if tracing >= 0:
 	    print("{0}cnc_transform={1:s}".format(indent, cnc_transform))
 				
-	# Grab some values out *operation_mount*:a
-	parallels_height =      operation_mount._parallels_height
-	tooling_plate =         operation_mount._tooling_plate
-	vice =                  operation_mount._vice
+	# Grab some values out *operation_mount*:
+	parallels_height      = operation_mount._parallels_height
+	tooling_plate         = operation_mount._tooling_plate
+	vice                  = operation_mount._vice
 
 	# Grab the extra material conners from *mount* and render into *mount_vrml_lines*:
 	extra_start_bsw, extra_start_tne = mount._extra_start_get()
@@ -7061,10 +7181,18 @@ class Operation_Multi_Mount(Operation):
     """ *Operation_Multi_Mount* is a class that manages multiple parts in the same operation.
     """
 
-    def __init__(self, part, multi_mounts, comment,
-      vice, jaws_spread, parallels_height, tooling_plate, spacers, tracing=-1000000):
+    def __init__(self, part, multi_mounts, comment, vice, jaws_spread,
+      parallels_height, tooling_plate, spacers, tooling_plate_present, tracing=-1000000):
 	""" *Operation_Multi_Mount*: Initialize the *Operation_Muili_Mount* object (i.e. *self*)
-	    to describe...
+	    mount each *Multi_Mount* object from *multi_mounts* for a multiple mount CNC
+	    path generation.  *part* is the *Part* that is the "parent" for the CNC path
+	    generation and the *part* name shows up in the summary `.wrl` file name.
+	    *vice* is the *Vice* object to use form mounting and *jaws_spread* specifies
+	    the distance between the vice jaws.  *parallels_height* specifies which height
+	    from the box of parallels to use.  *tooling_plate* is the tooling plate to use
+	    for mounting parts.  *spacers* specifies a list of spacess to mount the parts
+	    on the tooling plate.  *spacers* is set to None, if no spacers are to be rendered
+	    as part the the CNC path visualization.
 	"""
 
 	# Use *operation_multi_mount* instead of *self*:
@@ -7077,8 +7205,9 @@ class Operation_Multi_Mount(Operation):
 	assert isinstance(vice, Vice) or vice == None
 	assert isinstance(jaws_spread, L)
 	assert isinstance(parallels_height, L)
-	assert isinstance(tooling_plate, Tooling_Plate) or tooling_plate == None
+	assert isinstance(tooling_plate, Tooling_Plate)
 	assert isinstance(spacers, list)
+	assert isinstance(tooling_plate_present, bool)
 	for spacer in spacers:
 	    assert isinstance(spacer, tuple) and len(spacer) == 4
 	    for row_column in spacer:
@@ -7088,8 +7217,9 @@ class Operation_Multi_Mount(Operation):
 	if tracing >= 1:
 	    indent = ' ' * tracing
 	    print(("{0}=>Operation_Mount.__init__(*, p='{1}', fm='{2}', c='{3}'," +
-	      " v='{4}' js={5:i} ph={5:i}, *, {6}))").format(indent,
-	      part._name_get(), comment, vice._name_get(), jaws_spread, parallels_height, spacers))
+	      " v='{4}' js={5:i} ph={5:i}, *, {6}, {7}))").format(indent,
+              part._name_get(),  comment, vice._name_get(), jaws_spread, parallels_height,
+	      spacers, tooling_plate_present))
 
 	# Initialize the *Operation* super class:
 	sub_priority = 0
@@ -7108,6 +7238,7 @@ class Operation_Multi_Mount(Operation):
 	operation_multi_mount._parallels_height = parallels_height
 	operation_multi_mount._spacers = spacers
 	operation_multi_mount._tooling_plate = tooling_plate
+	operation_multi_mount._tooling_plate_present = tooling_plate_present
 	operation_multi_mount._vice = vice
 
 	# Wrap up any requested *tracing*:
@@ -7143,12 +7274,17 @@ class Operation_Multi_Mount(Operation):
 	    trace_detail = 2
 
 	# Grab some values out *operation_multi_mount*:
-	jaws_spread      = operation_multi_mount._jaws_spread
-	multi_mounts     = operation_multi_mount._multi_mounts
-	parallels_height = operation_multi_mount._parallels_height
-	spacers          = operation_multi_mount._spacers
-	tooling_plate    = operation_multi_mount._tooling_plate
-	vice             = operation_multi_mount._vice
+	jaws_spread           = operation_multi_mount._jaws_spread
+	multi_mounts          = operation_multi_mount._multi_mounts
+	parallels_height      = operation_multi_mount._parallels_height
+	spacers               = operation_multi_mount._spacers
+	tooling_plate         = operation_multi_mount._tooling_plate
+	tooling_plate_present = operation_multi_mount._tooling_plate_present
+	vice                  = operation_multi_mount._vice
+
+	# Set *debugging* to *True* to add some extra material bounding boxes to the CNC
+	# path visulation:
+	debugging = False
 
 	# Now visualize each *multi_mount*:
 	zero = L()
@@ -7192,7 +7328,13 @@ class Operation_Multi_Mount(Operation):
 	    # with the correct *dx*/*dy* offset:
 	    mount_vrml_triangles = \
 	      mount_cnc_transform._vrml(vrml_triangles, tracing = tracing + 1)
-	    mount_vrml_stl._append(mount_vrml_triangles)
+	    if not debugging:
+		mount_vrml_stl._append(mount_vrml_triangles)
+
+	    if debugging:
+		extra_bsw, extra_tne = multi_mount._extra_get()
+		mount_vrml_lines._box_outline("purple", extra_bsw, extra_tne)
+
 	assert isinstance(first_mount, Mount) and isinstance(first_part, Part)
 
 	# Create *cnc_vrml_lines* to visualize the multi mount:
@@ -7221,54 +7363,7 @@ class Operation_Multi_Mount(Operation):
 	mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3} )\n".
 	  format(mount_extra_start_dx, mount_extra_start_dy, mount_extra_start_dz, material))
 
-	#FIXME: Does this code do anything anymore???!!!
-	# Figure out where the *tooling_plate* goes (only if it exists):
-	#if tooling_plate == None:
-	#    # No *tooling_plate*, so just specify *corner* X/Y/Z coordinates:
-	#    x1 = zero
-	#    y1 = zero
-	#    z1 = parallels_height
-	#else:
-	#    # Tooling Plate Mount: Figure out where to put the extra material *corner1*:
-	#    first_mount_translate_point = first_mount._mount_translate_point_get()
-	#    first_part_extra_start_bsw, first_part_extra_start_tne = \
-	#      first_part._extra_start_fetch(cnc_transform)
-	#    first_part_extra_start_dx = first_part_extra_start_tne.x - first_part_extra_start_bsw.x
-	#    first_part_extra_start_dy = first_part_extra_start_tne.y - first_part_extra_start_bsw.y
-	#    first_part_extra_start_dz = first_part_extra_start_tne.z - first_part_extra_start_bsw.z
-	#    if trace_detail >= 1:
-	#	print("{0}combined_mount='{1}' first_mount='{2}' part='{3}'".format(indent,
-	#	  combined_mount._name_get(), first_mount._name_get(), part._name_get()))
-	#	print("{0}first_part_extra_start_bsw={1:i} first_part_extra_start_tne={2:i}".
-	#	  format(indent, first_part_extra_start_bsw, first_part_extra_start_tne))
-	#	print(("{0}first_part_extra_start_dx={1:i} " +
-	#	  "first_part_extra_start_dy={2:i} first_part_extra_start_dy={3:i}").format(indent,
-	#	  first_part_extra_start_dx, first_part_extra_start_dy, first_part_extra_start_dz))
-	#
-	#    # Now specify *corner1* X/Y/Z coordinates:
-	#    x1 = first_mount_translate_point.x - first_part_extra_start_dx/2
-	#    y1 = first_mount_translate_point.y + first_part_extra_start_dy/2
-	#    z1 = first_mount_translate_point.z - first_part_extra_start_dz
-	#
-	#    x1 = mount_extra_start_bsw.x
-	#    y1 = mount_extra_start_bsw.y
-	#    z1 = mount_extra_start_bsw.z
-	#
-	#    # Now draw in the *tooling_plate*:
-	#    corner = P(zero, zero, parallels_height)
-	#    tooling_plate._vrml_append(mount_vrml_lines, corner, spacers, tracing = tracing + 1)
-
-	# Draw the extra material outline:
-	#corner1 = P(x1, y1, z1)
-	#x2 = x1 + mount_extra_start_dx
-	#y2 = y1 - mount_extra_start_dy
-	#z2 = z1 + mount_extra_start_dz
-	#x2 = mount_extra_start_tne.x
-	#y2 = mount_extra_start_tne.y
-	#z2 = mount_extra_start_tne.z
-	#corner2 = P(x2, y2, z2)
-
-	if isinstance(tooling_plate, Tooling_Plate):
+	if tooling_plate_present:
 	    # Now draw in the *tooling_plate*:
 	    corner = P(zero, zero, parallels_height)
 	    tooling_plate._vrml_append(mount_vrml_lines, corner, spacers, tracing = tracing + 1)
@@ -8299,13 +8394,14 @@ class Operation_Vertical_Lathe(Operation):
 class Parallels:
     """ *Parallels*: A *Parallels* object specifies a set of parallels for use with a *Vice*."""
 
-    def __init__(self, length, thickness, heights):
+    def __init__(self, name, length, thickness, heights):
 	""" *Parallels*:  """
 
 	# Use *parallels* instead of *self*:
 	parallels = self
 
 	# Verify argument types:
+	assert isinstance(name, str) and not ' ' in name
 	assert isinstance(length, L)
 	assert isinstance(thickness, L)
 	assert isinstance(heights, tuple) or isinstance(heights, list)
@@ -8314,9 +8410,10 @@ class Parallels:
 	    assert isinstance(height, L) and height > zero 
 
 	# Stuff values into *parallels*:
+        parallels._heights = tuple(sorted(heights, reverse=True))
         parallels._length = length
+	parallels._name = name
         parallels._thickness = thickness
-        parallels._heights = tuple(heights)
 
     def _length_get(self):
         """ *Parallels: Return the length of each paralle associated with 
@@ -8329,6 +8426,50 @@ class Parallels:
 	    associated with the *Parallels* object (i.e. *self*.) """
 
 	return self._heights
+
+    def _select(self, dz, vice, tracing=-1000000):
+	""" *Parallels*: From the *Parallels* object (i.e. *self*), select a parallel
+	    that will ensure that a *Part* of height *dz* will be at or just above the
+	    jaw of *vice.
+	"""
+
+	# Use *parallels* instead of *vice*:
+	parallels = self
+	
+	# Verify argument types:
+	assert isinstance(vice, Vice)
+	assert isinstance(dz, L)
+	assert isinstance(tracing, int)
+	
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+            print("{0}=>Parallels._select('{1}', {2:i}, '{3}')".
+	      format(indent, parallels._name, dz, vice._name_get()))
+
+	# Grab the *jaw_height* from *vice*:
+	jaw_volume = vice._jaw_volume_get()
+	jaw_height = jaw_volume.z
+
+	# *heights* is sorted from the largest height to the smallest height.  The loop is
+	# terminated when the first parallel *height* that is too small is encountered.
+	heights = parallels._heights
+	selected_height = None
+	for height in parallels._heights:
+	    if height + dz < jaw_height:
+		break
+	    selected_height = height
+
+	# Make sure we got a *selected_height*:
+	assert isinstance(selected_height, L), \
+	  "Could not find a parallel that works with part of height {0:i}".format(dz)
+
+	# Wrap up any requested *tracing* and return selected *selected_height*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+            print("{0}=>Parallels._select('{1}', {2:i}, '{3}')=>{4:i}".
+	      format(indent, parallels._name, dz, vice._name_get(), selected_height))
+	return selected_height
 
     def _thickness_get(self):
         """ *Parallels: Return the thickness of each parallel associated with the
@@ -13866,7 +14007,7 @@ class Part:
 	part = self
 
 	# Verify argument types:
-	assert isinstance(tooling_plate_mount_name, str)
+	assert isinstance(tooling_plate_mount_name, str) and not ' ' in tooling_plate_mount_name
 	assert isinstance(columns, tuple) or isinstance(columns, list)
 	assert isinstance(rows, tuple) or isinstance(rows, list)
 	assert isinstance(skips, tuple) or isinstance(skips, list)
@@ -14149,7 +14290,7 @@ class Part:
 	    # Create *operation_mount* and add it to *part* operations list:
 	    vice = shop._vice_get()
 	    operation_mount = Operation_Mount(part, comment,
-	      vice, dy, parallels_height, tooling_plate, spacers, tracing = tracing + 1)
+	      vice, dy, parallels_height, tooling_plate, spacers, True, tracing = tracing + 1)
 	    part._operation_append(operation_mount)
 
 	    # Perform a dowel pin operation:
@@ -14868,7 +15009,7 @@ class Part:
 	    tooling_plate = None
 	    spacers = []
 	    operation_mount = Operation_Mount(part, name,
-	      vice, jaws_spread, selected_parallel_height, tooling_plate, spacers)
+	      vice, jaws_spread, selected_parallel_height, tooling_plate, spacers, False)
 	    part._operation_append(operation_mount)
 
 	    # Generate any needed dowel pin operation:
@@ -15035,7 +15176,7 @@ class Part:
 	# Store the *part* into *multi_mounts*:
 	multi_mounts._part_set(part)
 
-	# Do not do anthing until *cnc_mode*:
+	# Do not do anthing until *cnc_mode* is set:
 	ezcad = part._ezcad_get()
 	if ezcad._cnc_mode:
 	    ezcad._multi_mounts_list.append(multi_mounts)
@@ -15043,6 +15184,7 @@ class Part:
 		print("{0}multi-mounts: part='{1}' name='{2}'".
 		  format(indent, part._name, multi_mounts._name_get()))
 
+	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Part.multi_mount('{1}', '{2}')".
 	      format(indent, part._name, multi_mounts._name_get()))
@@ -15056,7 +15198,7 @@ class Part:
 	part = self
 
 	# Verify argument types:
-	assert isinstance(name, str) and not ' ' in name, "name='{0}'".format(name)
+	assert isinstance(name, str) and not ' ' in name, "name '{0}' has spaces".format(name)
 	assert isinstance(multi_mounts, Multi_Mounts)
 	assert isinstance(tracing, int)
 
@@ -15074,13 +15216,24 @@ class Part:
 	ezcad = part._ezcad_get()
 	assert ezcad._cnc_mode
 
+	# Grab *tooling_plate* from *ezcad*:
+	shop = ezcad._shop_get()
+	tooling_plate = shop._tooling_plate_get()
+
+	# Figure out if *multi_mounts* supposed to be mounted on a *tooling_plate*:
+	is_tooling_plate = multi_mounts._is_tooling_plate_get(tracing = tracing + 1)
+
+	# Determine how the extra material is layed out relative to the (0, 0) *tooling_plate* hole:
+	hole00_extra_start_bsw, hole00_extra_start_tne, dowel_pin = \
+	  multi_mounts._extra_start_dowel_pin_get(tooling_plate, tracing = tracing + 1)
+	if trace_detail >= 2:
+	    print("{0}hole00_extra_start_bsw{1:i} hole00_extra_start_tne={2:i} dowel_pin={3:i}".
+	      format(indent, hole00_extra_start_bsw, hole00_extra_start_tne, dowel_pin))
+
 	# Define some constants:
 	zero = L()
 	origin = P(zero, zero, zero)
 
-	# Grab some values from *tooling_plate*:
-	shop = ezcad._shop_get()
-	tooling_plate = shop._tooling_plate_get()
 	tooling_plate_hole_pitch = tooling_plate._hole_pitch_get()
 	tooling_plate_rows       = tooling_plate._rows_get()
 	tooling_plate_columns    = tooling_plate._columns_get()
@@ -15099,7 +15252,12 @@ class Part:
 	tooling_plate_extra_dx   = tooling_plate_dx - tooling_plate_columns_dx
 	tooling_plate_extra_dy   = tooling_plate_dy - tooling_plate_rows_dy
 	tooling_plate_spacer_dz  = tooling_plate._spacer_dz_get()
-	hole_0_0 = P(tooling_plate_extra_dx / 2, -tooling_plate_extra_dy / 2, zero)
+	if is_tooling_plate:
+	    hole_0_0 = P(tooling_plate_extra_dx / 2, -tooling_plate_extra_dy / 2, zero)
+	else:
+	    hole_0_0 = P(-hole00_extra_start_bsw.x, -hole00_extra_start_tne.y, zero)
+	    #hole_0_0 = P(zero, zero, zero)
+
 	if trace_detail >= 2:
 	    print("{0}tooling_plate: columns_dx={1:i} rows_dy={2:i}".
 	      format(indent, tooling_plate_columns_dx, tooling_plate_rows_dy))
@@ -15110,15 +15268,14 @@ class Part:
 
 	# Grab seom values from *vice*:
 	vice = shop._vice_get()
-	jaw_volume = vice._jaw_volume_get()
 	parallels = vice._parallels_get()
+	jaw_volume = vice._jaw_volume_get()
 
 	# Unpack the *vice* information some more:
 	jaw_dx = jaw_volume.x
 	jaw_dy = jaw_volume.y
 	jaw_dz = jaw_volume.z
 	jaws_spread = tooling_plate_dy
-	parallels_heights = sorted(parallels._heights_get(), reverse=True)
 
 	# Initialize some values prior to the loop which fills them in:
 	combined_multi_mount = None
@@ -15127,7 +15284,8 @@ class Part:
 	extra_bounding_box = Bounding_Box()
 
 	# Deal with tooling plate mounting vs. vice mounting:
-	if multi_mounts._is_tooling_plate_get(tracing = tracing + 1):
+	tooling_plate_present = multi_mounts._is_tooling_plate_get(tracing = tracing + 1)
+        if True:
 	    # Scan across each *multi_mount*:
 	    for index, multi_mount in enumerate(multi_mounts._multi_mounts_get()):
 		# Grab some values from *multi_mount*:
@@ -15209,14 +15367,8 @@ class Part:
 		    print("{0}[{1}]: part_dx={2:i} part_dy={3:i} part_dz={2:i}".
 		      format(indent, index, part_dx, part_dy, part_dz))
 
-		# Find the smallest parallel that just clears the top of the vice.
-		# *parallels_heights* was previously sorted from highest to lowest.
-		# Eventually we will find a parallel that is not high enough and terminate the loop:
-		selected_parallels_height = None
-		for parallels_height in parallels_heights:
-		    if parallels_height + part_dz < jaw_dz:
-			break
-		    selected_parallels_height = parallels_height
+		# Find the smallest parallel that just clears the top of the *vice* for *part_dz*:
+		selected_parallels_height = parallels._select(part_dz, vice)
 		if trace_detail >= 2:
 		    print("{0}[{1}]: selected_parallels_height={2:i}".
 		      format(indent, index, selected_parallels_height))
@@ -15226,8 +15378,13 @@ class Part:
 		      format(indent, index, tooling_plate_spacer_dz))
 		    print("{0}[{1}]: part_dz={2:i}".
 		      format(indent, index, part_dz))
-		top_surface_z = \
-		  selected_parallels_height + tooling_plate_dz + tooling_plate_spacer_dz + part_dz
+
+		# Figure out where *top_surface_z* is and compute the *top_surface* point:
+		if is_tooling_plate:
+		    top_surface_z = selected_parallels_height + \
+		      tooling_plate_dz + tooling_plate_spacer_dz + part_dz
+		else:
+		    top_surface_z = selected_parallels_height + part_dz
 		top_surface = P(zero, zero, top_surface_z)
 		if trace_detail >= 2:
 		    print("{0}[{1}]: selected_parallels_height={2:i}".
@@ -15332,7 +15489,7 @@ class Part:
 		    comment = ""
 		    operation_multi_mount = Operation_Multi_Mount(part, multi_mounts,
 		      comment, vice, jaws_spread, selected_parallels_height, tooling_plate, spacers,
-		      tracing = tracing + 1)
+		      is_tooling_plate, tracing = tracing + 1)
 		    combined_operations._append(combined_multi_mount,
 		      operation_multi_mount, tracing = tracing + 1)
 
@@ -18792,7 +18949,7 @@ class Shop:
 	  no4_50_percent_thread_diameter, L(inch=0.250), L(inch=0.500))
 
 	# Vice to use:
-	parallels = Parallels(L(inch=6.0), L(inch="1/8"), [
+	parallels = Parallels("Standard", L(inch=6.0), L(inch="1/8"), [
 	  L(inch="1/2"),
 	  L(inch="5/8"),
 	  L(inch="3/4"),
@@ -18802,7 +18959,7 @@ class Shop:
 	  L(inch="1-1/4"),
 	  L(inch="1/2"),
 	  L(inch="1-1/2") ] )
-	vice = Vice(vice_volume, parallels)
+	vice = Vice("5in_Vice", vice_volume, parallels)
 
 	# Initialize *shop*:
 	shop._assemblies = []		# Viewable assemblies
@@ -20118,6 +20275,145 @@ class Tooling_Plate:
 
 	return self._dz
 
+    def _extra_material_get(self, mount, column, row, rotate, tracing=-1000000):
+        """ *Tooling_Plate*: With the *Tooling_Plate* object (i.e. *self*) oriented with the (0,0)
+	    hole located just under the CNC machine origin, return the bounding box for the *Part*
+	    associated with *mount*.  The part is rotated by *rotate* such that it is oriented
+	    so that its upper left mounting hole is at (*column*, *row*) .  *rotate* must be a
+	    multiple of 90 degrees.
+	"""
+
+	# Use *tooling_plate* instead of *self*:
+	tooling_plate = self
+
+	# Verify argument types:
+	assert isinstance(mount, Mount)
+	assert isinstance(rotate, Angle)
+	assert isinstance(column, int) and 0 <= column < tooling_plate._columns
+	assert isinstance(row, int)    and 0 <= row    < tooling_plate._rows
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Tooling_Plate._extra_material_get('{1}', {2}, {3}, {4:d})".
+	      format(indent, mount._name_get(), column, row, rotate))
+	    trace_detail = 1
+
+	# Convert *rotate* to an *int*:
+	rotate_degrees = int(rotate.degrees())
+	assert rotate_degrees % 90 == 0, \
+	  "Rotate is {0:d} degrees when it needs to be a mulitple of 90 degrees".format(rotate)
+
+	# Figure out the size of the grid of *tooling_plate* mount holes:
+	tooling_plate_holes = mount._tooling_plate_holes_get()
+	hole_pitch     = tooling_plate._hole_pitch
+	unique_columns = tuple(sorted(set([ column_row[0] for column_row in tooling_plate_holes ])))
+	unique_rows    = tuple(sorted(set([ column_row[1] for column_row in tooling_plate_holes ])))
+	columns_span   = unique_columns[-1] - unique_columns[0]
+	rows_span      = unique_rows[-1]    - unique_rows[0]
+	columns_dx     = columns_span * hole_pitch
+	rows_dy        = rows_span    * hole_pitch
+	if trace_detail >= 3:
+	    print("{0}hole_pitch={1:i}".format(indent, hole_pitch))
+	    print("{0}unique_columns{1} unique_rows={2}".
+	      format(indent, unique_columns, unique_rows))
+	    print("{0}columns_span={1} rows_span={2}".format(indent, columns_span, rows_span))
+	    print("{0}columns_dx={1:i} rows_dy={2:i}".format(indent, columns_dx, rows_dy))
+
+	# Compute *rotate_transform* that rotates *part* by *rotate*:
+	zero = L()
+	one = L(mm=1.000)
+	z_axis = P(zero, zero, one)
+	mount_translate_point = mount._mount_translate_point_get()
+	rotate_transform = Transform().                       \
+	  translate("mount=>machine", -mount_translate_point). \
+	  rotate("rotate@machine", z_axis, rotate).     \
+          translate("CNC=>machine", mount_translate_point)
+	if trace_detail >= 3:
+	    print("{0}mount='{1}'".format(indent, mount._name_get()))
+	    print("{0}mount_translate_point={1:i}".format(indent, mount_translate_point))
+	    print("{0}rotate_transform={1:v}".format(indent, rotate_transform))
+
+	# Figure out where everything is located from the original CNC mount:
+	part = mount._part_get()
+	cnc_transform   = mount._cnc_transform_get()
+	cnc_part_bsw    = cnc_transform * part.bsw
+	cnc_part_center = cnc_transform * part.c
+	cnc_part_tne    = cnc_transform * part.tne
+	cnc_part_volume = (cnc_part_tne - cnc_part_bsw).absolute()
+	cnc_hole_bsw    = cnc_part_center + P(-columns_dx/2,  rows_dy/2, -cnc_part_volume.z/2)
+	cnc_hole_tne    = cnc_part_center + P( columns_dx/2, -rows_dy/2,  cnc_part_volume.z/2)
+	extra_start_bsw, extra_start_tne = mount._extra_start_get()
+	if trace_detail >= 3:
+	    print("{0}part='{1}' mount='{2}'".
+	      format(indent, part._name_get(), mount._name_get()))
+	    print("{0}cnc_part_bsw={1:i} cnc_part_center={2:i} cnc_part_tne={3:i}".
+	      format(indent, cnc_part_bsw, cnc_part_center, cnc_part_tne))
+	    print("{0}cnc_part_volume={1:i}".format(indent, cnc_part_volume))
+	    print("{0}cnc_hole_bsw={1:i} cnc_hole_tne={2:i}".
+	      format(indent, cnc_hole_bsw, cnc_hole_tne))
+	    print("{0}extra_start_bsw={1:i} extra_start_tne={2:i}".
+	      format(indent, extra_start_bsw, extra_start_tne))
+
+	# Push a bunch of interesting points through the *rotate_transform*:
+	rotated_cnc_part_bsw    = rotate_transform * cnc_part_bsw
+	rotated_cnc_part_center = rotate_transform * cnc_part_center
+	rotated_cnc_part_tne    = rotate_transform * cnc_part_tne
+	rotated_cnc_volume      = (rotated_cnc_part_tne - rotated_cnc_part_bsw).absolute()
+	rotated_cnc_hole_bsw    = rotate_transform * cnc_hole_bsw
+	rotated_cnc_hole_tne    = rotate_transform * cnc_hole_tne
+	rotated_extra_start_bsw = rotate_transform * extra_start_bsw
+	rotated_extra_start_tne = rotate_transform * extra_start_tne
+	if trace_detail >= 3:
+	    print("{0}rotated_cnc_part_bsw={1:i} rotated_cnc_part_tne={2:i}".
+	      format(indent, rotated_cnc_part_bsw, rotated_cnc_part_tne))
+	    print("{0}rotated_cnc_volume={1:i}".
+	      format(indent, rotated_cnc_volume))
+	    print("{0}rotated_cnc_part_center={1:i} == cnc_part_center={2:i}".
+	      format(indent, rotated_cnc_part_center, cnc_part_center))
+	    print("{0}rotated_cnc_hole_bsw={1:i} rotated_cnc_hole_tne={2:i}".
+	      format(indent, rotated_cnc_hole_bsw, rotated_cnc_hole_tne))
+	    print("{0}rotated_extra_start_bsw={1:i} rotated_extra_start_tne={2:i}".
+	      format(indent, rotated_extra_start_bsw, rotated_extra_start_tne))
+
+	# Fixup the corners after the *rotate_transform*:
+	fixed_cnc_part_bsw, fixed_cnc_part_tne       = \
+	  rotated_cnc_part_bsw.minimum_maximum(rotated_cnc_part_tne)
+	fixed_cnc_part_volume = fixed_cnc_part_tne - fixed_cnc_part_bsw
+	fixed_cnc_hole_bsw, fixed_cnc_hole_tne       = \
+	  rotated_cnc_hole_bsw.minimum_maximum(rotated_cnc_hole_tne)
+	fixed_extra_start_bsw, fixed_extra_start_tne = \
+	  rotated_extra_start_bsw.minimum_maximum(rotated_extra_start_tne)
+	if trace_detail >= 3:
+	    print("{0}fixed_cnc_part_bsw={1:i} fixed_cnc_part_tne={2:i}".
+	      format(indent, fixed_cnc_part_bsw, fixed_cnc_part_tne))
+	    print("{0}fixed_cnc_part_volume={1:i}".
+	      format(indent, fixed_cnc_part_volume))
+	    print("{0}fixed_cnc_hole_bsw={1:i} fixed_cnc_hole_tne={2:i}".
+	      format(indent, fixed_cnc_hole_bsw, fixed_cnc_hole_tne))
+	    print("{0}fixed_extra_start_bsw={1:i} fixed_extra_start_tne={2:i}".
+	      format(indent, fixed_extra_start_bsw, fixed_extra_start_tne))
+	
+	cnc_hole_upper_left = P(fixed_cnc_hole_bsw.x, fixed_cnc_hole_tne.y, zero)
+	corner_offset = P(column * hole_pitch, -row * hole_pitch, zero)
+	final_extra_start_bsw = fixed_extra_start_bsw - cnc_hole_upper_left + corner_offset
+	final_extra_start_tne = fixed_extra_start_tne - cnc_hole_upper_left + corner_offset
+	if trace_detail >= 3:
+	    print("{0}cnc_hole_upper_left={1:i} corner_offset={2:i}".
+	     format(indent, cnc_hole_upper_left, corner_offset))
+	    print("{0}final_extra_start_bsw={1:i} final_extra_start_tne={2:i}".
+	      format(indent, final_extra_start_bsw, final_extra_start_tne))
+
+	# Wrap up any requested *tracing* and return results:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=Tooling_Plate._extra_material_get('{1}', {2}, {3}, {4:d})=>{5:i}, {6:i}".
+	      format(indent, mount._name_get(), column, row, rotate,
+	      final_extra_start_bsw, final_extra_start_tne))
+	return final_extra_start_bsw, final_extra_start_tne
+
     def _hole_diameter_get(self):
 	""" *Tooling_Plate*: Return the diameter of the mounting holes for the *Tooling_Plate*
 	    object (i.e. *self*.)
@@ -20897,7 +21193,7 @@ class Transform:
 
 class Vice:
 
-    def __init__(self, volume, parallels):
+    def __init__(self, name, volume, parallels):
 	""" *Vice*: Initialize the *Vice* object (i.e. *self*) to contain *volume*,
 	    "parallels_thickness", and "parallels.  *volume* is a point (i.e. *P*)
 	    that specifies the vice volume dimensions between the vice jaws.
@@ -20907,12 +21203,14 @@ class Vice:
 	vice = self
 
 	# Verify argument types:
+	assert isinstance(name, str) and not ' ' in name
 	assert isinstance(volume, P)
 	assert isinstance(parallels, Parallels)
 
 	# Load up the *Vice* object (i.e. *self*):
-	vice._volume = volume
+	vice._name = name
 	vice._parallels = parallels
+	vice._volume = volume
 
     def _jaw_volume_get(self):
 	""" *Vice*: Return the jaw volume of the *Vice* object (i.e. *self*).
@@ -20945,7 +21243,8 @@ class Vice:
 	# Perform any requested *tracing*:
 	if tracing >= 0:	
 	    indent = ' ' * tracing
-	    prrint("{0}=>Vice._coordinates_vrml_append('{1}')".format(indent, vrml._name_get()))
+	    print("{0}=>Vice._coordinates_vrml_append('{1}', '{2}')".
+	      format(indent, vice._name, vrml._name_get()))
 
 	# Define some constants:
 	zero = L()
@@ -20971,7 +21270,8 @@ class Vice:
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    prrint("{0}<=Vice._coordinates_vrml_append('{1}')".format(indent, vrml._name_get()))
+	    print("{0}<=Vice._coordinates_vrml_append('{1}', '{2}')".
+	      format(indent, vice._name, vrml._name_get()))
 
 class VRML:
     """ *VRML* is used to output VRML (Virtual Reality Markup Language) file.  """
