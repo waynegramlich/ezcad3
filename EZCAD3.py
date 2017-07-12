@@ -1,4 +1,4 @@
-####################################################################################################
+###################################################################################################
 #<-----------------------------------------100 characters----------------------------------------->#
 #
 # EZCAD Coding Standards/Style
@@ -5660,7 +5660,8 @@ class Multi_Mounts:
     def _extra_start_dowel_pin_get(self, tooling_plate, tracing=-1000000):
 	""" *Multi_Mounts*: Return the extra material corners and dowel pin location for
 	    the *Multi_Mounts* object (i.e. *self*.)  The extra material corners are relative
-	    to the (0, 0) hole of *tooling_plate*.  The dowel pin
+	    to the (0, 0) hole of *tooling_plate*.  The dowel pin result is based relative
+	    to the tooling plate (0, 0) mounting hole and will need to be adjusted appropriately.
 	"""
 
 	# Use *multi_mounts* instead of *self*:
@@ -5692,7 +5693,10 @@ class Multi_Mounts:
 	    # Compute the extra material corners centered on hole (0, 0) of the *tooling_plate*:
 	    extra_start_bsw, extra_start_tne = \
 	      tooling_plate._extra_material_get(mount, column, row, rotate, tracing = tracing + 1)
-
+	    if trace_detail >=2:
+		print("{0}[{1}]: extra_start_bsw={2:i} extra_start_tne={3:i}".
+		  format(indent, index, extra_start_bsw, extra_start_tne))
+		
 	    # Save the results into *multi_mount* (for debugging):
 	    multi_mount._extra_set(extra_start_bsw, extra_start_tne)
 
@@ -5707,15 +5711,18 @@ class Multi_Mounts:
 		left_most_index = index
 		left_most_bsw = extra_start_bsw
 		left_most_tne = extra_start_tne
+	        if trace_detail >=2:
+		    print("{0}[{1}]: left_most_bsw={2:i} left_most_tne={3:i}".
+		  format(indent, index, left_most_bsw, left_most_tne))
 	assert index >= 0, \
 	  "No left most edge found for Multi_Mounts '{0}'".format(multi_mounts._name)
-
-	# Create the *dowel_pin* point:
-	dowel_pin = P(left_most_bsw.x, (left_most_bsw.y + left_most_tne.y)/2, left_most_bsw.x)
 
 	# Grab the final values from *bounding_box*:
 	final_bsw = bounding_box.bsw_get()
 	final_tne = bounding_box.tne_get()
+
+	# Create the *dowel_pin* point:
+	dowel_pin = P(final_bsw.x, (left_most_bsw.y + left_most_tne.y)/2, left_most_bsw.z)
 
 	# Perform any requested *tracing* and return the final corners and the left-most index:
 	if tracing >= 0:
@@ -6504,8 +6511,17 @@ class Operation_Dowel_Pin(Operation):
 	cnc_plunge_point = operation_dowel_pin._plunge_point
 	tool = operation_dowel_pin._tool
 	tip_depth = tool._tip_depth_get()
-	#cnc_top_surface_z = operation_dowel_pin._top_surface_z
-	#cnc_xy_rapid_safe_z = operation_dowel_pin._xy_rapid_safe_z
+
+	zero = L()
+	radius = diameter / 2
+	radius_offset = P(radius, zero, zero)
+	tip_offset = P(zero, zero, -tip_depth)
+	if cnc_plunge_point.x < cnc_dowel_point.x:
+	    # *plunge_point* is to the left of *dowel_point*:
+	    actual_dowel_point = cnc_dowel_point - radius_offset + tip_offset
+	else:
+	    # *plunge_point* is to the right of *dowel_point*:
+	    actual_dowel_point = cnc_dowel_point + radius_offset + tip_offset
 
 	# Define the speed and feed for these operations:
 	ipm10 = Speed(in_per_sec=10.0)
@@ -6513,14 +6529,6 @@ class Operation_Dowel_Pin(Operation):
 
 	# Output the *operation_dowel_pin* comment supplied by the user:
 	code._line_comment(comment)
-
-	# Output some dimenions for G-code debugging purposes:
-	#code._line_comment(
-	#  "{0} Initial Dimensions: {1} x {2} x {3}".format(part._name_get(),
-	#  part._dx_original_get(), part._dy_original_get(), part._dz_original_get()))
-
-	#call d@(form@("part:%v% cnc_gen@Op_Dowel_Pin:%i% %i%\n\") %
-	#  f@(part.name) % f@(plunge_x) / f@(plunge_y))
 
 	# Rapid over to the plunge point:
 	code._xy_rapid_safe_z_force(ipm10, rpm0)
@@ -6533,16 +6541,16 @@ class Operation_Dowel_Pin(Operation):
 	code._comment("Operator may check that Z-safe is correct")
 	code._command_end()
 
-	# Output some information about the *dowel_pin* for G-code debugging:
+	# Output some information about the *dowel_point* for G-code debugging:
 	#code._line_comment(
 	#  "z_stop={0:i} tip_depth={1:i}".format(z_stop, tip_depth))
 
 	# Move slowly down to *z_stop*:
-	code._z_feed(ipm10, rpm0, cnc_plunge_point.z, "dowel_pin")
+	code._z_feed(ipm10, rpm0, cnc_plunge_point.z, "dowel_pin		"	)
 
-	# Move slowly to (*dowel_x*, *dowel_y*).  This may cause the material in the
+	# Move slowly to (*dowel_pin_x*, *dowel_pin_y*).  This may cause the material in the
 	# vice to slide over:
-	code._xy_feed(ipm10, rpm0, cnc_dowel_point.x, cnc_dowel_point.y)
+	code._xy_feed(ipm10, rpm0, actual_dowel_point.x, actual_dowel_point.y)
 
 	# Now pause again, to let the operator move piece up against the
 	# the dowel pin (if it is not already up against there):
@@ -6563,7 +6571,7 @@ class Operation_Dowel_Pin(Operation):
 	tool_name = tool._name_get()
 	tip_vrml_lines_name = "{0}__{1}__{2}_Dowel_Tip".format(part_name, mount_name, tool_name)
 	tip_vrml_lines = VRML_Lines(tip_vrml_lines_name)
-	tool._vrml_append(tip_vrml_lines, 2, cnc_dowel_point, tip_depth, tracing + 1)
+	tool._vrml_append(tip_vrml_lines, 2, actual_dowel_point, tip_depth, tracing + 1)
 	cnc_vrml._append(tip_vrml_lines)
 
 	# Wrap-up any *tracing*:
@@ -10253,7 +10261,7 @@ class Part:
 	      format(indent, part._name, stl_vrml._name_get()))
 	return stl_vrml
 
-    def _tools_dowel_pin_search(self, tracing):
+    def _tools_dowel_pin_search(self, tracing=-1000000):
 	""" *Part*: Find and return a *Tool_Dowel_Pin* object. """
 
 	# Verify argument types:
@@ -10867,10 +10875,10 @@ class Part:
 	if tracing < 0 and part._tracing >= 0:
 	    tracing = part._tracing
 	if tracing >= 0:
-	    trace_detail = 1
 	    indent = ' ' * tracing
 	    print("{0}=>Part.dowel_pin('{1}', '{2}', {3:i}, {4:i})".
 	      format(indent, part._name, comment, dowel_point, plunge_point))
+	    trace_detail = 1
 
 	# Only generate the operation in CNC generate mode:
 	ezcad = part._ezcad
@@ -10884,7 +10892,6 @@ class Part:
 	    feed_speed = tool_dowel_pin._feed_speed_get()
 	    maximum_z_depth = tool_dowel_pin._maximum_z_depth_get()
 	    spindle_speed = tool_dowel_pin._spindle_speed_get()
-	    tip_depth = tool_dowel_pin._tip_depth_get()
 
 	    # This chunk of code figures how deep the part is in the mount position.
 	    # It relies on the fact that we know where machine origin lands on the top
@@ -10896,33 +10903,13 @@ class Part:
 	    half_part_dz = cnc_center_point.length()
 	    part_dz = 2 * half_part_dz
 
-	    # Compute *tip_z* which is how deep down the tip of the dowel pin is allowed to go:
-	    mount_translate_point = mount._mount_translate_point_get()
-	    top_surface_z = mount_translate_point.z
-	    maximum_tip_z = top_surface_z - maximum_z_depth
-	    preferred_tip_z = top_surface_z - part_dz - tip_depth
-	    tip_z = maximum_tip_z.maximum(preferred_tip_z)
-	    vice_safe_z = L(inch=0.100)
-	    if tip_z < vice_safe_z:
-                tip_z = vice_safe_z
-
-	    # Figure out which size of *dowel_point* we are on:
-	    dowel_point_x = dowel_point.x
-	    dowel_point_y = dowel_point.y
-	    plunge_point_x = plunge_point.x
-	    plunge_point_y = plunge_point.y
-	    radius = diameter / 2
-	    if plunge_point_x < dowel_point_x:
-		# *plunge_point* is to the left of *dowel_point*:
-		dowel_point_x -= radius
-	    else:
-		# *plunge_point* is to the right of *dowel_point*:
-		dowel_point_x += radius
-
 	    # Now create the final *cnc_dowel_point* and *cnc_plunge_point*:
-	    cnc_dowel_point = P(dowel_point_x, dowel_point_y, tip_z)
-	    cnc_plunge_point = P(plunge_point_x, plunge_point_y, tip_z)
-	    if trace_detail > 0:
+	    # *tip_depth* is a total kludge:
+	    mount_translate_point = mount._mount_translate_point_get()
+	    tip_z = mount_translate_point.z - part_dz
+	    cnc_dowel_point = P(dowel_point.x, dowel_point.y, tip_z)
+	    cnc_plunge_point = P(plunge_point.x, plunge_point.y, tip_z)
+	    if trace_detail >= 1:
 		print("{0}dowel_pin('{1}' cnc_dowel_point={2:i} cnc_plunge_point={3:i}".
 		  format(indent, part._name, cnc_dowel_point, cnc_plunge_point))
 
@@ -13995,19 +13982,21 @@ class Part:
 
 	self._tool_preferred = tool_name
 
-    def tooling_plate_drill(self, tooling_plate_mount_name, columns, rows, skips, tracing=-1000000):
+    def tooling_plate_drill(self, plate_mount_name, columns, rows, skips, tracing=-1000000):
 	""" *Part*: Force the drilling of tooling plate mounting holes in the *Part* object
-	    (i.e. *self*).  *tooling_plate_mount_name* specifies the name of the *Mount* object
+	    (i.e. *self*).  *plate_mount_name* specifies the name of the *Mount* object
 	    that is created.  *columns* and *rows* specify a grid of holes to be drilled in the
 	    *Part* object.  *skips* is a list of grid locations in the grid that will *not* be
 	    drilled.  Thus, an empty  *skips* list causes all grid locations to be drilled.
 	"""
 
+	# To save on typing, "tooling_plate" is shortened down to "plate*:
+
 	# Use *part* instead of *self:
 	part = self
 
 	# Verify argument types:
-	assert isinstance(tooling_plate_mount_name, str) and not ' ' in tooling_plate_mount_name
+	assert isinstance(plate_mount_name, str) and not ' ' in plate_mount_name
 	assert isinstance(columns, tuple) or isinstance(columns, list)
 	assert isinstance(rows, tuple) or isinstance(rows, list)
 	assert isinstance(skips, tuple) or isinstance(skips, list)
@@ -14032,66 +14021,64 @@ class Part:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.tooling_plate_drill('{1}', '{2}', {3}, {4}, {5})".format(
-	      indent, part._name, tooling_plate_mount_name, rows, columns, skips))
-	    trace_detail = 1
+	      indent, part._name, plate_mount_name, rows, columns, skips))
+	    trace_detail = 3
 
+	# Only do stuff if in *ezcad* is in *cnc_mode*:
 	ezcad = part._ezcad_get()
 	if ezcad._cnc_mode:
-	    # Grab the *tooling_plate* from *shop* and some associated values::
+	    # Grab the *plate* from *shop* and some associated values.
 	    shop = part._shop_get()
-	    tooling_plate = shop._tooling_plate_get()
-	    tooling_plate_dx = tooling_plate._dx_get()
-	    tooling_plate_dy = tooling_plate._dy_get()
-	    tooling_plate_dz = tooling_plate._dz_get()
-	    tooling_plate_rows = tooling_plate._rows_get()
-	    tooling_plate_columns = tooling_plate._columns_get()
-	    tooling_plate_drill_diameter =  tooling_plate._drill_diameter_get(part._material)
-	    tooling_plate_hole_pitch = tooling_plate._hole_pitch_get()
-	    tooling_plate_spacer_dz = tooling_plate._spacer_dz_get()
-	    tooling_plate_spacer_width = tooling_plate._spacer_width_get()
+	    plate = shop._tooling_plate_get()
+	    plate_dx             = plate._dx_get()
+	    plate_dy             = plate._dy_get()
+	    plate_dz             = plate._dz_get()
+	    plate_rows           = plate._rows_get()
+	    plate_columns        = plate._columns_get()
+	    plate_drill_diameter = plate._drill_diameter_get(part._material)
+	    plate_hole_pitch     = plate._hole_pitch_get()
+	    plate_spacer_dz      = plate._spacer_dz_get()
+	    plate_spacer_width   = plate._spacer_width_get()
 
 	    # Grab the *vice* from *shop* and some associated values:
 	    vice = shop._vice_get()
-	    vice_jaw_volume = vice._jaw_volume_get()
+	    vice_jaw_volume    = vice._jaw_volume_get()
 	    vice_jaw_volume_dx = vice_jaw_volume.x
 	    vice_jaw_volume_dy = vice_jaw_volume.y
 	    vice_jaw_volume_dz = vice_jaw_volume.z
-	    parallels = vice._parallels_get()
+	    parallels          = vice._parallels_get()
 	    
+	    # There are two *Mount* objects in this code.  *vice_mount* refers to the previously
+	    # specified mount of the material directly in the *vice*.  Shortly below, *tool_mount*
+	    # is created to specify how the material is mounted on the tooling *plate*:
+            
 	    # We need to know the how the *part* bounding box lays out after the
 	    # *top_surface_transform* has been applied:
-	    bsw = part.bsw
-	    tne = part.tne
-	    mount = part._current_mount
-	    top_surface_transform = mount._top_surface_transform
-	    transformed_bsw = top_surface_transform * bsw
-	    transformed_tne = top_surface_transform * tne
-	    minimum_x, maximum_x = transformed_bsw.x.minimum_maximum(transformed_tne.x)
-	    minimum_y, maximum_y = transformed_bsw.y.minimum_maximum(transformed_tne.y)
-	    minimum_z, maximum_z = transformed_bsw.z.minimum_maximum(transformed_tne.z)
-	    part_dx = maximum_x - minimum_x
-	    part_dy = maximum_y - minimum_y
-	    part_dz = maximum_z - minimum_z
-	    if trace_detail >= 1:
-		print("{0}bsw={1:i} tne={2:i}".
-		  format(indent, bsw, tne))
-		print("{0}minimum_x={1:i} maximum_x={2:i}".
-		  format(indent, minimum_x, maximum_x))
-		print("{0}minimum_y={1:i} maximum_y={2:i}".
-		  format(indent, minimum_y, maximum_y))
-		print("{0}minimum_z={1:i} maximum_z={2:i}".
-		  format(indent, minimum_z, maximum_z))
+	    part_bsw = part.bsw
+	    part_tne = part.tne
+	    vice_mount = part._current_mount_get()
+	    top_surface_transform = vice_mount._top_surface_transform_get()
+	    transformed_part_bsw = top_surface_transform * part_bsw
+	    transformed_part_tne = top_surface_transform * part_tne
+	    fixed_part_bsw, fixed_part_tne = \
+	      transformed_part_bsw.minimum_maximum(transformed_part_tne)
+	    fixed_part_volume = fixed_part_tne - fixed_part_bsw
+	    part_dx = fixed_part_volume.x
+	    part_dy = fixed_part_volume.y
+	    part_dz = fixed_part_volume.z
+	    if trace_detail >= 2:
+		print("{0}part_bsw={1:i} part_tne={2:i}".
+		  format(indent, part_bsw, part_tne))
+		print("{0}transformed_part_bsw={1:i} transformed_part_tne.{2:i}".
+		  format(indent, transformed_part_bsw, transformed_part_tne))
+		print("{0}fixed_part_bsw={1:i} fixed_part_tne.{2:i}".
+		  format(indent, fixed_part_bsw, fixed_part_tne))
 		print("{0}part_dx={1:i} part_dy={2:i} part_dz={3:i}".
 		  format(indent, part_dx, part_dy, part_dz))
 
 	    # Figure out which *parallel_height* to use from *parallels* to use to mount
 	    # the *tooling_plate*:
-	    parallels_heights = sorted(parallels._heights_get())
-	    selected_parallel_height = parallels_heights[0]
-	    for parallel_height in parallels_heights:
-		if parallel_height > selected_parallel_height and \
-		  parallel_height + part_dz <= vice_jaw_volume_dz:
-		    selected_parallel_height = parallel_height
+	    selected_parallels_height = parallels._select(part_dz, vice, tracing = tracing + 1)
 
 	    # Load up *skips_table* with the (row, column) pairs that are not to be drilled:
 	    skips_table = {}
@@ -14117,11 +14104,11 @@ class Part:
 	    # Make sure that we do not try to use a hole that does not exist:
 	    assert minimum_column >= 0, \
 	      "Negative column {0} in {1} not allowed".format(minimum_column, columns)
-	    assert maximum_column < tooling_plate_columns, \
+	    assert maximum_column < plate_columns, \
 	      "Column {0} in {1} too big".format(maximum_column, columns)
 	    assert minimum_row >= 0, \
 	      "Negative row {0} in {1} not allowed".format(minimum_row, rows)
-	    assert maximum_row < tooling_plate_rows, \
+	    assert maximum_row < plate_rows, \
 	      "Row {0} in {1} too big".format(maximum_row, rows)
 
 	    # Compute the *rows_spanned* and *columns_spanned*:
@@ -14129,13 +14116,13 @@ class Part:
 	    columns_spanned = maximum_column - minimum_column
 
 	    # Figure out where upper left tooling hole is located:
-	    upper_left_x = -((2 * minimum_column + columns_spanned) * tooling_plate_hole_pitch) / 2
-	    upper_left_y = -((2 * minimum_row  + rows_spanned) * tooling_plate_hole_pitch) / 2
+	    upper_left_x = -((2 * minimum_column + columns_spanned) * plate_hole_pitch) / 2
+	    upper_left_y = -((2 * minimum_row  + rows_spanned) * plate_hole_pitch) / 2
 	    zero = L()
 
 	    # Drill the *tooling_plate* holes at the intersections of *rows* and *columns*,
 	    # but ommitting any that are in *skips*:
-	    tooling_plate_holes = []
+	    plate_holes = []
 	    reverse_top_surface_transform = top_surface_transform.reverse()
 	    for row in rows:
 		for column in columns:
@@ -14144,19 +14131,19 @@ class Part:
 			# Figure out the *start* and *stop* points for the drill as if the
 			# part is centered immediately under the origin (i.e. after
 			# *top_sufrace_transform* is applied to the entire *part*.):
-			x = upper_left_x + tooling_plate_hole_pitch * column
-			y = upper_left_y + tooling_plate_hole_pitch * row
+			x = upper_left_x + plate_hole_pitch * column
+			y = upper_left_y + plate_hole_pitch * row
 			start = P(x, y, zero)
 			stop = P(x, y, -part_dz)
 
-			tooling_plate_holes.append(column_row)
+			plate_holes.append(column_row)
 
 			# Drill the hole using *reversed_start* and *reversed_stop*:
 			reversed_start = reverse_top_surface_transform * start
 			reversed_stop = reverse_top_surface_transform * stop
 			part.hole("Tooling plate hole ({0}, {1})".format(row, column),
-			  tooling_plate_drill_diameter, reversed_start, reversed_stop, "t",
-			  tracing=tracing+1)
+			  plate_drill_diameter, reversed_start, reversed_stop, "t",
+			  tracing = tracing+1)
 			if trace_detail >= 1:
 			    print(("{0}column={1} row={2} " +
 			      "start={3:i} stop={4:i} rstart={5:i} rstop={6:i}").format(
@@ -14167,60 +14154,58 @@ class Part:
 	    # computed here is stuffed into the *tooling_plate* object.
 
 	    # Identify the location of (0, 0) *tooling_plate* hole:
-	    tooling_plate_columns_dx = (tooling_plate_columns - 1) * tooling_plate_hole_pitch
-	    tooling_plate_rows_dy = (tooling_plate_rows - 1) * tooling_plate_hole_pitch
-	    tooling_plate_edge_dx = (tooling_plate_dx - tooling_plate_columns_dx) / 2
-	    tooling_plate_edge_dy = (tooling_plate_dy - tooling_plate_rows_dy) / 2
+	    plate_columns_dx = (plate_columns - 1) * plate_hole_pitch
+	    plate_rows_dy    = (plate_rows - 1) * plate_hole_pitch
+	    plate_edge_dx    = (plate_dx - plate_columns_dx) / 2
+	    plate_edge_dy    = (plate_dy - plate_rows_dy) / 2
 
 	    # Determine which parallel to use to mount the tooling plate such that
 	    # the top surface of the tooling plate is near the top surface the vice:
-	    selected_parallel_height = parallels_heights[0]
-	    for parallel_height in parallels_heights:
-		if parallel_height > selected_parallel_height and \
-		  parallel_height + tooling_plate_dz <= vice_jaw_volume_dz:
-		    selected_parallel_height = parallel_height
+	    selected_parallel_height = parallels._select(plate_dz, vice, tracing = tracing + 1)
 
 	    # The *tooling_plate* is placed so that its upper left corner touchs the upper left
 	    # jaw vice corner.  The part is placed so that it is centered in between the
 	    # minimum/maximum number of spanned rows/colums        
-	    x = tooling_plate_edge_dx + minimum_column * tooling_plate_hole_pitch + \
-	      (columns_spanned * tooling_plate_hole_pitch) / 2
-	    y = -(tooling_plate_edge_dy + minimum_row * tooling_plate_hole_pitch +
-	      (rows_spanned * tooling_plate_hole_pitch) / 2)
-	    z = selected_parallel_height + tooling_plate_dz + tooling_plate_spacer_dz + part_dz
-	    tooling_plate_translate_point = P(x, y, z)
+	    x = plate_edge_dx + minimum_column * plate_hole_pitch + \
+	      (columns_spanned * plate_hole_pitch) / 2
+	    y = -(plate_edge_dy + minimum_row * plate_hole_pitch +
+	      (rows_spanned * plate_hole_pitch) / 2)
+	    z = selected_parallel_height + plate_dz + plate_spacer_dz + part_dz
+	    plate_translate_point = P(x, y, z)
 	    top_surface_safe_z = z
 	    xy_rapid_safe_z = top_surface_safe_z + L(inch=0.500)
 
 	    # Create the *tooling_plate_mount*:
-	    tooling_plate_mount = Mount(tooling_plate_mount_name, part, top_surface_transform,
-	      tooling_plate_translate_point, top_surface_safe_z, xy_rapid_safe_z, True,
+	    plate_mount = Mount(plate_mount_name, part, top_surface_transform,
+	      plate_translate_point, top_surface_safe_z, xy_rapid_safe_z, True,
 	      tracing = tracing + 1)
 
 	    # Deal with extra material:
 	    vice_mount = part._current_mount_get()
 	    vice_mount_cnc_transform = vice_mount._cnc_transform_get()
-	    vice_extra_start_bsw, vice_extra_start_tne = vice_mount._extra_start_get()
 	    reverse_vice_cnc_transform = vice_mount_cnc_transform.reverse()
-	    part_start_bsw = reverse_vice_cnc_transform * vice_extra_start_bsw
-	    part_start_tne = reverse_vice_cnc_transform * vice_extra_start_tne
-	    cnc_transform = tooling_plate_mount._cnc_transform_get()
-	    tooling_start_bsw = cnc_transform * part_start_bsw
-	    tooling_start_tne = cnc_transform * part_start_tne
-	    tooling_plate_mount._extra_start_set(tooling_start_bsw, tooling_start_tne)
-	    tooling_plate_mount._extra_stop_set( tooling_start_bsw, tooling_start_tne)
+	    plate_mount_cnc_transform = plate_mount._cnc_transform_get()
 
-	    # Stuff the extra material information from *part* into *tooling_plate_mount*:
-	    #extra_start_bsw, extra_start_tne = part._extra_start_fetch(top_surface_transform)
-	    #tooling_plate_mount._extra_start_set(extra_start_bsw, extra_start_tne)
-	    #tooling_plate_mount._extra_stop_set( extra_start_bsw, extra_start_tne)
-	    tooling_plate_mount._tooling_plate_holes_set(tooling_plate_holes, tracing = tracing + 1)
-	    mount._tooling_plate_holes_set(tooling_plate_holes, tracing = tracing + 1)
+	    vice_extra_start_bsw, vice_extra_start_tne = vice_mount._extra_start_get()
+	    part_extra_start_bsw = reverse_vice_cnc_transform * vice_extra_start_bsw
+	    part_extra_start_tne = reverse_vice_cnc_transform * vice_extra_start_tne
+	    transformed_extra_start_bsw = plate_mount_cnc_transform * part_extra_start_bsw
+	    transformed_extra_start_tne = plate_mount_cnc_transform * part_extra_start_tne
+	    plate_extra_start_bsw, plate_extra_start_tne = \
+	      transformed_extra_start_bsw.minimum_maximum(transformed_extra_start_tne)
+	    plate_mount._extra_start_set(plate_extra_start_bsw, plate_extra_start_tne)
+	    plate_mount._extra_stop_set( plate_extra_start_bsw, plate_extra_start_tne)
+
+	    # Remember the *plate_holes* in both *vice_mount* and *plate_mount*.
+	    # *vice_mount* is needed for multi-mounting:
+	    vice_mount._tooling_plate_holes_set( plate_holes, tracing = tracing + 1)
+	    plate_mount._tooling_plate_holes_set(plate_holes, tracing = tracing + 1)
 
 	    # Compute the *dowel_point*:
 	    #extra_dx = extra_start_tne.x - extra_start_bsw.x
 	    extra_dx = zero
-	    dowel_point = P(x - extra_dx/2, y, z - part_dz)
+	    dowel_point = P(plate_extra_start_bsw.x, \
+	      (plate_extra_start_bsw.y + plate_extra_start_tne.y)/2, plate_extra_start_bsw.z)
 
 	    # Specify which *spacers* to visualize:
 	    spacers = []
@@ -14232,25 +14217,25 @@ class Part:
 		# Orient the spacers vertically:
 		for column in columns:
 		    spacers.append( (column, minimum_row, column, maximum_row) )
-	    tooling_plate_mount._spacers_set(spacers)
+	    plate_mount._spacers_set(spacers)
 	    if trace_detail >= 1:
 		print("{0}spacers={1}".format(indent, spacers))
 
 	    # Now remember where to mount the part with the tooling plate:
-	    tooling_plate._mount_reset()
-	    tooling_plate._dowel_point_set(dowel_point)
-	    tooling_plate._mount_set(tooling_plate_mount)
-	    tooling_plate._parallels_height_set(selected_parallel_height)
+	    plate._mount_reset()
+	    plate._dowel_point_set(dowel_point)
+	    plate._mount_set(plate_mount)
+	    plate._parallels_height_set(selected_parallel_height)
 	    if trace_detail >= 1:
 		print("{0}parallels_height_set({1:i})".format(indent, selected_parallel_height))
-	    tooling_plate._spacers_set(spacers)
-	    tooling_plate._xy_rapid_safe_z_set(xy_rapid_safe_z)
+	    plate._spacers_set(spacers)
+	    plate._xy_rapid_safe_z_set(xy_rapid_safe_z)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}<=Part.tooling_plate_drill('{1}', '{2}', {3}, {4}, {5})".format(
-	      indent, part._name, tooling_plate_mount_name, rows, columns, skips))
+	      indent, part._name, plate_mount_name, rows, columns, skips))
 
     def tooling_plate_mount(self, comment, tracing=-100000):
 	""" *Part*: Cause the mounting plate that holds the *Part* object (i.e. *self*)
@@ -14296,7 +14281,8 @@ class Part:
 	    # Perform a dowel pin operation:
 	    zero = L()
 	    plunge_point = dowel_point - P(L(inch=1.000), zero, zero)
-	    part.dowel_pin("", dowel_point, plunge_point, tracing = tracing + 1)
+	    part.dowel_pin("tooling plate dowel pin",
+	      dowel_point, plunge_point, tracing = tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -15224,11 +15210,11 @@ class Part:
 	is_tooling_plate = multi_mounts._is_tooling_plate_get(tracing = tracing + 1)
 
 	# Determine how the extra material is layed out relative to the (0, 0) *tooling_plate* hole:
-	hole00_extra_start_bsw, hole00_extra_start_tne, dowel_pin = \
+	hole00_extra_start_bsw, hole00_extra_start_tne, dowel_pin00 = \
 	  multi_mounts._extra_start_dowel_pin_get(tooling_plate, tracing = tracing + 1)
 	if trace_detail >= 2:
-	    print("{0}hole00_extra_start_bsw{1:i} hole00_extra_start_tne={2:i} dowel_pin={3:i}".
-	      format(indent, hole00_extra_start_bsw, hole00_extra_start_tne, dowel_pin))
+	    print("{0}hole00_extra_start_bsw{1:i} hole00_extra_start_tne={2:i} dowel_pin00={3:i}".
+	      format(indent, hole00_extra_start_bsw, hole00_extra_start_tne, dowel_pin00))
 
 	# Define some constants:
 	zero = L()
@@ -15256,7 +15242,10 @@ class Part:
 	    hole_0_0 = P(tooling_plate_extra_dx / 2, -tooling_plate_extra_dy / 2, zero)
 	else:
 	    hole_0_0 = P(-hole00_extra_start_bsw.x, -hole00_extra_start_tne.y, zero)
-	    #hole_0_0 = P(zero, zero, zero)
+	dowel_pin = dowel_pin00 + hole_0_0
+	if tracing >= 2:
+	    print("{0}hole_0_0={1:i} dowel_pin={2:i}".
+	      format(indent, hole_0_0, dowel_pin, dowel_pin))
 
 	if trace_detail >= 2:
 	    print("{0}tooling_plate: columns_dx={1:i} rows_dy={2:i}".
@@ -15483,8 +15472,8 @@ class Part:
 		if combined_multi_mount == None:
 		    origin = P(zero, zero, zero)
 		    combined_multi_mount_name = "{0}_Combined_Multi_Mount".format(name)
-		    combined_multi_mount = \
-		      Mount(combined_multi_mount_name, part, Transform(), origin, zero, zero, True)
+		    combined_multi_mount = Mount(combined_multi_mount_name,
+		      part, Transform(), origin, top_surface_safe_z, xy_rapid_safe_z, True)
 		    combined_operations = part._mount_register(combined_multi_mount)
 		    comment = ""
 		    operation_multi_mount = Operation_Multi_Mount(part, multi_mounts,
@@ -15493,10 +15482,22 @@ class Part:
 		    combined_operations._append(combined_multi_mount,
 		      operation_multi_mount, tracing = tracing + 1)
 
+		    # Create the dowel pin operation:
+		    dowel_pin_tool = part._tools_dowel_pin_search(tracing = tracing)
+		    assert isinstance(dowel_pin_tool, Tool_Dowel_Pin)
+		    plunge_point = dowel_pin + P(L(inch=-0.700), zero, zero)
+		    operation_dowel_pin = Operation_Dowel_Pin(part, "Multi Mount Dowel Pin",
+		      0, dowel_pin_tool, Operation.ORDER_DOWEL_PIN, None,
+		      dowel_pin_tool._feed_speed_get(), dowel_pin_tool._spindle_speed_get(),
+		      dowel_pin_tool._diameter_get(), dowel_pin, plunge_point,
+		      tracing = tracing + 1)
+		    combined_operations._append(combined_multi_mount,
+		      operation_dowel_pin, tracing = tracing + 1)
+
 		# Copy the operations from *multi_mount_mount_operations* to *combined_operations*
 		# skipping the *Operation_Mount* and *Operation_Dowel_Pin* operations:
 		combined_operations._extend(combined_mount,
-                  multi_mount_mount_operations, "MD", tracing = tracing + 1)
+		  multi_mount_mount_operations, "MD", tracing = tracing + 1)
 
 	    # Stuff the bounding box into *combined_multi_mount* for CNC visualization:
 	    extra_start_bsw = extra_bounding_box.bsw_get()
@@ -15506,9 +15507,9 @@ class Part:
 		print("{0}mount_name='{1}' extra_start_bsw={2:i} extra_start_tne={3:i}".
 		  format(indent, combined_multi_mount._name_get(),extra_start_bsw, extra_start_tne))
 		combined_operations._show("Multi Mount operations")
-	    temporary_bsw, temporary_tne = combined_multi_mount._extra_start_get()
-	    assert temporary_bsw == extra_start_bsw
-	    assert temporary_tne == extra_start_tne
+	    #temporary_bsw, temporary_tne = combined_multi_mount._extra_start_get()
+	    #assert temporary_bsw == extra_start_bsw
+	    #assert temporary_tne == extra_start_tne
 	else:
 	    assert False, \
 	      "dx_dy mode not supported yet for Multi_Mounts '{0}'".format(multi_mounts._name_get())
