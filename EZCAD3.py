@@ -5403,16 +5403,16 @@ class Multi_Mount:
 	# Stuff values into *multi_mount*:
 	zero = L()
 	big = L(mm=123.4567890)
-	multi_mount._column = -1	
+	multi_mount._column         = -1	
 	multi_mount._combined_mount = None
-	multi_mount._dx = -big
-	multi_mount._dy = -big
-	multi_mount._extra_bsw = None
-	multi_mount._extra_tne = None
-	multi_mount._mount_name = mount_name
-	multi_mount._part = part
-	multi_mount._rotate = rotate
-	multi_mount._row = -1
+	multi_mount._dx             = -big
+	multi_mount._dy             = -big
+	multi_mount._extra_bsw      = None
+	multi_mount._extra_tne      = None
+	multi_mount._mount_name     = mount_name
+	multi_mount._part           = part
+	multi_mount._rotate         = rotate
+	multi_mount._row            = -1
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -5453,6 +5453,40 @@ class Multi_Mount:
 	# Stuff *combined_mount* into *multi_mount*:
 	assert multi_mount._combined_mount == None
 	multi_mount._combined_mount = combined_mount
+
+    def _copy(self, mount_name, tracing=-100000):
+	""" *Multi_Mount*: Return a copy of the *Multi_Mount* object (i.e. *self*) where
+	    the mount name his replaced with *mount_name*.
+	"""
+
+	# Use *multi_mount* instead of *self*
+	multi_mount = self
+
+	# Verify argument types:
+	assert isinstance(mount_name, str) and not ' ' in mount_name
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Multi_Mount._copy('{1}', '{2}')".
+	      format(indent, multi_mount._mount_name, mount_name))
+
+	new_multi_mount = \
+	  Multi_Mount(multi_mount._part, mount_name, multi_mount._rotate, tracing = tracing + 1)
+	new_multi_mount._column         = multi_mount._column
+	new_multi_mount._combined_mount = multi_mount._combined_mount
+	new_multi_mount._dx             = multi_mount._dx
+	new_multi_mount._dy             = multi_mount._dy
+	new_multi_mount._extra_bsw      = multi_mount._extra_bsw
+	new_multi_mount._extra_tne      = multi_mount._extra_tne
+	new_multi_mount._row            = multi_mount._row
+
+	# Wrap up any requested *tracing* and return *new_multi_mount*:
+	if tracing >= 0:
+	    print("{0}=>Multi_Mount._copy('{1}', '{2}')=>'{3}'".
+	      format(indent, multi_mount._mount_name, mount_name, new_copy._mount_name))
+	return new_multi_mount
 
     def dx_dy(self, dx, dy):
         """ *Multi_Mount*: Adjust the *Multi_Mount* object (i.e. *self*) by (*dx*, *dy).
@@ -5634,6 +5668,47 @@ class Multi_Mounts:
 	multi_mounts._multi_mounts_list = []
 	multi_mounts._name = name
 	multi_mounts._part = None
+
+    def _copy(self, mount_name, tracing = -1000000):
+	""" *Multi_Mounts*: Return of copy of the *Multi_Mounts* object (i.e. *self*)
+	    where *mount_name* has been substituted in for all of the mount names.
+	"""
+
+	# Use *multi_mounts* instead of *self*:
+	multi_mounts = self
+
+	# Verify argument types:
+	assert isinstance(mount_name, str) and not ' ' in mount_name
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Multi_Mounts._copy('{1}', '{2}')".
+	      format(indent, multi_mounts._name, mount_name))
+
+	new_multi_mounts = Multi_Mounts(mount_name)
+	new_multi_mounts_list = new_multi_mounts._multi_mounts_list
+	replace_name = None
+	for index, multi_mount in enumerate(multi_mounts._multi_mounts_list):
+	    multi_mount_name = multi_mount._mount_name_get()
+	    if replace_name == None:
+		replace_name = multi_mount_name
+	    else:
+		assert multi_mount_name == replace_name, \
+		  "Multi_Mount[{0}] has of '{1}' which does not match previous name(s) of '{2}'". \
+		  format(index, mulit_mount_name, replace_name)
+
+	    # Copy *multi_mount* with a new name of *mount_name* and append to
+	    # *new_multi_mounts_list*:
+	    new_multi_mount = multi_mount._copy(mount_name)
+	    new_multi_mounts_list.append(new_multi_mount)
+
+	# Wrap up any requested *tracing* and return *new_multi_mounts*:
+	if tracing >= 0:
+	    print("{0}<=Multi_Mounts._copy('{1}', '{2}')=>'{3}.".
+	      format(indent, multi_mounts._name, mount_name, new_multi_mounts._name))
+	return new_multi_mounts
 
     def dx_dy_append(self, part, mount_name, rotate, dx, dy):
 	""" *Multi_Mounts*: Append *part*, *mount_name*, *rotate*, *dx*, and *dy* to the
@@ -11320,6 +11395,39 @@ class Part:
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Part.process('{1}')".format(indent, part._name))
+
+    def re_multi_mount(self, multi_mounts, mount_name, tracing=-1000000):
+	""" *Part*: Using the *Part* object (i.e. *self*), make a copy of *multi_mounts*
+	    substituting *mount_name* for all of the mount names.
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+        assert isinstance(multi_mounts, Multi_Mounts)
+	assert isinstance(mount_name, str) and not ' ' in mount_name
+	assert isinstance(tracing, int)
+
+	# Perform any requested tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.re_multi_mount('{1}', '{2}', '{3}')".
+	      format(indent, part._name, multi_mounts._name_get(), mount_name))
+
+	# Only do this operation in *cnc_mode*:
+	ezcad = part._ezcad_get()
+	if ezcad._cnc_mode:
+	    # Make a copy of *multi_mounts* substituting in *mount_name*:
+	    new_multi_mounts = multi_mounts._copy(mount_name, tracing = tracing + 1)
+
+	    # Now do the *multi_mount* operation on *new_multi_mounts*:
+	    part.multi_mount(new_multi_mounts)
+
+	# Wrap up any requested tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part.re_multi_mount('{1}', '{2}', '{3}')".
+	      format(indent, part._name, multi_mounts._name_get(), mount_name))
 
     def rectangular_contour(self, comment, radius, start_corner=0, tracing=-1000000):
 	""" *Part*: Peform a rectangular exterior contour of the *Part* object (i.e. *self*)
