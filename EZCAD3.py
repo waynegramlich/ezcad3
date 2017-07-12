@@ -6572,31 +6572,51 @@ class Operation_Dowel_Pin(Operation):
 	    print("{0}=>Operation_Dowel_Pin._cnc_generate('{1}', '{2}', '{3}')".
 	      format(indent, operation_dowel_pin._name, mount._name_get(), cnc_vrml._name_get()))
 
-	# Grab the *part*, *shop*, *code*, *vice*, and *jaw_volume* from *operation_dowel_pin*:
-	part = operation_dowel_pin._part_get()
-	shop = part._shop_get()
-	code = shop._code_get()
-	vice = shop._vice_get()
-	jaw_volume = vice._jaw_volume_get()
-	    
 	# Grab some values out of *operation_dowel_pin*:
-	comment = operation_dowel_pin._comment
-	diameter = operation_dowel_pin._diameter
-	cnc_dowel_point = operation_dowel_pin._dowel_point
+	cnc_dowel_point  = operation_dowel_pin._dowel_point
 	cnc_plunge_point = operation_dowel_pin._plunge_point
-	tool = operation_dowel_pin._tool
-	tip_depth = tool._tip_depth_get()
+	comment          = operation_dowel_pin._comment
+	diameter         = operation_dowel_pin._diameter
+	tool             = operation_dowel_pin._tool
+	part             = operation_dowel_pin._part_get()
 
-	zero = L()
-	radius = diameter / 2
-	radius_offset = P(radius, zero, zero)
-	tip_offset = P(zero, zero, -tip_depth)
-	if cnc_plunge_point.x < cnc_dowel_point.x:
-	    # *plunge_point* is to the left of *dowel_point*:
-	    actual_dowel_point = cnc_dowel_point - radius_offset + tip_offset
+	# Grab some values out of *tool*:
+	tip_depth       = tool._tip_depth_get()
+	maximum_z_depth = tool._maximum_z_depth_get()
+
+	# Grab some values out of *part*, *shop*, *vice*, and *mount*:
+	shop               = part._shop_get()
+	code               = shop._code_get()
+	vice               = shop._vice_get()
+	jaw_volume         = vice._jaw_volume_get()
+	top_surface_safe_z = mount._top_surface_safe_z_get()
+
+	# *cnc_dowel_point* is the desired place to put the bottom circular edge of the dowel pin.
+	# *actual_dowel_point* adjusts *cnc_dowel_point* so that the portion that is not
+	# *diameter* across is not used (i.e. the bottom *tip_depth* of the dowel pin).
+	# Also, we need to ensure that the the *maximum_z_depth* for the dowel pin is not exceeded:
+
+	# Grap desired X/Y/Z coordinates from *cnc_dowel_point* and initialize the actual X/Y/Z
+	# coordinates:
+	desired_x = cnc_dowel_point.x
+	desired_y = cnc_dowel_point.y
+	desired_z = cnc_dowel_point.z
+	actual_x = desired_x
+	actual_y = desired_y
+	actual_z = desired_z
+
+	# Adjust the location of *cnc_dowel_point* to *actual_dowel_point* to take into
+        # account the dowel point *diameter* and *maximum_z_depth*:
+	if cnc_plunge_point.x < desired_x:
+	    actual_x -= diameter / 2
 	else:
-	    # *plunge_point* is to the right of *dowel_point*:
-	    actual_dowel_point = cnc_dowel_point + radius_offset + tip_offset
+	    actual_x += diameter / 2
+	actual_z = (desired_z - tip_depth).maximum(top_surface_safe_z - maximum_z_depth)
+	actual_dowel_point = P(actual_x, actual_y, actual_z)
+
+	# The actual plunge point needs to have its Z coordinate adjusted to match the Z
+	# coordinate of *actual_dowel_point*:
+	actual_plunge_point = P(cnc_plunge_point.x, cnc_plunge_point.y, actual_z)
 
 	# Define the speed and feed for these operations:
 	ipm10 = Speed(in_per_sec=10.0)
@@ -6607,7 +6627,7 @@ class Operation_Dowel_Pin(Operation):
 
 	# Rapid over to the plunge point:
 	code._xy_rapid_safe_z_force(ipm10, rpm0)
-	code._xy_rapid(cnc_plunge_point.x, cnc_plunge_point.y)
+	code._xy_rapid(actual_plunge_point.x, actual_plunge_point.y)
 
 	# Now pause to let operator see if Z-safe is at the right height:
 	code._command_begin()
@@ -6621,11 +6641,11 @@ class Operation_Dowel_Pin(Operation):
 	#  "z_stop={0:i} tip_depth={1:i}".format(z_stop, tip_depth))
 
 	# Move slowly down to *z_stop*:
-	code._z_feed(ipm10, rpm0, cnc_plunge_point.z, "dowel_pin		"	)
+	code._z_feed(ipm10, rpm0, actual_plunge_point.z, "dowel_pin")
 
 	# Move slowly to (*dowel_pin_x*, *dowel_pin_y*).  This may cause the material in the
 	# vice to slide over:
-	code._xy_feed(ipm10, rpm0, actual_dowel_point.x, actual_dowel_point.y)
+	code._xy_feed(ipm10, rpm0, actual_x, actual_y)
 
 	# Now pause again, to let the operator move piece up against the
 	# the dowel pin (if it is not already up against there):
