@@ -5040,6 +5040,7 @@ class Mount_Operations:
 	part_mount_table = {}
 
 	# Perform each *operation* in *tool_operations*:
+	pairs_size = len(pairs)
 	for index, pair in enumerate(pairs):
 	    # Grab the *tool* and its associated *feed_speed* and *spindle_speed*:
 	    tool_mount = pair._mount_get()
@@ -5060,8 +5061,9 @@ class Mount_Operations:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed, tracing = tracing + 1)
 
 	    # Perform the CNC generation step for *operation*:
+	    is_last = (index + 1 >= pairs_size)
 	    tool_operation._cnc_generate(tool_mount, mount_ngc_file,
-	      cnc_tool_vrml, mount_vrml_lines, mount_vrml_stl, tracing = tracing + 1)
+	      cnc_tool_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing = tracing + 1)
 
 	    # Make darn we end at a safe height:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
@@ -6358,7 +6360,7 @@ class Operation_Contour(Operation):
 	      contour._name_get(), offset, effective_tool_radius, passes))
 
     def _cnc_generate(self,
-      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
 	""" *Operation_Contour*: Generate the CNC code for the *Operation_Contour* object
 	    (i.e. *self*).
 	"""
@@ -6372,6 +6374,7 @@ class Operation_Contour(Operation):
 	assert isinstance(cnc_vrml, VRML_Group)
 	assert isinstance(mount_vrml_lines, VRML_Lines)
 	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(is_last, bool)
 	assert isinstance(tracing, int)
 
 	# Grab some values from *contour*:
@@ -6550,7 +6553,7 @@ class Operation_Dowel_Pin(Operation):
 	      feed_speed, spindle_speed, diameter, dowel_point, plunge_point))
 
     def _cnc_generate(self,
-      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
 	""" *Operation_Dowel_Pin*: Generate the CNC G-code for a an
 	    *Operation_Dowel_Pin* object (i.e. *self*.)
 	"""
@@ -6564,6 +6567,7 @@ class Operation_Dowel_Pin(Operation):
 	assert isinstance(cnc_vrml, VRML)
 	assert isinstance(mount_vrml_lines, VRML_Lines)
 	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(is_last, bool)
 	assert isinstance(tracing, int)
 
 	# Perform any *tracing*:
@@ -6862,7 +6866,7 @@ class Operation_Drill(Operation):
               order, diameter, hole_kind, start, stop, is_countersink))
 
     def _cnc_generate(self,
-      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last,tracing=-1000000):
 	""" *Operation_Drill*: Generate the CNC G-code for an *Operation_Drill* object
 	    (i.e. *self*).
 	"""
@@ -6876,6 +6880,7 @@ class Operation_Drill(Operation):
 	assert isinstance(cnc_vrml, VRML_Group)
 	assert isinstance(mount_vrml_lines, VRML_Lines)
 	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(is_last, bool)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -6908,6 +6913,7 @@ class Operation_Drill(Operation):
 	cnc_start = cnc_transform * start
 	cnc_stop = cnc_transform * stop
 
+	top_surface_safe_z = mount._top_surface_safe_z_get()
 
 	is_laser = tool._is_laser_get()
 	if is_laser:
@@ -6920,9 +6926,6 @@ class Operation_Drill(Operation):
 		tool_drill = tool
 		point_angle = tool_drill._point_angle_get()
 		tip_depth = tool_drill._tip_depth_get()
-		#call line_comment@(code,
-		#  form@("z_stop=%i% diameter=%i% tip_depth=%i%") %
-		#  f@(z_stop) % f@(diameter) / f@(tip_depth))
 		z_stop -= tip_depth + L(inch=0.040)
 	    elif hole_kind == Part.HOLE_TIP:
 		z_stop = cnc_stop.z
@@ -6931,11 +6934,46 @@ class Operation_Drill(Operation):
 	    else:
 		assert False, "Unknown hole kind"
 
-	    # Force the tool to be start from a safe location:
+	    # Make darn sure we start a high enough Z:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
-	    code._xy_rapid(cnc_start.x, cnc_start.y)
-	    code._z_feed(feed_speed, spindle_speed, z_stop, "drill", tracing = tracing + 1)
+
+	    drill_depth = top_surface_safe_z - z_stop
+	    trip_depth = 3 * diameter
+	    if drill_depth > trip_depth:
+		# Compute *q* which is the peck distance:
+		pecks = int(drill_depth / trip_depth) + 1
+		# Add just a little to make sure *pecks* times *q* > *drill_depth*;
+		# The drill will *never* go below the Z value:
+		q = (drill_depth / float(pecks)) + L(inch=.005)
+
+		# Use a "canned" cycle to peck out the deep hole:
+		f = feed_speed
+		p = None
+		r = top_surface_safe_z + L(inch=0.1000)
+		s = spindle_speed
+		x = cnc_start.x
+		y = cnc_start.y
+		z = z_stop
+		code._drill_cycle(98, 83, f, p, q, r, s, x, y, z)
+	    else:
+		# Use a "canned" cycle to drill the hole:
+		f = feed_speed
+		p = None
+		q = None
+		r = top_surface_safe_z + L(inch=0.1000)
+		s = spindle_speed
+		x = cnc_start.x
+		y = cnc_start.y
+		z = z_stop
+		code._drill_cycle(98, 81, f, p, q, r, s, x, y, z)
+
+	    # Make darn sure we get back to a high enough Z:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
+
+	    if is_last:
+		code._command_begin()
+		code._unsigned("G9", 80)
+		code._command_end()
 
 	# Wrap-up any requested *tracing*:
 	if tracing >= 0:
@@ -7171,7 +7209,7 @@ class Operation_Mount(Operation):
 	      vice._name_get(), jaws_spread, parallels_height, spacers, tooling_plate_present))
 
     def _cnc_generate(self,
-      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
         """ *Operation_Mount*: Generate the CNC operations for the *Operation_Mount* object
 	    (i.e. *self*).
 	"""
@@ -7185,6 +7223,7 @@ class Operation_Mount(Operation):
 	assert isinstance(cnc_vrml, VRML_Group)
 	assert isinstance(mount_vrml_lines, VRML_Lines)
 	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(is_last, bool)
         assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -7351,7 +7390,7 @@ class Operation_Multi_Mount(Operation):
 	      part._name_get(), comment, vice._name_get(), jaws_spread, parallels_height, spacers))
 
     def _cnc_generate(self, combined_multi_mount,
-      mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
+      mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
         """ *Operation_Multi_Mount*: Perform CNC visualization the *Operation_Multi_Mount* object
 	    (i.e. *self*).  This ultimate results in mount tooling being rendered into
 	    *mount_vrml_lines* and parts being rendering into *mount_vrml_stl*.
@@ -7366,6 +7405,7 @@ class Operation_Multi_Mount(Operation):
 	assert isinstance(cnc_vrml, VRML_Group)
 	assert isinstance(mount_vrml_lines, VRML_Lines)
 	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(is_last, bool)
         assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -7550,7 +7590,7 @@ class Operation_Round_Pocket(Operation):
 	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed))
 
     def _cnc_generate(self,
-      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
 	""" *Operation_Round_Pocket*: Generate the CNC G-code for an *Operation_Round_Pocket*
 	    object (i.e. *self*).
 	"""
@@ -7561,6 +7601,7 @@ class Operation_Round_Pocket(Operation):
 	assert isinstance(cnc_vrml, VRML_Group)
 	assert isinstance(mount_vrml_lines, VRML_Lines)
 	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(is_last, bool)
 	assert isinstance(tracing, int)
 
 	# Use *round_pocket* instead of *self*:
@@ -7793,7 +7834,7 @@ class Operation_Simple_Exterior(Operation):
 	self.tool_radius = tool_radius
 
     def _cnc_generate(self,
-      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
 	""" *Operation_Simple_Exterior*: Generate the CNC G-code for an
 	    *Operation_Simple_Exterior* object (i.e. self).
 	"""
@@ -7806,6 +7847,7 @@ class Operation_Simple_Exterior(Operation):
 	assert isinstance(cnc_vrml, VRML_Group)
 	assert isinstance(mount_vrml_lines, VRML_Lines)
 	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(is_last, bool)
 	assert isinstance(tracing, int)
 
 	shop = part._shop
@@ -7969,7 +8011,7 @@ class Operation_Simple_Pocket(Operation):
 	return self._corner_radius
 
     def _cnc_generate(self,
-      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
 	""" *Operation_Simple_Pocket*: Generate the CNC G-code for a
 	    *Operation_Simple_Pocket* object (i.e. *self*).
 	"""
@@ -7980,6 +8022,7 @@ class Operation_Simple_Pocket(Operation):
 	assert isinstance(cnc_vrml, VRML_Group)
 	assert isinstance(mount_vrml_lines, VRML_Lines)
 	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(is_last, bool)
 	assert isinstance(tracing, int)
 
 	# Use *pocket* instead of *self*:
@@ -8323,7 +8366,7 @@ class Operation_Vertical_Lathe(Operation):
 	self.z_stop = z_stop
 
     def _cnc_generate(self,
-      mount, mount_ngc_file, cnc_vrml, mount_cnc_lines, mount_cnc_stl, tracing=-1000000):
+      mount, mount_ngc_file, cnc_vrml, mount_cnc_lines, mount_cnc_stl, is_last, tracing=-1000000):
 	""" *Operation_Vertical_Lathe*:
 	"""
 
@@ -8335,6 +8378,7 @@ class Operation_Vertical_Lathe(Operation):
 	assert isinstance(cnc_vrml, VRML_Group)
 	assert isinstance(mount_cnc_lines, VRML_Lines)
 	assert isinstance(mount_cnc_stl, VRML_Group)
+	assert isinstance(is_last, bool)
 	assert isinstance(tracing, int)
 
 	shop = part._shop
@@ -17048,6 +17092,59 @@ class Code:
 	    print("{0}=>Code._contour(*, po={1:i} co={2:i} tr={3:i} cl={4} z={5:i} *)".format(
 	      ' ' * tracing, plunge_offset, contour_offset, tool_radius, clockwise, z))
 
+    def _drill_cycle(self, g_complete, g_cycle, f, p, q, r, s, x, y, z):
+	""" *Code*: Generate one drill cycle for the *Code* object (i.e. *self*.)  *g_complete*
+	    must be either 98 or 99 for either a G89 or G99 completion cycle.  *g_cycle* must
+	    specify one of the canned drill cycles (i.e. 73, 74, 76, 81, 82, 83, 84, 85, 86, 87,
+	    88, or 89.)  *f* is the feed speed, *p* is pause time for some of the cycles.
+	    *q* is used for peck drilling. *r* is the retract level.  *s* is the spindle speed.
+	    *x* and *y* specify where to drill in the X/Y plane.  *z* specifies the final
+	    drill depth.
+	"""
+
+	# Use *code* instead of *self*:
+	code = self
+			
+	# Verify argument types:
+	assert isinstance(g_complete, int) and 98 <= g_complete <= 99
+	assert isinstance(f, Speed)
+	assert isinstance(p, Time) or p == None
+	assert isinstance(q, L) or q == None
+	assert isinstance(r, L) or r == None
+	assert isinstance(s, Hertz)
+	assert isinstance(x, L)
+	assert isinstance(y, L)
+	assert isinstance(z, L)
+
+	# Make sure we are at reasonable Z height:
+	code._xy_rapid_safe_z_force(f, s)
+
+	# Remember *z_before* so we can set z to the correct height at the end of the cycle:
+	z_before = code._z
+
+	# Perform the command:
+	code._command_begin()
+	code._unsigned("G10", g_complete)
+	code._unsigned("G9", g_cycle)
+	code._speed("F", f)
+	if isinstance(p, L):
+	    code._time("P", p)
+	if isinstance(q, L):
+	    code._length("Q", q)
+	if isinstance(r, L):
+	    code._length("R", r)
+	code._hertz("S", s)
+	code._length("X", x)
+	code._length("Y", y)
+	code._length("Z", z)
+	code._command_end()
+
+	# *g_complete* specifies whether Z ends on *z_before* or *r*:
+	if g_complete == 98:
+            code._z = z_before
+	else:
+            code._z = r
+
     def _dxf_angle_append(self, group_code, value):
 	""" *Code*: Append {group_code} and {value} to the current DXF entity in the
 	    *Code* object (i.e. *self*).
@@ -17449,6 +17546,10 @@ class Code:
 	    if code._j != value:
 		code._j = value
 		changed = True
+	elif field_name == "R":
+	    if code._r != value:
+		code._r = value
+		changed = True
 	elif field_name == "R0":
 	    if code._r0 != value:
 		code._r0 = value
@@ -17557,6 +17658,7 @@ class Code:
 	code._m5 = huge
 	code._p = Time(sec=-1.0)
 	code._q = big
+	code._r = big
 	code._r0 = big
 	code._r1 = big
 	code._s = Hertz(rps=123456789.0)
@@ -17628,8 +17730,9 @@ class Code:
 	code_stream.write("M6 T{0} (Insert {1})\n".format(tool_number, tool_name))
 	spindle_is_on = spindle_speed > Hertz()
 	if spindle_is_on:
-	    code_stream.write("( Get the spinde up to speed.)\n")
+	    code_stream.write("( Get the spindle up to speed.)\n")
 	    code_stream.write("S{0:rpm} M3 (Spindle on)\n".format(spindle_speed))
+	    #FIXME: Add a pause to let the spindle get up to speed???!!!
 
 	# Use the *material* to control the coolant:
 	material = part._material_get()
@@ -18021,10 +18124,10 @@ class Code:
 		else:
 		    # We did not match:
 		    matched = False
-	elif size == 2:
+	elif size == 3:
 	    if field_name == "G10":
 		matched = True
-		previous_value = code.g10
+		previous_value = code._g10
 		if previous_value != value:
 		    code._g10 = value
 	    elif field_name == "G11":
