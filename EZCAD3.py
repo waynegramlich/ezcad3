@@ -5035,6 +5035,16 @@ class Mount_Operations:
 	  spindle_speed, mount0, cnc_vrml_lines, tracing = tracing + 1)
 	code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
 
+	# Start at *tool_change_point*:
+	tool_change_point = code._tool_change_point
+	code._command_begin()
+	code._mode_motion(0, code._vrml_motion_color_rapid)
+	code._length("X", tool_change_point.x)
+	code._length("Y", tool_change_point.y)
+	code._length("Z", tool_change_point.z)
+	code._comment("Return to tool change point")
+	code._command_end()
+
 	# We need to output a *Part* VRML for each unique (*Part*, *Mount*) combination.
 	# This is done by keeping track of whenever a new pair comes along.
 	part_mount_table = {}
@@ -5083,6 +5093,16 @@ class Mount_Operations:
 	zero = L()
 	code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 	code._dxf_xy_offset_set(zero, zero)
+
+	# Return to *tool_change_point*:
+	code._command_begin()
+	code._mode_motion(0, code._vrml_motion_color_tool_change)
+	code._length("X", tool_change_point.x)
+	code._length("Y", tool_change_point.y)
+	code._length("Z", tool_change_point.z)
+	code._comment("Return to tool change point")
+	code._command_end()
+
 	code._finish(tracing + 1)
 
 	cnc_tool_vrml._append(mount_vrml_lines)
@@ -7492,6 +7512,9 @@ class Operation_Multi_Mount(Operation):
 	parallels._vrml_append(mount_vrml_lines,
 	  parallels_height, jaws_spread, tracing = tracing + 1)
 
+	# Show the coordinate axes:
+	vice._coordinates_vrml_append(mount_vrml_lines)
+	
 	# Visualize the extra material:
 	part = operation_multi_mount._part
 	#top_surface_transform = combined_mount._top_surface_transform_get()
@@ -16710,6 +16733,7 @@ class Code:
 	code._mount  = None		# *Mount* object to use for current batch of G-code
 	code._tool_program_number = -1	# Tool program number
 	code._tool_wrl_lines = None	# The lines to be written into the tool VRML file
+	code._tool_change_point = None	# Tool change location relative to viceo origin
 	code._mount_wrl_lines = None	# The lines to be written into the mount VRML file
 
 	# Construct the *g1_table*:
@@ -16754,9 +16778,10 @@ class Code:
 	code._z_safe_s = Hertz()	# Speed to perform z safe operation at
 
 	# Some color index constants:
-	code._vrml_motion_color_rapid = "green"
-	code._vrml_motion_color_cutting = "red"
-	code._vrml_motion_color_retract = "cyan"
+	code._vrml_motion_color_rapid       = "green"
+	code._vrml_motion_color_cutting     = "red"
+	code._vrml_motion_color_retract     = "cyan"
+	code._vrml_motion_color_tool_change = "orange"
 
 	# Reset VRML fields here.  Note: routine acessses some of the G-code variable,
 	# so it must be called last:
@@ -16791,11 +16816,22 @@ class Code:
 	# Stuff *cnc_transform* into *code*:
 	code._cnc_transform = cnc_transform
 
-    def _command_end(self):
+    def _command_end(self, vrml_suppress=False, tracing=-1000000):
 	""" *Code*: End the current RS274 in the *Code* object (i.e. *self*). """
 
 	# Use *code* instead of *self*:
 	code = self
+
+	# Verify argument types:
+	assert isinstance(vrml_suppress, bool)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Code._command_end(*)".format(indent))
+	    trace_detail = 2
 
 	# Make sure we have started a command:
 	assert code._command_started, "Not currently in a RS274 command"
@@ -16824,33 +16860,13 @@ class Code:
 	# Mark that we ended the current command:
 	code._command_started = False
 
-	# If the path color has changed, we have to "flush* out the current set of
-	 # points in *vrml_lines_points* to *vrml*:
-	vrml_motion_color = code._vrml_motion_color
-	vrml_current_color = code._vrml_current_color
-	vrml_points = code._vrml_points
-	if vrml_current_color != vrml_motion_color:
-	    # The path color has changed, so we need to flush out *vrml_lines_points* using the
-	    # current color:
-	    if vrml_current_color == "":
-	         vrml_current_color = "yellow"
-	    vrml = code._vrml
-	    assert isinstance(vrml, VRML)
-	    vrml._poly_line(vrml_current_color, vrml_points)
-
-	    # We need to clear out *vrml_lines_points* and start it with the *last_point* so
- 	    # there will be no gaps in the path:
-	    if len(vrml_points) > 0:
-		last_point = vrml_points[-1]
-		del vrml_points[:]
-		vrml_points.append(last_point)
-	    else:
-		zero = L()
-		vrml_points.append(P(zero, zero, zero))
-	    code._vrml_current_color = vrml_motion_color
-
 	# Now we can tack the current point onto *vrml_lines_points*:
-	vrml_points.append(P(code._x_value(), code._y_value(), code._z))
+	if not vrml_suppress:
+	    code._vrml_points_append(code._vrml_motion_color, P(code._x, code._y, code._z))
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Code._command_end(*)".format(indent))
 
     def _comment(self, comment):
 	""" *Code*: Output *comment* to the *Code* object (i.e. *self*). Any parentheses
@@ -17121,6 +17137,9 @@ class Code:
 
 	# Remember *z_before* so we can set z to the correct height at the end of the cycle:
 	z_before = code._z
+	point_before = P(x, y, z_before)
+	vrml_points = code._vrml_points
+	code._vrml_points_append(code._vrml_motion_color_rapid, point_before)
 
 	# Perform the command:
 	code._command_begin()
@@ -17137,13 +17156,19 @@ class Code:
 	code._length("X", x)
 	code._length("Y", y)
 	code._length("Z", z)
-	code._command_end()
+	code._command_end(vrml_suppress=True)
 
 	# *g_complete* specifies whether Z ends on *z_before* or *r*:
 	if g_complete == 98:
-            code._z = z_before
+	    z_after = z_before
 	else:
-            code._z = r
+            z_after = r
+	code._z = z_after
+
+	code._vrml_points_append(code._vrml_motion_color_retract, P(x, y, r))
+	code._vrml_points_append(code._vrml_motion_color_cutting, P(x, y, z))
+	code._vrml_points_append(code._vrml_motion_color_cutting, P(x, y, r))
+	code._vrml_points_append(code._vrml_motion_color_retract, P(x, y, z_after))
 
     def _dxf_angle_append(self, group_code, value):
 	""" *Code*: Append {group_code} and {value} to the current DXF entity in the
@@ -17439,23 +17464,12 @@ class Code:
 	code._top_surface_safe_z = None
 	code._xy_rapid_safe_z = None
 
-	# Random comment: the view3dscene program can view the resulting .wrl file:
-
 	# Write VRML to *tool_wrl_lines* and *mount_wrl_lines*.
 	tool_wrl_lines = []
 	mount_wrl_lines = code._mount_wrl_lines
 
-	#vrml_file.write("# Started Code._finish(): vrml\n")
-	#mount_wrl_file.write("# Started Code._finish(): mount\n")
-
 	# Flush any remaining points into *vrml_lines*:
-	vrml = code._vrml
-	vrml_points = code._vrml_points
-	if len(vrml_points) > 0:
-	    vrml_current_color = code._vrml_current_color
-	    vrml._poly_line("yellow", vrml_points)
-	    vrml_current_color = ""
-	    del vrml_points[:]
+	code._vrml_points_flush("")
 
 	# Reset *code*:
 	code._reset()
@@ -17714,6 +17728,19 @@ class Code:
 	code._code_stream = code_stream
 	if trace_detail >= 2:
 	     print("{0}code_file_name='{1}' opened".format(indent, code_file_name))
+
+	# Grap *vice* and *tool_change_point* and save into *code*:
+	shop = ezcad._shop_get()
+	vice = shop._vice_get()
+	tool_change_point = vice._tool_change_point_get()
+	code._tool_change_point = tool_change_point
+
+	# Now initialize everything as if it starts at *tool_change_point*:
+	code._x = tool_change_point.x
+	code._y = tool_change_point.y
+	code._z = tool_change_point.z
+	vrml_points = code._vrml_points
+	vrml_points.append(tool_change_point)
 
 	# Output a descriptive header comment:
 	code_stream.write("( Part {0}: Tool {1} Program: {2} )\n".
@@ -18363,6 +18390,74 @@ class Code:
 	code._vrml_lines_points.append(P(x, y, z))
 	point = (x.millimeters(), y.millimeters(), z.millimeters())
 
+    def _vrml_points_append(self, color, point, tracing=-1000000):
+	""" *Code*: Append *point* to the VRML points list of the *Code* object (i.e. *self*).
+	    The drawn line will be drawn in *color*.
+	"""
+
+	# Use *code* instead of *self*:
+	code = self
+
+	# Verify argument types:
+	assert isinstance(color, str)
+	assert isinstance(point, P)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+
+	vrml_current_color = code._vrml_current_color
+	if color != vrml_current_color:
+	    code._vrml_points_flush(color, tracing = tracing + 1)
+	code._vrml_points.append(point)
+
+    def _vrml_points_flush(self, new_color, tracing=-1000000):
+	""" *Code*: Flush out any vrml lines for the *Code* object (i.e. *self*).
+	"""
+
+	# Use *code* instead of *self*:
+	code = self
+
+	# Verify argument types:
+	assert isinstance(new_color, str)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Code._vrml_pionts_flush(*)".format(indent))
+	    trace_detail = 2
+
+	vrml_current_color = code._vrml_current_color
+	vrml_points = code._vrml_points
+	if trace_detail >= 2:
+	    print("{0}vrml_current_color='{1}'".format(indent, vrml_current_color))
+	    print("{0}vrml_points={1}".
+	      format(indent, [ "{0:i}".format(point) for point in vrml_points ]))
+	if new_color != vrml_current_color:
+	    # The path color has changed, so we need to flush out *vrml_lines_points* using the
+	    # current color:
+	    if vrml_current_color == "":
+	         vrml_current_color = "yellow"
+	    vrml = code._vrml
+	    assert isinstance(vrml, VRML)
+	    vrml._poly_line(vrml_current_color, vrml_points)
+
+	    # We need to clear out *vrml_lines_points* and start it with the *last_point* so
+ 	    # there will be no gaps in the path:
+	    if len(vrml_points) > 0:
+		last_point = vrml_points[-1]
+		del vrml_points[:]
+		vrml_points.append(last_point)
+	    else:
+		zero = L()
+		vrml_points.append(P(zero, zero, zero))
+	    code._vrml_current_color = new_color
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Code._vrml_pionts_flush(*)".format(indent))
+
     def _vrml_reset(self):
 	""" *Code*: Reset the VRML sub-system of the *Code* object (i.e. *self*). """
 
@@ -18375,7 +18470,7 @@ class Code:
 	code._vrml = None
 	code._vrml_file = None
 
-	code._vrml_points = [P(zero, zero, zero)]
+	code._vrml_points = [ ]
 	code._vrml_current_color = ""
 
     def _x_value(self):
@@ -19191,7 +19286,11 @@ class Shop:
 	  L(inch="1-1/4"),
 	  L(inch="1/2"),
 	  L(inch="1-1/2") ] )
-	vice = Vice("5in_Vice", vice_volume, parallels)
+	tool_change_x = L(inch=-1.500)
+	tool_change_y = L()
+	tool_change_z = L(inch=3.000)
+	tool_change_point = P(tool_change_x, tool_change_y, tool_change_z)
+	vice = Vice("5in_Vice", vice_volume, parallels, tool_change_point)
 
 	# Initialize *shop*:
 	shop._assemblies = []		# Viewable assemblies
@@ -21425,10 +21524,11 @@ class Transform:
 
 class Vice:
 
-    def __init__(self, name, volume, parallels):
+    def __init__(self, name, volume, parallels, tool_change_point):
 	""" *Vice*: Initialize the *Vice* object (i.e. *self*) to contain *volume*,
 	    "parallels_thickness", and "parallels.  *volume* is a point (i.e. *P*)
 	    that specifies the vice volume dimensions between the vice jaws.
+	    *tool_change_point* specifies where tool changes occur relative to the vice origin.
 	"""
 
 	# Use *vice* instead of *self*:
@@ -21438,30 +21538,13 @@ class Vice:
 	assert isinstance(name, str) and not ' ' in name
 	assert isinstance(volume, P)
 	assert isinstance(parallels, Parallels)
+	assert isinstance(tool_change_point, P)
 
 	# Load up the *Vice* object (i.e. *self*):
-	vice._name = name
-	vice._parallels = parallels
-	vice._volume = volume
-
-    def _jaw_volume_get(self):
-	""" *Vice*: Return the jaw volume of the *Vice* object (i.e. *self*).
-	"""
-
-	return self._volume
-
-    def _name_get(self):
-	""" *Vice*: Return the name of the *Vice* object (i.e. *self*.)
-	"""
-
-	return "NO VICE NAME YET"
-
-
-    def _parallels_get(self):
-	""" *Vice*: Return the *Parallels* object for the *Vice* object (i.e. *self*).
-	"""
-
-	return self._parallels
+	vice._name              = name
+	vice._parallels         = parallels
+	vice._tool_change_point = tool_change_point
+	vice._volume            = volume
 
     def _coordinates_vrml_append(self, vrml, tracing=-1000000):
 	""" *Vice*: Append the vice origin coordinates for the *Vice* object (i.e. *self*)
@@ -21473,7 +21556,7 @@ class Vice:
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
-	if tracing >= 0:	
+	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Vice._coordinates_vrml_append('{1}', '{2}')".
 	      format(indent, vice._name, vrml._name_get()))
@@ -21504,6 +21587,32 @@ class Vice:
 	if tracing >= 0:
 	    print("{0}<=Vice._coordinates_vrml_append('{1}', '{2}')".
 	      format(indent, vice._name, vrml._name_get()))
+
+    def _jaw_volume_get(self):
+	""" *Vice*: Return the jaw volume of the *Vice* object (i.e. *self*).
+	"""
+
+	return self._volume
+
+    def _name_get(self):
+	""" *Vice*: Return the name of the *Vice* object (i.e. *self*.)
+	"""
+
+	return "NO VICE NAME YET"
+
+
+    def _parallels_get(self):
+	""" *Vice*: Return the *Parallels* object for the *Vice* object (i.e. *self*).
+	"""
+
+	return self._parallels
+
+    def _tool_change_point_get(self):
+	""" *Vice*: Return the tool change point relative to the *Vice* object (i.e. *self*)
+	    origin.
+	"""
+
+	return self._tool_change_point
 
 class VRML:
     """ *VRML* is used to output VRML (Virtual Reality Markup Language) file.  """
