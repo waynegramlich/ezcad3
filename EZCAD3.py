@@ -3003,6 +3003,13 @@ class Contour:
 
 	return self._bends
 
+    def _bends_reverse(self):
+	""" *Contour*: Reverse the directions of the bends in the *Contour* object (i.e. *self*.
+	"""
+
+	self._bends.reverse()
+	self._is_clockwise = not self._is_clockwise
+
     def _bounding_box_expand(self, bounding_box):
 	""" *Contour*: Expand *bounding_box* by each point in the *Contour* object (i.e. *self). """
 
@@ -7646,13 +7653,11 @@ class Operation_Round_Pocket(Operation):
 	tool = round_pocket._tool
 
 	# The *top_surface_transform* has been previously set orient the material correctly for CNC:
-	top_surface_transform = mount._top_surface_transform_get()
-	mount_translate_point = mount._mount_translate_point_get()
-	cnc_transform = top_surface_transform.translate("Mount translate", mount_translate_point)
+	cnc_transform = mount._cnc_transform_get()
 	mapped_start = cnc_transform * start
 	mapped_stop = cnc_transform * stop
 	if trace_detail >= 2:
-	    print("{0}top_surface_transform={1:v}".format(indent, top_surface_transform))
+	    print("{0}cnc_transform={1:v}".format(indent, cnc_transform))
 
 	# Compute some values based on *diameter*:
 	maximum_depth = diameter / 3.0
@@ -7683,11 +7688,9 @@ class Operation_Round_Pocket(Operation):
 	    code._dxf_circle(mapped_start.x, mapped_start.y, radius - tool_radius)
 	else:
 	    # We do all the work to mill out the round_pocket pocket;
-	    mount_translate_point = mount._mount_translate_point_get()
 
 	    # Deal with through holes:
 	    is_through = False
-	    #print("operation.comment='{0}'".format(self._comment))
 	    x = mapped_start.x
 	    y = mapped_start.y
 	    z_start = mapped_start.z
@@ -7696,35 +7699,33 @@ class Operation_Round_Pocket(Operation):
 		is_through = True
 		z_stop -= L(inch=0.025)
 
-	    code._comment(
-	      "z_start={0} z_stop={1}".format(z_start, z_stop))
+	    code._line_comment(comment)
+	    code._line_comment(
+	      "x={0:i} y={1:i} radius={2:i} z_start={3:i} z_stop={4:i} tool_radius={5:i}".
+	      format(x, y, radius, z_start, z_stop, tool_radius))
 	    
 	    z_depth = (start - stop).length()
-	    passes = int(z_depth / maximum_depth) + 1
-	    depth_per_pass = z_depth / float(passes)
-	    assert passes < 100
-
-	    #call line_comment@(code,
-	    #  form@("z_depth=%i% passes=%i% depth_per_pass=%i%") %
-	    #  f@(z_depth) % f@(passes) / f@(depth_per_pass))
+	    depth_passes = int(z_depth / maximum_depth) + 1
+	    depth_per_pass = z_depth / float(depth_passes)
+	    assert depth_passes < 100
 
 	    # Move to position:
-	    code._comment(comment)
 	    code._xy_rapid_safe_z_force(f, s)
 	    code._xy_rapid(x, y)
 
 	    z_feed = f / 4.0
 	    shave = L(inch=0.005)
 	    radius_remove = radius - shave - tool_radius
-	    for depth_pass in range(passes):
-		code._comment(
-		  "{0} round_pocket pocket [pass {1} of {2}]".
-		  format(comment, depth_pass + 1, passes))
+	    for depth_pass in range(depth_passes):
+		code._line_comment(
+		  "{0} round_pocket pocket [depth pass {1} of {2}] radius_remove={3:i}".
+		  format(comment, depth_pass + 1, depth_passes, radius_remove))
 		
 		# Get to proper depth:
 		z = z_start - depth_per_pass * float(depth_pass + 1)
 
 		if is_through:
+		    # We are going all the way through, so we can ignore the material in the middle:
 		    code._xy_feed(f, s, x, y + radius_remove)
 		    code._z_feed(z_feed, s, z, "round_pocket_pocket")
 		    code._xy_ccw_feed(f, s, radius_remove, x, y - radius_remove)
@@ -7733,37 +7734,47 @@ class Operation_Round_Pocket(Operation):
  		    # We have to mow out all the intervening space:
 		    radius_passes = int(radius_remove /  half_tool_radius) + 1
 		    pass_remove_delta = radius_remove / float(radius_passes)
+		    code._line_comment("radius_passes={1} pass_remove_delta={1:i}".
+		      format(radius_passes, pass_remove_delta))
 
+		    #for radius_index in range(radius_passes):
 		    for radius_index in range(radius_passes):
 			pass_remove = pass_remove_delta * float(radius_index + 1)
+			code._line_comment("radius pass {0} of {1}: pass_remove={2:i}".
+			  format(radius_index + 1, radius_passes, pass_remove))
 			code._xy_feed(f, s, x, y + pass_remove)
-			code._z_feed(z_feed, s, z, "round_pocket_pocket")
+			code._z_feed(z_feed, s, z, "round_pocket_pocket[{0}]".format(radius_index))
 			code._xy_ccw_feed(f, s, pass_remove, x, y - pass_remove)
 			code._xy_ccw_feed(f, s, pass_remove, x, y + pass_remove)
+		    code._line_comment("radius passes done")
+		    code._xy_feed(f, s, x, y)
 
 	    # Do a "spring pass" to make everybody happy:
-	    code._comment("{0} round_pocket pocket 'spring' pass".format(comment))
-	    path_radius = radius - tool_radius
-	    half_path_radius = path_radius / 2
-	    code._xy_feed(f, s, x, y)
+	    if True:
+		code._line_comment("{0} round_pocket pocket 'spring' pass".format(comment))
+		path_radius = radius - tool_radius
+		half_path_radius = path_radius / 2
+		code._xy_feed(f, s, x, y)
 
-	    # Carefully feed the tool to the edge:
-	    code._comment("Carefully feed tool to the edge of the hole")
-	    code._xy_ccw_feed(f, s, half_path_radius, x + half_path_radius, y + half_path_radius)
-	    code._xy_ccw_feed(f, s, half_path_radius, x,                    y + path_radius)
+		# Carefully feed the tool to the edge:
+		code._line_comment("Carefully feed tool to the edge of the hole")
+		code._xy_ccw_feed(f, s,
+		  half_path_radius, x + half_path_radius, y + half_path_radius)
+		code._xy_ccw_feed(f, s, half_path_radius, x, y + path_radius)
 
-	    # Peform the entire spring cut:
-	    code._comment("Peform the entire spring cut")
-	    code._xy_ccw_feed(f, s, path_radius, x, y - path_radius)
-	    code._xy_ccw_feed(f, s, path_radius, x, y + path_radius)
+		# Peform the entire spring cut:
+		code._line_comment("Peform the entire spring cut")
+		code._xy_ccw_feed(f, s, path_radius, x, y - path_radius)
+		code._xy_ccw_feed(f, s, path_radius, x, y + path_radius)
 
-	    # Carefully remove the tool back to the center:
-	    code._comment("Carefully remove the tool back to the center")
-	    code._xy_ccw_feed(f, s, half_path_radius, x - half_path_radius, y + half_path_radius)
-	    code._xy_ccw_feed(f, s, half_path_radius, x, y)
+		# Carefully remove the tool back to the center:
+		code._line_comment("Carefully remove the tool back to the center")
+		code._xy_ccw_feed(f, s,
+		  half_path_radius, x - half_path_radius, y + half_path_radius)
+		code._xy_ccw_feed(f, s, half_path_radius, x, y)
 
 	    # Safely retract to z safe:
-	    code._comment("Safely retract to z safe")
+	    code._line_comment("Safely retract to z safe")
 	    code._xy_rapid_safe_z_force(f, s)
 
 	# Wrap up any requested *tracing*:
@@ -12223,6 +12234,9 @@ class Part:
 	stl_mode = ezcad._stl_mode
 
 	if stl_mode or cnc_mode:
+	    if not contour._is_clockwise:
+		contour._bends_reverse()
+
 	    # Perform all of the *contour* massaging:
 	    mount = part._current_mount
 	    assert isinstance(mount, Mount)
@@ -17676,9 +17690,9 @@ class Code:
 	code._r0 = big
 	code._r1 = big
 	code._s = Hertz(rps=123456789.0)
-	code._x = zero
-	code._y = zero
-	code._z = zero
+	code._x = big
+	code._y = big
+	code._z = big
 	code._z1 = zero
 
     def _start(self, part, tool, tool_program_number, spindle_speed, mount, vrml, tracing=-1000000):
@@ -17735,10 +17749,7 @@ class Code:
 	tool_change_point = vice._tool_change_point_get()
 	code._tool_change_point = tool_change_point
 
-	# Now initialize everything as if it starts at *tool_change_point*:
-	code._x = tool_change_point.x
-	code._y = tool_change_point.y
-	code._z = tool_change_point.z
+	# Now initialize *vrml_points* so that it starts at *tool_change_point*:
 	vrml_points = code._vrml_points
 	vrml_points.append(tool_change_point)
 
@@ -18183,10 +18194,12 @@ class Code:
 	code._vice_x = vice_x
 	code._vice_y = vice_y
 
-    def _vrml_arc_draw(self, ax, ay, bx, by, radius, z, clockwise, radius_x=None, radius_y=None):
+    def _vrml_arc_draw(self,
+      ax, ay, bx, by, radius, z, clockwise, radius_x=None, radius_y=None, tracing=-1000000):
 	""" *Code*: Draw an arc from (*ax*, *ay*, *z) to (*bx*, *by*, *bz*) with an
 	    arc radius of *radius*.  The arc is drawn in a clockwise direction if
-	    *clockwise* is *True* and a counter-clockwise direction otherwise. """
+	    *clockwise* is *True* and a counter-clockwise direction otherwise.
+	"""
     
 	# Use *code* instead of *self*:
 	code = self
@@ -18201,33 +18214,36 @@ class Code:
 	assert isinstance(radius_x, L) or radius_x == None
 	assert isinstance(radius_y, L) or radius_y == None
 
-	# Enable tracing by setting *debug* to *True*:
-	debug = False
-	#debug = True
-	have_radius = isinstance(radius_x, L) and isinstance(radius_y, L)
-	if debug:
-	    print("\nCode._vrml_arc_draw({0:i}, {1:i}, {2:i}, {3:i}, {4:i}, {5:i}, {6})".
-	      format(ax, ay, bx, by, radius, z, clockwise))
-	    if have_radius:
-		print("radius_x={0:i} radius_y={1:i}".format(radius_x, radius_y))
+	# Perform an requested_*tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Code._vrml_arc_draw({1:i}, {2:i}, {3:i}, {4:i}, {5:i}, {6})".
+	      format(indent, ax, ay, bx, by, z, clockwise))
+	    trace_detail = 3
 
-		ar_dx = ax - radius_x
-		ar_dy = ay - radius_y
-		ar_radius = ar_dx.distance(ar_dy)
-		print("ar_dx={0:i} ar_dy={1:i} ar_radius={2:i}".format(ar_dx, ar_dy, ar_radius))
-
-		br_dx = bx - radius_x
-		br_dy = by - radius_y
-		br_radius = br_dx.distance(br_dy)
-		print("br_dx={0:i} br_dy={1:i} br_radius={2:i}".format(br_dx, br_dy, br_radius))
-
-	# Compute some *Angle* constants:
+	# Define some *Angle* constants:
 	degrees0 = Angle(deg=0.0)
 	degrees15 = Angle(deg=15.0)
 	degrees90 = Angle(deg=90.0)
 	degrees180 = Angle(deg=180.0)
 	degrees360 = Angle(deg=360.0)
     
+	# Determine if we *have_radius*:
+	have_radius = isinstance(radius_x, L) and isinstance(radius_y, L)
+	if have_radius:
+	    if trace_detail >= 2:
+		print("{0}rx={1:i} ry={2:i}".format(indent, rx, ry))
+		ar_dx = ax - rx
+		ar_dy = ay - ry
+		ar_radius = ar_dx.distance(ar_dy)
+		print("{0}ar_dx={1:i} ar_dy={2:i} ar_radius={3:i}".format(ar_dx, ar_dy, ar_radius))
+
+		br_dx = bx - rx
+		br_dy = by - ry
+		br_radius = br_dx.distance(br_dy)
+		print("{0}br_dx={1:i} br_dy={2:i} br_radius={3:i}".format(br_dx, br_dy, br_radius))
+
 	# Assign *z* to *az* and *bz* for notational consistency.
 	az = z
 	bz = z	
@@ -18258,14 +18274,21 @@ class Code:
 	cx = (ax + bx) / 2
 	cy = (ay + by) / 2
 	cz = az
-	if debug:
-	    radius3 = (radius_x - cx).distance(radius_y - cy)
-	    print("C=({0:i},{1:i},{2:i}) radius_3={3:i}".format(cx, cy, cz, radius3))
+	if trace_detail >= 2:
+	    print("{0}cx={1:i} cy={2:i} cy={3:i}".format(indent, cx, cy, cz))
+	#if trace_detail >= 2:
+	#	assert isinstance(rx, L)
+	#	assert isinstance(cx, L)
+	#	assert isinstance(ry, L)
+	#	assert isinstance(cy, L)
+	#	assert isinstance(cz, L)
+	#	radius3 = (radius_x - cx).distance(radius_y - cy)
+	#	print("{0}C=({1:i},{2:i},{3:i}) radius_3={4:i}".format(indent, cx, cy, cz, radius3))
 
-    	# Now compute |AC| which is the length the the AC segment:
+	# Now compute |AC| which is the length the the AC segment:
 	ac_length = (cx - ax).distance(cy - ay)
-	if debug:
-	    print("ac_length={0:i}".format(ac_length))
+	if trace_detail >= 2:
+	    print("{0}ac_length={1:i}".format(indent, ac_length))
 
 	# We know that |AR| is equal to *radius*.  We need to compute |CR|.  This
 	# is basically just the Pythagorean theorem:
@@ -18281,10 +18304,10 @@ class Code:
 	radius_squared_mm = radius_mm * radius_mm
 	ac_mm = ac_length.millimeters()
 	ac_squared_mm = ac_mm * ac_mm
-	if radius_squared_mm < ac_squared_mm:
-	    return
-	assert radius_squared_mm >= ac_squared_mm
-	cr_mm = math.sqrt(radius_squared_mm - ac_squared_mm)
+	if trace_detail >= 3:
+	    print("{0}radius_mm={1} ac_mm={2}".format(indent, radius_mm, ac_mm))
+	#assert radius_squared_mm >= ac_squared_mm, "difference={0}".format(radius_mm - ac_mm)
+	cr_mm = math.sqrt(abs(radius_squared_mm - ac_squared_mm))
 	cr_length = L(mm=cr_mm)
 
 	# Now we need to compute the location of R=(*rx*,*ry*,*rz*).  This done by
@@ -18297,8 +18320,9 @@ class Code:
 	ac_dx = cx - ax
 	ac_dy = cy - ay
 	acx_angle = ac_dy.arc_tangent2(ac_dx)	# Yes, dy come before dx:
-	if debug:
-	    print("ac_dx={0:i} ac_dy={1:i} acx_angle={2:d}".format(ac_dx, ac_dy, acx_angle))
+	if trace_detail >= 2:
+	    print("{0}ac_dx={1:i} ac_dy={2:i} acx_angle={3:d}".
+	      format(indent, ac_dx, ac_dy, acx_angle))
 
 	# Step 2: Compute angle <RCX, which is +/- 90 degrees from <ACX:
 	rcx_angle = acx_angle
@@ -18306,24 +18330,22 @@ class Code:
 	    rcx_angle += degrees90
 	else:
 	    rcx_angle -= degrees90
-	if debug:
-	    print("acx_angle={0:d} rcx_angle={1:d}".format(acx_angle, rcx_angle))
+	if trace_detail >= 2:
+	    print("{0}acx_angle={1:d} rcx_angle={2:d}".format(indent, acx_angle, rcx_angle))
 
 	# Step 3: Normalize rcx_angle to between -180 degrees and +180 degrees:
-	if rcx_angle > degrees180:
-	    rcx_angle -= degrees360
-	elif rcx_angle < -degrees180:
-	    rcx_angle += degrees360
-	if debug:
-	    print("normalized rcx_angle={0:d}".format(rcx_angle))
+	rcx_angle = rcx_angle.normalize()
+	if trace_detail >= 2:
+	    print("{0}normalized rcx_angle={1:d}".format(indent, rcx_angle))
 
 	# Step 4: Compute R=(*rx*,*ry*,*rz*) using trigonmetry:
 	rx = cx + cr_length.cosine(rcx_angle)
 	ry = cy + cr_length.sine(rcx_angle)
 	rz = az
-	if debug:
-	    print("computed rx={0:i} ry={1:i} passed in rx={2:i} ry={3:i}".
-	      format(rx, ry, radius_x, radius_y))
+	if trace_detail >= 2:
+	    print("{0}computed rx={1:i} ry={2:i} rz={3:i}".format(indent, rx, ry, rz))
+	    if have_radius:
+		print("{0}radius_x={1:i} radius_y={2:i}".format(indent, radius_x, radius_y))
 
 	# Now we compute the angle <ARX which is a the angle from R to A relative to the X axis:
 	arx_angle = (ay - ry).arc_tangent2(ax - rx)
@@ -18331,14 +18353,14 @@ class Code:
 	# Similarly, we compute the <BRX which is the angle from R to B relative to the Y axis:
 	brx_angle = (by - ry).arc_tangent2(bx - rx)
 
-	if debug:
-	    print("arx_angle={0:d} brx_angle={1:d}".format(arx_angle, brx_angle))
+	if trace_detail >= 2:
+	    print("{0}arx_angle={1:d} brx_angle={2:d}".format(indent, arx_angle, brx_angle))
 
 	# Now we can compute angle <ARB which is the angle swept from A to B from R.
 	# Note that <ARB can be positive or negative depending up the direction of travel:
 	arb_angle = brx_angle - arx_angle
-	if debug:
-	    print("arb_angle={0:d}".format(arb_angle))
+	if trace_detail >= 2:
+	    print("{0}arb_angle={1:d}".format(indent, arb_angle))
 
 	# Normalize <ARB to be consistent with *clockwise*:
 	if clockwise and arb_angle < degrees0:
@@ -18347,13 +18369,15 @@ class Code:
 	elif not clockwise and arb_angle > degrees0:
 	    # Counter-clockwise requires *arb_angle* to be negative:
 	    arb_angle -= degrees360
-	if debug:
-	    print("normalize arb_angle={0:d}".format(arb_angle))
+	if trace_detail >= 2:
+	    print("{0}normalize arb_angle={1:d}".format(indent, arb_angle))
 
 	# We want to draw the arc as a sequence of line segments from A to B, where each segment
 	# covers about 15 degrees of the arc.  So first we figure compute the *steps* count:
 	steps = 1 + abs(int(arb_angle / degrees15))
 	assert steps >= 1
+	if trace_detail >= 2:
+	    print("{0}steps={1}".format(indent, steps))
 
 	# Now we compute the *step_angle* which is the arc angle coverted by each segment:
 	step_angle = arb_angle / float(steps)
@@ -18368,10 +18392,19 @@ class Code:
 	    segment_x = rx + radius.cosine(segment_angle)
 	    segment_y = ry +   radius.sine(segment_angle)
 	    segment_z = az
-	    vrml_points.append(P(segment_x, segment_y, segment_z))
+	    segment = P(segment_x, segment_y, segment_z)
+	    vrml_points.append(segment)
+	    if trace_detail >= 3:
+		print("{0}[{1}]: segment_angle={2:d} segment".
+		  format(indent, step, segment_angle, segment))
 
 	# Lay down B=(*bx*,*by*,*bz):
 	vrml_points.append(P(bx, by, z))
+
+	# Wrap up any requested_*tracing*:
+	if tracing >= 0:
+	    print("{0}<=Code._vrml_arc_draw({1:i}, {2:i}, {3:i}, {4:i}, {5:i}, {6})".
+	      format(indent, ax, ay, bx, by, z, clockwise))
 
     def _vrml_point(self, x, y, z, from_routine):
 	""" *Code*: Return the VRML point index for point (*x*, *y*, *z*) using the
@@ -18526,7 +18559,7 @@ class Code:
 	    code._length("Y", y)
 	    code._command_end()
     
-    def _xy_ccw_feed(self, f, s, r, x, y, rx=None, ry=None):
+    def _xy_ccw_feed(self, f, s, r, x, y, rx=None, ry=None, tracing=-1000000):
 	""" *Code*: Feed to location (*x*, *y*) as a radius *r* counter clockwise  circle with a
 	    feedrate of *f* and spindle speed of *s* using the *Code* object (i.e. *self*):
 	"""
@@ -18542,13 +18575,23 @@ class Code:
 	assert isinstance(y, L)
 	assert isinstance(rx, L) or rx == None
 	assert isinstance(ry, L) or ry == None
+	assert isinstance(tracing, int)
     
+	# Peform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Code._xy_ccw_feed(*, {1:i}, {2:rpm}, {3:i}, {4:i}, {5:i}) ".
+	      format(indent, f, s, r, x, y))
+	    trace_detail = 2
+
+	# Grab some values from *code*:
 	x1 = code._x_value()
 	y1 = code._y_value()
 	z1 = code._z
 	x2 = x
 	y2 = y
-	code._vrml_arc_draw(x1, y1, x2, y2, r, z1, True, rx, ry)
+	code._vrml_arc_draw(x1, y1, x2, y2, r, z1, True, rx, ry, tracing = tracing + 1)
 
 	if x1 != x or y1 != y:
 	    # Do the laser code first:
@@ -18566,6 +18609,11 @@ class Code:
 	    code._length("X", x)
 	    code._length("Y", y)
 	    code._command_end()
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Code._xy_ccw_feed(*, {1:i}, {2:rpm}, {3:i}, {4:i}, {5:i}) ".
+	      format(indent, f, s, r, x, y))
 
     def _xy_feed(self, f, s, x, y):
 	""" *Code*: Feed to location (*x*, *y*) with a feedrate of *f*
