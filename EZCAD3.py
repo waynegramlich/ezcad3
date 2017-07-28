@@ -273,6 +273,7 @@ class L:
 	# Load up *self*:
 	scale = 1.0
 	self._mm = scale * (mm + cm * 10.0 + inch * 25.4 + ft * (12.0 * 25.4))
+	assert isinstance(self._mm, float)
 
     ## @brief Returns *self* + *length*.
     #  @param self is the first *L* object to sum.
@@ -628,7 +629,9 @@ class L:
     def millimeters(self):
 	""" L: Return a {self} as a scalar in units of millimeters. """
 
-	return self._mm
+	mm = self._mm
+	assert isinstance(mm, float)
+	return mm
 
     def sine(self, angle):
 	""" L: Return {self} * sin(angle). """
@@ -8775,6 +8778,12 @@ class Part:
 	one = L(mm=1.0)
 	z_axis = P(zero, zero, one)
 
+	# The *Part* starts off with empty transforms:
+	null_transform = Transform()
+	root_transform = null_transform
+	if isinstance(up, Part):
+	    root_transform = up._root_transform
+	
 	ezcad = EZCAD3.ezcad
 	part._axis = z_axis			# Scheduled to go away
 	part._bounding_box = Bounding_Box()
@@ -8782,9 +8791,6 @@ class Part:
 	part._center = P()			# Is this used anymore
 	part._cnc_suppress = False
 	part._current_mount = None
-	#part._cnc_transform = None		# Orientation and translate transform for CNC vice
-	#part._dowel_x = zero
-	#part._dowel_y = zero
 	part._dx_original = zero
 	part._dxf_x_offset = zero
 	part._dxf_y_offset = zero
@@ -8800,18 +8806,12 @@ class Part:
 	part._is_part = False			# *True* => physical part made; *False* => assembly
 	part._laser_preferred = False
 	part._material = Material("plastic", "abs")
-	#part._mount_translate_point = P()	# Place to move top surface point to for a mount
 	part._mount_operations_table = {}
 	part._mount_operations_list = []	# List of operations that construct part
 	part._name = name			# Part name
-	#part._operations = []
-	#part._plunge_x = zero
-	#part._plunge_y = zero
+	part._parent_transform = null_transform
 	part._position_count = 0
 	part._priority = 0
-	#part._projection_axis = z_axis		# Scheduled to go away
-	#part._places = {}
-	part._rotate = None
 	part._shop = ezcad._shop
 	part._scad_difference_lines = []
 	part._scad_union_lines = []
@@ -8823,12 +8823,10 @@ class Part:
 	part._tooling_plate_translate_point = P() # Vice transform for tooling plate.
 	part._tool_preferred = ""
 	part._tracing = -1000000
-	part._translate = None			# Scheduled to go away
+	part._root_transform = null_transform
+	part._reverse_parent_transform = root_transform
+	part._reverse_root_transform = root_transform.reverse()
 	part._visible = True
-	#part._vice_x = None			# Vice X origin relative to part X origin
-	#part._vice_y = None			# Vice Y origin relative to part Y origin
-	#part._z_rapid = None			# Z above which XY rapids are OK
-	#part._z_safe = None			# Z above which Z rapids are OK
 	part.up = up
 
 	#print("<=Part.__init__(*, '{0}', *, place={1})".format(name, place))
@@ -11285,7 +11283,7 @@ class Part:
 	    print("{0}top_surface_transform={1:v}".format(indent, top_surface_transform))
 
 	# Remember *top_surface_transform* for other operations:
-	part._top_surface_transform_set(top_surface_transform, "extrude")
+	#part._top_surface_transform_set(top_surface_transform, "extrude")
 
 	# Now compute the transforms that will take a contour in the X/Y plane and map
 	# them to appropate planes at *start* and *end*:
@@ -12006,6 +12004,33 @@ class Part:
 
 	self._tracing = 0
 
+    def transform_set(self, transform):
+	""" *Part*: Set the transform from the *Part* object (i.e. *self*) to *transform*.
+	    The transform is used to map from the parent's 3D space ot the 3D space of the
+	    *Part* object.
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types*:
+	assert isinstance(transform, Transform)
+
+	# Load *transform* and its reverse into *part*:
+	part._parent_transform = transform
+	part._reverse_parent_transform = transform.reverse()
+
+	# Figure out what the *root_transform* is:
+	parent_part = part.up
+	if isinstance(parent_part, Part):
+	    root_transform = parent_part._root_transform.chain(transform)
+	else:
+	    root_transform = transform
+
+	# Load *root_transform* and its reverse into *part*:
+	part._root_transform = root_transform
+	part._reverse_root_transform = root_transform.reverse()
+
     def translate(self, center):
 	""" *Part*: Move the origin of the *Part* object (i.e. *self*) by
 	    *center*.
@@ -12097,6 +12122,7 @@ class Part:
 	    stl_triangles = stl._triangles_get()
 	    color_name = part._color._name_get()
 	    stl_vrml = VRML_Triangles(part._name, color_name, stl_triangles, tracing = tracing + 1)
+	    stl_vrml = part._parent_transform._vrml(stl_vrml, tracing + 1)
 	    stl_vrmls._append(stl_vrml)
 
 	# Stuff *stl_vrmls* into *part*:
@@ -21276,11 +21302,6 @@ class Transform:
 
 	return P(translated_x, translated_y, translated_z)
 
-    #def _scad_lines_get(self):
-    #	""" *Transform*: Return the scad lines for the *Transform* object (i.e. *self*). """
-    #
-    #	return self._forward_scad_lines
-
     def _scad_lines_append(self, lines, prefix):
 	""" *Transform*: Append the openscad transform lines from the *Transform* object
 	    (i.e. *self) to *lines* where each line is preceeded by *prefix*.
@@ -21305,6 +21326,37 @@ class Transform:
 	if abs(value) < 1.0e-10:
 	    value = 0.0
 	return value
+
+    def chain(self, next_transform):
+	""" *Transform*: Return a new transform that consists of the *Transform* object
+	    (i.e. *self*) followed by *next_transform*.
+	"""
+
+	# Use *transform* instead of *self*:
+	transform = self
+
+	# Verify argument types:
+	assert isinstance(next_transform, Transform)
+
+	# Create the *result* *Transform* object:
+	result = Transform()
+
+	# Construct the forward and reverse matrices:
+	result._forward_matrix = transform._forward_matrix.dot(next_transform._forward_matrix)
+	result._reverse_matrix = numpy.linalg.inv(result._forward_matrix)
+	
+	# Construct the forward and reverse scad_lines:
+	result._forward_scad_lines = \
+	  next_transform._forward_scad_lines + transform._forward_scad_lines
+	result._reverse_scad_lines = \
+	  transform._reverse_scad_lines + next_transform._reverse_scad_lines
+
+	# Construct the forward and reverse VRML transforms:
+	result._forward_vrmls = transform._forward_vrmls + next_transform._forward_vrmls
+	result._reverse_vrmls = next_transform._reverse_vrmls + transform._reverse_vrmls
+
+	# Return the *result*:
+	return result
 
     def reverse(self):
 	""" *Transform*: Return the reverse of the *Transform* object (i.e. *self*). """
@@ -21805,7 +21857,7 @@ class VRML:
 	vrml._pad_table = {}
 
     def _close(self):
-	""" *VRML*: Make sure that the *VRML* object (i.e. *self*) is closed.  This routoine
+	""" *VRML*: Make sure that the *VRML* object (i.e. *self*) is closed.  This routine
 	    is overridden by a sub-class as needed:
 	"""
 
