@@ -1,4 +1,4 @@
-###################################################################################################
+####################################################################################################
 #<-----------------------------------------100 characters----------------------------------------->#
 #
 # EZCAD Coding Standards/Style
@@ -307,8 +307,10 @@ class L:
 	  isinstance(divisor, int) or isinstance(divisor, L)
 
 	if isinstance(divisor, L):
+	    assert divisor._mm != 0.0
 	    result = self._mm / divisor._mm
 	else:
+	    assert divisor != 0.0
 	    result = L(mm = self._mm / divisor)
 
 	return result
@@ -1389,7 +1391,7 @@ class Bend:
 	bend._radius = radius
 
 	# We do most of the work in a projected coordinates.  The *projected* point is
-	# *point* after it has been rotated and translated so that the points project down
+	# *point* after it has been rotated and translated so that the points transform down
 	# down to the X/Y plane.  This value is computed by the *_project*() routine.
 	bend._projected_point = None	# Projected point:
 
@@ -3203,9 +3205,9 @@ class Contour:
 	return self._name
 
     def _project(self, transform, tracing = -1000000):
-	""" *Contour*: Sweep through the *Contour* object (i.e. *self*) and compute the
+	""" *Contour*: Sweep through the *Contour* object (i.e. *self*) and compute the projected
 	    X/Y coordinates of *Bend* object on an X/Y plane using *transform* each point
-	    in the contour prior prior to being projected down to the X/Y plane.
+	    in the contour prior to being projected down to the X/Y plane.
 	"""
 
 	# Verify argument types:
@@ -4092,6 +4094,7 @@ class EZCAD3:
 	  "w":      Bounding_Box.w_get,
 	}
 
+	# Save a global copy of *ezcad*:
 	EZCAD3.ezcad = self
 
     def _directory_get(self):
@@ -4121,6 +4124,42 @@ class EZCAD3:
         """
 
 	return self._ngc_directory
+
+    def _parts_stack_pop(self):
+	""" *EZCAD3: Pop the top most *Part* from the *Part* stack associated with the *EZCAD3*
+	    object (i.e. *self*.)
+	"""
+
+	# Pop the top most part from *parts_stack*:
+	self._parts_stack.pop()
+
+    def _parts_stack_push(self, part):
+	""" *EZCAD3: Push *part* onto the *Part* stack associated with the *EZCAD3* object
+	    (i.e. *self*.)
+	"""
+
+	# Use *ezcad* instead of *self*:
+	ezcad = self
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+
+	# Push *part* onto *parts_stack*:
+	parts_stack = ezcad._parts_stack
+	parts_stack.append(part)
+
+    def _parts_stack_reset(self):
+	""" *EZCAD3:* Empty the *Part* stack associated with the *EZCAD3* object (i.e. *self*.)
+	"""
+
+	del self._parts_stack[:]
+
+    def _parts_stack_to_text(self):
+	""" *EZCAD3*: Return the *Part* stack associated with the *EZCAD3* object (i.e. *self*)
+	    as a text string.
+	"""
+
+	return " ".join([ "{0}".format(part._name_get()) for part in self._parts_stack ])
 
     def _scad_directory_get(self):
 	""" *EZCAD3*: Return the directory to read/write SCAD files from/into from the *EZCAD3*
@@ -5489,7 +5528,7 @@ class Multi_Mount:
 	assert isinstance(combined_mount, Mount)
 	return combined_mount
 
-    def _combined_mount_set(self, combined_mount):
+    def _combined_mount_set(self, combined_mount, tracing = -1000000):
 	""" *Multi_Mount*: Set the final combined mount for the *Multi_Mount* object (i.e. *self*)
 	    to *combined_mount*.  This operation can only be done once.
 	"""
@@ -5500,9 +5539,23 @@ class Multi_Mount:
 	# Verify argument types:
 	assert isinstance(combined_mount, Mount)
 
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Multi_Mount._combined_mount_set('{1}', '{2}')".
+	      format(indent, multi_mount._mount_name, combined_mount._name_get()))
+
 	# Stuff *combined_mount* into *multi_mount*:
-	assert multi_mount._combined_mount == None
+	assert multi_mount._combined_mount == None, \
+	  "Multi_Mount '{0}' was previously set to Mount '{1}'; part_stack={2}". \
+	  format(multi_mount._mount_name, combined_mount._name_get(),
+	    EZCAD3.ezcad._parts_stack_to_text())
 	multi_mount._combined_mount = combined_mount
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Multi_Mount._combined_mount_set('{1}', '{2}')".
+	      format(indent, multi_mount._mount_name, combined_mount._name_get()))
 
     def _copy(self, mount_name, tracing=-100000):
 	""" *Multi_Mount*: Return a copy of the *Multi_Mount* object (i.e. *self*) where
@@ -8804,12 +8857,14 @@ class Part:
 	part._extra_stop_tne = None		# TNE extra material corner at part construct end
 	part._ezcad = ezcad			# Top level *EZCAD3* object
 	part._is_part = False			# *True* => physical part made; *False* => assembly
+	part._is_place_only = False		# *True* => Render from *place*() calls
 	part._laser_preferred = False
 	part._material = Material("plastic", "abs")
 	part._mount_operations_table = {}
 	part._mount_operations_list = []	# List of operations that construct part
 	part._name = name			# Part name
 	part._parent_transform = null_transform
+	part._places = {}
 	part._position_count = 0
 	part._priority = 0
 	part._shop = ezcad._shop
@@ -9755,7 +9810,7 @@ class Part:
 	raise AttributeError("Part '{0}' instance has no attribute named '{1}'".
 	  format(self._name, name))
 
-    def _manufacture(self, ezcad, tracing=-1000000):
+    def _manufacture(self, ezcad, tree_depth, tracing=-1000000):
 	""" *Part*: Visit the *Part* object (i.e. *self*) and all is the children *Part*'s
 	    and perform any manufacturing steps.
 	"""
@@ -9765,6 +9820,7 @@ class Part:
 
 	# Verify argument types:
 	assert isinstance(ezcad, EZCAD3)
+	assert isinstance(tree_depth, int) and tree_depth >= 0
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -9772,7 +9828,16 @@ class Part:
             tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Part._manufacture:('{1}', *)".format(indent, self._name))
+	    print("{0}=>Part._manufacture:('{1}', *, {2})".format(indent, self._name, tree_depth))
+
+	# Make sure that *up* is correct:
+	up = part.up
+	if tree_depth == 0:
+	    assert up == None, \
+	      "Root Part '{0}' should not have parent (it has one)".format(part._name)
+	else:
+	    assert up != None, \
+	      "Non-Root Part '{0}' does not have a parent (it should have one)".format(part._name)
 
 	# Make sure *part* is connected ot *ezcad*:
 	part._ezcad = ezcad
@@ -9780,13 +9845,16 @@ class Part:
 	shop = ezcad._shop_get()
 	code = shop._code_get()
 
+	# For debugging, keep the part stack in *ezcad* up to date:
+	ezcad._parts_stack_push(part)
+
 	# First manufacture any child *Part*'s:
 	for attribute_name in dir(part):
 	    if not attribute_name.startswith("_") and attribute_name.endswith("_"):
 		child_part = getattr(part, attribute_name)
 		assert isinstance(child_part, Part), \
 		  "{0}.{1} is not a Part".format(part.name, attribute_name)
-		child_part._manufacture(ezcad, tracing + 1)
+		child_part._manufacture(ezcad, tree_depth + 1, tracing + 1)
 
 	# Now run construct this *part*
 	if tracing >= 0:
@@ -9861,9 +9929,12 @@ class Part:
 	#    if tracing >= 0:
 	#	print("{0}<==Part._manufacture('{1}'):CNC".format(indent, part._name))
 
+	# For debugging, keep the part stack in *ezcad* up to date:
+	ezcad._parts_stack_pop()
+
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Part._manufacture:('{1}', *)".format(indent, self._name))
+	    print("{0}<=Part._manufacture:('{1}', *, {2})".format(indent, self._name, tree_depth))
 
     def _material_get(self):
 	""" *Part*: Return the matrial associated with the *Part* object (i.e. *self*.)"""
@@ -9927,8 +9998,8 @@ class Part:
 	mount_name = mount._name_get()
 
 	# Make sure we have no duplicates:
-	assert not mount_name in mount_operations_table, \
-	  "Mount name '{0}' previously used for Part '{1}'!".format(mount_name, part._name)
+	#assert not mount_name in mount_operations_table, \
+	#  "Mount name '{0}' previously used for Part '{1}'!".format(mount_name, part._name)
 
 	# Create a new *mount_operations* object:
 	mount_operations = Mount_Operations(mount_name)
@@ -11022,6 +11093,16 @@ class Part:
 	assert isinstance(welds, str)
 	assert isinstance(flags, str)
 
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(("{0}=>Part.Cylinder(c='{1}', p='{2}', m='{3}', clr={4}, sd={5:i}, ed={6:i}," +
+	      " s={7:i}, e={8:i}, s={9}, sa={10:d}, w='{11}', f='{12}')").
+	      format(indent, part._name, comment, material, color, start_diameter, end_diameter,
+              start, end, sides, sides_angle, welds, flags))
+	    trace_detail = 2
+
 	comment = comment.replace(' ', '_')
 
 	# Use *part* instead of *self*:
@@ -11073,10 +11154,10 @@ class Part:
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print(("{0}<=Part.cylinder('{1}', '{2}', {3}, {4}, {5:i}, {6:i}," +
-	      " {7:i}, {8:i}, {9}, {10:d}, '{11}', '{12}')").
-	      format(indent, self._name, comment, material, color, start_diameter, end_diameter,
-	      start, end, sides, sides_angle, welds, flags))
+	    print(("{0}<=Part.Cylinder(c='{1}', p='{2}', m='{3}', clr={4}, sd={5:i}, ed={6:i}," +
+	      " s={7:i}, e={8:i}, s={9}, sa={10:d}, w='{11}', f='{12}')").
+	      format(indent, part._name, comment, material, color, start_diameter, end_diameter,
+              start, end, sides, sides_angle, welds, flags))
 
     def dowel_pin(self, comment, dowel_point, plunge_point, tracing=-1000000):
 	""" *Part*: Request that a dowel pin be used to align the *Part* object (i.e. *self*).
@@ -11212,7 +11293,7 @@ class Part:
     def extrude(self, comment, material, color,
       contours, start, start_extra, end, end_extra, rotate, tracing = -1000000):
 	""" *Part*: Create an extrusion long the axis from *start* to *end* out of *material*
-	    (with a render color of *color*.   *contours* is a list of *Contour* objects
+	    (with a render color of *color*).   *contours* is a list of *Contour* objects
 	    where the first (required) *Contour* object specifies the outer contour and
 	    second and subsequent *Contour* objects (optional) specify internal hole contours.
 	    Only the X/Y coordinates of the *Contour* objects are actaully used (i.e. we
@@ -11237,16 +11318,12 @@ class Part:
 	part = self
 
 	# Perform any requested *tracing*
-	#if part._ezcad._stl_mode:
-	#    tracing = 0
-	#if tracing == -1000000:
-	#    tracing = part._tracing
 	trace_detail = -1
 	if tracing >= 0:
-	    trace_detail = 1
 	    indent = ' ' * tracing
 	    print("{0}=>Part.extrude('{1}', {2}, {3}, *, {4:i}, {5:i}, {6:i}, {7:i}, {8:d})".
 	      format(indent, comment, material, color, start, start_extra, end, end_extra, rotate))
+	    trace_detail = 3
 
 	# Some constants:
 	zero = L()
@@ -11257,8 +11334,6 @@ class Part:
 	# Record the *color* and *material*:
 	part._material = material
 	part._color = color
-
-	
 	extrude_axis = end - start
 	extrude_direction = extrude_axis.normalize()
 	start_extra_delta = -start_extra.millimeters() * extrude_direction
@@ -11268,91 +11343,99 @@ class Part:
 	extrude_axis = end - start
 	height = extrude_axis.length()
 
-	trace_detail = -1
-	if tracing >= 0:
-	    trace_detail = 1
-	    print("{0}direction={1:m} start_extra_delta={2:i} end_extra_delta={3:i}".
+	# Do a little tracing:
+	if trace_detail >= 1:
+	    print("{0}extrude_direction={1:m} start_extra_delta={2:i} end_extra_delta={3:i}".
 	      format(indent, extrude_direction, start_extra_delta, end_extra_delta))
+	    print("{0}height={1:i}".format(indent, height))
 
 	# Compute the transform that will place *start* on the X/Y plane with *start*-*end*
 	# pointing in the negative Z axis direction:
 	top_surface_transform = \
-	  Transform.top_surface("extrude", start, end, rotate, tracing + 1)
+	  Transform.top_surface("extrude", start, end, rotate, tracing = tracing + 1)
 	if trace_detail >= 2:
-	    print("{0}top_surface_transform={1:s}".format(indent, top_surface_transform))
 	    print("{0}top_surface_transform={1:v}".format(indent, top_surface_transform))
-
-	# Remember *top_surface_transform* for other operations:
-	#part._top_surface_transform_set(top_surface_transform, "extrude")
 
 	# Now compute the transforms that will take a contour in the X/Y plane and map
 	# them to appropate planes at *start* and *end*:
-	start_contour_transform = top_surface_transform.reverse()
-	end_contour_transform = start_contour_transform.translate("move to end", end - start)
-
-	if trace_detail >= 3:
-	    print("{0}before start_contour_transform={1:s}".format(indent, start_contour_transform))
+	reverse_top_surface_transform = top_surface_transform.reverse()
+	if trace_detail >= 2:
+	    print("{0}reverse_top_surface_transform={1:v}".
+	      format(indent, reverse_top_surface_transform))
 
 	# Extract the *outer_contour*:
 	outer_contour = contours[0]
 	outer_contour._project(top_surface_transform, tracing + 1)
 
-	if trace_detail >= 3:
-	    print("{0}middle1 start_contour_transform={1:s}".
-	      format(indent, start_contour_transform))
-
 	# Now we can expand the *bounding_box* by visiting each *bend* in *bends*:
-	bounding_box = self._bounding_box
+	bounding_box = part._bounding_box
 	bends = outer_contour._bends_get()
-	for bend in bends:
+	bottom_offset = P(zero, zero, -height)
+	for index, bend in enumerate(bends):
 	    # Compute the mapped bend points:
-	    projected_point = bend._projected_point_get()
-	    bend_start_point = start_contour_transform * projected_point
-	    bend_end_point = end_contour_transform * projected_point
-	    if trace_detail >= 2:
-		print("{0}point={1:i} bend_start_point={2:i} bend_end_point={3:i}".
-		  format(indent, point, bend_start_point, bend_end_point))
+	    top_bend_point = bend._point_get()
+	    bottom_bend_point = top_bend_point + bottom_offset
 	    if trace_detail >= 3:
-		print("{0}start_bend after plane_change={1:i}".
-		  format(indent, plane_change.point_multiply(bend_start_point)))
+		print("{0}[{1}]: top_bend_point={2:i}".
+		  format(indent, index, top_bend_point))
+		print("{0}[{1}]: bottom_bend_point={2:i}".
+		  format(indent, index, bottom_bend_point))
+
+	    transformed_top_bend_point =    reverse_top_surface_transform * top_bend_point
+	    transformed_bottom_bend_point = reverse_top_surface_transform * bottom_bend_point
+	    if trace_detail >= 3:
+		print("{0}[{1}]:  ..transformed_top_bend_point={2:i}".
+		  format(indent, index, transformed_top_bend_point))
+		print("{0}[{1}]:  ..transformed_bottom_projected_point={2:i}".
+		  format(indent, index, transformed_bottom_bend_point))
 
 	    # Now expand *bounding_box*:
-	    bounding_box.point_expand(bend_start_point)
-	    bounding_box.point_expand(bend_end_point)
+	    bounding_box.point_expand(transformed_top_bend_point)
+	    bounding_box.point_expand(transformed_bottom_bend_point)
 	if trace_detail >= 1:
 	    print("{0}bounding_box={1:i}".format(indent, bounding_box))
-	if trace_detail >= 3:
-	    print("{0}after start_contour_transform={1:s}".format(indent, start_contour_transform))
 
-	part._dowel_x = zero
-	part._dowel_y = zero
-
-	self._is_part = True
-	ezcad = self._ezcad
-	assert isinstance(ezcad, EZCAD3)
+	# Now render the *contours* in openscad:
+	part._is_part = True
+	ezcad = part._ezcad
 	if ezcad._stl_mode:
+	    # Trace STL mode:
 	    if trace_detail >= 1:
-		print("{0}==>Part.extrude:STL".format(indent))
-	    # Set up the transform and extrude:
-            lines = self._scad_union_lines
+		print("{0}STL mode entered".format(indent))
+
+	    # Set *lines* to collect OpenSCAD commands.  Due to the natur the of OpenSCAD
+	    # language syntax, these lines are appended to *lines in "reverse" order.
+	    lines = part._scad_union_lines
 	    pad = ' ' * 6
 
+	    # Use *reverse_top_surface_transform* to map the origin to *start*:
 	    lines.append("{0}// extrude('{1}', {2}, {3}, {4:m}, {5:m}, {6:m}, {7:m}, {8:d})".
 	      format(pad, comment, material, color, start, start_extra, end, end_extra, rotate))
+	    reverse_top_surface_transform._scad_lines_append(lines, pad)
+	    if trace_detail >= 2:
+		print("{0}reverse_top_surface_transform={1:v}".
+		  format(indent, reverse_top_surface_transform))
 
-	    if tracing >= 0:
-		print("{0}start_contour_transform={1:s}".format(indent, start_contour_transform))
-	    start_contour_transform._scad_lines_append(lines, pad)
-
+	    # Put top of extrusion at *origin*:
 	    lines.append(
 	      "{0}translate([ 0, 0, {1:m} ]) // Put top of extrusion at origin".
 	      format(pad, -height))
-            lines.append(
+	    lines.append(
 	      "{0}linear_extrude(height = {1:m}, convexity=10)".format(pad, height))
-	    
-	    # Output the polygon operation:
+
+	    # Start appending the OpenSCAD `polygon` command to *lines*:
 	    lines.append("{0}polygon(".format(pad))
 	    lines.append("{0}  convexity = 10,".format(pad))
+
+	    # Output all of the points used by each *contour* in *contours*.
+	    # This looks like:
+	    # 
+	    #        points = [
+            #          [x1, y1], ... , [xN, yN], // Contour 0
+	    #          [x1, y1], ... , [xN, yN], // Contour 1
+	    #          ...
+            #          [x1, y1], ... , [xN, yN], // Contour M
+            #        ],
 	    lines.append("{0}  points = [".format(pad))
 	    contours_size = len(contours)
 	    for contour_index, contour in enumerate(contours):
@@ -11368,10 +11451,16 @@ class Part:
 		line += "// Contour {0}".format(contour_index)
 		lines.append(line)
             lines.append("{0}  ],".format(pad))
-            lines.append("{0}  paths = [".format(pad))
 
-	    # Output the contour points, staring with the outer contour and followed
-	    # by any inner contours:
+	    # Output the contour paths with point indices, staring with the outer contour and
+	    # followed by any inner contours.  This looks like:
+	    #         paths = [
+	    #           [0, 1, ..., N], // Contour 0
+            #           [N+1, ..., M],  // Contour 1
+	    #           ...
+            #           [...]           // Contour M
+            #         ]
+            lines.append("{0}  paths = [".format(pad))
 	    point_index = 0
 	    for contour_index, contour in enumerate(contours):
 		line = "{0}    [ ".format(pad)
@@ -11393,15 +11482,15 @@ class Part:
 		line += "]{0} // Contour {1}".format(contour_comma, contour_index)
 		lines.append(line)
 
-	    # Wrap the polygon up:
+	    # Wrap up the `polygon` command:
             lines.append("{0}  ]".format(pad))
             lines.append("{0}); // polygon".format(pad))
 
 	    # Wrap up any *tracing*:
 	    if trace_detail >= 1:
-		print("{0}<==Part.extrude:STL".format(indent))
+		print("{0}STL exited".format(indent))
 
-	# Perform any requested tracing;
+	# Wrap up any requested *tracing*;
 	if tracing >= 0:
 	    print("{0}<=Part.extrude('{1}', {2}, {3}, *, {4:i}, {5:i}, {6:i}, {7:i}, {8:d})".
 	      format(indent, comment, material, color, start, start_extra, end, end_extra, rotate))
@@ -11477,10 +11566,46 @@ class Part:
 
 
     def invisible_set(self, invisible = True):
-	""" {Part}: Make part visible/invisible. """
+	""" *Part*: Make part visible/invisible.
+	"""
 
 	assert isinstance(invisible, bool)
 	self._visible = not invisible
+
+    def place(self, name, part, transform):
+	""" *Part*: Add a placement of *Part* using *transform* to the *Part* object (i.e. *self*.)
+	    The *name* must be unique for *part*.  *name* is also used for debugging.
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(name, str) and not ' ' in name
+	assert isinstance(part, Part)
+	assert isinstance(transform, Transform)
+
+	# Create *place* and insert to *places* indexed by *name*.  The reason why *_places*
+        # is a dictionary instead of a list is because because this is called from a
+        # construct method which gets called multiple times:
+	places = part._places
+	if name in places:
+	    # We have previously created a *place* for *name*:
+	    place = places[name]
+
+	    # Update the *transform* in *place* since it could have changed.
+	    place._transform_set(transform)
+	else:
+	    # This is the first time we have specified this *place* for *name*:
+	    place = Place(name, part, transform)
+	    places[name] = place
+
+    def place_only_set(self):
+	""" *Part*: Set the *Part* object so that it is only rendered from calls to the
+	    *Part*.*place*() routine.
+	"""
+
+	self._is_place_only = True
 
     def process(self, ezcad, tracing = -1000000):
 	""" *Part*: Perform all the manufacturing processing for a *Part*
@@ -11515,26 +11640,10 @@ class Part:
 
 	print("*************Part:{0} bounding_box={1:i}".format(self._name, self._bounding_box))
 
-	part._manufacture(ezcad, tracing + 1)
-
-	# Now visit *part* and all of its children in STL mode:
-	#ezcad._cnc_mode = True
-	#part._manufacture(ezcad, -1000000)
-	#ezcad._update_count += 1
-
-	# Now visit *part* and all of its children in visualization mode:
-	#ezcad._visualization_mode = True
-	#part._manufacture(ezcad, -1000000)
-	#ezcad._update_count += 1
-
-	# Now visit *part* and all of its children in CNC mode:
-	#ezcad._cnc_mode = True
-	#shop = ezcad._shop
-	#shop._cnc_generate_set(True)
-	#part._manufacture(ezcad, 0)
-	#part._manufacture(ezcad, -1000000)
-	#shop._cnc_generate_set(False)
-	#ezcad._update_count += 1
+	# Recursively manufacture all of the *Part* objects starting with *part*:
+	ezcad._parts_stack_reset()
+	part._manufacture(ezcad, 0, tracing + 1)
+	ezcad._parts_stack_reset()
 
 	# Clean up any directories:
 	ezcad._dxf_directory._clean_up(tracing = tracing + 1)
@@ -11682,6 +11791,8 @@ class Part:
 	    # *extra* is the material around *part*.  It used to compute how many passes
 	    # are needed to machine out the contour:
 	    extra = (extra_dx - part_dx).maximum(extra_dy - part_dy)
+	    if extra.millimeters() <= 0.0:
+		extra = L(mm=1.0)
 
 	    # Trim X/Y coordinates of *extra_stop_bsw* and *extra_stop_tne* down to contour
 	    # boundaries.  Leave the Z coordinates alone since no facing operation has occurred.
@@ -12103,7 +12214,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._wrl_manufacture('{1}')".format(indent, part._name))
 
-	# Grab STL *VRML* objects in the children of *parrt* and stuff them into *stl_vrmls*:
+	# Grab STL *VRML* objects in the children of *part* and stuff them into *stl_vrmls*:
 	stl_vrmls = VRML_Group(part._name)
 	for attribute_name in dir(self):
 	    if not attribute_name.startswith("_") and attribute_name.endswith("_"):
@@ -12124,6 +12235,8 @@ class Part:
 	    stl_vrml = VRML_Triangles(part._name, color_name, stl_triangles, tracing = tracing + 1)
 	    stl_vrml = part._parent_transform._vrml(stl_vrml, tracing + 1)
 	    stl_vrmls._append(stl_vrml)
+	else: 
+	    stl_vrmls = part._parent_transform._vrml(stl_vrmls, tracing = tracing + 1)
 
 	# Stuff *stl_vrmls* into *part*:
 	part._stl_vrmls = stl_vrmls
@@ -12360,20 +12473,27 @@ class Part:
 		if trace_detail >= 1:
 		    print("{0}is_clockwise={1}".format(indent, contour._is_clockwise))
 
-		# Remember perform all OpenScad operations in reverse order:
-
-		# Output the *top_surface_transform_reverse* to *difference_lines*:
-		difference_lines = part._scad_difference_lines
-		top_surface_transform_reverse = top_surface_transform.reverse()
-		pad = ' ' * 4
-		top_surface_transform_reverse._scad_lines_append(difference_lines, pad)
-
-		extra = L(mm=1.0)
-		difference_lines.append("{0}// Contour {1}".format(pad, contour._name_get()))
+		# We always contour a little *to_extra* on top.  We contour *bottom_extra*
+		# on the bottom if the *flags* has the 't` flag for "through":
+		zero = L()
+		bottom_extra = zero
+		if 't' in flags:
+		    # Through hole flag specified:
+		    bottom_extra = L(mm=1.0)
 		height = (end_point - start_point).length()
-		difference_lines.append("{0}translate([0, 0, {1:m}])".format(pad, -height - extra))
+		top_extra = L(mm=1.0)
+
+		# Generate the OpenSCAD commands to `linear_extrude` and translate and transform
+		# the contour to the correct location.  Remember perform all OpenScad operations
+                # in "reverse" order:
+		difference_lines = part._scad_difference_lines
+		pad = ' ' * 4
+		difference_lines.append("{0}// Contour {1}".format(pad, contour._name_get()))
+		top_surface_transform.reverse()._scad_lines_append(difference_lines, pad)
+		difference_lines.append("{0}translate([0, 0, {1:m}])".
+		  format(pad, -(bottom_extra + height)))
 		difference_lines.append("{0}linear_extrude(height = {1:m}) {{".
-		 format(pad, height + 2.0 * extra))
+		  format(pad, bottom_extra + height + top_extra))
 		contour._scad_lines_polygon_append(difference_lines, pad, True, tracing_plus_one)
 		difference_lines.append("{0}}} // linear_extrude".format(pad))
 
@@ -13301,7 +13421,7 @@ class Part:
 	#print "parts=", parts
 	return parts
 
-    def place(self,
+    def xxx_place(self,
       center = None, axis = None, rotate = None, translate = None):
 	""" *Part*: Place *self* at *translate* rotated by *rotate* around
 	    *axis* centered on *center*. """
@@ -15488,7 +15608,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.multi_mount('{1}', '{2}')".
 	      format(indent, part._name, multi_mounts._name_get()))
-	    trace_detail = 1
+	    trace_detail = 2
 
 	# Store the *part* into *multi_mounts*:
 	multi_mounts._part_set(part)
@@ -15735,8 +15855,8 @@ class Part:
 		    print("{0}[{1}]: combined_mount_translate_point={2:i}".
 		      format(indent, index, combined_mount_translate_point))
 
-		# Create *combined_mount* which is *Mount* object that will place *multi_mount_part*
-		# properly onto the tool plate:
+		# Create *combined_mount* which is a *Mount* object that will place
+                # *multi_mount_part* properly onto the tool plate:
 		combined_mount_name = "{0}[{1}]".format(name, index)
 		top_surface_safe_z = top_surface_z
 		xy_rapid_safe_z = top_surface_safe_z + L(inch=0.500)
@@ -16340,6 +16460,58 @@ class Part:
 #	if tracing >= 0:
 #	    print("{0}<=Part._wrl_write('{1}', '{2}', *, transform={3:s} file_name='{4}')".
 #	      format(indent, part._name, comment, transform, stl_file_name))
+
+class Place:
+    """ *Place*: Represents a part placement in the visualization. """
+
+    def __init__(self, name, part, transform):
+	""" *Place*: ...
+	"""
+
+	# Use *place* instead of *self*:
+	place = self
+
+	# Verify argument types:
+	assert isinstance(name, str) and not ' ' in name
+	assert isinstance(part, Part)
+	assert isinstance(transform, Transform)
+
+	# Load values into *place*:
+	place._name = name
+	place._part = part
+	place._transform = transform
+
+    def _name_get(self):
+	""" *Place*: Return the *name* of the *Place* object (i.e. *self*.)
+	"""
+
+        return self._name
+
+    def _part_get(self):
+	""" *Place*: Return the *Part* associated with the *Place* object (i.e. *self*.)
+	"""
+
+	return self._part
+
+    def _transform_set(self, transform):
+	""" *Place*: Replace the current *Transform* associated with the *Place* object
+	    (i.e. *self*) with *transform*.
+	"""
+
+	# Use *place* instead of *self*:
+	place = self
+
+	# Verify argument types:
+	assert isinstance(transform, Transform)
+
+	# Update *transform* into *place*:
+	place._transform = transform
+
+    def _transform_get(self):
+	""" *Place*: Return the *Transform* associated with the *Place* object (i.e. *self*.)
+	"""
+
+	return self._transform
 
 class Fastener(Part):
     """ *Fastener*: Represent a fastener (i.e. screw, bolt, etc.) to attach parts.  """
@@ -19051,7 +19223,7 @@ class Code:
 #   rotate by.
 # * Translate.  Independent of rotation the *Part* can moved in X/Y/Z.
 
-class Place:
+class xxx_Place:
     """ A {Place} represents the placement of a part relative to the
 	origin of an assembly. """
 
