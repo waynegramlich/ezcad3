@@ -12247,6 +12247,7 @@ class Part:
 	wrl_file_name = "{0}.wrl".format(part._name)
 	wrl_file_text = stl_vrmls._text_pad(0)
 	with wrl_directory._write_open(wrl_file_name, tracing = tracing + 1) as wrl_file:
+	    wrl_file.write("#VRML V2.0 utf8\n")
 	    wrl_file.write(wrl_file_text)
 
 	# Wrap up any requested *tracing* and return *stl_vrmls*:
@@ -22018,8 +22019,7 @@ class VRML:
 
 	# 
 	lines = []
-	lines.append("")
-	lines.append("#VRML V2.0 utf8\n")
+	lines.append("\n")
 	lines.append("# {0}\n".format(name))
 
 	# Load up *vrml*:
@@ -22062,7 +22062,7 @@ class VRML:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>VRML.write(*, *)".format(indent))
+	    print("{0}=>VRML._text_pad_helper('{1}', {2})".format(indent, vrml._name, pad))
 	    trace_detail = 2
 
 	# Make sure all *vrml* is closed:
@@ -22086,7 +22086,7 @@ class VRML:
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}=>VRML.write({1}, *)".format(indent, pad))
+	    print("{0}<=VRML._text_pad_helper('{1}', {2})".format(indent, vrml._name, pad))
 	return text
 
 class VRML_Group(VRML):
@@ -22148,10 +22148,9 @@ class VRML_Group(VRML):
 	else:
 	    # Put all the needed text pieces into *lines*:
 	    lines = []
-	    lines.append("")
-	    lines.append("#VRML V2.0 utf8\n")
+	    lines.append("\n")
 	    lines.append("### VRML_Group\n")
-	    lines.append("Group {\n")
+	    lines.append("DEF {0} Group {{\n".format(vrml_group._name))
 	    lines.append(" children [\n")
 	    for index, vrml_child in enumerate(vrml_group._children):
 		if trace_detail >= 2:
@@ -22557,8 +22556,7 @@ class VRML_Translate(VRML):
 
 	    # Construct all the *lines* that are needed for a VRML Transform:
 	    lines = []
-	    lines.append("")
-	    lines.append("#VRML V2.0 utf8\n")
+	    lines.append("\n")
 	    lines.append("# {0}\n".format(vrml_translate._name))
 	    lines.append("### VRML_Translate\n")
 	    lines.append("Transform {\n")
