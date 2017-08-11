@@ -4870,6 +4870,7 @@ class Mount_Operations:
 	mount_name = mount0._name_get().replace(' ', '_')
 	mount_wrl_file_name = "O{0}_{1}_{2}.wrl".format(mount_program_number, part_name, mount_name)
 	with ngc_directory._write_open(mount_wrl_file_name, tracing + 1) as mount_wrl_file:
+	    mount_wrl_file.write("#VRML V2.0 utf8\n")
 	    mount_vrml_text = mount_vrml._text_pad(0)
 	    mount_wrl_file.write(mount_vrml_text)
 
@@ -8857,7 +8858,7 @@ class Part:
 	part._extra_stop_tne = None		# TNE extra material corner at part construct end
 	part._ezcad = ezcad			# Top level *EZCAD3* object
 	part._is_part = False			# *True* => physical part made; *False* => assembly
-	part._is_place_only = False		# *True* => Render from *place*() calls
+	part._is_place_only = False		# *True* => Render from *place*() calls only
 	part._laser_preferred = False
 	part._material = Material("plastic", "abs")
 	part._mount_operations_table = {}
@@ -8874,7 +8875,6 @@ class Part:
 	part._stl_file_name = None
  	part._stl = None			# *STL* object associated with *part* (not assembly)
 	part._stl_vrml = None			# *VRML_STL* object for this *part* only
-	part._stl_vrmls = None			# *VRML_Group* objects for this *part* and children
 	part._tooling_plate_translate_point = P() # Vice transform for tooling plate.
 	part._tool_preferred = ""
 	part._tracing = -1000000
@@ -8882,6 +8882,7 @@ class Part:
 	part._reverse_parent_transform = root_transform
 	part._reverse_root_transform = root_transform.reverse()
 	part._visible = True
+	part._vrmls = None			# *VRML_Group* objects for this *part* and children
 	part.up = up
 
 	#print("<=Part.__init__(*, '{0}', *, place={1})".format(name, place))
@@ -11572,9 +11573,9 @@ class Part:
 	assert isinstance(invisible, bool)
 	self._visible = not invisible
 
-    def place(self, name, part, transform):
+    def place(self, name, sub_part, transform):
 	""" *Part*: Add a placement of *Part* using *transform* to the *Part* object (i.e. *self*.)
-	    The *name* must be unique for *part*.  *name* is also used for debugging.
+	    The *name* must be unique for *sub_part*.  *name* is also used for debugging.
 	"""
 
 	# Use *part* instead of *self*:
@@ -11582,7 +11583,7 @@ class Part:
 
 	# Verify argument types:
 	assert isinstance(name, str) and not ' ' in name
-	assert isinstance(part, Part)
+	assert isinstance(sub_part, Part)
 	assert isinstance(transform, Transform)
 
 	# Create *place* and insert to *places* indexed by *name*.  The reason why *_places*
@@ -11597,7 +11598,7 @@ class Part:
 	    place._transform_set(transform)
 	else:
 	    # This is the first time we have specified this *place* for *name*:
-	    place = Place(name, part, transform)
+	    place = Place(name, sub_part, transform)
 	    places[name] = place
 
     def place_only_set(self):
@@ -12214,46 +12215,160 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._wrl_manufacture('{1}')".format(indent, part._name))
 
-	# Grab STL *VRML* objects in the children of *part* and stuff them into *stl_vrmls*:
-	stl_vrmls = VRML_Group(part._name)
+	# OK. This probably the best place to explain some of the gymnastics required to get
+	# VRML to work correctly with the *Place* objects associated with a *Part*.  The way
+	# this all works is that the Part is usually output a VRML group with the following
+	# format:
+	#
+	#        DEF *part_name* Group [
+        #         children [
+	#          # Children *Part*'s typically only occur in assemblies
+	#          *child part1 VRML Node*
+	#          ...
+        #          *child partN VRML Node*
+	#
+	#          # STL for *part* (usually *NOT* an assembly):
+	#          Shape {
+        #           # VRML for Part (usually a bunch of triangles):
+	#          }
+        #
+	#          # Placements typically only occur in assemblies:
+	#          Transform { ... children[ USE place1_part_name] }
+	#          ...
+	#          Transform { ... children[ USE placeN_part_name] }
+        #         ]
+        #        }
+        #
+        # The key thing to understand is that the ability to do placements relies on the
+	# VRML DEF and USE technology.  While the VRML reference manual does not specify any
+	# constraints on the order of DEF and USE, there are many implementations that require
+	# the "DEF name" to occur before an "USE name".  This is definitely true with the
+        # *view3dscene* program.  For this reason, all children *Part* VRML is placed in the
+	# file for force the child definitions to occur first.  All of the placement transforms
+	# occur at the end of the *Part* VRML.
+	#
+	# In order to work, the Part tree constrains the *Place* object to only be able to
+	# reference *Part*'s that are lower in the *Part* tree.  Otherwise, it is possible
+	# to generate a USE for a part before it is defined.
+	# 
+	# The next issue concerns the *Part.no_automatic_placement*() method which sets the
+	# *_is_place_only* flag for a *Part*.  When this flat is set, we do not want to
+	# automatically display the *Part* with an empty transform.  The trick for doing
+	# this is to use the magic of a VRML Switch statement:
+	#
+	#         Switch {
+	#          choice [
+        #           Group DEF *part_name* {
+	#            # Rest of VRML for *part_name* here...
+	#           }
+	#          ]
+	#         }
+        #
+	# Please read the VRML reference manual to find out more about the VRML Switch Node.
+	# Basially, by not specifying a `whichChoice` clause, the body of the Switch Node
+	# is processed to record the DEF, but it is not automatically rendered.  The node
+        # only rendered by an appropriate USE reference.
+	#	
+	# Lastly, we write out a `.wrl` for each node in the *Part* tree.  For *Part*'s that
+	# that have the *_is_place_only* flag set to *True*, this will cause the *Part* to not
+	# render.  The kludge to work around this generate an enclosing VRML Group node that
+	# REF's the *Part* VRML.  Yes, this is a total kludge but it works.  Enough said.
+    
+	# Start by creating *part_group_vrmls* which is the workhorse VRML Group node for
+	# this *part*:
+	part_name = part._name
+	part_group_vrmls = VRML_Group(part_name)
+
+	# Put the children *Part*'s into *part_group_vrmls*:
 	for attribute_name in dir(self):
 	    if not attribute_name.startswith("_") and attribute_name.endswith("_"):
-		sub_part = getattr(self, attribute_name)
-		assert isinstance(sub_part, Part)
-		sub_part_stl_vrmls = sub_part._stl_vrmls
-		if sub_part_stl_vrmls == None:
-		    sub_part._wrl_manufacture(tracing = tracing + 1)
-		    sub_part_stl_vrmls = sub_part._stl_vrmls
-		    assert isinstance(sub_part_stl_vrmls, VRML_Group)
-		stl_vrmls._append(sub_part_stl_vrmls)
+		child_part = getattr(self, attribute_name)
+		assert isinstance(child_part, Part)
 
-	# Create the *stml_vrml* for *part* if it is an actual part:
+		# Only call *_wrl_manufacture* for *child_part* if we have not already done so:
+		child_part_vrmls = child_part._vrmls
+		if child_part_vrmls == None:
+		    child_part._wrl_manufacture(tracing = tracing + 1)
+		    child_part_vrmls = child_part._vrmls
+		    assert isinstance(child_part_vrmls, VRML_Group) or \
+		      isinstance(child_part_vrmls, VRML_Switch)
+
+		# Stuff *child_part_vrmls* onto the end *part_group_vrmls*:
+		part_group_vrmls._append(child_part_vrmls)
+
+	# Create the *stml_vrml* for *part* if it is an actual part::
 	if part._is_part:
 	    stl = part._stl_get()
 	    stl_triangles = stl._triangles_get()
 	    color_name = part._color._name_get()
 	    stl_vrml = VRML_Triangles(part._name, color_name, stl_triangles, tracing = tracing + 1)
-	    stl_vrml = part._parent_transform._vrml(stl_vrml, tracing + 1)
-	    stl_vrmls._append(stl_vrml)
-	else: 
-	    stl_vrmls = part._parent_transform._vrml(stl_vrmls, tracing = tracing + 1)
+	    # FIXME: This has been repleaced by *Part.place(...)*!!!
+	    #stl_vrml = part._parent_transform._vrml(stl_vrml, tracing + 1)
+	    part_group_vrmls._append(stl_vrml)
 
-	# Stuff *stl_vrmls* into *part*:
-	part._stl_vrmls = stl_vrmls
+	# Perform the *places*:
+	places = part._places
+	for place in places.values():
+	    # Grab some values out of *place*:
+	    assert isinstance(place, Place)
+	    place_name = place._name_get()
+	    place_part = place._part_get()
+	    place_transform = place._transform_get()
+	
+	    # Verify that *place_part* occurs "under" *part* in the *Part* tree in order to
+	    # ensure that every part is DEF'ed before a subsequent USE:
+	    parent_part = place_part
+	    while parent_part != None:
+		if parent_part == part:
+		    break
+		parent_part = parent_part.up
+	    assert parent_part != None, "Place part '{0}' is not 'under' '{1}' in Part tree. ".\
+	      format(place_part._name_get(), part._name)
 
-	# Write *stl_vrmls* out to the file *wrl_file_name*:
+	    # Now create a VRML USE for *place*:
+	    use_comment = "{0}_USE".format(place_part._name_get())
+	    use_vrml = VRML_Use(use_comment, place_part, tracing = tracing + 1)
+	    transformed_use_vrml = place_transform._vrml(use_vrml, tracing = tracing + 1)
+	    part_group_vrmls._append(transformed_use_vrml)
+
+	# If we have a *place_only* part, we hide the definition inside of VRML Switch grouping:
+	# The definition is recorded by the VRML viewer, but does not actually get shown until
+	# there is a VRML USE reference somewhere else.  Frankly, this is pretty obscure stuff
+	# and it causes problems below when we want to write out VRML file:
+	is_place_only = part._is_place_only
+	if is_place_only:
+	    switch_vrmls = VRML_Switch("{0}_Switch".format(part_name), -1)
+	    switch_vrmls._append(part_group_vrmls)
+	    part_group_vrmls = switch_vrmls
+	
+	# Stuff *part_group_vrmls* into *part*:
+	part._vrmls = part_group_vrmls
+
+	# OK this is ugly.  When the *part* is marked *is_place* only and is the top level
+	# VRML file, the VRML Switch grouping causes nothing to be shown.  Bummer!  The solution
+	# is to wrap everything in a Group that accesses the part definition:
+	final_vrmls = part_group_vrmls
+	if is_place_only:
+	    use_comment = "{0}_USE".format(part_name)
+	    use_vrml = VRML_Use(use_comment, part, tracing = tracing + 1)
+	    group_vrml = VRML_Group("TOP_LEVEL")
+	    group_vrml._append(part_group_vrmls)
+	    group_vrml._append(use_vrml)
+	    final_vrmls = group_vrml
+
+	# Write *final_vrmls* out to the file *wrl_file_name*:
 	ezcad = part._ezcad
 	wrl_directory = ezcad._wrl_directory_get()
 	wrl_file_name = "{0}.wrl".format(part._name)
-	wrl_file_text = stl_vrmls._text_pad(0)
+	wrl_file_text = final_vrmls._text_pad(0)
 	with wrl_directory._write_open(wrl_file_name, tracing = tracing + 1) as wrl_file:
 	    wrl_file.write("#VRML V2.0 utf8\n")
 	    wrl_file.write(wrl_file_text)
 
-	# Wrap up any requested *tracing* and return *stl_vrmls*:
+	# Wrap up any requested *tracing* and return *part_groupo_vrmls*:
 	if tracing >= 0:
 	    print("{0}<=Part._wrl_manufacture('{1}')".format(indent, part._name))
-	return stl_vrmls
+	return part_group_vrmls
 
     def __str__(self):
 	""" Part: Return {self} as a formatted string. """
@@ -13451,13 +13566,12 @@ class Part:
 	#print("<=Part.place({0}, part='{1}',name='{2}' ...)". \
 	#  format(self._name, part._name, name))
 
-    def xxxno_automatic_place(self):
-	""" *Part*: Disable automatic placement of *self*. """
+    def no_automatic_place(self):
+	""" *Part*: Disable automatic placement of the *Part* object (i.e. *self*.)
+	"""
 
-	name = self._name
-	places = self.up._places
-	if name in places:
-	    del places[name]
+	# Mark that only *Place* objects are to be used:
+	self._is_place_only = True
 
     #def point(self, point_path):
     #	""" Part dimensions: Return the {P} associated with {point_path}
@@ -22486,6 +22600,103 @@ class VRML_Rotate(VRML):
 	    print("{0}<=VRML_Rotate._text_pad('{1}', {2})".format(indent, vrml_rotate._name, pad))
 	return text
 
+class VRML_Switch(VRML):
+    """ *VRML_Switch*: Represents a VRML Switch node.
+    """
+
+    def __init__(self, name, which_choice):
+	""" *VRML_Switch*: Initialize the *VRML_Switch* object (i.e. *self*):
+	"""
+
+	# Use *vrml_switch* instead of *self*:
+	vrml_switch = self
+
+	# Verify argument types:
+	assert isinstance(name, str) and not ' ' in name
+	assert isinstance(which_choice, int)
+
+	# Initialize super-class:
+	VRML.__init__(self, name)
+
+	# Create *children* lists:
+	vrml_switch._children = []
+	vrml_switch._which_choice = which_choice
+
+    def _append(self, vrml):
+	""" *VRML_Switch*: Append *vrml* to the *VRML_Switch* object (i.e. *self*):
+	"""
+
+	# Use *vrml_switch* instead of *self*:
+	vrml_switch = self
+
+	# Verify argument types:
+	assert isinstance(vrml, VRML)
+
+	# Make sure that *vrml_switch* is still open:
+	assert vrml_switch._is_open
+
+	# Append *vrml* to *children*:
+	vrml_switch._children.append(vrml)
+
+    def _text_pad(self, pad, tracing=-1000000):
+	""" *VRML_Switch*: Return the *VRML_Switch* object (i.e. *self*) as a single string 
+	"""
+
+	# Use *vrml_switch* instead of *self*:
+	vrml_switch = self
+
+	# Verify argument types:
+	assert isinstance(pad, int)	
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>VRML_Switch._text_pad('{1}', {2})".format(indent, vrml_switch._name, pad))
+	    trace_detail = 2
+
+	# Mark this switch as *closed*:
+	vrml_switch._is_open = False
+
+	# Construct the content:
+	pad_table = vrml_switch._pad_table
+	if pad in pad_table:
+	    # This padding level has been previously computed:
+	    text = pad_table[pad]
+	else:
+	    # Put all the needed text pieces into *lines*:
+	    lines = []
+	    lines.append("\n")
+	    lines.append("### VRML_Switch\n")
+	    lines.append("Switch {\n")
+	    which_choice = vrml_switch._which_choice
+	    if which_choice >= 0:
+		lines.append(" whichChoice {0}\n".format(which_choice))
+	    lines.append(" choice [\n")
+	    for index, vrml_child in enumerate(vrml_switch._children):
+		if trace_detail >= 2:
+		    print("{0}[{1}] '{2}'".format(indent, index, vrml_child.__class__.__name__))
+		vrml_child_text = vrml_child._text_pad(pad + 2, tracing = tracing + 1)
+		assert isinstance(vrml_child_text, str), \
+		  "Bad return for {0}".format(vrml_child.__class__.__name__)
+		lines.append(vrml_child_text)
+	    lines.append(" ]\n")
+	    lines.append("}\n")
+
+	    # Concatenate all of lines into one big string of *text* padded with *padding*::
+	    padding = ' ' * pad
+	    text = padding.join(lines)
+
+	    # Stuff *text* into *pad_table*:
+	    pad_table[pad] = text
+
+	# Wrap up any requested *tracing* and return *text*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=VRML_Switch._text_pad('{1}', {2})".format(indent, vrml_group._name, pad))
+	return text
+
 class VRML_Translate(VRML):
     """ *VRML_Translate*: Represents a VRML Rotatiation Transform node.
     """
@@ -22529,7 +22740,6 @@ class VRML_Translate(VRML):
 
 	# Use *vrml_translate* instead of *self*:
 	vrml_translate = self
-
 	# Verify argument types:
 	assert isinstance(pad, int)
 	assert isinstance(tracing, int)
@@ -22578,40 +22788,6 @@ class VRML_Translate(VRML):
 	    print("{0}VRML_Translate._text_pad('{1}', {2})".
 	      format(indent, vrml_translate._name, pad))
 	return text
-
-    def padded_write(self, vrml_file, pad):
-	""" *VRML_Translate*: Write the *VRML_Translate* object out to *vrml_file* with each line
-	    indented by *pad* spaces.
-	"""
-
-	# Use *vrml_translate* instead of *self*:
-	vrml_translate = self
-	
-	# Verify argument types:
-	assert isinstance(vrml_file, file)
-	assert isinstnace(pad, int)
-
-	# Write out the header:
-	vrml_translate._header_write(vrml_file, pad)
-	
-	# Grab some values from *vrml_translate*:
-	translate = vrml_translate._translate
-	children = vrml_translate._children
-
-	# Write out the transform lines:
-	padding = ' ' * pad
-	vrml_file.write("{0}Transform {{\n".format(padding))
-	vrml_file.write("{0} translation {1:m} {2:m} {3:m}\n".
-	  format(padding, translate.x, translate.y, translate.z))
-
-	# Write out the *children*:
-	vrml_file.write("{0} children [\n".format(padding))
-	for child_vrml in children:
-	    child_vrml.padded_write(vrml_file, pad + 2)
-	vrml_file_write("{0} ]\n")
-
-	# Close up final curly brace for Transform:
-	vrml_file.write("{0}}}".format(pad))
 
 class VRML_Triangles(VRML):
     """ *VRML_Triangles*: Represent a VRML shape that consists of colored triangles.
@@ -22748,6 +22924,89 @@ class VRML_Triangles(VRML):
 	if tracing >= 0:
 	    print("{0}VRML_Triangles._text_pad('{1}', {2})".
 	      format(indent, vrml_triangles._name, pad))
+	return text
+
+class VRML_Use(VRML):
+    """ *VRML_Use*: Represents a VRML Rotatiation Transform node.
+    """
+
+    def __init__(self, name, use, tracing=-1000000):
+	""" *VRML_Use*: Initialize the *VRML_Use* node object (i.e. *self*) to
+	    represent a VRML "use" call.
+	"""
+	
+	# Use *vrml_use* instead of *self*:
+	vrml_use = self
+
+	# Verify argument types:
+	assert isinstance(name, str) and not ' ' in name
+	assert isinstance(use, Part)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>VRML_Use.__init__(*, '{1}', '{2}')".
+	      format(indent, name, use._name_get()))
+
+	# Intialize the *VRML* super class:
+	VRML.__init__(vrml_use, name)
+
+	# Load values into *vrml_use*:
+	vrml_use._use = use
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=VRML_Use.__init__(*, '{1}', '{2}')".
+	      format(indent, name, use._name_get()))
+
+    def _text_pad(self, pad, tracing=-1000000):
+	""" *VRML_Use* Return the *VRM_Use* object (i.e. *self*) as a string
+	    where each line is preceeded by *pad* spaces.
+	"""
+
+	# Use *vrml_use* instead of *self*:
+	vrml_use = self
+
+	# Verify argument types:
+	assert isinstance(pad, int)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}VRML_Use._text_pad('{1}', {2})".
+	      format(indent, vrml_use._name, pad))
+	    trace_detail = 2
+
+	# Figure out if we have already done this *pad* before:
+	pad_table = vrml_use._pad_table
+	if pad in pad_table:
+	    text = pad_table[pad]
+	else:
+	    # Grab the values out of *vrml_use*:
+	    use = vrml_use._use
+	    use_name = use._name_get()
+
+	    # Construct all the *lines* that are needed for a VRML Transform:
+	    lines = []
+	    lines.append("\n")
+	    lines.append("### VRML_Use\n")
+	    lines.append("# {0}\n".format(use_name))
+	    lines.append("USE {0}\n".format(use_name))
+	    
+	    # Convert *lines* into one big *text* string where each lines is prepended by *padding*:
+	    padding = ' ' * pad
+	    text = padding.join(lines)
+
+	    # Stuff *text* back into *pad_table*:
+	    pad_table[pad] = text
+
+	# Wrap up any requested *tracing* and return text:
+	if tracing >= 0:
+	    print("{0}VRML_Use._text_pad('{1}', {2})".
+	      format(indent, vrml_use._name, pad))
 	return text
 
 #    #FIXME: This Part routine appears to be no longer used!!!
