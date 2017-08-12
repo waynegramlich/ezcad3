@@ -8864,13 +8864,14 @@ class Part:
 	part._mount_operations_table = {}
 	part._mount_operations_list = []	# List of operations that construct part
 	part._name = name			# Part name
-	part._parent_transform = null_transform
 	part._places = {}
 	part._position_count = 0
 	part._priority = 0
-	part._shop = ezcad._shop
+	part._reverse_root_transform = root_transform.reverse()
+	part._root_transform = null_transform
 	part._scad_difference_lines = []
 	part._scad_union_lines = []
+	part._shop = ezcad._shop
 	part._signature_hash = None
 	part._stl_file_name = None
  	part._stl = None			# *STL* object associated with *part* (not assembly)
@@ -8878,9 +8879,6 @@ class Part:
 	part._tooling_plate_translate_point = P() # Vice transform for tooling plate.
 	part._tool_preferred = ""
 	part._tracing = -1000000
-	part._root_transform = null_transform
-	part._reverse_parent_transform = root_transform
-	part._reverse_root_transform = root_transform.reverse()
 	part._visible = True
 	part._vrmls = None			# *VRML_Group* objects for this *part* and children
 	part.up = up
@@ -12116,33 +12114,6 @@ class Part:
 
 	self._tracing = 0
 
-    def transform_set(self, transform):
-	""" *Part*: Set the transform from the *Part* object (i.e. *self*) to *transform*.
-	    The transform is used to map from the parent's 3D space ot the 3D space of the
-	    *Part* object.
-	"""
-
-	# Use *part* instead of *self*:
-	part = self
-
-	# Verify argument types*:
-	assert isinstance(transform, Transform)
-
-	# Load *transform* and its reverse into *part*:
-	part._parent_transform = transform
-	part._reverse_parent_transform = transform.reverse()
-
-	# Figure out what the *root_transform* is:
-	parent_part = part.up
-	if isinstance(parent_part, Part):
-	    root_transform = parent_part._root_transform.chain(transform)
-	else:
-	    root_transform = transform
-
-	# Load *root_transform* and its reverse into *part*:
-	part._root_transform = root_transform
-	part._reverse_root_transform = root_transform.reverse()
-
     def translate(self, center):
 	""" *Part*: Move the origin of the *Part* object (i.e. *self*) by
 	    *center*.
@@ -12302,8 +12273,6 @@ class Part:
 	    stl_triangles = stl._triangles_get()
 	    color_name = part._color._name_get()
 	    stl_vrml = VRML_Triangles(part._name, color_name, stl_triangles, tracing = tracing + 1)
-	    # FIXME: This has been repleaced by *Part.place(...)*!!!
-	    #stl_vrml = part._parent_transform._vrml(stl_vrml, tracing + 1)
 	    part_group_vrmls._append(stl_vrml)
 
 	# Perform the *places*:
@@ -13536,35 +13505,6 @@ class Part:
 	parts.reverse()
 	#print "parts=", parts
 	return parts
-
-    def xxx_place(self,
-      center = None, axis = None, rotate = None, translate = None):
-	""" *Part*: Place *self* at *translate* rotated by *rotate* around
-	    *axis* centered on *center*. """
-
-	#print("=>Part.place({0}, part='{1}',name='{2}' ...)". \
-	#  format(self._name, part._name, name))
-
-	# Check argument types:
-	none_type = type(None)
-	assert type(center) == none_type or isinstance(center, P)
-	assert type(axis) == none_type or isinstance(axis, P)
-	assert type(rotate) == none_type or isinstance(rotate, Angle)
-	assert type(translate) == none_type or isinstance(translate, P)
-
-	# Load up *self8:
-	self._center = center
-	self._axis = axis
-	self._rotate = rotate
-	self._translate = translate
-
-	# Create *place* and stuff into *_places*:
-	#place = Place(part = part, name = name,
-	#  center = center, axis = axis, rotate = rotate, translate = translate)
-	#self._places[name] = place
-
-	#print("<=Part.place({0}, part='{1}',name='{2}' ...)". \
-	#  format(self._name, part._name, name))
 
     def no_automatic_place(self):
 	""" *Part*: Disable automatic placement of the *Part* object (i.e. *self*.)
@@ -16307,274 +16247,6 @@ class Part:
 	if tracing >= 0:
 	    print("{0}<=Part._multi_mount_process('{1}', '{2}', *)".
 	      format(indent, 0, part._name, name))
-
-# Hang onto this code, it will need to be reworked for assembly .wrl file geneation:
-#
-#    def _wrl_write(self, comment, wrl_lines,
-#      transform, wrl_indent, stl_file_name, parts_table = {}, tracing = -1000000):
-#    	""" *Part*: Write *self* to *wrl_file*. """
-#
-#	# Check argument types:
-#	assert isinstance(comment, str)
-#	assert isinstance(wrl_lines, list)
-#	assert isinstance(transform, Transform)
-#	assert isinstance(wrl_indent, int)
-#	assert isinstance(parts_table, dict)
-#	assert isinstance(stl_file_name, str)
-#	assert isinstance(tracing, int)
-#
-#	# Use *part* instead of *self*:
-#	part = self
-#
-#	# Perform any requested *tracing*:
-#	trace_detail = -1
-#	if tracing >= 0:
-#	    indent = ' ' * tracing
-#	    print("{0}=>Part._wrl_write('{1}', '{2}', *, transform={3:s} file_name='{4}')".
-#	      format(indent, part._name, comment, transform, stl_file_name))
-#	    trace_detail = 1
-#
-#	if trace_detail >= 1:
-#	    print("{0}before len(wrl_lines)={1}".format(indent, len(wrl_lines)))
-#
-#	# Do some preparation work:
-#	#ezcad = part._ezcad_get()
-#	name = part._name
-#	spaces = ' ' * wrl_indent
-#
-#	# Figure out whether to generate USE or DEF:
-#	if part._visible:
-#	    if name in parts_table:
-#		wrl_lines.append("{0}USE x{1}\n".format(spaces, name))
-#	    else:
-#		# Remember that we have defined *part* in the .wrl file:
-#		parts_table[name] = part
-#    
-#		# Decide whether we are a part or an assembly:
-#		if part._is_part and part._color.alpha > 0.0:
-#		    # Read in the .stl file that was generated by OpenSCAD:
-#		    name = part._name
-#		    ezcad = part._ezcad_get()
-#		    stl_directory = ezcad._stl_directory_get()
-#		    stl_file_name = "{0}_{1}.stl".format(name, part._signature)
-#		    stl_lines = stl_directory._lines_read(stl_file_name, tracing = tracing + 1)
-#		    if tracing >= 0:
-#			print("{0}len(stl_lines)={1}".format(indent, len(stl_lines)))
-#    
-#		    # Extract the *triangles* and *vertices* from the read
-#		    # in content:
-#		    triangles = []
-#		    offsets = []
-#		    vertices = {}
-#		    size = len(stl_lines)
-#		    assert stl_lines[0][:5] == "solid"
-#		    index = 1
-#		    while index + 4 < size:
-#			#  Extract *point1*, *point2*, and *point3* from *stl_lines*:
-#			xlist1 = stl_lines[index + 2].split()
-#			point1 = P(L(float(xlist1[1])), L(float(xlist1[2])), L(float(xlist1[3])))
-#			xlist2 = stl_lines[index + 3].split()
-#			point2 = P(L(float(xlist2[1])), L(float(xlist2[2])), L(float(xlist2[3])))
-#			xlist3 = stl_lines[index + 4].split()
-#			point3 = P(L(float(xlist3[1])), L(float(xlist3[2])), L(float(xlist3[3])))
-#
-#			# Transform *point1*, *point2*, and *point3*:
-#			point1 = transform * point1
-#			point2 = transform * point2
-#			point3 = transform * point3
-#
-#			# Now convert the transformed *point1*, *point2*, and *point3*, back
-#			# back into immutable Python tuples that  can be used to index into
-#	         	# a Python dictionary:
-#			vertex1 = point1.triple()
-#			vertex2 = point2.triple()
-#			vertex3 = point3.triple()
-#    
-#			# Get *offset1* for *vertex1*:
-#			if vertex1 in vertices:
-#			    offset1 = vertices[vertex1]
-#			else:
-#			    offset1 = len(offsets)
-#			    offsets.append(vertex1)
-#			    vertices[vertex1] = offset1
-#    
-#			# Get *offset2* for *vertex2*:
-#			if vertex2 in vertices:
-#			    offset2 = vertices[vertex2]
-#			else:
-#			    offset2 = len(offsets)
-#			    offsets.append(vertex2)
-#			    vertices[vertex2] = offset2
-#    
-#			# Get *offset3* for *vertex3*:
-#			if vertex3 in vertices:
-#			    offset3 = vertices[vertex3]
-#			else:
-#			    offset3 = len(offsets)
-#			    offsets.append(vertex3)
-#			    vertices[vertex3] = offset3
-#    
-#			# Create a triangle using the offsets:
-#			triangles.append( (offset1, offset2, offset3,) )
-#			index += 7
-#		    # We are done with *stl_lines*:
-#		    stl_lines = None
-#		    spaces = ' ' * wrl_indent
-#    
-#		    # Write out "DEF name Shape {":
-#		    #wrl_lines.append(
-#		    #  "DEF x{1} Shape {".format(name))
-#		    wrl_lines.append(
-#		      "#VRML V2.0 utf8\n")
-#		    wrl_lines.append(
-#		        "# {0}\n".format(comment))
-#		    wrl_lines.append(
-#		      "# Transform={0:s}\n".format(transform))
-#		    wrl_lines.append(
-#		      "Shape {\n")
-#    
-#		    # Output appearance *color* and material properties::
-#		    color = part._color
-#		    assert isinstance(color, Color)
-#		    wrl_lines.append(
-#		      " appearance Appearance {\n")
-#		    wrl_lines.append(
-#		      "  material Material {\n")
-#		    wrl_lines.append(
-#		      "   diffuseColor {0} {1} {2}\n".format(color.red, color.green, color.blue))
-#		    if color.alpha < 1.0:
-#			wrl_lines.append(
-#		      "   transparency {0}\n".format(1.0 - color.alpha))
-#		    wrl_lines.append(
-#		      "  }")
-#		    wrl_lines.append(
-#		      " }")
-#	    
-#		    # Start "geometry IndexedFaceSet {...}":
-#		    wrl_lines.append(
-#		      " geometry IndexedFaceSet {\n")
-#    
-#		    # Output the *vertices* in a "Coordinate {...}":
-#		    wrl_lines.append(
-#		      "  coord Coordinate {\n")
-#		    wrl_lines.append(
-#		      "   point[\n")
-#		    for offset in offsets:
-#			wrl_lines.append(
-#		      "    {0} {1} {2}\n".format(offset[0], offset[1], offset[2]))
-#		    wrl_lines.append(
-#		      "   ]\n")
-#		    wrl_lines.append(
-#		      "  }\n")
-#    
-#		    # Output the *triangles* in a "coordIndex [...]"::
-#		    wrl_lines.append(
-#		      "  coordIndex [\n")
-#		    for triangle in triangles:
-#			# Output each *triangle* (except last one) with
-#			# trailing comma:
-#			wrl_lines.append(
-#		      "   {0} {1} {2} -1 #\n".
-#			  format(triangle[0], triangle[1], triangle[2]))
-#		    wrl_lines.append(
-#		      "  ]")
-#    
-#		    # Close "geometry IndexdFaceSet{...}":
-#		    wrl_lines.append(
-#		      " }\n")
-#		    # Close "... Shape {...}":
-#		    wrl_lines.append(
-#		      "}\n")
-#		else:
-#		    # Start a named "Group {...}":
-#		    wrl_lines.append(
-#		      "DEF x{1} Group {\n".format(part._name))
-#		    wrl_lines.append(
-#		      " children [\n")
-#    
-#		    # Output each *place* in *places*
-#		    sub_parts = []
-#		    for attribute_name in dir(part):
-#			if not attribute_name.startswith("_") and \
-#			  attribute_name.endswith("_"):
-#			    sub_part = getattr(part, attribute_name)
-#			    assert isinstance(sub_part, Part)
-#			    sub_parts.append(sub_part)
-#		    sub_parts = list(set(sub_parts))
-#		    sub_parts.sort(key = lambda sub_part: sub_part._name)
-#    
-#		    for sub_part in sub_parts:
-#			# Extract some values from *place*:
-#			center = sub_part._center
-#			axis = sub_part._axis
-#			rotate = sub_part._rotate
-#			translate = sub_part._translate
-#    
-#			# Figure out if we have to do a "Transform...":
-#			none_type = type(None)
-#			zero_rotate = type(rotate) == none_type or rotate == Angle()
-#			zero_translate = \
-#			  type(translate) == none_type or translate == P()
-#			if zero_rotate and zero_translate:
-#			    # We have neither a rotation nor a translation;
-#			    # so we output *part* without a "Transform..."
-#			    sub_part._wrl_write(wrl_lines,
-#			      transform, wrl_indent + 2, parts_table, file_name)
-#			else:
-#			    # We have either a rotation and/or a translation;
-#			    # So we need to wrap *part* in a "Transform ...":
-#			    wrl_lines.append(
-#			      "  Transform {\n")
-#    
-#			    # If appropriate, write out "rotation"
-#			    if not zero_rotate:
-#				# Move rotation center if not (0,0,0):
-#				if type(center) != none_type and center != P():
-#				    wrl_lines.append(
-#				      "   center {0} {1} {2}\n".
-#				      format(center.x, center.y, center.z))
-#				# Write out the rotation:
-#				wrl_lines.append(
-#				      "   rotation {0} {1} {2} {3:r}\n".format(
-#				      axis.x, axis.y, axis.z, rotate))
-#    
-#			    # If appropriate, write out the "translation ..."
-#			    if not zero_translate:
-#				wrl_lines.append(
-#				  "   translation {0} {1} {2}\n".format(
-#				  translate.x, translate.y, translate.z))
-#    
-#			    # Now we can write out *part* wrapped in
-#			    # "children [...]":
-#			    wrl_lines.append(
-#			      "   children [")
-#			    sub_part._wrl_write(wrl_file, transform,
-#			      wrl_indent + 4, parts_table, file_name)
-#			    wrl_lines.append(
-#			      "   ]\n")
-#    
-#			    # Close out "Transform {...}":
-#			    wrl_lines.append(
-#			      "  }\n")
-#    
-#		    # We are done writing out *places*, so we can close out
-#		    # "children [ ...]":
-#		    wrl_lines.append(
-#		      " ]\n")
-#    
-#		    # Close out "Group { ... }":
-#		    wrl_lines.append(
-#		      "} # Part._wrl_write\n")
-#    
-#	    #print("{0}<=Part.wrl_write({1}, {2}, {3}, {4}):leave".
-#	    #  format(spaces, name, indent, parts_table.keys(), file_name))
-#
-#	if trace_detail >= 1:
-#	    print("{0}after len(wrl_lines)={1}".format(indent, len(wrl_lines)))
-#
-#	if tracing >= 0:
-#	    print("{0}<=Part._wrl_write('{1}', '{2}', *, transform={3:s} file_name='{4}')".
-#	      format(indent, part._name, comment, transform, stl_file_name))
 
 class Place:
     """ *Place*: Represents a part placement in the visualization. """
@@ -19399,10 +19071,6 @@ class xxx_Place:
 	if trace >= 0:
 	    print("{0}translate_matrix={1}".
 	      format(trace * ' ', translate_matrix))
-
-	#print "Place(): cm=\n{0}\nrm=\n{1}\nrcm=\n{2}\ntm=\n{3}\n". \
-	#  format(center_matrix.mat, rotate_matrix.mat, \
-	#  center_reverse_matrix.mat, translate_matrix.mat)
 
 	# Compute {forward_matrix} and {reverse_matrix}:
 	forward_matrix = center_matrix * \
