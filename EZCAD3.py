@@ -12,7 +12,7 @@
 #   are marked in *italics* inside all comments.
 # * All variable names are in lower case with adverbs, nouns, and verbs, separated by underscore
 #   `_` characters.  Fully spelled out words are **strongly** encouraged.  Dropping vowels and
-#   and syllables is simply not done.
+#   and sylables is simply not done.
 # * All class names are like variable names, but first letter of each word is capitalized.
 #   CamelCase class names are not used.  The only exception is classes that come from imported
 #   Python libraries.  The *L* (i.e. length) and *P* classes (i.e. point) classes are an
@@ -182,6 +182,8 @@
 # at vice mount time and it is kept track of by EZCAD.  Thus, each mount object containts
 # a couple of points that specify where the extra material is.  If fact, there actually
 # two pairs of points.
+#
+# {To be continued...}
 
 # Imported libraries:
 import hashlib				# Used to create unique hash for `.scad` files
@@ -2348,13 +2350,23 @@ class Bounding_Box:
 
 	return P(self._east - self._west, self._north - self._south, self._top - self._bottom)
 
-    def point_expand(self, point):
+    def point_expand(self, point, tracing=-1000000):
 	""" *Bounding_Box*: Expand the *Bounding_Box* object (i.e. *self*)
 	    to enclose *point*.
 	"""
 
+	# Use *bounding_box* instead of *self*:
+	bounding_box = self
+
 	# Verify argument types:
 	assert isinstance(point, P)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Bounding_Box.point_expand({1:i}, {2:i})".
+	      format(indent, bounding_box, point))
 
 	# Extract *x*/*y*/*z* from *point*:
 	x = point.x
@@ -2362,31 +2374,35 @@ class Bounding_Box:
 	z = point.z
 
 	# Deal with an empty bounding box first:
-	if self._is_empty:
-	    # The *Bounding_Box* object (i.e. *self*) so mark it as non_empty and make
-	    # exactly enclose *point*:
-	    self._east = x
-	    self._west = x
-	    self._north = y
-	    self._south = y
-	    self._top = z
-	    self._bottom = z
+	if bounding_box._is_empty:
+	    # The *bounding_box* is empty, so make it exactly enclose *point*:
+	    bounding_box._east = x
+	    bounding_box._west = x
+	    bounding_box._north = y
+	    bounding_box._south = y
+	    bounding_box._top = z
+	    bounding_box._bottom = z
 	else:
 	    # Update the minimum and maximum *x*:
-	    self._east =   x.maximum(self._east)
-	    self._west =   x.minimum(self._west)
-	    self._north =  y.maximum(self._north)
-	    self._south =  y.minimum(self._south)
-	    self._top =    z.maximum(self._top)
-	    self._bottom = z.minimum(self._bottom)
+	    bounding_box._east =   x.maximum(bounding_box._east)
+	    bounding_box._west =   x.minimum(bounding_box._west)
+	    bounding_box._north =  y.maximum(bounding_box._north)
+	    bounding_box._south =  y.minimum(bounding_box._south)
+	    bounding_box._top =    z.maximum(bounding_box._top)
+	    bounding_box._bottom = z.minimum(bounding_box._bottom)
 
 	# Make sure the *bounding_box* is not broken:
-	assert self._west <= self._east
-	assert self._south <= self._north
-	assert self._bottom <= self._top
+	assert bounding_box._west <= bounding_box._east
+	assert bounding_box._south <= bounding_box._north
+	assert bounding_box._bottom <= bounding_box._top
 
 	# Sure that we mark everything as not empty:
-	self._is_empty = False
+	bounding_box._is_empty = False
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Bounding_Box.point_expand({1:i}, {2:i}".
+	      format(indent, bounding_box, point))
 
     @staticmethod
     def unit_test():
@@ -3324,6 +3340,7 @@ class Contour:
 	    # FIXME: *trim* extra should be computed:
 	    # Now tack on extra box area:
 	    trim_extra = L(inch=36.0)
+	    #trim_extra = L(inch=2.0)
 	    x1 = x_minimum - trim_extra
 	    x2 = x_maximum + trim_extra
 	    y1 = y_minimum - trim_extra
@@ -12179,12 +12196,13 @@ class Part:
 
 	# Verify argument types:
 	assert isinstance(tracing, int)
-        
+
 	# Perform any requested tracing:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._wrl_manufacture('{1}')".format(indent, part._name))
+	    trace_detail = 3
 
 	# OK. This probably the best place to explain some of the gymnastics required to get
 	# VRML to work correctly with the *Place* objects associated with a *Part*.  The way
@@ -12276,6 +12294,7 @@ class Part:
 	    part_group_vrmls._append(stl_vrml)
 
 	# Perform the *places*:
+	part_bounding_box = part._bounding_box
 	places = part._places
 	for place in places.values():
 	    # Grab some values out of *place*:
@@ -12284,6 +12303,27 @@ class Part:
 	    place_part = place._part_get()
 	    place_transform = place._transform_get()
 	
+	    if trace_detail >= 3:
+		print("{0}place_name='{1}'".format(indent, place_name))
+		print("{0}place_part.bsw={1:i} place_part.tne={2:i}".
+		  format(indent, place_part.bsw, place_part.tne))
+		print("{0}transformed place_part.bsw={1:i}".
+		  format(indent, place_transform * place_part.bsw))
+		print("{0}before part_bounding_box={1:i}".format(indent, part_bounding_box))
+
+	    # Expand the *bounding_box*:
+	    part_bounding_box.point_expand(place_transform * place_part.bsw)
+	    part_bounding_box.point_expand(place_transform * place_part.bnw)
+	    part_bounding_box.point_expand(place_transform * place_part.bne)
+	    part_bounding_box.point_expand(place_transform * place_part.bse)
+	    part_bounding_box.point_expand(place_transform * place_part.tsw)
+	    part_bounding_box.point_expand(place_transform * place_part.tnw)
+	    part_bounding_box.point_expand(place_transform * place_part.tne)
+	    part_bounding_box.point_expand(place_transform * place_part.tse)
+
+	    if trace_detail >= 3:
+		print("{0}after part_bounding_box={1:i}".format(indent, part_bounding_box))
+
 	    # Verify that *place_part* occurs "under" *part* in the *Part* tree in order to
 	    # ensure that every part is DEF'ed before a subsequent USE:
 	    parent_part = place_part
@@ -16341,7 +16381,7 @@ class Fastener(Part):
 
 	zero = L()
 	fastener.comment_s = name
-	fastener.color = Color("black")
+	fastener.color = Color("red")
 	fastener.material = Material("steel", "stainless")
 	fastener.start_p = P()
 	fastener.end_p = P()
@@ -16360,9 +16400,8 @@ class Fastener(Part):
 	fastener.sides_angle_a = Angle()
 	fastener.flat_head_point_angle_a = Angle()
 
-    def configure(self, comment = None, material = None, color = None,
-      flags = None, start = None, end = None, sides_angle = None,
-      head_washer_diameter = None, tail_washer_diameter = None):
+    def configure(self, start, end, flags,
+      head_washer_diameter = None, tail_washer_diameter = None, sides_angle = None):
      	""" *Fastener*: Confitugure the *Fastener* object (i.e. *self*).
 	    *comment* shows up in generated CNC.  *material* specifies the fastener material.
 	    *color* specifies the rendering color.  *start* and *end* specify the end points
@@ -16375,145 +16414,131 @@ class Fastener(Part):
 	fastener = self
 
 	# Verify argument types:
-	assert isinstance(comment, str) or comment == None
-	assert isinstance(material, Material) or material == None
-	assert isinstance(color, Color) or color == None
-	assert isinstance(flags, str) or flags == None
-	assert isinstance(start, P) or start == None
-	assert isinstance(end, P) or end == None
-	assert isinstance(sides_angle, Angle) or sides_angle == None
+	assert isinstance(start, P)
+	assert isinstance(end, P)
+	assert isinstance(flags, str)
 	assert isinstance(head_washer_diameter, L) or head_washer_diameter == None
 	assert isinstance(tail_washer_diameter, L) or tail_washer_diameter == None
+	assert isinstance(sides_angle, Angle) or sides_angle == None
 
 	major_diameter = None
-
-	if isinstance(comment, str):
-	    fastener.comment_s = comment
-	if isinstance(material, Material):
-	    fastener.material = material
-	if isinstance(color, Color):
-	    fastener.color = color
 	if isinstance(sides_angle, Angle):
 	    fastener.sides_angle_a = sides_angle
-	if isinstance(flags, str):
-	    fastener.flags_s = flags
-	    for flag in flags.split(':'):
-		if flag == "#0-80":
-		    major_diameter = L(inch = .0600)
-		    pitch = L(inch = "1/80")
-		    thread75 = L(inch = "3/64")
-		    thread50 = L(inch = .0520)
-		    close_fit = L(inch = 0.0635)
-		    free_fit = L(inch = 0.0700)
-		    # Nut dims from page 1568 of Mach. Handbook (26th ed.):
-		    nut_height = L(inch = 0.050)
-		    hex_nut_edge_width = L(inch = "5/32")
-		    hex_nut_tip_width = L(inch = 0.180)
-		    flat_head_diameter = L(inch = 0.119)
-		elif flag == "#1-72":
-		    major_diameter = L(inch = .0730)
-		    pitch = L(inch = "1/72")
-		    thread75 = L(inch = .0595)
-		    thread50 = L(inch = .0635)
-		    close_fit = L(inch = 0.0760)
-		    free_fit = L(inch = 0.0810)
-		    nut_height = L(inch = 0.050)
-		    hex_nut_edge_width = L(inch = "5/32")
-		    hex_nut_tip_width = L(inch = 0.180)
-		    flat_head_diameter = L(inch = 0.146)
-		elif flag == "#2-56":
-		    major_diameter = L(inch = .0860)
-		    pitch = L(inch = "1/56")
-		    thread75 = L(inch = .0700)
-		    thread50 = L(inch = .0730)
-		    close_fit = L(inch = 0.0890)
-		    free_fit = L(inch = 0.0960)
-		    nut_height = L(inch = 0.066)
-		    hex_nut_edge_width = L(inch = "3/16")
-		    hex_nut_tip_width = L(inch = 0.217)
-		    flat_head_diameter = L(inch = 0.172)
-		elif flag == "#4-40":
-		    major_diameter = L(inch = .1120)
-		    pitch = L(inch = "1/40")
-		    thread75 = L(inch = .0890)
-		    thread50 = L(inch = .0960)
-		    close_fit = L(inch = 0.1160)
-		    free_fit = L(inch = 0.1285)
-		    nut_height = L(inch = 0.098)
-		    hex_nut_edge_width = L(inch = "1/4")
-		    hex_nut_tip_width = L(inch = 0.289)
-		    flat_head_diameter = L(inch = 0.225)
-		elif flag == "#6-32":
-		    major_diameter = L(inch = .1380)
-		    pitch = L(inch = "1/32")
-		    thread75 = L(inch = .1065)
-		    thread50 = L(inch = .1160)
-		    close_fit = L(inch = 0.1440)
-		    free_fit = L(inch = 0.1495)
-		    nut_height = L(inch = 0.114)
-		    hex_nut_edge_width = L(inch = "5/16")
-		    hex_nut_tip_width = L(inch = 0.361)
-		    flat_head_diameter = L(inch = 0.279)
-		elif flag == "#10-24":
-		    major_diameter = L(inch = 0.1900)
-		    pitch = L(inch = "1/24")
-		    thread75 = L(inch = 0.1495)
-		    thread50 = L(inch = 0.1610)
-		    close_fit = L(inch = 0.1960)
-		    free_fit = L(inch = 0.2010)
-		    nut_height = L(inch = 0.130)
-		    hex_nut_edge_width = L(inch = "3/8")
-		    hex_nut_tip_width = L(inch = 0.433)
-		    flat_head_diameter = L(inch = 0.385)
-		elif flag == "#10-32":
-		    major_diameter = L(inch = 0.1900)
-		    pitch = L(inch = "1/32")
-		    thread75 = L(inch = 0.1590)
-		    thread50 = L(inch = 0.1695)
-		    close_fit = L(inch = 0.1960)
-		    free_fit = L(inch = 0.2010)
-		    nut_height = L(inch = 0.130)
-		    hex_nut_edge_width = L(inch = "3/8")
-		    hex_nut_tip_width = L(inch = 0.433)
-		    flat_head_diameter = L(inch = 0.385)
-		elif flag == "M3x.05":
-		    major_diameter = L(mm = 3.00)
-		    pitch = L(mm = 0.05)
-		    thread75 = L(mm = 2.50)
-		    thread50 = L(mm = 2.50)
-		    close_fit = L(mm = 3.90)
-		    free_fit = L(mm = 3.90)
-		    nut_height = L(inch = 0.130)
-		    hex_nut_edge_width = L(mm = 5.50)
-		    hex_nut_tip_width = L(mm = 6.35)
-		    flat_head_diameter = L(mm = 6.30)
-		elif flag == "fh":
-		    #print("Fastener.drill(): flat_head")
-		    fastener.flat_head_point_angle_a = Angle(deg = 81)
-		elif flag == "hi":
-		    # Hex insert
-		    fastener.hex_insert_b = True
-		else:
-		    assert False, \
-		      "Unrecognized flag ('{0}') in flags('{1}')". \
-		      format(flag, flags)
+	fastener.flags_s = flags
+	for flag in flags.split(':'):
+	    if flag == "#0-80":
+		major_diameter = L(inch = .0600)
+		pitch = L(inch = "1/80")
+		thread75 = L(inch = "3/64")
+		thread50 = L(inch = .0520)
+		close_fit = L(inch = 0.0635)
+		free_fit = L(inch = 0.0700)
+		# Nut dims from page 1568 of Mach. Handbook (26th ed.):
+		nut_height = L(inch = 0.050)
+		hex_nut_edge_width = L(inch = "5/32")
+		hex_nut_tip_width = L(inch = 0.180)
+		flat_head_diameter = L(inch = 0.119)
+	    elif flag == "#1-72":
+		major_diameter = L(inch = .0730)
+		pitch = L(inch = "1/72")
+		thread75 = L(inch = .0595)
+		thread50 = L(inch = .0635)
+		close_fit = L(inch = 0.0760)
+		free_fit = L(inch = 0.0810)
+		nut_height = L(inch = 0.050)
+		hex_nut_edge_width = L(inch = "5/32")
+		hex_nut_tip_width = L(inch = 0.180)
+		flat_head_diameter = L(inch = 0.146)
+	    elif flag == "#2-56":
+		major_diameter = L(inch = .0860)
+		pitch = L(inch = "1/56")
+		thread75 = L(inch = .0700)
+		thread50 = L(inch = .0730)
+		close_fit = L(inch = 0.0890)
+		free_fit = L(inch = 0.0960)
+		nut_height = L(inch = 0.066)
+		hex_nut_edge_width = L(inch = "3/16")
+		hex_nut_tip_width = L(inch = 0.217)
+		flat_head_diameter = L(inch = 0.172)
+	    elif flag == "#4-40":
+		major_diameter = L(inch = .1120)
+		pitch = L(inch = "1/40")
+		thread75 = L(inch = .0890)
+		thread50 = L(inch = .0960)
+		close_fit = L(inch = 0.1160)
+		free_fit = L(inch = 0.1285)
+		nut_height = L(inch = 0.098)
+		hex_nut_edge_width = L(inch = "1/4")
+		hex_nut_tip_width = L(inch = 0.289)
+		flat_head_diameter = L(inch = 0.225)
+	    elif flag == "#6-32":
+		major_diameter = L(inch = .1380)
+		pitch = L(inch = "1/32")
+		thread75 = L(inch = .1065)
+		thread50 = L(inch = .1160)
+		close_fit = L(inch = 0.1440)
+		free_fit = L(inch = 0.1495)
+		nut_height = L(inch = 0.114)
+		hex_nut_edge_width = L(inch = "5/16")
+		hex_nut_tip_width = L(inch = 0.361)
+		flat_head_diameter = L(inch = 0.279)
+	    elif flag == "#10-24":
+		major_diameter = L(inch = 0.1900)
+		pitch = L(inch = "1/24")
+		thread75 = L(inch = 0.1495)
+		thread50 = L(inch = 0.1610)
+		close_fit = L(inch = 0.1960)
+		free_fit = L(inch = 0.2010)
+		nut_height = L(inch = 0.130)
+		hex_nut_edge_width = L(inch = "3/8")
+		hex_nut_tip_width = L(inch = 0.433)
+		flat_head_diameter = L(inch = 0.385)
+	    elif flag == "#10-32":
+		major_diameter = L(inch = 0.1900)
+		pitch = L(inch = "1/32")
+		thread75 = L(inch = 0.1590)
+		thread50 = L(inch = 0.1695)
+		close_fit = L(inch = 0.1960)
+		free_fit = L(inch = 0.2010)
+		nut_height = L(inch = 0.130)
+		hex_nut_edge_width = L(inch = "3/8")
+		hex_nut_tip_width = L(inch = 0.433)
+		flat_head_diameter = L(inch = 0.385)
+	    elif flag == "M3x.05":
+		major_diameter = L(mm = 3.00)
+		pitch = L(mm = 0.05)
+		thread75 = L(mm = 2.50)
+		thread50 = L(mm = 2.50)
+		close_fit = L(mm = 3.90)
+		free_fit = L(mm = 3.90)
+		nut_height = L(inch = 0.130)
+		hex_nut_edge_width = L(mm = 5.50)
+		hex_nut_tip_width = L(mm = 6.35)
+		flat_head_diameter = L(mm = 6.30)
+	    elif flag == "fh":
+		#print("Fastener.drill(): flat_head")
+		fastener.flat_head_point_angle_a = Angle(deg = 81)
+	    elif flag == "hi":
+		# Hex insert
+		fastener.hex_insert_b = True
+	    else:
+		assert False, "Unrecognized flag ('{0}') in flags('{1}')".format(flag, flags)
 
-	if isinstance(major_diameter, L):
-	    fastener.major_diameter_l = major_diameter
-	    fastener.pitch_l = pitch
-	    fastener.thread75_l = thread75
-	    fastener.thread50_l = thread50
-	    fastener.close_fit_l = close_fit
-	    fastener.free_fit_l = free_fit
-	    fastener.nut_height_l = nut_height
-	    fastener.hex_nut_edge_width_l = hex_nut_edge_width
-	    fastener.hex_nut_tip_width_l = hex_nut_tip_width
-	    fastener.flat_head_diameter_l = flat_head_diameter
+	assert isinstance(major_diameter, L), "No fastener size specified (e.g '#4-40' or 'M3x.05')"
 
-	if isinstance(start, P):
-	    fastener.start_p = start
-	if isinstance(end, P):
-	    fastener.end_p = end
+	# Load stuff into *fastener*:
+	fastener.major_diameter_l = major_diameter
+	fastener.pitch_l = pitch
+	fastener.thread75_l = thread75
+	fastener.thread50_l = thread50
+	fastener.close_fit_l = close_fit
+	fastener.free_fit_l = free_fit
+	fastener.nut_height_l = nut_height
+	fastener.hex_nut_edge_width_l = hex_nut_edge_width
+	fastener.hex_nut_tip_width_l = hex_nut_tip_width
+	fastener.flat_head_diameter_l = flat_head_diameter
+	fastener.start_p = start
+	fastener.end_p = end
 
     def construct(self):
 	""" *Fastener*: """
