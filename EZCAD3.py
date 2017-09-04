@@ -10583,24 +10583,25 @@ class Part:
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Part._tools_dowel_pin_search('0')".format(indent, self._name))
+	    print("{0}=>Part._tools_dowel_pin_search('{1}')".format(indent, self._name))
 
 	# Use *part* instead of *self*:
 	part = self
 
 	zero = L()
-	dowel_pin = part._tools_search(Tool_Dowel_Pin._match, zero, zero, "dowel_pin", tracing + 1)
+	dowel_pin = part._tools_search(Tool_Dowel_Pin._match,
+	  zero, zero, "dowel_pin", tracing = tracing + 1)
 	assert isinstance(dowel_pin, Tool_Dowel_Pin)
 
 	if tracing >= 0:
 	    tool_name = "NONE"
 	    if dowel_pin != None:
 		tool_name = dowel_pin._name_get()
-	    print("{0}<=Part._tools_dowel_pin_search('0')".format(indent, self._name, tool_name))
+	    print("{0}<=Part._tools_dowel_pin_search('{1}')".format(indent, self._name, tool_name))
 
 	return dowel_pin
 
-    def _tools_drill_search(self, diameter, maximum_z_depth, tracing):
+    def _tools_drill_search(self, diameter, maximum_z_depth, tracing=-1000000):
 	""" *Part*: Return a drill tool for the *Part* object (i.e. *self*) that has 
 	    a diameter of *diameter* and go to a depth of at least *maximum_z_depth*.
 	"""
@@ -10619,8 +10620,8 @@ class Part:
 	    trace_detail = 2
 
 	# Seach for a *drill_tool* that matches our requirements:
-	drill_tool = \
-	  self._tools_search(Tool_Drill._match, diameter, maximum_z_depth, "drill", tracing + 1)
+	drill_tool = self._tools_search(Tool_Drill._match,
+	  diameter, maximum_z_depth, "drill", tracing = tracing + 1)
 	if trace_detail >= 2:
 	    print("{0}is_drill_tool={1}".format(indent, isinstance(drill_tool, Tool_Drill)))
 
@@ -10741,7 +10742,7 @@ class Part:
 	return mill_drill_tool
 
     # FIXME: tool searching should be part of the *Shop* class:
-    def _tools_search(self, match_routine, parameter1, parameter2, from_routine, tracing):
+    def _tools_search(self, match_routine, parameter1, parameter2, from_routine, tracing=-1000000):
 	""" *Part*: Search for the best *Tool* object using *match_routine*,
 	    *parameter1*, and *parameter2*.  *from_routine* is used for debugging*:
 	"""
@@ -10761,7 +10762,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_search('{1}', *, {2:i}, {3:i}, '{4}')".
 	      format(indent, part._name, parameter1, parameter2, from_routine))
-	    trace_detail = 1
+	    trace_detail = 3
 
 	# For now grab the material of the first part and assume the
 	# rest are compatible.  In reality, what we want is to grab
@@ -10786,13 +10787,16 @@ class Part:
 	if trace_detail >= 3:
 	    print("{0}available tools={1}".format(indent, len(tools)))
 
+	match_tracing = -1000000
+	if trace_detail >= 3:
+	    match_tracing = tracing + 1
 	for tool in tools:
 	    # Keep track of search results for this tool:
 	    tool._search_results_clear()
 
 	    # Lookup the *speed_range* for *material* and *tool*:
 	    tool_material = tool._material_get()
-	    speed_range = shop._surface_speeds_lookup(part_material, tool_material)
+	    speed_range = shop._surface_speeds_lookup(part_material, tool_material, match_tracing)
 	    speed_range_ok = isinstance(speed_range, Speed_Range)
 
 	    # Always log *surface_speeds_ok*:
@@ -10808,9 +10812,6 @@ class Part:
 		# See whether *tool* has a chance of being a match:
 		#if debug:
 		#    print("    speed_range={0:.0F}\n".format(speed_range))
-		match_tracing = -1000000
-		if trace_detail >= 3:
-		    match_tracing = tracing + 1
 		priority = match_routine(tool, parameter1, parameter2, from_routine, match_tracing)
 		if priority >= 0.0:
 		    # Tool is an acceptable match:
@@ -11207,7 +11208,7 @@ class Part:
 	ezcad = part._ezcad
 	if ezcad._cnc_mode:
 	    # Find the *tool_dowel_pin* to use :a
-	    tool_dowel_pin = part._tools_dowel_pin_search(tracing)
+	    tool_dowel_pin = part._tools_dowel_pin_search(tracing = tracing + 1)
 	    assert isinstance(tool_dowel_pin, Tool_Dowel_Pin), "No dowel pin tool found"
 
 	    # Grab some values from *tool_dowel_pin*:
@@ -19853,7 +19854,7 @@ class Shop:
 	if debug:
 	    print("speeds_table[{0}] = {1}".format(key, speed_range))
 
-    def _surface_speeds_lookup(self, part_material, tool_material):
+    def _surface_speeds_lookup(self, part_material, tool_material, tracing=-1000000):
 	""" *Shop*: Lookup and return a *Speed_Range* object from the
 	    *Shop* object (i.e. *self*) keyed on *part_material* and
 	    *tool_material*; or return *None* otherwise.
@@ -19863,6 +19864,12 @@ class Shop:
 	assert isinstance(part_material, Material)
 	assert isinstance(tool_material, int)
 
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Shop._surface_speeds_lookup(*, '{1}', '{2}')".format(indent,
+	      part_material, tool_material))
+
 	# Look up the *Speed_Range* object from *surfaces_speeds_table*:
 	key = (part_material._generic_get(), tool_material)
 	#print("Shop.surface_speeds_lookup():key={0}".format(key))
@@ -19870,6 +19877,12 @@ class Shop:
 	speed_range = None
 	if key in surface_speeds_table:
 	    speed_range = surface_speeds_table[key]
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}=>Shop._surface_speeds_lookup(*, '{1}', '{2}')=>{3:i}".format(indent,
+              part_material, tool_material, speed_range))
+
 	return speed_range
 
     def _tool_append(self, new_tool):
