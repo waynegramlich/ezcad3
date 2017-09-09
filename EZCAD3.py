@@ -10762,7 +10762,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_search('{1}', *, {2:i}, {3:i}, '{4}')".
 	      format(indent, part._name, parameter1, parameter2, from_routine))
-	    trace_detail = 3
+	    trace_detail = 2
 
 	# For now grab the material of the first part and assume the
 	# rest are compatible.  In reality, what we want is to grab
@@ -13116,7 +13116,8 @@ class Part:
 	    zero = L()
 	    axis = end - start
 	    height = axis.length()
-	    assert height > zero, "Cylinder '{0}' has no height".format(comment)
+	    assert height > zero, \
+	      "Cylinder '{0}' has no height (start={1:i} end={2:i}".format(comment, start, end)
 
 	    lines.append("{0}translate([0, 0, {1:m}])".format(pad, -height))
 
@@ -16688,7 +16689,7 @@ class Fastener(Part):
 	    indent = ' ' * tracing
 	    print("{0}=>Fastener._fasten('{1}', '{2}', '{3}', '{4}')".
 	      format(indent, fastener._name, comment, part._name_get(), select))
-	    trace_detail = 2
+	    trace_detail = 1
 
 	# No need to do anything until we are past dimensions mode:
 	ezcad = part._ezcad_get()
@@ -16759,6 +16760,10 @@ class Fastener(Part):
 
 	    # Now we can drill the hole in *part* with *new_start* and *new_end*:
 	    hole_name = "{0} Hole".format(comment)
+	    zero = L()
+	    assert new_start.distance(new_end) > zero, \
+	      "Fastener.fasten: Zero length '{0}': s={1:i} ns={2:i} e={3:i} ne={4:i}".format(
+	      fastener.comment_s, start, new_start, end, new_end)
 	    part.hole(hole_name, diameter, new_start, new_end, "t", tracing = tracing + 1)
 
 	#FIXME: This code is a little old an needs some work!!!
