@@ -17174,8 +17174,8 @@ class Code:
 		    arc_radius = bend_radius - total_offset
 
 		    # For inside bends, we need to negate the *arc_radius*:
-		    arc_start = bend._incoming_tangent_compute(-arc_radius) + mount_translate_point
-		    arc_end = bend._outgoing_tangent_compute(-arc_radius) + mount_translate_point
+		    arc_start = bend._incoming_tangent_compute(-arc_radius)
+		    arc_end = bend._outgoing_tangent_compute(-arc_radius)
 		    code._xy_feed(feed_speed, spindle_speed, arc_start.x, arc_start.y)
 		    code._xy_ccw_feed(feed_speed, spindle_speed, arc_radius, arc_end.x, arc_end.y)
 		else:
