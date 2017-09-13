@@ -15338,7 +15338,7 @@ class Part:
 		top_rotate_angle = degrees90
 		if 't' in jaw_surface:
 		    jaw_point = t
-		    jaw_rotate_angle = -degree90
+		    jaw_rotate_angle = -degrees90
 		    left_dowel_point = n
 		    right_dowel_point = s
 		elif 'b' in jaw_surface:
