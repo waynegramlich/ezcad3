@@ -16550,7 +16550,7 @@ class Fastener(Part):
 
 	assert fastener.comment_s != "NO_COMMENT", \
 	  "Fastener name is not set (not configured!)"
-	diameter = fastener.major_diameter_l
+	diameter = fastener.thread75_l
 	fastener.cylinder(fastener.comment_s, fastener.material, fastener.color,
 	  diameter, diameter, fastener.start_p, fastener.end_p, 16, Angle(deg=0.0), "", "")
 
@@ -16680,7 +16680,7 @@ class Fastener(Part):
 	# Verify argument types:
 	assert isinstance(comment, str)
 	assert isinstance(part, Part)
-	assert isinstance(select, str) and select in ("thread", "close", "loose")
+	assert isinstance(select, str) and select in ("thread", "close", "loose", "access")
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*;
@@ -16708,8 +16708,11 @@ class Fastener(Part):
 		diameter = fastener.close_fit_l
 	    elif select == "free":
 		diameter = fastener.free_fit_l
+	    elif select == "access":
+		diameter = fastener.thread75_l
 	    else:
-		assert False, "select='{0}', not 'thread', 'close' or 'loose'".format(select)
+		assert False, \
+		  "select='{0}', not 'thread', 'close', 'loose', 'access'".format(select)
 
 	    # Grab *start* and *end* from *fastener*:
 	    start = fastener.start_p
@@ -16765,6 +16768,21 @@ class Fastener(Part):
 	      "Fastener.fasten: Zero length '{0}': s={1:i} ns={2:i} e={3:i} ne={4:i}".format(
 	      fastener.comment_s, start, new_start, end, new_end)
 	    part.hole(hole_name, diameter, new_start, new_end, "t", tracing = tracing + 1)
+
+	    # An "access" hole is drilled about 1/4 of the way in on to after the first
+	    # hole is drilled:
+	    if select == "access":
+		#print("Access hole {0}".format(fastener.comment_s))
+		#print("Access hole: ns={0:i} ne={1:i} depth={2:i}".
+		#  format(new_start, new_end, new_start.distance(new_end)))
+		access_depth = (new_end - new_start) / 4
+		access_start = new_start
+		access_end   = new_start + access_depth
+		#print("Access hole: as={0:i} ae={1:i} ad={2:i}".
+		#  format(access_start, access_end, access_start.distance(access_end)))
+		major_diameter = fastener.major_diameter_l
+		part.hole("Access_{0}".format(hole_name),
+		  2 * major_diameter, access_start, access_end, "t", tracing = tracing + 1)
 
 	#FIXME: This code is a little old an needs some work!!!
 	if False:
