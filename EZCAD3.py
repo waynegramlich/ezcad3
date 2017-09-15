@@ -14564,13 +14564,15 @@ class Part:
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
+	deep_tracing = -1000000
 	if tracing < 0 and part._tracing >= 0:
 	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.tooling_plate_drill('{1}', '{2}', {3}, {4}, {5})".format(
 	      indent, part._name, plate_mount_name, rows, columns, skips))
-	    trace_detail = 3
+	    trace_detail = 1
+	    #deep_tracing = tracing + 1
 
 	# Only do stuff if in *ezcad* is in *cnc_mode*:
 	ezcad = part._ezcad_get()
@@ -14626,7 +14628,7 @@ class Part:
 
 	    # Figure out which *parallel_height* to use from *parallels* to use to mount
 	    # the *tooling_plate*:
-	    selected_parallels_height = parallels._select(part_dz, vice, tracing = tracing + 1)
+	    selected_parallels_height = parallels._select(part_dz, vice, tracing = deep_tracing)
 
 	    # Load up *skips_table* with the (row, column) pairs that are not to be drilled:
 	    skips_table = {}
@@ -14639,9 +14641,9 @@ class Part:
 		  "Skip column {0} not in columns {1}".format(skip_column, columns)
 		skips_table[skip] = skip
 
-	    # Sort *rows* and *columns*:
-	    sorted_rows = sorted(tuple(rows))
+	    # Sort *columns* and *rows*:
 	    sorted_columns = sorted(tuple(columns))
+	    sorted_rows = sorted(tuple(rows))
 
 	    # Grab the minimum and maximum from *rows* and *columns*:
 	    minimum_row = sorted_rows[0]
@@ -14664,14 +14666,20 @@ class Part:
 	    columns_spanned = maximum_column - minimum_column
 
 	    # Figure out where upper left tooling hole is located:
-	    upper_left_x = -((2 * minimum_column + columns_spanned) * plate_hole_pitch) / 2
-	    upper_left_y = -((2 * minimum_row  + rows_spanned) * plate_hole_pitch) / 2
+	    #FIXME: Is the `2 * minimum_column` correct?!!!
+	    lower_left_x = -((2 * minimum_column + columns_spanned) * plate_hole_pitch) / 2
+	    lower_left_y = -((2 * minimum_row  + rows_spanned) * plate_hole_pitch) / 2
 	    zero = L()
 
 	    # Drill the *tooling_plate* holes at the intersections of *rows* and *columns*,
 	    # but ommitting any that are in *skips*:
 	    plate_holes = []
 	    reverse_top_surface_transform = top_surface_transform.reverse()
+	    if trace_detail >= 1:
+		print("{0}top_surface_transform={1:s}".
+		  format(indent, top_surface_transform))
+		print("{0}reverse_top_surface_transform={1:s}".
+		  format(indent, reverse_top_surface_transform))
 	    for row in rows:
 		for column in columns:
 		    column_row = (column, row)
@@ -14679,10 +14687,10 @@ class Part:
 			# Figure out the *start* and *stop* points for the drill as if the
 			# part is centered immediately under the origin (i.e. after
 			# *top_sufrace_transform* is applied to the entire *part*.):
-			x = upper_left_x + plate_hole_pitch * column
-			y = upper_left_y + plate_hole_pitch * row
+			x = lower_left_x + plate_hole_pitch * column
+			y = lower_left_y + plate_hole_pitch * row
 			start = P(x, y, zero)
-			stop = P(x, y, -part_dz)
+			stop =  P(x, y, -part_dz)
 
 			plate_holes.append(column_row)
 
@@ -14691,7 +14699,7 @@ class Part:
 			reversed_stop = reverse_top_surface_transform * stop
 			part.hole("Tooling plate hole ({0}, {1})".format(row, column),
 			  plate_drill_diameter, reversed_start, reversed_stop, "t",
-			  tracing = tracing+1)
+			  tracing = deep_tracing)
 			if trace_detail >= 1:
 			    print(("{0}column={1} row={2} " +
 			      "start={3:i} stop={4:i} rstart={5:i} rstop={6:i}").format(
@@ -14709,7 +14717,7 @@ class Part:
 
 	    # Determine which parallel to use to mount the tooling plate such that
 	    # the top surface of the tooling plate is near the top surface the vice:
-	    selected_parallel_height = parallels._select(plate_dz, vice, tracing = tracing + 1)
+	    selected_parallel_height = parallels._select(plate_dz, vice, tracing = deep_tracing)
 
 	    # The *tooling_plate* is placed so that its upper left corner touchs the upper left
 	    # jaw vice corner.  The part is placed so that it is centered in between the
@@ -14726,7 +14734,7 @@ class Part:
 	    # Create the *tooling_plate_mount*:
 	    plate_mount = Mount(plate_mount_name, part, top_surface_transform,
 	      plate_translate_point, top_surface_safe_z, xy_rapid_safe_z, True,
-	      tracing = tracing + 1)
+	      tracing = deep_tracing)
 
 	    # Deal with extra material:
 	    vice_mount = part._current_mount_get()
@@ -14746,8 +14754,8 @@ class Part:
 
 	    # Remember the *plate_holes* in both *vice_mount* and *plate_mount*.
 	    # *vice_mount* is needed for multi-mounting:
-	    vice_mount._tooling_plate_holes_set( plate_holes, tracing = tracing + 1)
-	    plate_mount._tooling_plate_holes_set(plate_holes, tracing = tracing + 1)
+	    vice_mount._tooling_plate_holes_set( plate_holes, tracing = deep_tracing)
+	    plate_mount._tooling_plate_holes_set(plate_holes, tracing = deep_tracing)
 
 	    # Compute the *dowel_point*:
 	    #extra_dx = extra_start_tne.x - extra_start_bsw.x
@@ -15338,7 +15346,7 @@ class Part:
 		top_rotate_angle = degrees90
 		if 't' in jaw_surface:
 		    jaw_point = t
-		    jaw_rotate_angle = -degrees90
+		    jaw_rotate_angle = degrees90
 		    left_dowel_point = n
 		    right_dowel_point = s
 		elif 'b' in jaw_surface:
@@ -21342,6 +21350,40 @@ class Transform:
 	if abs(value) < 1.0e-10:
 	    value = 0.0
 	return value
+
+    def center_rotate(self, comment, center, axis, angle, tracing=-1000000):
+	""" *Transform*: Append a rotation transform to the *Transform* object (i.e. *self*).
+	    The rotation occurs around *center* along an *axis* by an amount of *angle*.
+	"""
+
+	# Use *transform *instead of *self*:
+	transform = self
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(center, P)
+	assert isinstance(axis, P)
+	assert isinstance(angle, Angle)
+	assert isinstance(tracing, int)
+
+	# Perform any requested tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Transform.center_rotate('{1}', {2:i}, {3:i}, {4:d}".
+	      format(indent, comment, center, axis, angle))
+	    trace_detail = 1
+
+	# Move to *center* to origin, rotate around *axis* by *angle*, and move back to *center*:
+	transform = transform.translate("{0}: Move center to origin".format(comment), -center)
+	transform = transform.rotate("{0}: Rotate along axis".format(comment), axis, angle)
+	transform = transform.translate("{0}: Move back to center".format(comment), center)
+
+	# Wrap up any *tracing* and return *transform*:
+	if tracing >= 0:
+	    print("{0}<=Transform.center_rotate('{1}', {2:i}, {3:i}, {4:d})=>{5:v}".
+	      format(indent, comment, center, axis, angle, transform))
+	return transform
 
     def chain(self, next_transform):
 	""" *Transform*: Return a new transform that consists of the *Transform* object
