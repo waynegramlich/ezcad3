@@ -4847,7 +4847,7 @@ class Mount_Operations:
 	    if trace_detail >= 2:
 		priority_mount_operations._show("Priority {0}".format(index), tracing = tracing + 1)
 
-	    # Now we can generate all the tool operations that are at the same pirority:
+	    # Now we can generate all the tool operations that are at the same pirority:	
 	    priority_program_number = \
 	      priority_mount_operations._cnc_priority_generate(priority_program_number,
 	      mount_ngc_file, mount_vrml, mount_vrml_lines, mount_vrml_stl, tracing = tracing + 1)
@@ -5157,6 +5157,11 @@ class Mount_Operations:
 
 	    # Perform the CNC generation step for *operation*:
 	    is_last = (index + 1 >= pairs_size)
+	    underscore_part_name = part.name_get().replace(' ', '_')
+	    underscore_tool_name = tool_name.replace(' ', '_')
+	    underscore_operation_comment = tool_operation._comment_get().replace(' ', '_')
+	    code._line_comment("PN={0} TN={1} OC={2}".format(
+	      underscore_part_name, underscore_tool_name, underscore_operation_comment))
 	    tool_operation._cnc_generate(tool_mount, mount_ngc_file,
 	      cnc_tool_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing = tracing + 1)
 
@@ -12368,12 +12373,13 @@ class Part:
 
 	# Write *final_vrmls* out to the file *wrl_file_name*:
 	ezcad = part._ezcad
-	wrl_directory = ezcad._wrl_directory_get()
-	wrl_file_name = "{0}.wrl".format(part._name)
-	wrl_file_text = final_vrmls._text_pad(0)
-	with wrl_directory._write_open(wrl_file_name, tracing = tracing + 1) as wrl_file:
-	    wrl_file.write("#VRML V2.0 utf8\n")
-	    wrl_file.write(wrl_file_text)
+	if not isinstance(part, Fastener):
+	    wrl_directory = ezcad._wrl_directory_get()
+	    wrl_file_name = "{0}.wrl".format(part._name)
+	    wrl_file_text = final_vrmls._text_pad(0)
+	    with wrl_directory._write_open(wrl_file_name, tracing = tracing + 1) as wrl_file:
+		wrl_file.write("#VRML V2.0 utf8\n")
+		wrl_file.write(wrl_file_text)
 
 	# Wrap up any requested *tracing* and return *part_groupo_vrmls*:
 	if tracing >= 0:
@@ -16772,9 +16778,12 @@ class Fastener(Part):
 	    # Now we can drill the hole in *part* with *new_start* and *new_end*:
 	    hole_name = "{0} Hole".format(comment)
 	    zero = L()
+	    #assert new_start.distance(new_end) > zero, \
+	    #  "Fastener.fasten: Zero length '{0}': s={1:i} ns={2:i} e={3:i} ne={4:i}".format(
+	    #  fastener.comment_s, start, new_start, end, new_end)
 	    assert new_start.distance(new_end) > zero, \
-	      "Fastener.fasten: Zero length '{0}': s={1:i} ns={2:i} e={3:i} ne={4:i}".format(
-	      fastener.comment_s, start, new_start, end, new_end)
+	      "Fastener.fasten: Part '{0}' (center={1:i}) misses Fastener '{2}' (center={3:i}". \
+	      format(fastener.comment_s, fastener.c, part.name_get(), part.c)
 	    part.hole(hole_name, diameter, new_start, new_end, "t", tracing = tracing + 1)
 
 	    # An "access" hole is drilled about 1/4 of the way in on to after the first
@@ -19645,9 +19654,9 @@ class Shop:
 	  11, hss, L(inch=0.1495), 2, L(inch=2.000), degrees118, stub)
 	drill_9 = shop._drill_append("#9 drill",
 	  12, hss, L(inch=0.1960), 2, L(inch=2.000), degrees118, stub)
-	drill_43 = shop._drill_append("#43 drill",
+	drill_43 = shop._drill_append("#43 drill (4-40 thread)",
 	  13, hss, L(inch=.0890), 2, L(inch=1.500), degrees118, stub)
-	drill_32 = shop._drill_append("#32 drill",
+	drill_32 = shop._drill_append("#32 drill (4-40 close)",
 	  14, hss, L(inch=0.1160), 2, L(inch=1.500), degrees118, stub)
 	drill_50 = shop._drill_append("#50 drill",
 	  15, hss, L(inch=0.0700), 2, L(inch=1.500), degrees118, stub)
