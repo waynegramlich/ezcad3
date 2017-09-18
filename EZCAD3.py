@@ -14661,11 +14661,13 @@ class Part:
 	    assert minimum_column >= 0, \
 	      "Negative column {0} in {1} not allowed".format(minimum_column, columns)
 	    assert maximum_column < plate_columns, \
-	      "Column {0} in {1} too big".format(maximum_column, columns)
+	      "Column {0} in {1} too big for tooling plate column maximum {2}". \
+              format(maximum_column, columns, plate_columns - 1)
 	    assert minimum_row >= 0, \
 	      "Negative row {0} in {1} not allowed".format(minimum_row, rows)
 	    assert maximum_row < plate_rows, \
-	      "Row {0} in {1} too big".format(maximum_row, rows)
+	      "Row {0} in {1} too big for tooling plate row maximum". \
+              format(maximum_row, rows, plate_rows - 1)
 
 	    # Compute the *rows_spanned* and *columns_spanned*:
 	    rows_spanned = maximum_row - minimum_row
