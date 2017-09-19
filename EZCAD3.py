@@ -9808,7 +9808,8 @@ class Part:
 		    return 0
 	    elif name.endswith("_l"):
 		if first_update:
-		    return L()
+		    # Do not return 0, since it trigger division by 0 errors on the first pass:
+		    return L(inch=0.000000000000001)
 	    elif name.endswith("_m"):
 		if first_update:
 		    return Material()
@@ -12212,7 +12213,7 @@ class Part:
 
 	# OK. This probably the best place to explain some of the gymnastics required to get
 	# VRML to work correctly with the *Place* objects associated with a *Part*.  The way
-	# this all works is that the Part is usually output a VRML group with the following
+	# this all works is that the Part is usually output as a VRML Group with the following
 	# format:
 	#
 	#        DEF *part_name* Group [
@@ -12238,13 +12239,13 @@ class Part:
 	# VRML DEF and USE technology.  While the VRML reference manual does not specify any
 	# constraints on the order of DEF and USE, there are many implementations that require
 	# the "DEF name" to occur before an "USE name".  This is definitely true with the
-        # *view3dscene* program.  For this reason, all children *Part* VRML is placed in the
-	# file for force the child definitions to occur first.  All of the placement transforms
+        # *view3dscene* program.  For this reason, all children *Part* VRML is placed first in the
+	# file to force the child definitions to occur first.  All of the placement transforms
 	# occur at the end of the *Part* VRML.
 	#
 	# In order to work, the Part tree constrains the *Place* object to only be able to
 	# reference *Part*'s that are lower in the *Part* tree.  Otherwise, it is possible
-	# to generate a USE for a part before it is defined.
+	# to generate a USE for a part before it is DEF'ed.
 	# 
 	# The next issue concerns the *Part.no_automatic_placement*() method which sets the
 	# *_is_place_only* flag for a *Part*.  When this flat is set, we do not want to
