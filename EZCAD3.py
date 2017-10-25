@@ -744,7 +744,7 @@ class P:
 	return P(self.x.absolute(), self.y.absolute(), self.z.absolute())
 
     def angle_between(self, point):
-	""" P dimensions: Return the angle between {self} and {point}. """
+	""" *P*: Return the angle between *self*  and *point* with respect to origin. """
 
 	# Verify argument types:
 	assert isinstance(point, P)
@@ -1534,7 +1534,7 @@ class Bend:
 	# the bend point.  There is circle of radius r centered around the circle center
 	# point C.  r is the radius of the bend.  *I* and *O* are the adjecent *Bend* object
 	# points.  The circle tangentally touches the the IB line segment at J and the OB
-	# line segement at N.  This the length of both JC and NC is r.  The length of BC
+	# line segement at N.  Thus the length of both JC and NC is r.  The length of BC
 	# is given the variable name of d.
 	#
 	#     
@@ -1554,7 +1554,7 @@ class Bend:
 	#		   \|/	             V
 	#		    B  <-------------+-
 	# 
-	# Our goal is to compute C using I, B, O and r.  Once we have that we need will also
+	# Our goal is to compute C using I, B, O and r.  Once we have that, we need will also
 	# need the direction vectors <<JC>> and <<NC>> for computing the tangent points J and N:
 	#
 	#        J = C + r * <<JC>>					(1)
@@ -1624,6 +1624,8 @@ class Bend:
 
 	# Compute *ibo_angle* and *cbo_angle*:
 	ibo_angle = ib.angle_between(ob)
+	assert ibo_angle != Angle(), \
+	  "Bend='{0}' i={1:i} b={2:i} o={3:i} ib={4:i} ob={5:i}".format(bend._name, i, b, o, ib, ob)
 	cbo_angle = ibo_angle / 2
 	if trace_detail >= 2:
 	    print("{0}ibo_angle={1:d} cbo_angle={2:d}".format(indent, ibo_angle, cbo_angle))
@@ -3584,7 +3586,7 @@ class Contour:
 	    # and (*ox4*, *oy4*) to represent the [o]iginal points.
 	    # We will use (*ax1*, *ay1*), (*ax2*, *ay2*), (*ax3*, *ay3*)
 	    # and (*ax4*, *ay4*) to represent the [a]djusted points.
-    	# Note that using this notation, (*ox2*, *oy2*) is the same
+	    # Note that using this notation, (*ox2*, *oy2*) is the same
 	    # as (*ox3*, *oy3*), but (*ax2*, *ay2*) is not the same as
 	    # (*ax3*, *ay3):
 
@@ -8294,7 +8296,8 @@ class Operation_Simple_Pocket(Operation):
 	    passes = passes + 1
 	if trace_detail >= 2:
 	    print("{0}passes={1}".format(indent, passes))
-	assert passes > 0
+	assert passes > 0, \
+	  "total_cut={0:i} corner1={1:i} corner2={2:i}".format(total_cut, corner1, corner2)
 	assert maximum_pass_depth * float(passes) >= total_cut
 
 	# Compute *z_step* which is the mount remvoed for each pass:
@@ -9354,7 +9357,7 @@ class Part:
 	    #  format(' ' * trace, part._places))
 
 	# Start with nothing *changed*:
-	changed = 0
+	changed = []
 
 	#FIXME: This is weird, why is this necessary???
 	part._ezcad = ezcad
@@ -9420,13 +9423,15 @@ class Part:
 	      format(name, attribute_name, type(before_value),
 	      type(after_value))
 	    if before_value != after_value:
-		changed += 1
-		if changed > 0:
+		changed.append("{0}.{1}".format(part._name, attribute_name))
+		if len(changed) > 0:
 		    #print("here 2")
 		    pass
-		if ezcad._update_count > 10 or tracing >= 0:
+		#if ezcad._update_count > 20:
+		#    assert False, "Dimensions loop:{0}".format(changed)
+		if tracing >= 0:
 		    print("{0}Part._dimensions_update:{1}.{2} ({3}=>{4})". \
-		      format(' ' * trace, name, attribute_name,
+		      format(indent, name, attribute_name,
 		      before_value, after_value))
 
 	# Now update the *bounding_box* for *part*:
@@ -9434,7 +9439,7 @@ class Part:
 	for sub_part in sub_parts:
 	    after_bounding_box.bounding_box_expand(sub_part._bounding_box)
 	if before_bounding_box != after_bounding_box:
-	    changed += 1
+	    changed.append("{0}.bounding_box".format(part._name))
 	    part._bounding_box = after_bounding_box
 
 	    #part._bounding_box_set(after_bounding_box)
@@ -10623,7 +10628,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_drill_search('{1}', {2:i}, {3:i})".
 	      format(indent, self._name, diameter, maximum_z_depth))
-	    trace_detail = 2
+	    trace_detail = 3
 
 	# Seach for a *drill_tool* that matches our requirements:
 	drill_tool = self._tools_search(Tool_Drill._match,
@@ -10768,7 +10773,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_search('{1}', *, {2:i}, {3:i}, '{4}')".
 	      format(indent, part._name, parameter1, parameter2, from_routine))
-	    trace_detail = 2
+	    trace_detail = 3
 
 	# For now grab the material of the first part and assume the
 	# rest are compatible.  In reality, what we want is to grab
@@ -11650,14 +11655,23 @@ class Part:
 	# Do the dimensions propogate phase:
 	ezcad._dimensions_mode = True
 	ezcad._update_count = 0
-	changed = 1
-	while changed != 0:
+	changed = ["foo"]
+	while len(changed) > 0:
+	    if ezcad._update_count > 20:
+                print("Dimensions loop cycle:")
+		for change_index, change in enumerate(changed):
+		    change_indent = ""
+		    if change.endswith("bounding_box"):
+			change_indent = "        "
+		    print("[{0}]:{1}{2}".format(change_index, change_indent, change))
+		assert False, "Infinite dimensions loop?"
 	    # Find all the child *Part*'s:
 	    print("Dimensions update {0}".format(ezcad._update_count + 1))
 	    changed = part._dimensions_update(ezcad, -1000000)
+	    assert isinstance(changed, list)
 	    #changed = part._dimensions_update(ezcad, 0)
 	    #part._bounding_box_check(0)
-	    print("Part.process: {0} dimension(s) changed\n".format(changed))
+	    print("Part.process: {0} dimension(s) changed\n".format(len(changed)))
 	    ezcad._update_count += 1
 	ezcad._dimensions_mode = False
 
@@ -12571,12 +12585,17 @@ class Part:
 	    tracing_plus_one = tracing + 1
 
 	# Before we do anything else, we need to update the bounding box for *part*:
-	bounding_box = part._bounding_box
-	contour._bounding_box_expand(bounding_box)
+	# FIXME: Why???!!!  Removing for now!!!
+	#bounding_box = part._bounding_box
+	#if trace_detail >= 1:
+	#    print("{0}[C0]bb={1:i}".format(indent, part._bounding_box))
+	#contour._bounding_box_expand(bounding_box)
+	#if trace_detail >= 1:
+	#    print("{0}[C1]bb={1:i}".format(indent, part._bounding_box))
 
 	# Figure out if we are in *cnc_mode* or *stl_mode*:
 	ezcad = part._ezcad
-	cnc_mode = ezcad._cnc_mode
+	cnc_mode = ezcad._cnc_mode and not part._cnc_suppress
 	stl_mode = ezcad._stl_mode
 
 	# Only do real work in CNC or STL mode:
@@ -12621,7 +12640,8 @@ class Part:
                 # in "reverse" order:
 		difference_lines = part._scad_difference_lines
 		pad = ' ' * 4
-		difference_lines.append("{0}// Contour {1}".format(pad, contour._name_get()))
+		difference_lines.append("{0}// Contour '{1}' start={2:m} end={3:m}".
+		  format(pad, contour._name_get(), start_point, end_point))
 		top_surface_transform.reverse()._scad_lines_append(difference_lines, pad)
 		difference_lines.append("{0}translate([0, 0, {1:m}])".
 		  format(pad, -(bottom_extra + height)))
@@ -12633,6 +12653,9 @@ class Part:
 		# Indicate we are done with STL stuff:
 		if trace_detail >= 1:
 		    print("{0}STL mode ended".format(indent))
+
+	    if trace_detail >= 1:
+		print("{0}[C0]bb={1:i}".format(indent, part._bounding_box))
 
 	    # Do any requested CNC generation:
 	    if cnc_mode:
@@ -12917,24 +12940,32 @@ class Part:
 	countersink_radius = countersink_diameter/2
 
 	# Compute *is_tip_hole*, *is_flat_hole* and *is_through_hole* from *flags*:
-	is_through_hole = False
+	is_through_hole = 't' in flags
 	is_tip_hole = 'p' in flags
 	is_flat_hole = 'f' in flags
-	if not (is_tip_hole or is_flat_hole):
-	    is_through_hole = True
-	    if part._laser_preferred:
-		is_flat_hole = True
-		is_through_hole = False
-	is_countersink = countersink_diameter > hole_diameter
+	assert is_through_hole or is_tip_hole or is_flat_hole, \
+	  "Specify 't' for through hole, 'p' for tip hole or 'f' for flat hole in flags argument"
+	assert     is_through_hole and not is_tip_hole and not is_flat_hole or \
+               not is_through_hole and     is_tip_hole and not is_flat_hole or \
+               not is_through_hole and not is_tip_hole and     is_flat_hole,   \
+	  "Only specify one of 't', 'p', or 'f' for flags argument"
+	
 	if trace_detail >= 2:
 	     print("{0}is_through_hole={1} is_tip_hole={2} is_flat_hole={3} is_countersink={4}".
 	      format(indent, is_through_hole, is_tip_hole, is_flat_hole, is_countersink))
+
+	zero = L()
+	is_countersink = countersink_diameter > zero
+	# Figure out how deep we want the countsink "cone hole" to go:
+	if not is_countersink:
+	    # No countersink is required, so we will countersink to just
+	    # to just about 3/4 of the drill diameter:
+	    countersink_diameter = 0.75 * hole_diameter
 
 	# Hole axis is direction of drilling:
 	hole_axis = (start - stop).normalize()
 
 	# Compute *hole_kind*:
-	try_flat = False
 	hole_stop = stop
 	if is_tip_hole:
 	    hole_kind = Part.HOLE_TIP
@@ -12949,84 +12980,78 @@ class Part:
 	if trace_detail >= 1:
 	     print("{0}hole_kind={1}".format(indent, hole_kind))
 	 
+	#FIXME: Why *stl_mode* with *cnc_mode*???!!!
 	ezcad = part._ezcad
 	if ezcad._cnc_mode or ezcad._stl_mode:
+	    success = False
 	    spot_operation = None
 	    hole_z_depth = start.distance(hole_stop)
-	    if is_through_hole or is_tip_hole:
-		# Figure out how deep we want the countsink "cone hole" to go:
-		if countersink_diameter <= zero:
-		    # No countersink is required, so we will countersink to just
-		    # to just about 3/4 of the drill diameter:
-		    countersink_diameter = 0.75 * hole_diameter
+	    
+	    # Search for useful tools:
+	    maximum_mill_drill_diameter = L(inch=1.0)
+	    mill_drill_tool = part._tools_mill_drill_tip_search(
+	      maximum_mill_drill_diameter, countersink_diameter/2, tracing + 1)
+	    drill_tool = part._tools_drill_search(hole_diameter, hole_z_depth, tracing + 1)
+	    end_mill_tool = part._tools_end_mill_search(hole_diameter,
+	      hole_z_depth, "countersink_hole", tracing + 1)
+	    
+	    if (is_through_hole or is_tip_hole) and mill_drill_tool != None and drill_tool != None:
+		assert isinstance(mill_drill_tool, Tool_Mill_Drill)
+		assert isinstance(drill_tool, Tool_Drill)
+		# Worry about countersinking first:
+		operation_countersink = None
 
-		# First we need to find both a *tool_mill_drill* and a *tool_drill*.  The
-	 	# The tip depth is set to *countersink_hole_diameter/2* since most mill drill
-	 	# bits have 90 degree point angle:
-		maximum_mill_drill_diameter = L(inch=1.0)
-		tool_mill_drill = part._tools_mill_drill_tip_search(
-		  maximum_mill_drill_diameter, countersink_diameter/2, tracing + 1)
-		tool_drill = part._tools_drill_search(hole_diameter, hole_z_depth, tracing + 1)
+		# With the *mill_drill_tool* we can actually countersink or at least
+		# spot drill where the drill needs to go:
+		# Compute the depth of the countersink "cone hole" drill using the formula:
+ 		#
+	        #   depth = r * tan(90 - pa/2)
+		#
+		# where r is the tool radius and pa is the point angle of the tool:
+		mill_drill_point_angle = mill_drill_tool._point_angle_get()
+		mill_drill_diameter = mill_drill_tool._diameter_get()
+		mill_drill_radius = mill_drill_diameter / 2 
+		countersink_z_depth = \
+		  mill_drill_radius * (Angle(deg=90.0) - mill_drill_point_angle/2).tangent()
 
-		# Can this hole be drilled or should it be milled out:
-		if tool_drill != None:
-		    # We have an actual drill, so we can drill this hole:
+		# Figure out where the *countersink_stop* point is:
+		countersink_comment = "{0} [countersink]".format(comment)
+		countersink_stop = start - hole_axis * countersink_z_depth.millimeters()
 
-		    # Worry about countersinking first:
-		    operation_countersink = None
-		    if tool_mill_drill != None:
-	         	# With the *tool_mill_drill* we can actually countersink or at least
-			# spot drill where the drill needs to go:
-			# Compute the depth of the countersink "cone hole" drill using the formula:
- 			#
-	         	#   depth = r * tan(90 - pa/2)
-			#
-			# where r is the tool radius and pa is the point angle of the tool:
-			mill_drill_point_angle = tool_mill_drill._point_angle_get()
-			mill_drill_diameter = tool_mill_drill._diameter_get()
-			mill_drill_radius = mill_drill_diameter / 2 
-			countersink_z_depth = \
-			  mill_drill_radius * (Angle(deg=90.0) - mill_drill_point_angle/2).tangent()
+		# Create *operation_counterink* and append it to the *part* operations:
+		sub_priority = 0
+		operation_countersink = Operation_Drill(part, countersink_comment,
+		  sub_priority, mill_drill_tool, Operation.ORDER_MILL_DRILL_COUNTERSINK,
+		  None, countersink_diameter, Part.HOLE_TIP,
+		  start, countersink_stop, True, tracing = tracing + 1)
+		part._operation_append(operation_countersink, tracing = tracing + 1)
 
-			# Figure out where the *countersink_stop* point is:
-			countersink_comment = "{0} [countersink]".format(comment)
-			countersink_stop = start - hole_axis * countersink_z_depth.millimeters()
+		# Now focus on drilling:
+		if is_through_hole:
+		    drill_tip_depth = drill_tool._tip_depth_get()
+		    hole_stop = stop - hole_axis * drill_tip_depth.millimeters()
 
-			# Create *operation_counterink* and append it to the *part* operations:
-			sub_priority = 0
-			operation_countersink = Operation_Drill(part, countersink_comment,
-			  sub_priority, tool_mill_drill, Operation.ORDER_MILL_DRILL_COUNTERSINK,
-			  None, countersink_diameter, Part.HOLE_TIP,
-			  start, countersink_stop, True, tracing = tracing + 1)
-			part._operation_append(operation_countersink, tracing = tracing + 1)
-
-			# Now focus on drilling:
-			if is_through_hole:
-			    drill_tip_depth = tool_drill._tip_depth_get()
-			    hole_stop = stop - hole_axis * drill_tip_depth.millimeters()
-
-			# Now drill the hole:
-			sub_priority = 1
-			operation_drill = Operation_Drill(part, comment, sub_priority, tool_drill,
-			  Operation.ORDER_DRILL, operation_countersink, hole_diameter, hole_kind,
-			  start, hole_stop, False)
-			part._operation_append(operation_drill, tracing = tracing + 1)
-
-		    else:
-			try_flat = True
-
-	    # See if we should try to mill the hole:
-	    if try_flat:
-		end_mill_tool = part._tools_end_mill_search(hole_diameter,
-		  hole_z_depth, "countersink_hole", tracing + 1)
-		if end_mill_tool != None:
-		    mount = part._current_mount
-		    operation_round_pocket = Operation_Round_Pocket(part, comment,
-		      0, end_mill_tool, Operation.ORDER_END_MILL_ROUND_POCKET, None,
-		      hole_diameter, countersink_diameter, hole_kind, start, stop,
-		      end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
-		      tracing = tracing + 1)
-		    part._operation_append(operation_round_pocket)
+		# Now drill the hole:
+		sub_priority = 1
+		operation_drill = Operation_Drill(part, comment, sub_priority, drill_tool,
+		      Operation.ORDER_DRILL, operation_countersink, hole_diameter, hole_kind,
+		      start, hole_stop, False)
+		part._operation_append(operation_drill, tracing = tracing + 1)
+		success = True
+	    elif (is_flat_hole or is_through_hole) and end_mill_tool != None:
+		mount = part._current_mount
+		operation_round_pocket = Operation_Round_Pocket(part, comment,
+		  0, end_mill_tool, Operation.ORDER_END_MILL_ROUND_POCKET, None,
+		  hole_diameter, countersink_diameter, hole_kind, start, stop,
+		  end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
+		  tracing = tracing + 1)
+		part._operation_append(operation_round_pocket)
+		success = True
+    	    else:
+		print(("Can't drill diameter {0:i} hole {1:i} deep in part '{2}'" +
+		  " flags='{3}' md={4} d={5} em={6}").
+		  format(hole_diameter, hole_z_depth, part._name, flags, mill_drill_tool != None,
+		  drill_tool != None, end_mill_tool != None))
 
 	if ezcad._stl_mode:
 	    if trace_detail >= 1:
@@ -19644,7 +19669,7 @@ class Shop:
 	drill_27 = shop._drill_append("#27 drill",
 	  4, hss, L(inch=0.1440), 2, L(inch=1.750), degrees118, stub)
 	end_mill_3_8 = shop._end_mill_append("3/8 End Mill",
-	  5, hss, in3_8, 2, in5_8, not laser)
+	  5, hss, in3_8, 2, in3_4, not laser)		#FIXME; Cut depth should be 5/8inch
 	end_mill_1_4 = shop._end_mill_append("1/4 End Mill",
 	  6, hss, in1_4, 2, in1_2, not laser)
 	double_angle = shop._double_angle_append("3/4 Double Angle",
@@ -19658,7 +19683,7 @@ class Shop:
 	drill_9 = shop._drill_append("#9 drill",
 	  12, hss, L(inch=0.1960), 2, L(inch=2.000), degrees118, stub)
 	drill_43 = shop._drill_append("#43 drill (4-40 thread)",
-	  13, hss, L(inch=.0890), 2, L(inch=1.500), degrees118, stub)
+	  13, hss, L(inch=.0890), 2, L(inch=3.500), degrees118, stub)	# Huge drill depth
 	drill_32 = shop._drill_append("#32 drill (4-40 close)",
 	  14, hss, L(inch=0.1160), 2, L(inch=1.500), degrees118, stub)
 	drill_50 = shop._drill_append("#50 drill",
@@ -19677,10 +19702,14 @@ class Shop:
 	  20, hss, in3_32, 2, L(inch=1.750), degrees118, stub)
 	drill_42 = shop._drill_append("#42 drill",
 	  21, hss, L(inch=0.0935), 2, L(inch=1.750), degrees118, stub)
+	drill_3_64 = shop._drill_append("3/64 drill",
+	  22, hss, L(inch="3/64"), 2, L(inch=1.05), degrees118, stub)
+	drill_52 = shop._drill_append("#52 drill",
+	  23, hss, L(inch=0.0635), 2, L(inch=1.90), degrees118, stub)
 
 	# Laser "tools":
-	#laser_007 = shop._end_mill_append("Laser_007",
-	#  100, hss, L(inch=0.007), 2, L(inch=0.750), laser)
+	laser_007 = shop._end_mill_append("Laser_007",
+	  100, hss, L(inch=0.007), 2, L(inch=0.750), laser)
 	#laser_000 = shop._end_mill_append("Laser_000",
 	#  101, hss, L(), 2, L(inch=0.750), laser)
 
