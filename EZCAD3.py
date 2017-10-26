@@ -9715,10 +9715,11 @@ class Part:
 
 	return self._ezcad
 
-    def fasten(self, comment, fastener, select, tracing=-1000000):
-	""" *Part*: Use *fastener* to drill a hole from the *Part* object (i.e. *self*).
-	    *select* is one of "thread", "close", or "free" to specify the desired hole
-	    diameter for the hole.  *comment* may
+    def place_fasten(self, comment, transform, fastener, select, tracing=-1000000):
+	""" *Part*: Fasten *fastener* to the *Part* object (i.e. *self*) after applying
+	    *transform* to move *fastener* to a new location.  "select* must be one of
+	    "thread", "close", or "free" to specify the hole diameter.  *comment* is used
+	    for debugging.
 	"""
 
 	# Use *part* instead of *self*:
@@ -9726,8 +9727,41 @@ class Part:
 
 	# Verify argument types:
         assert isinstance(comment, str)
-	assert isinstance(select, str)
+	assert isinstance(transform, Transform)
         assert isinstance(fastener, Fastener)
+	assert isinstance(select, str)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.place_fasten('{1}', '{2}', *, '{3}')".
+	      format(indent, part._name, comment, fastener._name_get()))
+
+	fastener._fasten(comment, part, select, transform=transform, tracing = tracing + 1)
+
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part.place_fasten('{1}', '{2}', *, '{3}')".
+	      format(indent, part._name, comment, fastener._name_get()))
+
+    def fasten(self, comment, fastener, select, tracing=-1000000):
+	""" *Part*: Use *fastener* to drill a hole from the *Part* object (i.e. *self*).
+	    *select* is one of "thread", "close", or "free" to specify the desired hole
+	    diameter for the hole.  *comment* is used for debugging.
+	"""
+
+	# Use *part* instead of *self*:
+        part = self
+
+	# Verify argument types:
+        assert isinstance(comment, str)
+        assert isinstance(fastener, Fastener)
+	assert isinstance(select, str)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -9824,6 +9858,9 @@ class Part:
 	    elif name.endswith("_s"):
 		if first_update:
 		    return ""
+	    elif name.endswith("_t"):
+		if first_update:
+		    return Transform()
 	    elif name.endswith("_p"):
 		if first_update:
 		    return P()
@@ -12950,17 +12987,16 @@ class Part:
                not is_through_hole and not is_tip_hole and     is_flat_hole,   \
 	  "Only specify one of 't', 'p', or 'f' for flags argument"
 	
-	if trace_detail >= 2:
-	     print("{0}is_through_hole={1} is_tip_hole={2} is_flat_hole={3} is_countersink={4}".
-	      format(indent, is_through_hole, is_tip_hole, is_flat_hole, is_countersink))
-
+	# Figure out how deep we want the countsink "cone hole" to go:
 	zero = L()
 	is_countersink = countersink_diameter > zero
-	# Figure out how deep we want the countsink "cone hole" to go:
 	if not is_countersink:
 	    # No countersink is required, so we will countersink to just
 	    # to just about 3/4 of the drill diameter:
 	    countersink_diameter = 0.75 * hole_diameter
+	if trace_detail >= 2:
+	     print("{0}is_through_hole={1} is_tip_hole={2} is_flat_hole={3} is_countersink={4}".
+	      format(indent, is_through_hole, is_tip_hole, is_flat_hole, is_countersink))
 
 	# Hole axis is direction of drilling:
 	hole_axis = (start - stop).normalize()
@@ -16710,7 +16746,7 @@ class Fastener(Part):
 	      format(dx, dy, dz))
 	    difference_lines.append("")
 	
-    def _fasten(self, comment, part, select, tracing=-1000000):
+    def _fasten(self, comment, part, select, transform=None, tracing=-1000000):
 	""" *Fastener*: Use  the *Fastener* object (i.e. *self*) to drill a hole in *part*
 	    using its current mount for *part*.  *select* should be "thread* for a threaded
 	    hole, "close* for a close fit hole, "free" for a looser fit hole.
@@ -16723,6 +16759,7 @@ class Fastener(Part):
 	assert isinstance(comment, str)
 	assert isinstance(part, Part)
 	assert isinstance(select, str) and select in ("thread", "close", "loose", "access")
+	assert isinstance(transform, Transform) or transform == None
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*;
@@ -16765,6 +16802,11 @@ class Fastener(Part):
 	      "No end point specified for fastener '{0}'".fastener._name
 	    if trace_detail >= 2:
 		print("{0}start={1:i} end={2:i}".format(indent, start, end))
+
+	    # Deal with *Transform* if it is specified:
+	    if isinstance(transform, Transform):
+		start = transform * start
+		end = transform * end
 
 	    # Clip *start* and *end* to be within the bounding box of *part* to create
 	    # *new_start* and *new_end*:
@@ -20672,7 +20714,7 @@ class Tool_Mill_Drill(Tool):		# A mill-drill bit
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("=>{0}Tool_Mill_Drill._mill_drill_side_match('{1}', {2:i}, {3:i}, '{4}')".
+	    print("{0}=>Tool_Mill_Drill._mill_drill_side_match('{1}', {2:i}, {3:i}, '{4}')".
 	      format(indent, tool._name, maximum_diameter, maximum_z_depth, from_routine))
 
 	priority = -1.0
@@ -20686,7 +20728,7 @@ class Tool_Mill_Drill(Tool):		# A mill-drill bit
 
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("<={0}Tool_Mill_Drill._mill_drill_side_match('{1}', {2:i}, {3:i}, '{4}')=>{5}".
+	    print("{0}<=Tool_Mill_Drill._mill_drill_side_match('{1}', {2:i}, {3:i}, '{4}')=>{5}".
 	      format(indent, tool._name, maximum_diameter, maximum_z_depth, from_routine, priority))
 
 	return priority
