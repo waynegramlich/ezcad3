@@ -1955,6 +1955,213 @@ class Bend:
 	return self._radius
 
 
+class BOM:
+    """ *BOM*: A *BOM* represents Bill Of Materials.  It is a catch all for summary
+	information about a *Part*:
+    """
+
+    def __init__(self, part):
+	""" *BOM*: Initialize the *BOM* for *part*.
+	"""
+    
+	# Use *bom* instead of *self*:
+	bom = self
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+
+	# Stuff *part* into *bom* and initialize tables:
+	bom._part = part
+	bom._blocks = []
+	bom._pending_block = None
+
+
+    def _block_pending(self, part, material, corner1, corner2):
+	""" *BOM*: Register a block of *material* with opposing corners of *corner1* and *corner2*
+	    with the *BOM* object.
+	"""
+
+	# Use *bom* instead of *self*:
+	bom = self
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(material, Material)
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
+
+	# Hang onto a *pending_block*:
+	bom._pending_block = BOM_Block(part, material, corner1, corner2)
+
+    def _block_register(self, transform):
+	""" *BOM*: Register any pending *BOM_Block* associated with *BOM*.
+	"""
+
+	# Use *bom* instead of *self*:
+	bom = self
+
+	# Verify argument types:
+	assert isinstance(transform, Transform)
+
+	# Register *pending_bom_block* using to *transform* to reorient it:
+	pending_block = bom._pending_block
+	if isinstance(pending_block, BOM_Block):
+	    pending_block._transform(transform)
+	    bom._blocks.append(pending_block)
+	    bom._pending_block = None
+
+    def _merge(self, child_bom):
+	""" *BOM*: Merge the contents of *child_bom* into to the parent *BOM* object (i.e. *self*.)
+	"""
+
+	# Use *parent_bom* instead of *self*:
+	parent_bom = self
+
+	# Merge the *BOM_Blocks* from *child_bom* to *parent_bom*:
+	parent_bom._blocks.extend(child_bom._blocks)
+
+    def _material_summary(self):
+	""" *BOM*: Generate a material summary:
+	"""
+
+	# Use *bom* instead of *self*:
+	bom = self
+
+	blocks = bom._blocks
+	blocks.sort(key=BOM_Block.key)
+
+	thicknesses = {}
+	for block in blocks:
+	    key = block._key
+	    thickness_key = (key[0], key[1], round(key[2], 4))
+	    if thickness_key in thicknesses:
+		thicknesses[thickness_key].append(block)
+	    else:
+		thicknesses[thickness_key] = [block]
+	
+	summary_file = open("/tmp/blocks.txt", "w")
+	thicknesses_keys = sorted(thicknesses.keys())
+	for thickness_key in thicknesses_keys:
+	    grouped_blocks = thicknesses[thickness_key]
+	    block0 = grouped_blocks[0]
+	    adjusted_dz = block0._adjusted_dz
+	    summary_file.write("{0} {1} {2}:\n".
+	      format(thickness_key[0], thickness_key[1], adjusted_dz))
+	    for block in grouped_blocks:
+		dx = block._dx
+		dy = block._dy
+		dz = block._dz
+		part_name = block._part.name_get()
+		summary_file.write("    {0:i} x {1:i} x {2:i}: '{3}\n".
+		  format(dx, dy, dz, part_name))
+	summary_file.close()
+	
+class BOM_Block:
+    """ *BOM_Block*: Represents a block of material.
+    """
+
+    # Desired thicknesses in inches:
+    HDPE_THICKNESSES = (
+      0.0625,
+      0.1250,
+      0.2500,
+      0.3750,
+      0.5000,
+      0.6250,
+      0.7500,
+      1.0000,
+      1.2500,
+      2.0000,
+      3.0000,
+      4.0000 )
+    ALUMINUM_THICKNESSES = (
+      0.1250,
+      0.2500,
+      0.5000,
+      1.0000 )
+
+    def __init__(self, part, material, corner1, corner2):
+	""" *BOM_Block*: Initialize the *BOM_Block* object to contain *material*, *corner1*, and
+	    *corner2*.
+	"""
+
+	# Use *bom_block* instead of *self*:
+	bom_block = self
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(material, Material)
+	assert isinstance(corner1, P)
+	assert isinstance(corner2, P)
+
+	# Load up *bom_block*:
+	bom_block._part = part
+	bom_block._material = material
+	bom_block._corner1 = corner1
+	bom_block._corner2 = corner2
+
+    def _transform(self, transform):
+	""" *BOM_Block*: Transform the corners of the *BOM_Block* object (i.e. *self*) using
+	    *transform*.
+	"""
+
+	# Use *bom_block* instead of self
+	bom_block = self
+
+	# Verify argument types:
+	assert isinstance(transform, Transform)
+
+	# Transform the two corners
+	corner1 = transform * bom_block._corner1
+	corner2 = transform * bom_block._corner2
+
+	# Compute the volume values:
+	dx = (corner2.x - corner1.x).absolute()
+	dy = (corner2.y - corner1.y).absolute()
+	dz = (corner2.z - corner1.z).absolute()
+
+	# Compute the *key* tuple used for sorting:
+	# Determine *adjusted_dz* from the available *material* thicknesses:
+	material = bom_block._material
+	generic = material.generic_get()
+	specific = material.specific_get()
+	thicknesses = tuple()
+	if specific == "hdpe":
+	    # HDPE: High Density Polyethelene:
+	    thicknesses = BOM_Block.HDPE_THICKNESSES
+	elif generic == "aluminum":
+	    # Aluminum:
+	    thicknesses = BOM_Block.ALUMINUM_THICKNESSES
+
+	# Grab the first thickness that is thick enough for *adjusted_dz*:
+	adjusted_dz_inch = round(dz.inches(), 4)
+	for thickness in thicknesses:
+	    if thickness >= adjusted_dz_inch:
+		adjusted_dz_inch = thickness
+		break
+
+	# Compute the *key* tuple:
+	dx_inch = dx.inches()
+	dy_inch = dy.inches()
+	dz_inch = dz.inches()
+	area_inch = dx_inch * dy_inch
+	part_name = bom_block._part.name_get()
+	key = (generic, specific, adjusted_dz_inch, dz_inch, area_inch, dx_inch, dy_inch, part_name)
+
+	# Load up *bom_block*:
+	bom_block._adjusted_dz = adjusted_dz_inch
+	bom_block._dx = dx
+	bom_block._dy = dy
+	bom_block._dz = dz
+	bom_block._key = key
+
+    def key(self):
+	""" *BOM_Block*: Return an immutable tuple for comparing the *BOM_Block* object
+	    (i.e. *self*) with other *BOM_Block* objects when sorting.
+	"""
+
+	return self._key
+
 class Hertz:
     def __init__(self, frequency=0.0, rpm=0.0, rps=0.0):
 	""" *Hertz*: Initialize the *Hertz* object (i.e. *self*) to be the sum of
@@ -2051,6 +2258,12 @@ class Material:
 	assert isinstance(material_name, str)
 	return self._generic == material_name
 
+    def generic_get(self):
+	""" *Material*: Return the generic material name for the *Material* object (i.e. *self*):
+	"""
+
+	return self._generic
+
     def _needs_coolant(self):
 	""" *Material*: Return *True* if the *Material* object (i.e. *self*) should
 	    be machined with coolant on and *False* otherwise.
@@ -2070,6 +2283,12 @@ class Material:
 	"""
 
 	return self._generic.lower() == "steel"
+
+    def specific_get(self):
+	""" *Material*: Return the specific material name for the *Material* object (i.e. *self*):
+	"""
+
+	return self._specific
 
 class Bounding_Box:
 
@@ -4214,6 +4433,8 @@ class EZCAD3:
 	""" *EZCAD3*: Perform all of the processing starting at *part*.
 	"""
 
+	print("=>EZCAD3.process()")
+
 	# Use *ezcad* instead of *self*:
 	ezcad = self
 
@@ -4428,7 +4649,8 @@ class Mount:
 
     def _extra_stop_set(self, extra_stop_bsw, extra_stop_tne, tracing=-1000000):
 	""" *Mount* Store *extra_stop_bsw* and *extra_stop_tne* into the *Mount* object
-	    (i.e. *self*.
+	    (i.e. *self*.)  These values must bracke the bounding box of the associated
+	    *Part* object.
 	"""
 
 	# Use *mount* instead of *self*:
@@ -4443,7 +4665,7 @@ class Mount:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}<=Mount._extra_stop_store('{1}', *, {2:i}, {3:i})".
+	    print("{0}<=Mount._extra_stop_set('{1}', *, {2:i}, {3:i})".
 	      format(indent, mount._name, extra_stop_bsw, extra_stop_tne))
 	    trace_detail = 2
 
@@ -4460,9 +4682,28 @@ class Mount:
 	assert isinstance(extra_stop_bsw, P)
 	assert isinstance(extra_stop_tne, P)
 
+	# Make sure that *final_bsw*/*final_tne* box subsumes the *part_bsw*/*part_tne* box:
+	part = mount._part
+	part_bsw = part.bsw
+	part_tne = part.tne
+	# Floating point errors add up over time, so compensate with *epsilon*.
+	epsilon = L(inch=.000000001)
+	assert final_bsw.x - epsilon <= part_bsw.x, \
+	  "final_bsw={0:i} part_bsw={1:i}".format(final_bsw, part_bsw)
+	assert final_bsw.y - epsilon <= part_bsw.y, \
+	  "final_bsw={0:i} part_bsw={1:i}".format(final_bsw, part_bsw)
+	assert final_bsw.z - epsilon <= part_bsw.z, \
+	  "final_bsw={0:i} part_bsw={1:i}".format(final_bsw, part_bsw)
+	assert part_tne.x <= final_tne.x + epsilon, \
+	  "part_tne={0:i} final_tne={1:i}".format(part_tne, final_tne)
+	assert part_tne.y <= final_tne.y + epsilon, \
+	  "part_tne={0:i} final_tne={1:i}".format(part_tne, final_tne)
+	assert part_tne.z <= final_tne.z + epsilon, \
+	  "part_tne={0:i} final_tne={1:i}".format(part_tne, final_tne)
+
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}=>Mount._extra_stop_store('{1}', *, {2:i}, {3:i})".
+	    print("{0}=>Mount._extra_stop_set('{1}', *, {2:i}, {3:i})".
 	      format(indent, mount._name, extra_stop_bsw, extra_stop_tne))
 
     def _is_tooling_plate_mount_get(self):
@@ -4882,7 +5123,7 @@ class Mount_Operations:
 	#mount_wrl_lines.append("}\n")
 
 	# Output *mount_wrl_lines* to the *mount_wrl_file_name* file.  Please note that
-	# these file names end in `.wrl` and are written into the *ngc_directory* to with
+	# these file names end in `.wrl` and are written into the *ngc_directory* to
         # coexist with their similarly named `.ngc` counterparts:
 	ezcad = part._ezcad_get()
 	part_name = part._name_get().replace(' ', '_')
@@ -5098,6 +5339,9 @@ class Mount_Operations:
 	spindle_speed = operation0._spindle_speed_get()
 	part = operation0._part_get()
 
+	# Remember that *part* uses *tool*:
+	tool._part_register(part)
+
 	# Output the call to *mount_ngc_file*:
 	tool_name = tool._name_get()
 	if tool_name != "None":
@@ -5210,7 +5454,8 @@ class Mount_Operations:
 	    cnc_tool_vrml_padded_text = cnc_tool_vrml._text_pad(0)
 	    wrl_file_name = "O{0}.wrl".format(tool_program_number)
 	    with ngc_directory._write_open(wrl_file_name) as tool_wrl_file:
-	      tool_wrl_file.write(cnc_tool_vrml_padded_text)
+		tool_wrl_file.write("#VRML V2.0 utf8\n")
+		tool_wrl_file.write(cnc_tool_vrml_padded_text)
 	    if trace_detail >= 2:
 		print("{0}Wrote file '{1}'".format(indent, wrl_file_name))
 
@@ -7387,23 +7632,25 @@ class Operation_Mount(Operation):
 
 	# Grab the extra material conners from *mount* and render into *mount_vrml_lines*:
 	extra_start_bsw, extra_start_tne = mount._extra_start_get()
-	mount_vrml_lines._box_outline("azure", extra_start_bsw, extra_start_tne)
+	cnc_extra_start_bsw = cnc_transform * extra_start_bsw
+	cnc_extra_start_tne = cnc_transform * extra_start_tne
+	mount_vrml_lines._box_outline("azure", cnc_extra_start_bsw, cnc_extra_start_tne)
 	if trace_detail >= 2:
 	    print("{0}extra_start_bsw={1:i} extra_start_tne={2:i}".
 	      format(indent, extra_start_bsw, extra_start_tne))
 
 	# Write the dimentions of the initial *material* into *mount_ngc_file*:
-	extra_start_dx = extra_start_tne.x - extra_start_bsw.x
-	extra_start_dy = extra_start_tne.y - extra_start_bsw.y
-	extra_start_dz = extra_start_tne.z - extra_start_bsw.z
+	cnc_extra_start_dx = cnc_extra_start_tne.x - cnc_extra_start_bsw.x
+	cnc_extra_start_dy = cnc_extra_start_tne.y - cnc_extra_start_bsw.y
+	cnc_extra_start_dz = cnc_extra_start_tne.z - cnc_extra_start_bsw.z
 	material = part._material_get()
 	mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3} )\n".
-	  format(extra_start_dx, extra_start_dy, extra_start_dz, material))
+	  format(cnc_extra_start_dx, cnc_extra_start_dy, cnc_extra_start_dz, material))
 
 	# If there is a tooling plate, visualize that into *cnc_vrml_lines*:
 	jaws_spread = extra_start_tne.y - extra_start_bsw.y
+	zero = L()
 	if tooling_plate != None:
-	    zero = L()
 	    corner = P(zero, zero, parallels_height)
 	    spacers = mount._spacers_get()
 	    tooling_plate._vrml_append(mount_vrml_lines, corner, spacers, tracing = tracing + 1)
@@ -7415,6 +7662,15 @@ class Operation_Mount(Operation):
 	parallels = vice._parallels_get()
 	parallels._vrml_append(mount_vrml_lines,
 	  parallels_height, jaws_spread, tracing = tracing + 1)
+
+	# Show the *vice* jaws:
+	vice_jaw_volume = vice._jaw_volume_get()
+	corner1 = P(zero,               zero,        zero)
+	corner2 = P(vice_jaw_volume.x,  zero,        vice_jaw_volume.z)
+	mount_vrml_lines._box_outline("yellow", corner1, corner2)
+	corner1 = P(zero,              -jaws_spread, zero)
+	corner2 = P(vice_jaw_volume.x, -jaws_spread, vice_jaw_volume.z)
+	mount_vrml_lines._box_outline("yellow", corner1, corner2)
 
 	# Show the coordinate axes:
 	ezcad = part._ezcad_get()
@@ -8157,10 +8413,11 @@ class Operation_Simple_Pocket(Operation):
 	operation_simple_pocket._corner_radius = corner_radius
 	operation_simple_pocket._tool_radius = tool_radius
 	operation_simple_pocket._pocket_kind = pocket_kind
+	operation_simple_pocket._tracing = -1000000
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print(("{0}=>Operation_Simple_Pocket.__init__(*, p='{1}', c='{2}', sp={3}, t='{4}'," +
+	    print(("{0}<=Operation_Simple_Pocket.__init__(*, p='{1}', c='{2}', sp={3}, t='{4}'," +
 	      " o={5}, f={6:i}, s={7:rpm}, c1={8:i}, c2={9:i}, cr={10:i}, tr={11:i}, pk={12})").
 	      format(indent, part._name_get(), comment, sub_priority, tool._name_get(), order,
 	      feed_speed, spindle_speed, corner1, corner2, corner_radius, tool_radius, pocket_kind))
@@ -8198,6 +8455,11 @@ class Operation_Simple_Pocket(Operation):
 	operation_simple_pocket = self
 
 	# Perform any requested *tracing*:
+	part          = operation_simple_pocket._part
+	if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
+	if operation_simple_pocket._tracing >= 0:
+	    tracing = operation_simple_pocket._tracing
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
@@ -8303,7 +8565,7 @@ class Operation_Simple_Pocket(Operation):
 	# Compute *z_step* which is the mount remvoed for each pass:
 	z_step = total_cut / float(passes)
 
-	# *tool_radius* is the radius of the selected end-mill, which we will henceforth,
+	# *tool_radius* is the radius of the selected end-mill, which we will henceforth
         # call R. We need to be careful on our inner passes because the end-mill can only
         # cut R/sqrt(2) along the diagnoal.  If each pass is separated by exactly 2R, there
         # will be little triangular islands left behind.
@@ -8865,6 +9127,7 @@ class Part:
 	
 	ezcad = EZCAD3.ezcad
 	part._axis = z_axis			# Scheduled to go away
+	part._bom = BOM(part)
 	part._bounding_box = Bounding_Box()
 	part._color = None
 	part._center = P()			# Is this used anymore
@@ -9222,7 +9485,7 @@ class Part:
 	return color
 
     def _cnc_manufacture(self, tracing = -1000000):
-	""" *Part*: Force the generate of `.ngc` and `.wrl` path files for the *Part* object.
+	""" *Part*: Force the generation of `.ngc` and `.wrl` path files for the *Part* object.
 	"""
 
 	# Use *part* instead of *self*
@@ -9920,7 +10183,10 @@ class Part:
 		  "{0}.{1} is not a Part".format(part.name, attribute_name)
 		child_part._manufacture(ezcad, tree_depth + 1, tracing + 1)
 
-	# Now run construct this *part*
+		# Update the Bill of Materials for *part* with *child_part* BOM:
+		part._bom._merge(child_part._bom)
+
+	# Now run *construct* for this *part*
 	if tracing >= 0:
 	    print("{0}==>Part.construct('{1}') ****************".format(indent, part_name))
 	ezcad._stl_mode = True
@@ -10433,14 +10699,6 @@ class Part:
 	# Close off difference():
 	lines.append("  } // difference")
 
-	#    # Perform all the placements:
-	#    for sub_part in sub_parts:
-	#	#print("Part._manufacture.place={0}".format(place))
-	#	self._scad_transform(lines, 0, center = sub_part._center,
-	#	  axis = sub_part._axis, rotate = sub_part._rotate,
-	#	  translate = sub_part._translate);
-	#	lines.append("{0}();".format(sub_part._name))
-
 	# Close off the module:
 	lines.append("} // module")
 	lines.append("")
@@ -10484,104 +10742,6 @@ class Part:
 	        print("{0}subprocess command='{1}".format(indent, command))
 	    subprocess.call(command, stderr=ignore_file) 
 	    ignore_file.close()
-
-	#if False:
-	#    # Now manufacture this node:
-	#    #scad_difference_lines = []
-	#    #scad_union_lines = []
-	#    #self._scad_difference_lines = scad_difference_lines
-	#    #self._scad_union_lines = scad_union_lines
-	#    #self.tracing = tracing + 1
-	#    #self.construct()
-	#    #self._scad_difference_lines = None
-	#    #self._scad_union_lines = None
-
-	#    scad_difference_lines = self._scad_difference_lines
-	#    scad_union_lines = self._scad_union_lines
-	#    if trace_detail >= 3:
-	#	print("{0}len(scad_difference_lines)={1} len(scad_union_lines)={2}".
-	#	  format(indent, len(scad_difference_lines), len(scad_union_lines)))
-
-	#    sub_parts = []
-	#    sub_part_names = []
-	#    # Find all the *sub_parts* from *self*:
-	#    for attribute_name in dir(self):
-	#    	if not attribute_name.startswith("_") and \
-	#    	  attribute_name.endswith("_"):
-	#    	    sub_part = getattr(self, attribute_name)
-	#    	    assert isinstance(sub_part, Part)
-	#	    sub_parts.append(sub_part)
-	#	    sub_part_names.append(sub_part._name)
-
-	#    # Remove duplicates from *sub_parts* and *sub_part_names* and sort:
-	#    sub_parts = list(set(sub_parts))
-	#    sub_parts.sort(key = lambda sub_part: sub_part._name)
-	#    sub_part_names = list(set(sub_part_names))
-	#    sub_part_names.sort()
-
-	#    # The *signature* for the Part (i.e. *self*) is the concatenation
-	#    # of *scad_union_lines* and *scad_difference_lines*:
-	#    signature = "\n".join(
-	#      scad_union_lines + scad_difference_lines + sub_part_names)
-	#    signature_hash = hashlib.sha1(signature).hexdigest()
-	#    self._signature_hash = signature_hash
-	#    if trace_detail >= 3:
-	#	print("{0}signature_hash={1}".format(indent, signature_hash))
-
-	#    # We want to create a *name* the consists of *base_name* followed
-	#    # by a digit.  We want a unique *name* for each *signature*.
-
-	#    # *base_name* is the most specific class name:
-	#    base_name = self.__class__.__name__
-
-	#    # *bases_table* keeps track of each different *base_name*.
-	#    bases_table = ezcad._bases_table
-
-	#    # We deterimine there is a signature table entry for *base_name*:
-	#    if base_name in bases_table:
-	#	base_signatures_table = bases_table[base_name]
-	#    else:
-	#	base_signatures_table = {}
-	#	bases_table[base_name] = base_signatures_table
-
-	#    # Now ensure see whether we have encountered this *signature* before:
-	#    if signature in base_signatures_table:
-	#	# Yes we have, so reuse the previously assigned name:
-	#	name = base_signatures_table[signature]
-	#	self._name = name
-	#	if trace_detail >= 3:
-	#	    print("{0}reuse name '{1}'".format(indent, name))
-	#    else:
-	#	# No we have not so we create a new one *and* write out
-	#	# the associated *name*.scad file:
-	#	name = "{0}{1}".format(base_name, len(base_signatures_table))
-	#	base_signatures_table[signature] = name
-	#	self._name = name
-	#	if trace_detail >= 3:
-	#	    print("{0}new name '{1}'".format(indent, name))
-
-	#	    # Write out DXF file:
-	#	    dxf_scad_lines = self._dxf_scad_lines
-	#	    if len(dxf_scad_lines) > 0:
-	#		scad_directory = ezcad._scad_directory_get()
-	#		dxf_scad_file_name = os.path.join(scad_directory,
-	#		  "{0}_Dxf.scad".format(name))
-	#		dxf_scad_file = open(dxf_scad_file_name, "wa")
-	#		dxf_scad_file.write("use <{0}.scad>;\n".format(name))
-	#		for dxf_scad_line in dxf_scad_lines:
-	#		    dxf_scad_file.write(dxf_scad_line)
-	#		    dxf_scad_file.write("\n")
-	#		dxf_scad_file.write("{0}();\n".format(name))
-	#		dxf_scad_file.close()
-	#		self._dxf_scad_lines = []
-
-	#		dxf_file_name = os.path.join(directory, "{0}.dxf".format(name))
-	#		dxf_scad_file_name = os.path.join(directory, "{0}_Dxf.scad".format(name))
-	#		command = [ "openscad" , "-o", dxf_file_name, dxf_scad_file_name ]
-	#		print("openscad command = '{0}'".format(" ".join(command)))
-	#		ignore_file = open("/dev/null", "w")
-	#		subprocess.call(command, stderr=ignore_file)
-	#		ignore_file.close()
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -11113,8 +11273,8 @@ class Part:
 	      format(pad, x2 - x1, y2 - y1, z2 - z1, comment))
 
 	if ezcad._cnc_mode:
-	    # Do nothing for CNC:
-	    pass
+	    # Add a block record to the *part* BOM (Bill Of Materials):
+	    part._bom._block_pending(part, material, corner1, corner2)
 
 	# Wrap up tracing:
 	if tracing >= 0:
@@ -11719,12 +11879,18 @@ class Part:
 	part._manufacture(ezcad, 0, tracing + 1)
 	ezcad._parts_stack_reset()
 
+	part._bom._material_summary()
+
 	# Clean up any directories:
 	ezcad._dxf_directory._clean_up(tracing = tracing + 1)
 	ezcad._ngc_directory._clean_up(tracing = tracing + 1)
 	ezcad._scad_directory._clean_up(tracing = tracing + 1)
 	ezcad._stl_directory._clean_up(tracing = tracing + 1)
 	ezcad._wrl_directory._clean_up(tracing = tracing + 1)
+
+	# Write out the tools summary:
+	shop = ezcad._shop_get()
+	shop._tools_summary_write()
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -11794,41 +11960,42 @@ class Part:
 	    # We need to figure out where the four corners are in 3D space.  To do this we first
 	    # figure out where everything landed after *top_surface_transform* is applied.  After
 	    # that we can reverse the points back into 3D space.  So first we compute the bounding
-	    # box coordinates of the *part* after it has been transformed to CNC machine coordinates
-	    # with the top surface touching the machine origin:
+	    # box coordinates of the *part* after it has been transformed  with the
+            # *top_surface_transform* touching the machine origin:
+
+	    # Get the *top_transform* and its reverse from *mount*:
 	    mount = part._current_mount
 	    assert isinstance(mount, Mount)
-
-	    top_surface_transform = mount._top_surface_transform_get()
-	    reverse_top_surface_transform = top_surface_transform.reverse()
+	    top_transform = mount._top_surface_transform_get()
+	    reverse_top_transform = top_transform.reverse()
 	    if trace_detail >= 2:
-		print("{0}top_surface_transform={1:v}".format(indent, top_surface_transform))
-		print("{0}reverse_top_surface_transform={1:v}".
-		  format(indent, reverse_top_surface_transform))
+		print("{0}top_transform={1:v}".format(indent, top_transform))
+		print("{0}reverse_top_transform={1:v}".format(indent, reverse_top_transform))
 
+	    # Now grap the bounding box after *top_surface_transform* has been applied:
 	    top_bsw, top_tne = \
-	      part._bounding_box_get(top_surface_transform, tracing = tracing + 1)
-	    top_x0 = top_bsw.x
+	      part._bounding_box_get(top_transform, tracing = tracing + 1)
 	    top_x1 = top_tne.x
-	    top_y0 = top_bsw.y
+	    top_x0 = top_bsw.x
 	    top_y1 = top_tne.y
-	    top_z0 = top_bsw.z
+	    top_y0 = top_bsw.y
 	    top_z1 = top_tne.z
+	    top_z0 = top_bsw.z
 	    if trace_detail >= 2:
 		print("{0}top_bsw={1:i} top_tne={2:i}".format(indent, top_bsw, top_tne))
-		print(("{0}top_x0={1:i} top_x1={2:i} top_y0={3:i} top_y1={4:i} " +
-		  "top_z0={5:i} top_z1={6:i}").
-		  format(indent, top_x0, top_x1, top_y0, top_y1, top_z0, top_z1))
+		print("{0}top_x0={1:i} top_x1={2:i}".format(indent, top_x0, top_x1))
+		print("{0}top_y0={1:i} top_y1={2:i}".format(indent, top_y0, top_y1))
+		print("{0}top_z0={1:i} top_z1={2:i}".format(indent, top_z0, top_z1))
 
-	    # Now we use *reverse_top_surface_transform* to map the points back to 3D space.
-	    # Append each *corners* to *corners* in a clockswise direction to force climb milling:
+	    # Now we use *reverse_top_surface_transform* to map the points back to 3D space and
+	    # append each *corner* to *corners* in a clockswise direction to force climb milling:
 	    corners = []
-	    corners.append(reverse_top_surface_transform * P(top_x0, top_y0, top_z1))
-	    corners.append(reverse_top_surface_transform * P(top_x0, top_y1, top_z1))
-	    corners.append(reverse_top_surface_transform * P(top_x1, top_y1, top_z1))
-	    corners.append(reverse_top_surface_transform * P(top_x1, top_y0, top_z1))
+	    corners.append(reverse_top_transform * P(top_x0, top_y0, top_z1))
+	    corners.append(reverse_top_transform * P(top_x0, top_y1, top_z1))
+	    corners.append(reverse_top_transform * P(top_x1, top_y1, top_z1))
+	    corners.append(reverse_top_transform * P(top_x1, top_y0, top_z1))
 
-	    # Rotate *corners* by *start_corner*:
+	    # Rotate *corners* by *start_corner* using some fun Python slice magic:
 	    corners = corners[start_corner:] + corners[:start_corner]
 	    if trace_detail >= 2:
 		print("{0}corner1={1:i}".format(indent, corners[0]))
@@ -11836,43 +12003,47 @@ class Part:
 		print("{0}corner3={1:i}".format(indent, corners[2]))
 		print("{0}corner4={1:i}".format(indent, corners[3]))
 
+	    # Create the *exterior_contour*:
+	    exterior_contour = Contour("Exterior Contour")
+	    for index, corner in enumerate(corners):
+		exterior_contour.bend_append("Corner {0}".format(index), corner, radius)
+	
+	    # Now figure out the *start* and *stop* point back in *part* coordinates:
 	    top_start = P(top_x0, (top_y0 + top_y1)/2, top_z1)
 	    top_stop  = P(top_x0, (top_y0 + top_y1)/2, top_z0 - L(inch=0.020))
-	    start = reverse_top_surface_transform * top_start
-	    stop  = reverse_top_surface_transform * top_stop
+	    start = reverse_top_transform * top_start
+	    stop  = reverse_top_transform * top_stop
 	    if trace_detail >= 2:
 		print("{0}top_start={1:i}".format(indent, top_start))
 		print("{0}top_stop={1:i}".format(indent, top_stop))
 		print("{0}start={1:i}".format(indent, start))
 		print("{0}stop={1:i}".format(indent, stop))
 
-	    # Create the *exterior_contour*:
-	    exterior_contour = Contour("Exterior Contour")
-	    for index, corner in enumerate(corners):
-		exterior_contour.bend_append("Corner {0}".format(index), corner, radius)
-	
-	    part_dx = top_x1 - top_x0
-	    part_dy = top_y1 - top_y0
-	    part_dz = top_z1 - top_z0
+	    # Figure out the bounding box dimensions after *top_transform*:
+	    top_dx = top_x1 - top_x0
+	    top_dy = top_y1 - top_y0
 
 	    # FIXME: Dealing with extra material in contours is broken!!!
 	    part_mount = part._current_mount_get()
 	    extra_bsw, extra_tne = part_mount._extra_stop_get(tracing = tracing + 1)
-	    extra_dx = extra_tne.x - extra_bsw.x
-	    extra_dy = extra_tne.y - extra_bsw.y
-	    extra_dz = extra_tne.z - extra_bsw.z
+	    top_extra_bsw = top_transform * extra_bsw
+	    top_extra_tne = top_transform * extra_tne
+
 
 	    # *extra* is the material around *part*.  It used to compute how many passes
 	    # are needed to machine out the contour:
-	    extra = (extra_dx - part_dx).maximum(extra_dy - part_dy)
-	    if extra.millimeters() <= 0.0:
+	    top_extra_dx = top_extra_tne.x - top_extra_bsw.x
+	    top_extra_dy = top_extra_tne.y - top_extra_bsw.y
+	    extra = (top_extra_dx - top_dx).maximum(top_extra_dy - top_dy)
+	    zero = L()
+	    if extra <= zero:
 		extra = L(mm=1.0)
 
 	    # Trim X/Y coordinates of *extra_stop_bsw* and *extra_stop_tne* down to contour
 	    # boundaries.  Leave the Z coordinates alone since no facing operation has occurred.
 	    # Stuff the result back into *part*:
-	    extra_stop_bsw = P(top_x0, top_y0, extra_bsw.z)
-	    extra_stop_tne = P(top_x1, top_y1, extra_tne.z)
+	    extra_stop_bsw = reverse_top_transform * P(top_x0, top_y0, top_extra_bsw.z)
+	    extra_stop_tne = reverse_top_transform * P(top_x1, top_y1, top_extra_tne.z)
 	    part_mount._extra_stop_set(extra_stop_bsw, extra_stop_tne)
 
 	    # Now, actually perform the contour operation:
@@ -12086,7 +12257,7 @@ class Part:
 
 	    # Process the 't' flag to make the pocket go all the way through *part8:
 	    hole_kind = Part.HOLE_FLAT
-	    extra = L(inch=0.0250).millimeters()
+	    extra = L(inch=0.250).millimeters()
 	    if 't' in flags:
 		# Extend *stop* so that it end .250inch further "down":
 		hole_axis = (start - stop).normalize()
@@ -12182,6 +12353,126 @@ class Part:
 	      " {7:i}, {8:i}, {9:i}, {10:i})").
 	      format(indent, self._name,  comment, material, color,
 	      outer_diameter, inner_diameter, start, start_extra, end, end_extra))
+
+    def top_face(self, comment, tracing=-1000000):
+	""" *Part*: Remove extra material from the top surface of the *Part* object (i.e. *self*.)
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.top_face('{1}')".format(indent, comment))
+	    trace_detail = 2
+
+	# Only do stuff if in *ezcad* is in *cnc_mode*:
+	ezcad = part._ezcad_get()
+	if ezcad._cnc_mode:
+	    # Get the current mount:
+	    current_mount = part._current_mount
+	    assert isinstance(current_mount, Mount), \
+	      "Is part '{0}' mounted in vice?".format(part._name)
+
+	    # Convert the extra bounding material bounding box via *top_surface_transform*:
+	    extra_stop_bsw, extra_stop_tne = current_mount._extra_stop_get()
+	    top_transform = current_mount._top_surface_transform_get()
+	    top_extra_stop_bsw, top_extra_stop_tne = \
+	      (top_transform * extra_stop_bsw).minimum_maximum(top_transform * extra_stop_tne)
+	    if trace_detail >= 2:
+		print("{0}Part='{1}'".format(indent, part._name))
+		print("{0}part.tne={1:i}".format(indent, part.tne))
+		print("{0}part.bsw={1:i}".format(indent, part.bsw))
+		print("{0}current_mount='{1}'".format(indent, current_mount._name_get()))
+		print("{0}extra_stop_tne={1:i}".format(indent, extra_stop_tne))
+		print("{0}extra_stop_bsw={1:i}".format(indent, extra_stop_bsw))
+		print("{0}top_transform=\n{1:m}".format(indent, top_transform))
+		print("{0}top_extra_stop_tne={1:i}".format(indent, top_extra_stop_tne))
+		print("{0}top_extra_stop_bsw={1:i}".format(indent, top_extra_stop_bsw))
+
+	    # Grap the bounding box oriented using *top_surface_transform(*:
+	    top_bounding_box_bsw, top_bounding_box_tne = part._bounding_box_get(top_transform)
+	    if trace_detail >= 2:
+		print("{0}top_bounding_box_tne={1:i}".
+		  format(indent, top_bounding_box_tne))
+		print("{0}top_bounding_box_bsw={1:i}".
+		  format(indent, top_bounding_box_bsw))
+
+	    # Compute *remove_dz* which is the amount mow off the top:
+	    remove_dz = top_extra_stop_tne.z - top_bounding_box_tne.z
+	    if trace_detail >= 2:
+		print("{0}remove_dz={1:i}".format(indent, remove_dz))
+
+	    # Search for an *end_mill_tool* that can do the job:
+	    detail_tracing = -1000000
+	    if trace_detail >= 3:
+		detail_tracing = tracing + 1
+	    maximum_diameter = L(inch=1.000)
+	    end_mill_tool = self._tools_end_mill_search(maximum_diameter,
+	      remove_dz, "simple_pocket", detail_tracing)
+	    assert end_mill_tool != None, \
+	      "Could not find a end mill to mill off top of part {0}".format(part._name)
+	    if trace_detail >= 1:
+		 print("{0}end_mill_tool='{1}'".format(indent, end_mill_tool._name_get()))
+
+	    # Grab some values out of *end_mill_tool*:
+	    end_mill_diameter = end_mill_tool._diameter_get()
+	    end_mill_radius = end_mill_diameter / 2
+	    end_mill_feed_speed = end_mill_tool._feed_speed_get()
+	    end_mill_spindle_speed = end_mill_tool._spindle_speed_get()
+
+	    # We need the compute the corners of a "simple pocket" that will remove the top face.
+	    zero = L()
+	    end_mill_offset = P(end_mill_radius, end_mill_radius, zero)
+	    top_corner1 = P(top_extra_stop_bsw.x, top_extra_stop_bsw.y, top_bounding_box_tne.z) - \
+	      end_mill_offset
+	    top_corner2 = top_extra_stop_tne + end_mill_offset
+
+	    # Note that we need to map back from CNC coordinates to actual coordinates
+	    # for the *Operation_Simple_Pocket*() below:
+	    reverse_top_transform = top_transform.reverse()
+	    final_corner1, final_corner2 = (reverse_top_transform * top_corner1). \
+	      minimum_maximum(reverse_top_transform * top_corner2)
+	    if trace_detail >= 2:
+		print("{0}top_corner2={1:i}".format(indent, top_corner2))
+		print("{0}top_corner1={1:i}".format(indent, top_corner1))
+		print("{0}final_corner2={1:i}".format(indent, final_corner2))
+		print("{0}final_corner1={1:i}".format(indent, final_corner1))
+
+	    # Now construct the *operation_simple_packet* and add it to *part*:
+	    operation_order = Operation.ORDER_END_MILL_SIMPLE_POCKET
+	    pocket_kind = Operation.POCKET_KIND_FLAT
+	    operation_simple_pocket = Operation_Simple_Pocket(part, comment, 0,
+	      end_mill_tool, operation_order, None, end_mill_feed_speed, end_mill_spindle_speed,
+	      final_corner1, final_corner2, end_mill_radius, end_mill_radius, pocket_kind,
+	      tracing = tracing + 1)
+	    #operation_simple_pocket._tracing = 5
+	    part._operation_append(operation_simple_pocket)
+
+	    # Remember to update the extra material to note that the top face has been removed:
+	    new_top_extra_stop_bsw = top_extra_stop_bsw
+	    new_top_extra_stop_tne = top_extra_stop_tne - P(zero, zero, remove_dz)
+	    new_extra_stop_bsw, new_extra_stop_tne = \
+	      (reverse_top_transform * new_top_extra_stop_bsw).minimum_maximum(
+	      reverse_top_transform * new_top_extra_stop_tne)
+	    if trace_detail >= 2:
+		print("{0}new_extra_stop_tne={1:i}".format(indent, new_extra_stop_tne))
+		print("{0}new_extra_stop_bsw={1:i}".format(indent, new_extra_stop_bsw))
+	    current_mount._extra_stop_set(new_extra_stop_bsw, new_extra_stop_tne)
+
+	    # Make sure that this CNC operation does not get merged with any other operations
+            # that follow it:
+	    #part.cnc_fence()
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part.top_face('{1}')".format(indent, comment))
 
     def tracing_enable(self):
 	""" *Part*: Enable tracing for the *Part* object (i.e. *self*).
@@ -14465,7 +14756,7 @@ class Part:
 		  P(x2 - radius, y1 + radius, zero)
 		]
 
-		# This is we the compute the various angles need to have *corner_sides* sides
+		# This is where we the compute the various angles need to have *corner_sides* sides
 		# in each pocket corner:
 		corner_sides = 4
 		degrees90 = Angle(deg=90)
@@ -14622,7 +14913,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.tooling_plate_drill('{1}', '{2}', {3}, {4}, {5})".format(
 	      indent, part._name, plate_mount_name, rows, columns, skips))
-	    trace_detail = 1
+	    trace_detail = 2
 	    #deep_tracing = tracing + 1
 
 	# Only do stuff if in *ezcad* is in *cnc_mode*:
@@ -14654,15 +14945,15 @@ class Part:
 	    # is created to specify how the material is mounted on the tooling *plate*:
             
 	    # We need to know the how the *part* bounding box lays out after the
-	    # *top_surface_transform* has been applied:
+	    # *top_transform* has been applied:
 	    part_bsw = part.bsw
 	    part_tne = part.tne
 	    vice_mount = part._current_mount_get()
-	    top_surface_transform = vice_mount._top_surface_transform_get()
-	    transformed_part_bsw = top_surface_transform * part_bsw
-	    transformed_part_tne = top_surface_transform * part_tne
+	    top_transform = vice_mount._top_surface_transform_get()
+	    top_part_bsw = top_transform * part_bsw
+	    top_part_tne = top_transform * part_tne
 	    fixed_part_bsw, fixed_part_tne = \
-	      transformed_part_bsw.minimum_maximum(transformed_part_tne)
+	      top_part_bsw.minimum_maximum(top_part_tne)
 	    fixed_part_volume = fixed_part_tne - fixed_part_bsw
 	    part_dx = fixed_part_volume.x
 	    part_dy = fixed_part_volume.y
@@ -14670,12 +14961,22 @@ class Part:
 	    if trace_detail >= 2:
 		print("{0}part_bsw={1:i} part_tne={2:i}".
 		  format(indent, part_bsw, part_tne))
-		print("{0}transformed_part_bsw={1:i} transformed_part_tne.{2:i}".
-		  format(indent, transformed_part_bsw, transformed_part_tne))
+		print("{0}top_part_bsw={1:i} top_part_tne.{2:i}".
+		  format(indent, top_part_bsw, top_part_tne))
 		print("{0}fixed_part_bsw={1:i} fixed_part_tne.{2:i}".
 		  format(indent, fixed_part_bsw, fixed_part_tne))
 		print("{0}part_dx={1:i} part_dy={2:i} part_dz={3:i}".
 		  format(indent, part_dx, part_dy, part_dz))
+
+	    # We will eventually need to know the height of the *part* with extra material:
+	    extra_stop_bsw, extra_stop_tne = vice_mount._extra_stop_get()
+	    top_extra_stop_bsw, top_extra_stop_tne = \
+	      (top_transform * extra_stop_tne).minimum_maximum(top_transform * extra_stop_bsw)
+	    extra_dz = top_extra_stop_tne.z - top_extra_stop_bsw.z
+	    if trace_detail >= 2:
+		print("{0}extra_dz={1:i}".format(indent, extra_dz))
+	    zero = L()
+	    assert extra_dz >= zero
 
 	    # Figure out which *parallel_height* to use from *parallels* to use to mount
 	    # the *tooling_plate*:
@@ -14727,12 +15028,12 @@ class Part:
 	    # Drill the *tooling_plate* holes at the intersections of *rows* and *columns*,
 	    # but ommitting any that are in *skips*:
 	    plate_holes = []
-	    reverse_top_surface_transform = top_surface_transform.reverse()
+	    reverse_top_transform = top_transform.reverse()
 	    if trace_detail >= 1:
-		print("{0}top_surface_transform={1:s}".
-		  format(indent, top_surface_transform))
+		print("{0}top_transform={1:s}".
+		  format(indent, top_transform))
 		print("{0}reverse_top_surface_transform={1:s}".
-		  format(indent, reverse_top_surface_transform))
+		  format(indent, reverse_top_transform))
 	    for row in rows:
 		for column in columns:
 		    column_row = (column, row)
@@ -14748,8 +15049,8 @@ class Part:
 			plate_holes.append(column_row)
 
 			# Drill the hole using *reversed_start* and *reversed_stop*:
-			reversed_start = reverse_top_surface_transform * start
-			reversed_stop = reverse_top_surface_transform * stop
+			reversed_start = reverse_top_transform * start
+			reversed_stop = reverse_top_transform * stop
 			part.hole("Tooling plate hole ({0}, {1})".format(row, column),
 			  plate_drill_diameter, reversed_start, reversed_stop, "t",
 			  tracing = deep_tracing)
@@ -14781,29 +15082,33 @@ class Part:
 	      (rows_spanned * plate_hole_pitch) / 2)
 	    z = selected_parallel_height + plate_dz + plate_spacer_dz + part_dz
 	    plate_translate_point = P(x, y, z)
-	    top_surface_safe_z = z
+	    top_surface_safe_z = z + (extra_dz - part_dz)
 	    xy_rapid_safe_z = top_surface_safe_z + L(inch=0.500)
 
 	    # Create the *tooling_plate_mount*:
-	    plate_mount = Mount(plate_mount_name, part, top_surface_transform,
+	    plate_mount = Mount(plate_mount_name, part, top_transform,
 	      plate_translate_point, top_surface_safe_z, xy_rapid_safe_z, True,
 	      tracing = deep_tracing)
 
 	    # Deal with extra material:
 	    vice_mount = part._current_mount_get()
-	    vice_mount_cnc_transform = vice_mount._cnc_transform_get()
-	    reverse_vice_cnc_transform = vice_mount_cnc_transform.reverse()
-	    plate_mount_cnc_transform = plate_mount._cnc_transform_get()
+	    #vice_mount_cnc_transform = vice_mount._cnc_transform_get()
+	    #reverse_vice_cnc_transform = vice_mount_cnc_transform.reverse()
+	    #plate_mount_cnc_transform = plate_mount._cnc_transform_get()
 
-	    vice_extra_start_bsw, vice_extra_start_tne = vice_mount._extra_start_get()
-	    part_extra_start_bsw = reverse_vice_cnc_transform * vice_extra_start_bsw
-	    part_extra_start_tne = reverse_vice_cnc_transform * vice_extra_start_tne
-	    transformed_extra_start_bsw = plate_mount_cnc_transform * part_extra_start_bsw
-	    transformed_extra_start_tne = plate_mount_cnc_transform * part_extra_start_tne
-	    plate_extra_start_bsw, plate_extra_start_tne = \
-	      transformed_extra_start_bsw.minimum_maximum(transformed_extra_start_tne)
-	    plate_mount._extra_start_set(plate_extra_start_bsw, plate_extra_start_tne)
-	    plate_mount._extra_stop_set( plate_extra_start_bsw, plate_extra_start_tne)
+	    #vice_extra_start_bsw, vice_extra_start_tne = vice_mount._extra_start_get()
+	    #part_extra_start_bsw = reverse_vice_cnc_transform * vice_extra_start_bsw
+	    #part_extra_start_tne = reverse_vice_cnc_transform * vice_extra_start_tne
+	    #transformed_extra_start_bsw = plate_mount_cnc_transform * part_extra_start_bsw
+	    #transformed_extra_start_tne = plate_mount_cnc_transform * part_extra_start_tne
+	    #plate_extra_start_bsw, plate_extra_start_tne = \
+	    #  transformed_extra_start_bsw.minimum_maximum(transformed_extra_start_tne)
+	    #plate_mount._extra_start_set(plate_extra_start_bsw, plate_extra_start_tne)
+	    #plate_mount._extra_stop_set( plate_extra_start_bsw, plate_extra_start_tne)
+
+	    extra_start_bsw, extra_start_tne = vice_mount._extra_start_get()
+	    plate_mount._extra_start_set(extra_start_bsw, extra_start_tne)
+	    plate_mount._extra_stop_set( extra_start_bsw, extra_start_tne)
 
 	    # Remember the *plate_holes* in both *vice_mount* and *plate_mount*.
 	    # *vice_mount* is needed for multi-mounting:
@@ -14813,6 +15118,10 @@ class Part:
 	    # Compute the *dowel_point*:
 	    #extra_dx = extra_start_tne.x - extra_start_bsw.x
 	    extra_dx = zero
+
+	    plate_cnc_transform = plate_mount._cnc_transform_get()
+	    plate_extra_start_bsw = plate_cnc_transform * extra_start_bsw
+	    plate_extra_start_tne = plate_cnc_transform * extra_start_tne
 	    dowel_point = P(plate_extra_start_bsw.x, \
 	      (plate_extra_start_bsw.y + plate_extra_start_tne.y)/2, plate_extra_start_bsw.z)
 
@@ -15167,7 +15476,7 @@ class Part:
 	    *top_surface* and *jaw_surface* must be one of 't'" (top), 'b' (bottom), 'n' (north),
 	    's' (south), 'e' (east) or 'w' (west).  *comment* is the attached to any
 	    generated G-code.  The *Part* dimensions are specified by its bounding box.
-	    This routine has the required *flags* string argument can be left empty.
+	    This routine has a required *flags* string argument can be left empty.
 	    The *flags* argument to support a dowel pin operation.  (See *Part.dowel_pin()*
 	    for more information about a dowel pin operation.)  When *flags* contains 'l',
 	    "l" it generates a left dowel pin operation, and when it contains 'r' it generates
@@ -15209,11 +15518,13 @@ class Part:
 	      "{6:i}, {7:i}, {8:i}, {9:i})").format(indent,
 	      part._name, name, top_surface, jaw_surface, flags,
 	      extra_dx, extra_dy, extra_top_dz, extra_bottom_dz))
-	    trace_detail = 1
+	    trace_detail = 2
 
-	# We need the *top_surface_transform* for both STL and CNC mode
+	# We do not need to do anything until we are in CNC mode:
 	ezcad = part._ezcad_get()
 	if ezcad._cnc_mode:
+	    # We need to compute *top_surface_transform* for CNC mode:
+
 	    # The *x_axis*, *y_axis*, and *z_axis* are needed for rotations:
 	    one = L(mm=1.0)
 	    x_axis = P(one, zero, zero).normalize()
@@ -15229,7 +15540,6 @@ class Part:
 
 	    # Grab the 6 possible center surface points (and *center_point*) of the *bounding_box*
 	    # for use below:
-	    #bounding_box = part._bounding_box
 	    c = part.c
 	    t = part.t
 	    b = part.b
@@ -15239,14 +15549,14 @@ class Part:
 	    w = part.w
 
 	    # *top_axis* and *top_rotate* are used to rotate the desired bounding box surface
-	    # facing up in the vice.  Leaving as *top_rotate_angle* as *None* means no top
+	    # facing up in the vice.  Leaving *top_rotate_angle* as *None* means no top
 	    # rotation is needed.  *top_point* matches *top_surface*:
 	    top_point = None
 	    top_axis = None
 	    top_rotate_angle = None
 
 	    # *jaw_axis* and *jaw_rotate* are used to rotate the desired bounding box surface
-	    # facing towards the rear vice jaw.  Leaving as *jaw_rotate_angle * as *None* means no
+	    # facing towards the rear vice jaw.  Leaving *jaw_rotate_angle * as *None* means no
 	    # jaw rotaton needed.  *jaw_point* matches *jaw_surface*:
 	    jaw_point = None
 	    jaw_axis = z_axis
@@ -15471,18 +15781,9 @@ class Part:
 	    if trace_detail >= 2:
 		print("{0}top_surface_transform 2={1:v}".format(indent, top_surface_transform))
 
-	    #FIXME: Old code. extra material is now stored in mount objects!!!
-	    # The first time the *part* is mounted in a vice, we set both the extra start
-	    # and stop corners of *part*.  The start corners are sticky and do not change.
-	    # The extra stop corners are updated as the appropriate exterior contour and
-	    # facing operations occur:
-	    #reverse_top_surface_transform = top_surface_transform.reverse()
-	    #if not part._extra_start_stop_available:
-	    #	part._extra_start_store(reverse_top_surface_transform,
-	    #	  extra_start_bsw, extra_start_tne, tracing = tracing + 1)
-	    #	part._extra_stop_store(reverse_top_surface_transform,
-	    #	  extra_start_bsw, extra_start_tne, tracing = tracing + 1)
-	    #	assert part._extra_start_stop_available
+	    # Register the block with the *bom* (Bill Of Materials):
+	    bom = part._bom
+	    bom._block_register(top_surface_transform)
 
 	    # Grab some values from the *vice*:
 	    shop = part._shop_get()
@@ -15504,9 +15805,9 @@ class Part:
 	    part_dx = 2 * half_part_dx
 	    part_dy = 2 * half_part_dy
 	    part_dz = 2 * half_part_dz
-	    if trace_detail >= 2:
-		print("{0}part_dimensions: dx={1:i} dy={2:i} dz={3:i} volume={4:i}".
-		  format(indent, part_dx, part_dy, part_dz, bounding_box.volume_get()))
+	    #if trace_detail >= 2:
+	    #	print("{0}part_dimensions: dx={1:i} dy={2:i} dz={3:i} volume={4:i}".
+	    #	  format(indent, part_dx, part_dy, part_dz, bounding_box.volume_get()))
 
 	    # Grab the associated *parallels_heights* from *parallels* and get
 	    # *smallest_parallel_height*:
@@ -15576,26 +15877,40 @@ class Part:
 
 	    # Now we can issue the mount command for the *part*:
 	    cnc_top_surface_safe_z = cnc_top_surface_z + extra_top_dz
-	    cnc_xy_rapid_safe_z = cnc_top_surface_z + L(inch=0.500)
+	    cnc_xy_rapid_safe_z    = cnc_top_surface_z + extra_top_dz + L(inch=0.500)
 	    
 	    # Create *mount* and stuff into *part*:
 	    mount = Mount(name, part, top_surface_transform, mount_translate_point,
 	      cnc_top_surface_safe_z, cnc_xy_rapid_safe_z, False, tracing = tracing + 1)
 	    part._mount_register(mount, tracing = tracing + 1)
 
-	    # Now start dealing with the extra material arguments:
-	    cnc_transform = mount._cnc_transform_get()
-	    bounding_bsw, bounding_tne = \
-	      part._bounding_box_get(cnc_transform, tracing = tracing + 1)
-	    extra_start_bsw = bounding_bsw - P(extra_dx/2, extra_dy/2, zero)
-	    extra_start_tne = bounding_tne + P(extra_dx/2, extra_dy/2, zero)
+	    # We can only deal with the extra material if the part is oriented correctly.
+	    # Thus, we transform the part bounding box using *top_transform*, add in the
+	    # extra material, reverse the transform back, and stuff the results back into *mount*.
+
+	    # Grab the *part* bounding box corners after being mapped using *top_transform*:
+	    top_transform = mount._top_surface_transform_get()
+	    top_bounding_bsw, top_bounding_tne = \
+	      part._bounding_box_get(top_transform, tracing = tracing + 1)
+
+	    # Now add in the extra material:
+	    top_extra_start_bsw = top_bounding_bsw - P(extra_dx/2, extra_dy/2, -extra_bottom_dz)
+	    top_extra_start_tne = top_bounding_tne + P(extra_dx/2, extra_dy/2,  extra_top_dz)
+
+	    # Now reverse the extra material back into the original *part* locations:
+	    top_reverse_transform = top_transform.reverse()
+	    extra_start_bsw = top_reverse_transform * top_extra_start_bsw
+	    extra_start_tne = top_reverse_transform * top_extra_start_tne
+
+	    # Now save the values back into *mount* as the initial start and stop values
+	    # for extra material:
 	    mount._extra_start_set(extra_start_bsw, extra_start_tne)
 	    mount._extra_stop_set( extra_start_bsw, extra_start_tne)
 	    if trace_detail >= 2:
-		print("{0}cnc_transform={1:s}".format(indent, cnc_transform))
-		print("{0}bounding_box_bsw={1:i} bounding_box_tne={2:i}".
-		  format(indent, bounding_box_bsw, bounding_box_tne))
-		print("{0}extra_start_bsw={1:i} extra_start_tne={2:i}".
+		print("{0}top_transform={1:s}".format(indent, top_transform))
+		print("{0}top_transformed bounding_bsw={1:i} bounding_tne={2:i}".
+		  format(indent, top_bounding_bsw, top_bounding_tne))
+		print("{0}top_reverse_transformed extra_start_bsw={1:i} extra_start_tne={2:i}".
 		  format(indent, extra_start_bsw, extra_start_tne))
 
 	    # Create *operation_mount* and add it to *part* operations list:
@@ -15636,9 +15951,12 @@ class Part:
 		      indent, cnc_dowel_point, cnc_plunge_point))
 
 		# Perform the dowel pin operation:
-		part.dowel_pin(dowel_pin_comment, cnc_dowel_point, cnc_plunge_point, tracing + 1)
+		detail_tracing = -1000000
+		if trace_detail >= 3:
+		    detail_tracing = tracing + 1
+		part.dowel_pin(dowel_pin_comment, cnc_dowel_point, cnc_plunge_point, detail_tracing)
 
-	# Perform any requested *tracing*:
+	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print(("{0}<=Part.vice_mount('{1}', '{2}', '{3}', '{4}', '{5}, " +
 	      "{6:i}, {7:i}, {8:i}, {9:i})").format(indent,
@@ -19689,7 +20007,7 @@ class Shop:
 
 	dowel_pin = shop._dowel_pin_append("3/8 Dowel Pin",
 	  1, hss, in3_8, L(inch=.900), in3_16)
-	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill",
+	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill (.9\" deep)",
 	  2, hss, in3_8, 2, L(inch=.900), degrees90)
 	drill_36 = shop._drill_append("#36 Drill",
 	  3, hss, L(inch=0.1065), 2, L(inch=1.500), degrees118, stub)
@@ -19709,13 +20027,13 @@ class Shop:
 	  11, hss, L(inch=0.1495), 2, L(inch=2.000), degrees118, stub)
 	drill_9 = shop._drill_append("#9 drill",
 	  12, hss, L(inch=0.1960), 2, L(inch=2.000), degrees118, stub)
-	drill_43 = shop._drill_append("#43 drill (4-40 thread)",
-	  13, hss, L(inch=.0890), 2, L(inch=3.500), degrees118, stub)	# Huge drill depth
-	drill_32 = shop._drill_append("#32 drill (4-40 close)",
+	drill_43 = shop._drill_append("#43 drill (4-40 75% thread) 1.5in deep",
+	  13, hss, L(inch=.0890), 2, L(inch=1.500), degrees118, stub)
+	drill_32 = shop._drill_append("#32 drill (4-40 close) 1.5in deep",
 	  14, hss, L(inch=0.1160), 2, L(inch=1.500), degrees118, stub)
 	drill_50 = shop._drill_append("#50 drill",
 	  15, hss, L(inch=0.0700), 2, L(inch=1.500), degrees118, stub)
-	end_mill_3_8_long = shop._end_mill_append("3/8 1\" End Mill",
+	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill 1in deep",
 	  16, hss, in3_8, 2, L(inch=1.000), not laser)
 	#end_mill_3_4 = shop._end_mill_append("3/4 End Mill",
 	#  13, hss, in3_4, 2, in1_3_8)
@@ -19729,10 +20047,12 @@ class Shop:
 	  20, hss, in3_32, 2, L(inch=1.750), degrees118, stub)
 	drill_42 = shop._drill_append("#42 drill",
 	  21, hss, L(inch=0.0935), 2, L(inch=1.750), degrees118, stub)
-	drill_3_64 = shop._drill_append("3/64 drill",
+	drill_3_64 = shop._drill_append("3/64 drill (#0-80 75% thread) 1.05in deep",
 	  22, hss, L(inch="3/64"), 2, L(inch=1.05), degrees118, stub)
-	drill_52 = shop._drill_append("#52 drill",
+	drill_52 = shop._drill_append("#52 drill (#80-80 close) 1.90in deep",
 	  23, hss, L(inch=0.0635), 2, L(inch=1.90), degrees118, stub)
+	drill_19 = shop._drill_append("#19 drill (M4x.7 close) 1.90in deep",
+	  24, hss, L(inch=0.1660), 2, L(inch=1.90), degrees118, stub)
 
 	# Laser "tools":
 	laser_007 = shop._end_mill_append("Laser_007",
@@ -19910,6 +20230,25 @@ class Shop:
 	"""
 
 	return self._tools
+
+    def _tools_summary_write(self):
+	""" *Shop*: Write out a summary of CNC tool usage for the *Shop* object (i.e. *self*.)
+	"""
+
+	# Use *shop* instead of *self*:
+	shop = self
+
+	# Write out the summary file:
+	summary_file = open("/tmp/tools.txt", "w")
+	tools = shop._tools
+	for tool in tools:
+	    parts = tool._parts
+	    if len(parts) > 0:
+		summary_file.write("T{0}: {1}\n".format(tool._number, tool._name))
+		parts.sort(key=lambda part: part.name_get())
+		for part in parts:
+		    summary_file.write("    {0}\n".format(part.name_get()))
+	summary_file.close()
 
     def _program_base_get(self):
 	""" *Shop*: Return the program base number object associated with the *Shop* object
@@ -20132,6 +20471,9 @@ class Tool:
 	""" *Tool*: Initialize a *Tool* object (i.e. *self*).
 	"""
 
+	# Use *tool* instead of *self*:
+	tool = self
+
 	# Verify argument types:
 	assert isinstance(name, str)
 	assert isinstance(kind, int) and Tool.KIND_NONE < kind < Tool.KIND_LAST
@@ -20141,18 +20483,19 @@ class Tool:
 	assert isinstance(maximum_z_depth, L)
 
 	# Load up *self*:
-	self._name = name			# Tool name
-	self._number = number			# Tool number in rack
-	self._kind = kind
-	self._material = material		# Material tool is made of
-	self._diameter = diameter		# Diameter of tool
-	self._flutes_count = flutes_count	# Number of flutes or teeth
-	self._maximum_z_depth = maximum_z_depth	# Maximum Z depth allowed
-
-	self._search_results = []		# Result of array search
-	self._priority = 0.0			# Priority in tool search
-	self._feed_speed = Speed()		# Nominal feedrate
-	self._spindle_speed = Hertz()		# Preferred spindle speed
+	tool._name = name			# Tool name
+	tool._number = number			# Tool number in rack
+	tool._kind = kind
+	tool._material = material		# Material tool is made of
+	tool._diameter = diameter		# Diameter of tool
+	tool._flutes_count = flutes_count	# Number of flutes or teeth
+	tool._maximum_z_depth = maximum_z_depth	# Maximum Z depth allowed
+	tool._search_results = []		# Result of array search
+	tool._priority = 0.0			# Priority in tool search
+	tool._feed_speed = Speed()		# Nominal feedrate
+	tool._spindle_speed = Hertz()		# Preferred spindle speed
+	tool._parts = []			# List of parts using tool
+	
 
     def __format__(self, format):
 	""" *Tool*: Return the *Tool* object (i.e. *self*) formatted as a string. """
@@ -20223,6 +20566,20 @@ class Tool:
 	assert isinstance(number, int)
 
 	self._number = number
+
+    def _part_register(self, part):
+	""" *Tool*: Register that *part* uses the *Tool* object (i.e. *self*.) """
+
+	# Use *tool* instead of *self*:
+	tool = self
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+
+	# Make sure *part* is in *parts* for *tool* without duplicates:
+	parts = tool._parts
+	if part not in parts:
+	    parts.append(part)
 
     def _priority_get(self):
 	""" *Tool*: Return the priority of the *Tool* object (i.e. *self*). """
@@ -21887,6 +22244,7 @@ class Vice:
 	vice._parallels         = parallels
 	vice._tool_change_point = tool_change_point
 	vice._volume            = volume
+	print("Vice.__init__():Vice._volume={0:i}".format(volume))
 
     def _coordinates_vrml_append(self, vrml, tracing=-1000000):
 	""" *Vice*: Append the vice origin coordinates for the *Vice* object (i.e. *self*)
