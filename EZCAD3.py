@@ -4476,7 +4476,8 @@ class Mount:
     """
 
     def __init__(self, name, part, top_surface_transform, mount_translate_point,
-      top_surface_safe_z, xy_rapid_safe_z, is_tooling_plate_mount, tracing=-1000000):
+      top_surface_safe_z, xy_rapid_safe_z, is_tooling_plate_mount, selected_parallel_height,
+      tracing=-1000000):
 	""" *Mount*: Initialize the *Mount* object (i.e. *self*) to contain *name*, *part*,
 	    *top_surface_transform*, and *mount_translate_point*.  *name* is provides a
 	    mount name for debugging purposes.  *part* is the *Part* object being mounted.
@@ -4487,7 +4488,9 @@ class Mount:
 	    vice or on a tooling plate.  *top_surface_safe_z* is the machine Z axis altitude
 	    above which is safe to prerform rapid moves (i.e. G0) in the Z direction.
 	    *xy_rapid_safe_z* is the machine Z axis alitude above which it is safe to perform
-	    rapid moves in the X and Y direction.
+	    rapid moves in the X and Y direction.  *is_tooling_palte_mount* is *True* if the
+	    art is mounted on a tooling plate and *False* otherwise. *selected_parallel_height*
+	    is the height of the parallels to use.
 	"""
 
 	# Use *mount* instead of *self*:
@@ -4501,13 +4504,16 @@ class Mount:
 	assert isinstance(top_surface_safe_z, L)
 	assert isinstance(xy_rapid_safe_z, L)
 	assert isinstance(is_tooling_plate_mount, bool)
+	assert isinstance(selected_parallel_height, L)
+	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i})".format(indent,
-	      name, part._name_get(), mount_translate_point, top_surface_safe_z, xy_rapid_safe_z))
+	    print("{0}=>Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i}, {6}, {7:i})".
+	      format(indent, name, part._name_get(), mount_translate_point, top_surface_safe_z,
+	      xy_rapid_safe_z, is_tooling_plate_mount, selected_parallel_height))
 	    trace_detail = 1
 
 	# Create *cnc_transform*:
@@ -4532,6 +4538,7 @@ class Mount:
 	mount._mount_translate_point = mount_translate_point	# Translate from CNC origin to mount
         mount._name = name					# Mount name
 	mount._part = part					# Part that is mounted
+	mount._selected_parallel_height = selected_parallel_height # Height of the parallel to use
 	mount._spacers = []					# Tooling plate spacer locations
 	mount._stl_vrml = None					# STL *VRML* object for mount
 	mount._tooling_plate_holes = []				# Each tooling plate hole (x, y)
@@ -4541,8 +4548,9 @@ class Mount:
 	
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i}".format(indent,
-	      name, part._name_get(), mount_translate_point, top_surface_safe_z, xy_rapid_safe_z))
+	    print("{0}<=Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i}, {6}, {7:i})".
+	      format(indent, name, part._name_get(), mount_translate_point, top_surface_safe_z,
+	      xy_rapid_safe_z, is_tooling_plate_mount, selected_parallel_height))
 
     def _cnc_transform_get(self):
 	""" *Mount*: Return the CNC *Transform* object associated with the *Mount* object
@@ -4738,6 +4746,13 @@ class Mount:
 	"""
 
 	return self._part
+
+    def _selected_parallel_height_get(self):
+	""" *Mount*: Return the selected parallel height associated with the *Mount* object
+	    (i.e. *self*.)
+	"""
+
+	return self._selected_parallel_height
 
     def _spacers_get(self):
 	""" *Mount*: Return the spacer locations associated with the *Mount* object (i.e. *self*.)
@@ -6953,10 +6968,12 @@ class Operation_Dowel_Pin(Operation):
 	assert isinstance(tracing, int)
 
 	# Perform any *tracing*:
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Operation_Dowel_Pin._cnc_generate('{1}', '{2}', '{3}')".
 	      format(indent, operation_dowel_pin._name, mount._name_get(), cnc_vrml._name_get()))
+	    trace_detail = 2
 
 	# Grab some values out of *operation_dowel_pin*:
 	cnc_dowel_point  = operation_dowel_pin._dowel_point
@@ -7003,6 +7020,9 @@ class Operation_Dowel_Pin(Operation):
 	# The actual plunge point needs to have its Z coordinate adjusted to match the Z
 	# coordinate of *actual_dowel_point*:
 	actual_plunge_point = P(cnc_plunge_point.x, cnc_plunge_point.y, actual_z)
+	if trace_detail >= 1:
+	    print("{0}cnc_dowel_point={1:i}".format(indent, cnc_dowel_point))
+	    print("{0}actual_plunge_point={1:i}".format(indent, actual_plunge_point))
 
 	# Define the speed and feed for these operations:
 	ipm10 = Speed(in_per_sec=10.0)
@@ -7646,6 +7666,13 @@ class Operation_Mount(Operation):
 	material = part._material_get()
 	mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3} )\n".
 	  format(cnc_extra_start_dx, cnc_extra_start_dy, cnc_extra_start_dz, material))
+	selected_parallel_height = mount._selected_parallel_height_get()
+	if mount._is_tooling_plate_mount_get():
+	    mount_ngc_file.write("( Parallels height {0:i}in for tooling plate )\n".
+	      format(selected_parallel_height))
+	else:
+	    selected_parallel_height = mount._selected_parallel_height_get()
+	    mount_ngc_file.write("( Parallels height {0:i}in )\n".format(selected_parallel_height))
 
 	# If there is a tooling plate, visualize that into *cnc_vrml_lines*:
 	jaws_spread = extra_start_tne.y - extra_start_bsw.y
@@ -14980,7 +15007,7 @@ class Part:
 
 	    # Figure out which *parallel_height* to use from *parallels* to use to mount
 	    # the *tooling_plate*:
-	    selected_parallels_height = parallels._select(part_dz, vice, tracing = deep_tracing)
+	    selected_parallel_height = parallels._select(part_dz, vice, tracing = deep_tracing)
 
 	    # Load up *skips_table* with the (row, column) pairs that are not to be drilled:
 	    skips_table = {}
@@ -15088,7 +15115,7 @@ class Part:
 	    # Create the *tooling_plate_mount*:
 	    plate_mount = Mount(plate_mount_name, part, top_transform,
 	      plate_translate_point, top_surface_safe_z, xy_rapid_safe_z, True,
-	      tracing = deep_tracing)
+	      selected_parallel_height, tracing = deep_tracing)
 
 	    # Deal with extra material:
 	    vice_mount = part._current_mount_get()
@@ -15477,7 +15504,7 @@ class Part:
 	    's' (south), 'e' (east) or 'w' (west).  *comment* is the attached to any
 	    generated G-code.  The *Part* dimensions are specified by its bounding box.
 	    This routine has a required *flags* string argument can be left empty.
-	    The *flags* argument to support a dowel pin operation.  (See *Part.dowel_pin()*
+	    The *flags* argument is to support a dowel pin operation.  (See *Part.dowel_pin()*
 	    for more information about a dowel pin operation.)  When *flags* contains 'l',
 	    "l" it generates a left dowel pin operation, and when it contains 'r' it generates
 	    a right dowel pin operation.  The optional *extra_dx*, *extra_dy*, *extra_top_dz*
@@ -15488,7 +15515,7 @@ class Part:
 	    physical part placed into the vice has been padded in the dx and dy vice coordinates.
 	    (Half goes on each side.)  Likewise, the optional *extra_top_dz* and *extra_bottom_dz*
 	    arguments indicate that the top and bottom of the physical part placed into the vice
-	    are padded with material on the top and/or bottom (usually to allow for facing
+	    are padded with material on the top and/or bottom (usually to allow for top facing
 	    operations.)
 	"""
 
@@ -15754,9 +15781,9 @@ class Part:
 		    print("{0}jaw_axis=None".format(indent))
 		print("{0}jaw_rotate_angle={1}".format(indent, jaw_rotate_angle))
 	    if trace_detail >= 2:
-		print("{0}center={1:i} top={2:i} jaw={3:i} left_dowel={4:i} right_dowel={5:i}".
-		  format(indent, c, top_point, jaw_point,
-		  left_dowel_point, right_dowel_point))
+		print("{0}center={1:i} top={2:i} jaw={3:i}".format(indent, c, top_point, jaw_point))
+		print("{0}left_dowel={1:i} right_dowel={2:i}".
+		  format(indent, left_dowel_point, right_dowel_point))
 
 	    # Now we can compute the *top_surface_transform*, which rotates the *part* bounding box
 	    # so that it is oriented correctly for the vice with the top surface located at
@@ -15881,7 +15908,8 @@ class Part:
 	    
 	    # Create *mount* and stuff into *part*:
 	    mount = Mount(name, part, top_surface_transform, mount_translate_point,
-	      cnc_top_surface_safe_z, cnc_xy_rapid_safe_z, False, tracing = tracing + 1)
+	      cnc_top_surface_safe_z, cnc_xy_rapid_safe_z, False, selected_parallel_height,
+	      tracing = tracing + 1)
 	    part._mount_register(mount, tracing = tracing + 1)
 
 	    # We can only deal with the extra material if the part is oriented correctly.
@@ -15931,17 +15959,19 @@ class Part:
 		if is_left_dowel_pin:
 		    dowel_pin_comment = "Left dowel pin"
 		    if part_centered_in_vice:
-			dowel_x = vice_jaw_dx/2 - (part_dx + extra_dx)
+			dowel_x = vice_jaw_dx/2 - (part_dx + extra_dx)/2
 		    else:
 			dowel_x = zero
 		    plunge_x = dowel_x - plunge_x_offset
 		elif is_right_dowel_pin:
 		    dowel_pin_comment = "Right dowel pin"
 		    if part_centered_in_vice:
-			dowel_x = vice_jaw_dx/2 + part_dx + extra_dx
+			dowel_x = vice_jaw_dx/2 + (part_dx + extra_dx)/2
 		    else:
 			dowel_x = vice_jaw_dx
 		    plunge_x = dowel_x + plunge_x_offset
+		else:
+		    assert False
 
 		# Create *cnc_plunge_point* and *cnc_dowel_point*:
 		cnc_plunge_point = P(plunge_x, vice_y, zero)
@@ -16065,7 +16095,7 @@ class Part:
 	return mount_translate_point, selected_parallel_height
 
     def multi_mount(self, multi_mounts, tracing=-1000000):
-	""" *Part*: Set up a multi mounted CNC tool for the*Part* object (i.e. *self*) that
+	""" *Part*: Set up a multi mounted CNC tool for the *Part* object (i.e. *self*) that
 	    consists of *multi_mounts*.
 	"""
 
@@ -16284,10 +16314,10 @@ class Part:
 		      format(indent, index, part_dx, part_dy, part_dz))
 
 		# Find the smallest parallel that just clears the top of the *vice* for *part_dz*:
-		selected_parallels_height = parallels._select(part_dz, vice)
+		selected_parallel_height = parallels._select(part_dz, vice)
 		if trace_detail >= 2:
-		    print("{0}[{1}]: selected_parallels_height={2:i}".
-		      format(indent, index, selected_parallels_height))
+		    print("{0}[{1}]: selected_parallel_height={2:i}".
+		      format(indent, index, selected_parallel_height))
 		    print("{0}[{1}]: tooling_plate_dz={2:i}".
 		      format(indent, index, tooling_plate_dz))
 		    print("{0}[{1}]: tooling_plate_spacer_dz={2:i}".
@@ -16297,14 +16327,14 @@ class Part:
 
 		# Figure out where *top_surface_z* is and compute the *top_surface* point:
 		if is_tooling_plate:
-		    top_surface_z = selected_parallels_height + \
+		    top_surface_z = selected_parallel_height + \
 		      tooling_plate_dz + tooling_plate_spacer_dz + part_dz
 		else:
-		    top_surface_z = selected_parallels_height + part_dz
+		    top_surface_z = selected_parallel_height + part_dz
 		top_surface = P(zero, zero, top_surface_z)
 		if trace_detail >= 2:
-		    print("{0}[{1}]: selected_parallels_height={2:i}".
-		      format(indent, index, selected_parallels_height))
+		    print("{0}[{1}]: selected_parallel_height={2:i}".
+		      format(indent, index, selected_parallel_height))
 		    print("{0}[{1}]: tooling_plate_dz={2:i}".
 		      format(indent, index, tooling_plate_dz))
 		    print("{0}[{1}]: tooling_plate_spacer_dz={2:i}".
@@ -16338,7 +16368,7 @@ class Part:
 		xy_rapid_safe_z = top_surface_safe_z + L(inch=0.500)
 		combined_mount = Mount(combined_mount_name, multi_mount_part,
 		  rotated_top_surface_transform, combined_mount_translate_point,
-		  top_surface_safe_z, xy_rapid_safe_z, True)
+		  top_surface_safe_z, xy_rapid_safe_z, True, selected_parallel_height)
 		multi_mount._combined_mount_set(combined_mount)
 		if trace_detail >= 2:
 		    print("{0}[{1}]: combined_mount='{2}'".
@@ -16400,11 +16430,12 @@ class Part:
 		    origin = P(zero, zero, zero)
 		    combined_multi_mount_name = "{0}_Combined_Multi_Mount".format(name)
 		    combined_multi_mount = Mount(combined_multi_mount_name,
-		      part, Transform(), origin, top_surface_safe_z, xy_rapid_safe_z, True)
+		      part, Transform(), origin, top_surface_safe_z, xy_rapid_safe_z, True,
+		      selected_parallel_height)
 		    combined_operations = part._mount_register(combined_multi_mount)
 		    comment = ""
 		    operation_multi_mount = Operation_Multi_Mount(part, multi_mounts,
-		      comment, vice, jaws_spread, selected_parallels_height, tooling_plate, spacers,
+		      comment, vice, jaws_spread, selected_parallel_height, tooling_plate, spacers,
 		      is_tooling_plate, tracing = tracing + 1)
 		    combined_operations._append(combined_multi_mount,
 		      operation_multi_mount, tracing = tracing + 1)
@@ -21259,8 +21290,8 @@ class Tooling_Plate:
 	# Verify argument types:
 	assert isinstance(mount, Mount)
 	assert isinstance(rotate, Angle)
-	assert isinstance(column, int) and 0 <= column < tooling_plate._columns
-	assert isinstance(row, int)    and 0 <= row    < tooling_plate._rows
+	assert isinstance(column, int) # and 0 <= column < tooling_plate._columns
+	assert isinstance(row, int)    # and 0 <= row    < tooling_plate._rows
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
