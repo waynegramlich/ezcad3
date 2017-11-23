@@ -4219,7 +4219,7 @@ class Directory:
 
     def _write_open(self, file_name, tracing=-1000000):
         """ *Directory*: Open *file* name in the *Directory* object and return the associated
-	    Python *file*.
+	    Python *file* object.
 	"""
 
 	# Use *directory* instead of *self*:
@@ -5037,7 +5037,7 @@ class Mount_Operations:
 	# calls each tool operation from a single top level .ngc file:
 	ezcad = part._ezcad_get()
 	ngc_directory = ezcad._ngc_directory_get()
-	mount_ngc_file_name = "O{0}.ngc".format(mount_program_number)
+	mount_ngc_file_name = "{0}.ngc".format(mount_program_number)
 	mount_ngc_file = ngc_directory._write_open(mount_ngc_file_name, tracing + 1)
 	assert mount_ngc_file != None, "Unable to open {0}".format(mount_ngc_file_name)
 	if trace_detail >= 2:
@@ -5143,7 +5143,7 @@ class Mount_Operations:
 	ezcad = part._ezcad_get()
 	part_name = part._name_get().replace(' ', '_')
 	mount_name = mount0._name_get().replace(' ', '_')
-	mount_wrl_file_name = "O{0}_{1}_{2}.wrl".format(mount_program_number, part_name, mount_name)
+	mount_wrl_file_name = "{0}_{1}_{2}.wrl".format(mount_program_number, part_name, mount_name)
 	with ngc_directory._write_open(mount_wrl_file_name, tracing + 1) as mount_wrl_file:
 	    mount_wrl_file.write("#VRML V2.0 utf8\n")
 	    mount_vrml_text = mount_vrml._text_pad(0)
@@ -5467,7 +5467,7 @@ class Mount_Operations:
 	    ezcad = part._ezcad_get()
 	    ngc_directory = ezcad._ngc_directory_get()
 	    cnc_tool_vrml_padded_text = cnc_tool_vrml._text_pad(0)
-	    wrl_file_name = "O{0}.wrl".format(tool_program_number)
+	    wrl_file_name = "{0}.wrl".format(tool_program_number)
 	    with ngc_directory._write_open(wrl_file_name) as tool_wrl_file:
 		tool_wrl_file.write("#VRML V2.0 utf8\n")
 		tool_wrl_file.write(cnc_tool_vrml_padded_text)
@@ -7675,7 +7675,7 @@ class Operation_Mount(Operation):
 	    mount_ngc_file.write("( Parallels height {0:i}in )\n".format(selected_parallel_height))
 
 	# If there is a tooling plate, visualize that into *cnc_vrml_lines*:
-	jaws_spread = extra_start_tne.y - extra_start_bsw.y
+	jaws_spread = (cnc_extra_start_tne.y - cnc_extra_start_bsw.y).absolute()
 	zero = L()
 	if tooling_plate != None:
 	    corner = P(zero, zero, parallels_height)
@@ -8074,9 +8074,11 @@ class Operation_Round_Pocket(Operation):
 	tool_radius = tool_diameter / 2 
 	half_tool_radius = tool_radius / 2
 
+	if trace_detail >= 1:
+	    print("{0}is_laser={1}".format(indent, is_laser))
 	if is_laser:
 	    # We just cut a simple circle:
-	    if tracing >= 0:
+	    if trace_detail >= 2:
 		print("{0}start={1:i} stop={2:i}".format(indent, mapped_start, mapped_stop))
 	    code._dxf_circle(mapped_start.x, mapped_start.y, radius - tool_radius)
 	else:
@@ -9786,6 +9788,63 @@ class Part:
 
 	return self._dx_original
 
+    def _dxf_manufacture(self, tracing=-1000000):
+	""" *Part*: Generate a dxf file for the *Part* object (i.e. *self*) if appropriate.
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part._dxf_manufacture('{1}'):CNC".format(indent, part._name))
+	    trace_detail = 2
+
+	# This code may be needed for DXF mode:
+	ezcad = part._ezcad
+	shop = ezcad._shop_get()
+	code = shop._code_get()
+	if code._dxf_content_avaiable():
+	    # We do have a .dxf file to write.  Open *dxf_file*:
+	    dxf_directory = ezcad._dxf_directory_get()
+	    assert isinstance(dxf_directory, Directory)
+
+	    # Write out the dxf file content:
+	    with dxf_directory._write_open("{0}.dxf".format(part._name)) as dxf_file:
+		# Output the .dxf file headers:
+		assert isinstance(dxf_file, file)
+		dxf_file.write("0\nSECTION\n2\nHEADER\n")
+		#original = True
+		original = False
+		if original:
+		    # Old original code (this kind of worked for some unknown reason):
+		    dxf_file.write("9\n$DIMAUNITS\n70\n1\n")
+		    dxf_file.write("9\n$INSUNITS\n70\n1\n")
+		    dxf_file.write("9\n$LUNITS\n70\n0\n")
+		    dxf_file.write("9\n$MEASUREMENT\n70\n0\n")
+		else:
+		    # New code that matches the DXF file spec. for metric:
+		    dxf_file.write("9\n$DIMAUNITS\n70\n0\n")
+		    dxf_file.write("9\n$INSUNITS\n70\n4\n")
+		    dxf_file.write("9\n$LUNITS\n70\n4\n")
+		    dxf_file.write("9\n$MEASUREMENT\n70\n1\n")
+		dxf_file.write("0\nENDSEC\n")
+		dxf_file.write("0\nSECTION\n2\nENTITIES\n")
+
+		# Output the body of the *dxf_file*:
+		code._dxf_write(dxf_file)
+
+		# Close out *dxf_file*:
+		dxf_file.write("0\nENDSEC\n0\nEOF\n")
+
+	if tracing >= 0:
+	    print("{0}<=Part._dxf_manufacture('{1}'):CNC".format(indent, part._name))
+
     def _dxf_x_offset_get(self):
 	""" *Part*: Return the DXF offset X field of the *Part* object (i.e. *self*)
 	"""
@@ -10238,53 +10297,8 @@ class Part:
 	# Force the `.ngc` and `.wrl` files for the `ngc` directory to be generated:
 	part._cnc_manufacture(tracing = tracing + 1)
 
-	# This code may be needed for DXF mode:
-	#if part._cnc_suppress:
-	#    print("Part '{0}' is suppressing CNC".format(part._name))
-	#if mode == EZCAD3.CNC_MODE and not part._cnc_suppress:
-	#    # Flush out all of the pending CNC operations:
-	#    if tracing >= 0:
-	#	print("{0}==>Part._manufacture('{1}'):CNC****************************".
-	#	  format(indent, part._name))
-
-	#    shop = ezcad._shop
-	#    program_base = shop._program_base_get()
-	#    assert program_base % 10 == 0
-	#    program_number = part._cnc_part_generate(program_base, tracing + 1)
-
-	#    part._mount = -1
-
-	#    # We want the program base number to start with a mulitple of 10.
-	#    remainder = program_number % 10
-	#    if remainder != 0:
-	#	program_number += 10 - remainder
-	#    shop._program_base_set(program_number)
-
-	#    # See if we have a .dxf file to write:
-	#    if code._dxf_content_avaiable():
-	#	# We do have a .dxf file to write.  Open *dxf_file*:
-	#	dxf_directory = ezcad._dxf_directory_get()
-	#	dxf_file_name = os.path.join(dxf_directory, "{0}.dxf".format(part._name))
-	#	dxf_file = open(dxf_file_name, "w")
-
-	#	# Output the .dxf file headers:
-	#	#dxf_file.write("0\nSECTION\n2\nHEADER\n")
-	#	#dxf_file.write("9\n$DIMAUNITS\n70\n1\n")
-	#	#dxf_file.write("9\n$INSUNITS\n70\n1\n")
-	#	#dxf_file.write("9\n$LUNITS\n70\n0\n")
-	#	#dxf_file.write("9\n$MEASUREMENT\n70\n0\n")
-	#	#dxf_file.write("0\nENDSEC\n")
-	#	dxf_file.write("0\nSECTION\n2\nENTITIES\n")
-
-	#	# Output the body of the *dxf_file*:
-	#	code._dxf_write(dxf_file)
-
-	#	# Close out *dxf_file*:
-	#	dxf_file.write("0\nENDSEC\n0\nEOF\n")
-	#	dxf_file.close()
-
-	#    if tracing >= 0:
-	#	print("{0}<==Part._manufacture('{1}'):CNC".format(indent, part._name))
+	# Force the `.dxf` files for the `dxf` directory to be generated:
+	part._dxf_manufacture(tracing = tracing + 1)
 
 	# For debugging, keep the part stack in *ezcad* up to date:
 	ezcad._parts_stack_pop()
@@ -13337,19 +13351,29 @@ class Part:
 	#FIXME: Why *stl_mode* with *cnc_mode*???!!!
 	ezcad = part._ezcad
 	if ezcad._cnc_mode or ezcad._stl_mode:
+	    if trace_detail >= 0:
+		print("{0}cnc/stl mode".format(indent))
 	    success = False
 	    spot_operation = None
 	    hole_z_depth = start.distance(hole_stop)
 	    
 	    # Search for useful tools:
+	    deep_tracing = -1000000
+	    if trace_detail >= 3:
+		deep_tracing = tracing + 1
 	    maximum_mill_drill_diameter = L(inch=1.0)
 	    mill_drill_tool = part._tools_mill_drill_tip_search(
-	      maximum_mill_drill_diameter, countersink_diameter/2, tracing + 1)
-	    drill_tool = part._tools_drill_search(hole_diameter, hole_z_depth, tracing + 1)
+	      maximum_mill_drill_diameter, countersink_diameter/2, deep_tracing)
+	    drill_tool = part._tools_drill_search(hole_diameter, hole_z_depth, deep_tracing)
 	    end_mill_tool = part._tools_end_mill_search(hole_diameter,
-	      hole_z_depth, "countersink_hole", tracing + 1)
-	    
-	    if (is_through_hole or is_tip_hole) and mill_drill_tool != None and drill_tool != None:
+	      hole_z_depth, "countersink_hole", deep_tracing)
+	    if trace_detail >= 2:
+	        print("{0}mill_drill_tool={1}".format(indent, mill_drill_tool))
+	        print("{0}drill_tool={1}".format(indent, drill_tool))
+	        print("{0}end_mill_tool={1}".format(indent, end_mill_tool))
+
+	    if (is_through_hole or is_tip_hole) and mill_drill_tool != None and \
+	      drill_tool != None and not end_mill_tool._is_laser_get():
 		assert isinstance(mill_drill_tool, Tool_Mill_Drill)
 		assert isinstance(drill_tool, Tool_Drill)
 		# Worry about countersinking first:
@@ -18304,7 +18328,7 @@ class Code:
 	# Open new *code_stream*:
 	ezcad = part._ezcad_get()
 	ngc_directory = ezcad._ngc_directory_get()
-	code_file_name = "O{0}.ngc".format(tool_program_number)
+	code_file_name = "{0}.ngc".format(tool_program_number)
 	code_stream = ngc_directory._write_open(code_file_name)
 	code._code_stream = code_stream
 	if trace_detail >= 2:
@@ -18653,7 +18677,7 @@ class Code:
 	# Open the top-level *part_ngc_stream* file that invokes each tool operation
 	# in a separate .ngc file:
 	ngc_directory = ezcad._ngc_directory_get()
-	mount_ngc_file_name = os.path.join(ngc_directory, "O{0}.ngc".format(program_number))
+	mount_ngc_file_name = os.path.join(ngc_directory, "{0}.ngc".format(program_number))
 	part_ngc_stream = open(mount_ngc_file_name, "w")
 	assert part_ngc_stream != None, "Unable to open {0}".format(mount_ngc_file_name)
 
@@ -20038,7 +20062,7 @@ class Shop:
 
 	dowel_pin = shop._dowel_pin_append("3/8 Dowel Pin",
 	  1, hss, in3_8, L(inch=.900), in3_16)
-	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill (.9\" deep)",
+	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill [.9\" deep]",
 	  2, hss, in3_8, 2, L(inch=.900), degrees90)
 	drill_36 = shop._drill_append("#36 Drill",
 	  3, hss, L(inch=0.1065), 2, L(inch=1.500), degrees118, stub)
@@ -20058,9 +20082,9 @@ class Shop:
 	  11, hss, L(inch=0.1495), 2, L(inch=2.000), degrees118, stub)
 	drill_9 = shop._drill_append("#9 drill",
 	  12, hss, L(inch=0.1960), 2, L(inch=2.000), degrees118, stub)
-	drill_43 = shop._drill_append("#43 drill (4-40 75% thread) 1.5in deep",
+	drill_43 = shop._drill_append("#43 drill [4-40 75% thread] 1.5in deep",
 	  13, hss, L(inch=.0890), 2, L(inch=1.500), degrees118, stub)
-	drill_32 = shop._drill_append("#32 drill (4-40 close) 1.5in deep",
+	drill_32 = shop._drill_append("#32 drill [4-40 close] 1.5in deep",
 	  14, hss, L(inch=0.1160), 2, L(inch=1.500), degrees118, stub)
 	drill_50 = shop._drill_append("#50 drill",
 	  15, hss, L(inch=0.0700), 2, L(inch=1.500), degrees118, stub)
@@ -20078,11 +20102,11 @@ class Shop:
 	  20, hss, in3_32, 2, L(inch=1.750), degrees118, stub)
 	drill_42 = shop._drill_append("#42 drill",
 	  21, hss, L(inch=0.0935), 2, L(inch=1.750), degrees118, stub)
-	drill_3_64 = shop._drill_append("3/64 drill (#0-80 75% thread) 1.05in deep",
+	drill_3_64 = shop._drill_append("3/64 drill [#0-80 75% thread] 1.05in deep",
 	  22, hss, L(inch="3/64"), 2, L(inch=1.05), degrees118, stub)
-	drill_52 = shop._drill_append("#52 drill (#80-80 close) 1.90in deep",
+	drill_52 = shop._drill_append("#52 drill [#80-80 close] 1.90in deep",
 	  23, hss, L(inch=0.0635), 2, L(inch=1.90), degrees118, stub)
-	drill_19 = shop._drill_append("#19 drill (M4x.7 close) 1.90in deep",
+	drill_19 = shop._drill_append("#19 drill [M4x.7 close] 1.90in deep",
 	  24, hss, L(inch=0.1660), 2, L(inch=1.90), degrees118, stub)
 
 	# Laser "tools":
@@ -20526,7 +20550,6 @@ class Tool:
 	tool._feed_speed = Speed()		# Nominal feedrate
 	tool._spindle_speed = Hertz()		# Preferred spindle speed
 	tool._parts = []			# List of parts using tool
-	
 
     def __format__(self, format):
 	""" *Tool*: Return the *Tool* object (i.e. *self*) formatted as a string. """
@@ -23268,7 +23291,7 @@ class VRML_Use(VRML):
 #	    ngc_file_name = os.path.join(ngc_directory, "{0}.ngc".format(program_number))
 #	    print("ngc_file_name='{0}'".format(ngc_file_name))
 #	    wrl_directory = ezcad._wrl_directory_get()
-#	    wrl_file_name = os.path.join(ngc_directory, "O{0}.wrl".format(program_number))
+#	    wrl_file_name = os.path.join(ngc_directory, "{0}.wrl".format(program_number))
 #	    print("wrl_file_name='{0}'".format(wrl_file_name))
 #	    wrl_file = open(wrl_file_name, "wa")
 #	    assert isinstance(wrl_file, file)
