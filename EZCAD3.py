@@ -4845,7 +4845,7 @@ class Mount:
 	# Perform any requested *tracing*:
 	if tracing > 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Mount._tooling_plat_holes_set('{1}', {2})".
+	    print("{0}=>Mount._tooling_plate_holes_set('{1}', {2})".
 	      format(indent, mount._name, tooling_plate_holes))
 
 	# Stuff *tooling_plate_holes* into *mount*:
@@ -4853,7 +4853,7 @@ class Mount:
 
 	# Wrap up any requested *tracing*:
 	if tracing > 0:
-	    print("{0}<=Mount._tooling_plat_holes_set('{1}', {2})".
+	    print("{0}<=Mount._tooling_plate_holes_set('{1}', {2})".
 	      format(indent, mount._name, tooling_plate_holes))
 
     def _top_surface_transform_get(self):
@@ -7665,7 +7665,8 @@ class Operation_Mount(Operation):
 	cnc_extra_start_dz = cnc_extra_start_tne.z - cnc_extra_start_bsw.z
 	material = part._material_get()
 	mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3} )\n".
-	  format(cnc_extra_start_dx, cnc_extra_start_dy, cnc_extra_start_dz, material))
+	  format(cnc_extra_start_dx.absolute(), cnc_extra_start_dy.absolute(),
+	  cnc_extra_start_dz.absolute(), material))
 	selected_parallel_height = mount._selected_parallel_height_get()
 	if mount._is_tooling_plate_mount_get():
 	    mount_ngc_file.write("( Parallels height {0:i}in for tooling plate )\n".
@@ -9056,10 +9057,12 @@ class Parallels:
 
 	# *heights* is sorted from the largest height to the smallest height.  The loop is
 	# terminated when the first parallel *height* that is too small is encountered.
+	epsilon = L(inch=.000000001)
 	heights = parallels._heights
 	selected_height = None
 	for height in parallels._heights:
-	    if height + dz < jaw_height:
+	    # Use *epsilon* to deal with rounding errors:
+	    if height + dz < jaw_height - epsilon:
 		break
 	    selected_height = height
 
@@ -13367,13 +13370,20 @@ class Part:
 	    drill_tool = part._tools_drill_search(hole_diameter, hole_z_depth, deep_tracing)
 	    end_mill_tool = part._tools_end_mill_search(hole_diameter,
 	      hole_z_depth, "countersink_hole", deep_tracing)
+	    end_mill_tool_is_laser = False
+	    if end_mill_tool != None:
+		end_mill_tool_is_laser = end_mill_tool._is_laser_get()
 	    if trace_detail >= 2:
 	        print("{0}mill_drill_tool={1}".format(indent, mill_drill_tool))
 	        print("{0}drill_tool={1}".format(indent, drill_tool))
 	        print("{0}end_mill_tool={1}".format(indent, end_mill_tool))
+		print("{0}end_mill_tool_is_laser={1}".format(indent, end_mill_tool_is_laser))
+		print("{0}is_through_hole={1}".format(indent, is_through_hole))
+		print("{0}is_tip_hole={1}".format(indent, is_tip_hole))
 
+	    #FIXME: We need to use *Operaton_Round_Pocket* when we are generating a .dxf file!!!:
 	    if (is_through_hole or is_tip_hole) and mill_drill_tool != None and \
-	      drill_tool != None and not end_mill_tool._is_laser_get():
+	      drill_tool != None: # and not end_mill_tool_is_laser:
 		assert isinstance(mill_drill_tool, Tool_Mill_Drill)
 		assert isinstance(drill_tool, Tool_Drill)
 		# Worry about countersinking first:
@@ -14964,8 +14974,9 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.tooling_plate_drill('{1}', '{2}', {3}, {4}, {5})".format(
 	      indent, part._name, plate_mount_name, rows, columns, skips))
-	    trace_detail = 2
-	    #deep_tracing = tracing + 1
+	    trace_detail = 3
+	    if trace_detail >= 3:
+		deep_tracing = tracing + 1
 
 	# Only do stuff if in *ezcad* is in *cnc_mode*:
 	ezcad = part._ezcad_get()
@@ -15569,7 +15580,7 @@ class Part:
 	      "{6:i}, {7:i}, {8:i}, {9:i})").format(indent,
 	      part._name, name, top_surface, jaw_surface, flags,
 	      extra_dx, extra_dy, extra_top_dz, extra_bottom_dz))
-	    trace_detail = 2
+	    trace_detail = 3
 
 	# We do not need to do anything until we are in CNC mode:
 	ezcad = part._ezcad_get()
@@ -15870,10 +15881,16 @@ class Part:
 	    # as near to the top jaw edge as possible.  However, sometimes the parallels will
 	    # not let us get that low:
 	    selected_parallel_height = smallest_parallel_height
-	    for parallel_height in parallels_heights:
+	    epsilon = L(inch=.000001)
+	    for index, parallel_height in enumerate(parallels_heights):
+		# Use *epsilon* to deal with rounding errors:
+		trial_top_surface_z = parallel_height + extra_bottom_dz + part_dz - epsilon
 		if parallel_height > selected_parallel_height and \
-		  parallel_height + part_dz + extra_bottom_dz <= vice_jaw_dz:
-	             selected_parallel_height = parallel_height
+		  trial_top_surface_z <= vice_jaw_dz:
+		    selected_parallel_height = parallel_height
+		    if trace_detail >= 3:
+			print("{0}Parallel[{1}]: parellel_height={2:i} trial_top_surface_z={2:i}".
+			  format(indent, index, parallel_height, trial_top_surface_z))
 	    if trace_detail >= 1:
 		print("{0}parallels_heights={1}".format(indent,
 		  [parallel_height.inches() for parallel_height in parallels_heights]))
@@ -19903,7 +19920,6 @@ class Shop:
 	# Define some useful values:
 	zero = L()
 	tools = []
-	vice_volume = P(L(inch=5.0), L(inch=6.0), L(inch=1.0))
 
 	# Tooling plate with #4 holes:
 	no4_close_fit_diameter = L(inch=.1160)
@@ -19913,21 +19929,26 @@ class Shop:
 	  11, 11, L(inch=.500), no4_close_fit_diameter, no4_75_percent_thread_diameter,
 	  no4_50_percent_thread_diameter, L(inch=0.250), L(inch=0.500))
 
-	# Vice to use:
-	parallels = Parallels("Standard", L(inch=6.0), L(inch="1/8"), [
-	  L(inch="1/2"),
-	  L(inch="5/8"),
-	  L(inch="3/4"),
-	  L(inch="7/8"),
-	  L(inch=1.000),
+	# Create *parallels*:
+	parallels_length    = L(inch=6.000)
+	parallels_thickness = L(inch="1/8")
+	parallels = Parallels("Standard", parallels_length, parallels_thickness, [
+	  L(inch=  "1/2"),
+	  L(inch=  "5/8"),
+	  L(inch=  "3/4"),
+	  L(inch=  "7/8"),
+	  L(inch= 1.000),
 	  L(inch="1-1/8"),
 	  L(inch="1-1/4"),
-	  L(inch="1/2"),
+	  L(inch="1-3/8"),
 	  L(inch="1-1/2") ] )
 	tool_change_x = L(inch=-1.500)
 	tool_change_y = L()
-	tool_change_z = L(inch=3.000)
+	tool_change_z = L(inch=5.000)
 	tool_change_point = P(tool_change_x, tool_change_y, tool_change_z)
+
+	# Create *vice*:
+	vice_volume = P(L(inch=5.1), L(inch=5.0), L(inch=1.5))
 	vice = Vice("5in_Vice", vice_volume, parallels, tool_change_point)
 
 	# Initialize *shop*:
@@ -22298,7 +22319,7 @@ class Vice:
 	vice._parallels         = parallels
 	vice._tool_change_point = tool_change_point
 	vice._volume            = volume
-	print("Vice.__init__():Vice._volume={0:i}".format(volume))
+	#print("Vice.__init__():Vice._volume={0:i}".format(volume))
 
     def _coordinates_vrml_append(self, vrml, tracing=-1000000):
 	""" *Vice*: Append the vice origin coordinates for the *Vice* object (i.e. *self*)
