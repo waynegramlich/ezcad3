@@ -2183,8 +2183,8 @@ class Hertz:
 	result = ""
 	if format == "" or format == "frequency" or format == "rps":
 	    result = "{0}".format(frequency)
-	if format == "rpm":
-	    result = "{0}".format(60.0 * frequency)
+	elif format == "rpm":
+	    result = "{0}".format(frequency * 60.0)
 	else:
 	    result = "Unknown Hertz format '{0}'".format(format)
         return result
@@ -2720,12 +2720,19 @@ class Speed:
 	    or *m_per_sec*.
 	"""
 
+	# Verify argument types:
+	assert isinstance(mm_per_sec, float) or isinstance(mm_per_sec, int)
+	assert isinstance(in_per_sec, float) or isinstance(in_per_sec, int)
+	assert isinstance(cm_per_sec, float) or isinstance(cm_per_sec, int)
+	assert isinstance(ft_per_min, float) or isinstance(ft_per_min, int)
+	assert isinstance(m_per_sec, float)  or isinstance(m_per_sec, int)
+
 	self._mm_per_sec =			\
 	  mm_per_sec +				\
-	  in_per_sec * 25.4 +			\
 	  cm_per_sec * 10.0 +			\
-	  ft_per_min * 60.0 * 12.0 * 25.4 +	\
-	  m_per_sec * 60.0 / 1000.0
+	  in_per_sec * 25.4 +			\
+	  m_per_sec * 1000.0 +			\
+	  ft_per_min * 12.0 * 25.4 / 60.0
 
     def __eq__(speed1, speed2):
 	""" *Speed*: Return true if the *speed1* is equal to *speed2. """
@@ -2764,10 +2771,15 @@ class Speed:
 
 	# Verify argument types:
 	if isinstance(divisor, L):
+	    # Dividing by length (i.e. *L*) yields a frequency (i.e. *Hertz*):
 	    inches_per_second = self.inches_per_second()
 	    inches = divisor.inches()
 	    rps = inches_per_second / inches
 	    hertz =  Hertz(rps=rps)
+	    #print("inches_per_second={0}".format(inches_per_second))
+	    #print("inches={0}".format(inches))
+	    #print("rps={0}".format(rps))
+	    #print("hertz={0:rps}rps (={0:rpm}rpm)".format(hertz))
 	    return hertz
 	elif isinstance(divisor, int) or isinstance(divisor, float):
 	    return Speed(mm_per_sec=self._mm_per_sec / divisor)
@@ -2782,19 +2794,23 @@ class Speed:
 	scale = 1.0
 	if format_text.endswith('F'):
 	    # Feet per minute:
-	    scale = 60.0 * 25.4 * 12.0
+	    scale = 60.0 / (25.4 * 12.0)
 	    format_text = format_text[:-1]
 	elif format_text.endswith('M'):
-	    # Meters per minute:
-	    scale = 60.0 / 1000.0
+	    # Meters per second:
+	    scale = 1 / 1000.0
 	    format_text = format_text[:-1]
 	elif format_text.endswith('c'):
 	    # Centimeters per second:
-	    scale = 10.0
+	    scale = 1.0 / 10.0
 	    format_text = format_text[:-1]
 	elif format_text.endswith('i'):
 	    # Inches per second:
-	    scale =  25.4
+	    scale =  1.0 / 25.4
+	    format_text = format_text[:-1]
+	elif format_text.endswith('I'):
+	    # Inches per minute:
+	    scale =  60.0 / 25.4
 	    format_text = format_text[:-1]
 	elif format_text.endswith('m'):
 	    # Millimeters per second:
@@ -2804,7 +2820,7 @@ class Speed:
             assert False, "Unrecognized Speed format '{0}'".format(format_text)
 	
 	# Format the value as a string and return it:
-	value = self._mm_per_sec / scale
+	value = self._mm_per_sec * scale
 	speed_format_text = "{0:" + format_text + "f}"
 	#print("base={0} format_text='{1}' scaled={2} speed_format_text='{3}'".
 	#  format(self._mm_per_sec, format_text, value, speed_format_text))
@@ -2832,7 +2848,7 @@ class Speed:
 	""" *Speed*: Return the speed as a *float* in feet per minute.
 	"""
 
-	return self._mm_per_sec * 25.4 * 12.0 * 60.0
+	return self._mm_per_sec / (25.4 * 12.0) * 60.0
 
     def meters_per_minute(self):
 	""" *Speed*: Return the speed as a *float* in feet per minute.
@@ -5117,7 +5133,7 @@ class Mount_Operations:
 	# Write out the final G-code lines to *mount_ngc_file*:
 	mount_ngc_file.write("G53 Y0.0 ( Move the work to the front )\n")
 	mount_ngc_file.write("M2\n")
-	mount_ngc_file.write("(mount_ngc_file_closed in Mount_Operations._cnc_mount_generate)")
+	mount_ngc_file.write("(mount_ngc_file_closed in Mount_Operations._cnc_mount_generate)\n")
 	mount_ngc_file.close()
 	
 	# Now append *mount_vrml_lines* to *mount_vrml*:
@@ -11022,6 +11038,7 @@ class Part:
 	# materials.  That is too much work for now:
 	shop = part._shop_get()
 	part_material = part._material_get()
+	#print("part_material={0}".format(part_material))
 
 	best_tool = None
 	best_priority = -1.0
@@ -11030,6 +11047,8 @@ class Part:
 	# speeds from the *Mill* object:
 	maximum_spindle = Hertz(rpm=5000.0)
 	minimum_spindle = Hertz(rpm=150.0)
+	#print("maximum_spindle={0:rpm}rpm (={0:rps}rps)".format(maximum_spindle))
+	#print("minimum_spindle={0:rpm}rpm (={0:rps}rps)".format(minimum_spindle))
 
 	# FIXME: This code probably belongs over in *Shop*:
 	# Now search through {tools}:
@@ -11090,27 +11109,30 @@ class Part:
 			# {high_speed}:
 			low_speed = speed_range._low_speed_get()
 			high_speed = speed_range._high_speed_get()
+			tool_diameter = tool._diameter_get()
 
-			#print("Tool diameter={0}\n".format(tool.diameter))
+			#print("low_speed={0:F}fpm(={0:i}ips)".format(low_speed))
+			#print("high_speed={0:F}fpm(={0:i}ips)".format(high_speed))
+			#print("Tool diameter={0:i}in".format(tool._diameter))
+			#print("maximum_spindle={0:rpm}".format(maximum_spindle))
+			#print("minimum_spindle={0:rpm}".format(minimum_spindle))
 
 			pi = 3.14159265358979323846
-			desired_spindle = low_speed / (tool._diameter_get() * pi)
-
-			#print("low_speed={0} diam={1}\n".
-			#  format(low_speed, tool.diameter))
-			#print("desired_spindle={0}\n".
-			#  format(desired_spindle))
+			desired_spindle = low_speed / (tool_diameter * pi)
+			#print("desired_spindle={0:rpm}rpm".format(desired_spindle))
 
 			# Deal with spindle speed limits:
+			actual_spindle = desired_spindle
 			if desired_spindle > maximum_spindle:
 			    # Speed is to fast, clamp it to *maximum_spindle*:
-			    desired_spindle = maximum_spindle
-			assert desired_spindle >= minimum_spindle,				\
-			  "Disired spindle ({0:rpm}) is less than minimum spindle({1:rpm})".	\
-			  format(desired_spindle, minimum_spindle)
+			    actual_spindle = maximum_spindle
+			assert actual_spindle >= minimum_spindle,				\
+			  "Actual spindle ({0:rpm}) is less than minimum spindle({1:rpm})".	\
+			  format(actual_spindle, minimum_spindle)
+			#print("actual_spindle={0:rpm}rpm".format(actual_spindle))
 
-			# Record everything we figured out back in {tool}:
-			tool._spindle_speed_set(desired_spindle)
+			# Record everything we figured out back into *tool*:
+			tool._spindle_speed_set(actual_spindle)
 			chip_load = L(inch=0.001)
 			flutes_count = tool._flutes_count_get()
 
@@ -11118,9 +11140,15 @@ class Part:
 			# in the *tool*.  These values are only good until the end of this
 			# routine.  They will possibly get overridden during a subsequent
 			# tool search:
+			actual_spindle_frequency = actual_spindle.frequency()
+			#print("actual_spindle_frequency={0}".format(actual_spindle_frequency))
 			feed_speed = Speed(mm_per_sec=
 			  ((chip_load * float(flutes_count)).millimeters() *
-			   desired_spindle.frequency()))
+			  actual_spindle_frequency))
+			#print("chip_load={0}".format(chip_load))
+			#print("flutes_count={0}".format(flutes_count))
+			#print("Set feed_speed for tool {0} to {1:I}".
+			#  format(tool._name, feed_speed))
 			tool._feed_speed_set(feed_speed)
 			tool._priority_set(priority)
 
@@ -18074,6 +18102,9 @@ class Code:
 
 	# Write out "O# endsub" to *code_stream*:
 	code_stream = code._code_stream
+	code_stream.write("G49 (Disable tool offset)\n")
+	code_stream.write("M5 (Turn spindle off)\n")
+	code_stream.write("M9 (Turn coolant off)\n")
 	code_stream.write("O{0} endsub\n".format(code._tool_program_number))
 	code._tool_program_number = -1
 
@@ -18374,6 +18405,7 @@ class Code:
 
 	# Output the tool change, get the coolant on, and spindle spun up:
 	code_stream.write("M6 T{0} (Insert {1})\n".format(tool_number, tool_name))
+	code_stream.write("G43 H{0} (Enable tool offset)\n".format(tool_number))
 	spindle_is_on = spindle_speed > Hertz()
 	if spindle_is_on:
 	    code_stream.write("( Get the spindle up to speed.)\n")
@@ -18586,7 +18618,7 @@ class Code:
 	      spindle_speed, feed_speed, rapid_move))
 
     def _speed(self, field_name, value):
-	""" *Code*: Set the speed for *field_name* to *value in the the current command of the
+	""" *Code*: Set the speed for *field_name* to *value* in the the current command of the
 	    *Code* object (i.e. *self*).
 	"""
 
@@ -18611,9 +18643,9 @@ class Code:
 
 	if changed:
 	    if square_bracket:
-		chunk = "[{0:i}]".format(value)
+		chunk = "[{0:I}]".format(value)
 	    else:
-		chunk = "{0}{1:i}".format(field_name[0], value)
+		chunk = "{0}{1:I}".format(field_name[0], value)
 	    code._command_chunks.append(chunk)
 
     #FIXME: This is old code!!!
@@ -20056,6 +20088,7 @@ class Shop:
 	plastic = Material("Plastic", "")
 	aluminum = Material("Aluminum", "")
 	fpm600 = Speed(ft_per_min=600)
+	#print("fpm600={0:F}".format(fpm600))
 	fpm1200 = Speed(ft_per_min=1200)
 	shop._surface_speeds_insert(aluminum, hss, fpm600, fpm1200)
 	shop._surface_speeds_insert(aluminum, hss, fpm600, fpm1200)
