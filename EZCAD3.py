@@ -5054,88 +5054,90 @@ class Mount_Operations:
 	ezcad = part._ezcad_get()
 	ngc_directory = ezcad._ngc_directory_get()
 	mount_ngc_file_name = "{0}.ngc".format(mount_program_number)
-	mount_ngc_file = ngc_directory._write_open(mount_ngc_file_name, tracing + 1)
-	assert mount_ngc_file != None, "Unable to open {0}".format(mount_ngc_file_name)
-	if trace_detail >= 2:
-	    print("{0}mount_ngc_file_name='{1}' opened".format(indent, mount_ngc_file_name))
-
-	# Output some heading lines for *mount_ngc_file*:
-	mount_ngc_file.write("( Part: {0})".format(part._name_get()))
-	mount_ngc_file.write("( Tooling table: )\n")
-
-	# Associated with each *Operation* is a priority field that stores the number of times
-	# that *Part.cnc_fence*() has been called for the associated *Part* object.  The rule
-	# is that all operations with a lower priority **MUST** be performed before moving
-	# onto the the next priority.  This completely disallows intermixing of operations
-	# that cross a call to CNC fence.
-
-	# Create *priority_sorted_pairs* so by the operation priority (i.e. *pair*[1]):
-	priority_sorted_pairs = \
-	  sorted(pairs, key=lambda pair: pair._operation_get()._priority_get() )
-
-	# Now create *priority_mount_operations_list* where each *Mount_Operations* object
-	# in the list has *Operation* objects at the same priority level:
-	current_priority = -1
-	priority_mount_operations_list = []
-	current_priority_mount_operations = None
-	for pair in priority_sorted_pairs:
-	    # Extract *mount* and *operation* from *pair*.  Get the *priority* from *operation*:
-	    mount = pair._mount_get()
-	    operation = pair._operation_get()
-	    priority = operation._priority_get()
-
-	    # If the *priority* does not match *current_priority*, we have to create a new
-	    # *Mount_Operations* object:
-	    if priority != current_priority:
-		# Create new *Mount_Operation_Object* and tack it onto th end of
-        	# *priority_mount_operations_list*:
-		current_priority = priority
-		current_priority_mount_operations = \
-		  Mount_Operations("{0} Priority {1}".format(mount_operations._name, priority))
-		priority_mount_operations_list.append(current_priority_mount_operations)
-
-	    # Now we can take *mount* and *operation* onto the *current_priority_mount_operations*:
-	    current_priority_mount_operations._append(mount, operation)
-	assert len(priority_mount_operations_list) > 0
-	
-	# Now we can generate the *priority_operations* from *priority_groups*:
-	#priority_program_number = mount_program_number
-	#for priority_operations in priority_groups:
-	#    # Output a couple of G-code lines *mount_ngc_file*:
-	#    tool_number = tool._number_get()
-	#    tool_name = tool._name_get()
-	#    mount_ngc_file.write("( T{0} {1} )\n".format(tool_number, tool_name))
-	#    mount_ngc_file.write("O{0} call\n".format(priority_program_number))
-
-	# Create *mount_vrml_stl* and *mount_vrml_lines*:
-	mount_name = mount0._name_get()
-	mount_vrml_stl_name = "{0}__{1}__STL".format(part_name, mount_name)
-	mount_vrml_stl = VRML_Group(mount_vrml_stl_name)
-	mount_vrml_lines_name = "{0}__{1}__Lines".format(part_name, mount_name)
-	mount_vrml_lines = VRML_Lines(mount_vrml_lines_name)
-
-	# Now generate all of the tool paths:
-	priority_program_number = mount_program_number
-	mount_vrml = VRML_Group(part._name_get())
-	for index, priority_mount_operations in enumerate(priority_mount_operations_list):
+	with ngc_directory._write_open(mount_ngc_file_name, tracing + 1) as mount_ngc_file:
+	    assert mount_ngc_file != None, "Unable to open {0}".format(mount_ngc_file_name)
 	    if trace_detail >= 2:
-		priority_mount_operations._show("Priority {0}".format(index), tracing = tracing + 1)
+		print("{0}mount_ngc_file_name='{1}' opened".format(indent, mount_ngc_file_name))
 
-	    # Now we can generate all the tool operations that are at the same pirority:	
-	    priority_program_number = \
-	      priority_mount_operations._cnc_priority_generate(priority_program_number,
-	      mount_ngc_file, mount_vrml, mount_vrml_lines, mount_vrml_stl, tracing = tracing + 1)
+	    # Output some heading lines for *mount_ngc_file*:
+	    mount_ngc_file.write("( Part: {0} )\n".format(part._name_get()))
+	    mount_ngc_file.write("( Tooling table: )\n")
 
-	# The *next_mount_program_number* must be divisible by 10:
-	next_mount_program_number = priority_program_number + 9
-	next_mount_program_number -= next_mount_program_number % 10
+	    # Associated with each *Operation* is a priority field that stores the number of times
+	    # that *Part.cnc_fence*() has been called for the associated *Part* object.  The rule
+	    # is that all operations with a lower priority **MUST** be performed before moving
+	    # onto the the next priority.  This completely disallows intermixing of operations
+	    # that cross a call to CNC fence.
 
-	# Write out the final G-code lines to *mount_ngc_file*:
-	mount_ngc_file.write("G53 Y0.0 ( Move the work to the front )\n")
-	mount_ngc_file.write("M2\n")
-	mount_ngc_file.write("(mount_ngc_file_closed in Mount_Operations._cnc_mount_generate)\n")
-	mount_ngc_file.close()
+	    # Create *priority_sorted_pairs* so by the operation priority (i.e. *pair*[1]):
+	    priority_sorted_pairs = \
+	      sorted(pairs, key=lambda pair: pair._operation_get()._priority_get() )
+
+	    # Now create *priority_mount_operations_list* where each *Mount_Operations* object
+	    # in the list has *Operation* objects at the same priority level:
+	    current_priority = -1
+	    priority_mount_operations_list = []
+	    current_priority_mount_operations = None
+	    for pair in priority_sorted_pairs:
+		# Extract *mount* and *operation* from *pair*.  Get the *priority* from *operation*:
+		mount = pair._mount_get()
+		operation = pair._operation_get()
+		priority = operation._priority_get()
+
+		# If the *priority* does not match *current_priority*, we have to create a new
+		# *Mount_Operations* object:
+		if priority != current_priority:
+		    # Create new *Mount_Operation_Object* and tack it onto th end of
+		    # *priority_mount_operations_list*:
+		    current_priority = priority
+		    current_priority_mount_operations = \
+		      Mount_Operations("{0} Priority {1}".format(mount_operations._name, priority))
+		    priority_mount_operations_list.append(current_priority_mount_operations)
+
+		# Now we can take *mount* and *operation* onto the
+                # *current_priority_mount_operations*:
+		current_priority_mount_operations._append(mount, operation)
+	    assert len(priority_mount_operations_list) > 0
 	
+	    # Now we can generate the *priority_operations* from *priority_groups*:
+	    #priority_program_number = mount_program_number
+	    #for priority_operations in priority_groups:
+	    #    # Output a couple of G-code lines *mount_ngc_file*:
+	    #    tool_number = tool._number_get()
+	    #    tool_name = tool._name_get()
+	    #    mount_ngc_file.write("( T{0} {1} )\n".format(tool_number, tool_name))
+	    #    mount_ngc_file.write("O{0} call\n".format(priority_program_number))
+
+	    # Create *mount_vrml_stl* and *mount_vrml_lines*:
+	    mount_name = mount0._name_get()
+	    mount_vrml_stl_name = "{0}__{1}__STL".format(part_name, mount_name)
+	    mount_vrml_stl = VRML_Group(mount_vrml_stl_name)
+	    mount_vrml_lines_name = "{0}__{1}__Lines".format(part_name, mount_name)
+	    mount_vrml_lines = VRML_Lines(mount_vrml_lines_name)
+
+	    # Now generate all of the tool paths:
+	    priority_program_number = mount_program_number
+	    mount_vrml = VRML_Group(part._name_get())
+	    for index, priority_mount_operations in enumerate(priority_mount_operations_list):
+		if trace_detail >= 2:
+		    priority_mount_operations._show("Priority {0}".format(index),
+		      tracing = tracing + 1)
+
+		# Now we can generate all the tool operations that are at the same pirority:	
+		priority_program_number = \
+		  priority_mount_operations._cnc_priority_generate(priority_program_number + 1,
+		  mount_ngc_file, mount_vrml, mount_vrml_lines, mount_vrml_stl,
+		  tracing = tracing + 1)
+
+	    # The *next_mount_program_number* must be divisible by 10:
+	    next_mount_program_number = priority_program_number + 9
+	    next_mount_program_number -= next_mount_program_number % 10
+
+	    # Write out the final G-code lines to *mount_ngc_file*:
+	    mount_ngc_file.write("G53 Y0.0 ( Move the work to the front )\n")
+	    mount_ngc_file.write("M2\n")
+	    mount_ngc_file.flush()
+
 	# Now append *mount_vrml_lines* to *mount_vrml*:
 	mount_vrml._append(mount_vrml_lines)
 	mount_vrml._append(mount_vrml_stl)
@@ -5365,137 +5367,147 @@ class Mount_Operations:
 	mount0 = pair0._mount_get()
 	mount0_cnc_transform = mount0._cnc_transform_get()
 	operation0 = pair0._operation_get()
-	tool = operation0._tool_get()
-	feed_speed = operation0._feed_speed_get()
-	spindle_speed = operation0._spindle_speed_get()
-	part = operation0._part_get()
 
-	# Remember that *part* uses *tool*:
-	tool._part_register(part)
+	# Do not generate any .ngc file for and *Operation_Mount*:
+	new_tool_program_number = tool_program_number
+	if not isinstance(operation0, Operation_Mount):
+	    # Grap some values from *tool_mount_operations*:
+	    tool = operation0._tool_get()
+	    feed_speed = operation0._feed_speed_get()
+	    spindle_speed = operation0._spindle_speed_get()
+	    part = operation0._part_get()
 
-	# Output the call to *mount_ngc_file*:
-	tool_name = tool._name_get()
-	if tool_name != "None":
-	    mount_ngc_file.write("O{0} call ( {1} )\n".format(tool_program_number, tool_name))
+	    # Remember that *part* uses *tool*:
+	    tool._part_register(part)
 
-	# Create *cnc_tool_vrml* for recording just this *tool*:
-	part_name = part._name_get()
-	mount_name = mount0._name_get()
-	tool_name = tool._name_get()
-	cnc_tool_vrml_name = "{0}__{1}__{2}__Tool".format(part_name, mount_name, tool_name)
-	cnc_tool_vrml = VRML_Group(cnc_tool_vrml_name)
-
-	# Create *cnc_vrml_lines* to record the tool path visualation:
-	cnc_vrml_lines_name = "{0}__{1}__{2}__Tool_Path".format(part_name, mount_name, tool_name)
-	cnc_vrml_lines = VRML_Lines(cnc_vrml_lines_name)
-	cnc_tool_vrml._append(cnc_vrml_lines)
-
-	# Reset the *code* object and feed it *cnc_vrml_lines* to record tool path visualization:
-	shop = part._shop_get()
-	code = shop._code_get()
-	code._start(part, tool, tool_program_number,
-	  spindle_speed, mount0, cnc_vrml_lines, tracing = tracing + 1)
-	code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
-
-	# Start at *tool_change_point*:
-	tool_change_point = code._tool_change_point
-	code._command_begin()
-	code._mode_motion(0, code._vrml_motion_color_rapid)
-	code._length("X", tool_change_point.x)
-	code._length("Y", tool_change_point.y)
-	code._length("Z", tool_change_point.z)
-	code._comment("Return to tool change point")
-	code._command_end()
-
-	# We need to output a *Part* VRML for each unique (*Part*, *Mount*) combination.
-	# This is done by keeping track of whenever a new pair comes along.
-	part_mount_table = {}
-
-	# Perform each *operation* in *tool_operations*:
-	pairs_size = len(pairs)
-	for index, pair in enumerate(pairs):
-	    # Grab the *tool* and its associated *feed_speed* and *spindle_speed*:
-	    tool_mount = pair._mount_get()
-	    tool_mount_name = tool_mount._name_get()
-	    tool_operation = pair._operation_get()
-	    tool_operation_name = tool_operation._name_get()
-	    tool = tool_operation._tool_get()
+	    # Output the call to *mount_ngc_file*:
 	    tool_name = tool._name_get()
-	    feed_speed = tool_operation._feed_speed_get()
-	    spindle_speed = tool_operation._spindle_speed_get()
-	    assert isinstance(feed_speed, Speed)
-	    assert isinstance(spindle_speed, Hertz)
-	    if trace_detail >= 2:
-		print("{0}tool_op[{1}]: name={2} tool={3} feed_speed={4:i} spindle_speed={5:rpm}".
-		  format(indent, index, tool_operation_name, tool_name, feed_speed, spindle_speed))
+	    if tool_name != "None":
+		mount_ngc_file.write("O{0} call ( {1} )\n".format(tool_program_number, tool_name))
 
-	    # Make sure we start at a safe height:
-	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed, tracing = tracing + 1)
-
-	    # Perform the CNC generation step for *operation*:
-	    is_last = (index + 1 >= pairs_size)
-	    underscore_part_name = part.name_get().replace(' ', '_')
-	    underscore_tool_name = tool_name.replace(' ', '_')
-	    underscore_operation_comment = tool_operation._comment_get().replace(' ', '_')
-	    code._line_comment("PN={0} TN={1} OC={2}".format(
-	      underscore_part_name, underscore_tool_name, underscore_operation_comment))
-	    tool_operation._cnc_generate(tool_mount, mount_ngc_file,
-	      cnc_tool_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing = tracing + 1)
-
-	    # Make darn we end at a safe height:
-	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
-
-	    # Build a ( *Part*, *Mount* ) pair to use as a key to *part_mount_table*:
-	    #FIXME: Maybe use ( id(part), id(mount) ) instead???!!!
-	    part = tool_operation._part_get()
+	    # Create *cnc_tool_vrml* for recording just this *tool*:
 	    part_name = part._name_get()
-	    mount_name = tool_mount._name_get()
-	    part_mount_key = ( part_name, mount_name )
-	    if not part_mount_key in part_mount_table:
-		if trace_detail >= 1:
-		    print("{0}part_mount_key is new".format(indent, part_mount_key))
-		part_mount_table[part_mount_key] = True
+	    mount_name = mount0._name_get()
+	    tool_name = tool._name_get()
+	    cnc_tool_vrml_name = "{0}__{1}__{2}__Tool".format(part_name, mount_name, tool_name)
+	    cnc_tool_vrml = VRML_Group(cnc_tool_vrml_name)
 
-	# Safe the tool and shut down *code*:
-	zero = L()
-	code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
-	code._dxf_xy_offset_set(zero, zero)
+	    # Create *cnc_vrml_lines* to record the tool path visualation:
+	    cnc_vrml_lines_name = "{0}__{1}__{2}__Tool_Path". \
+	      format(part_name, mount_name, tool_name)
+	    cnc_vrml_lines = VRML_Lines(cnc_vrml_lines_name)
+	    cnc_tool_vrml._append(cnc_vrml_lines)
 
-	# Return to *tool_change_point*:
-	code._command_begin()
-	code._mode_motion(0, code._vrml_motion_color_tool_change)
-	code._length("X", tool_change_point.x)
-	code._length("Y", tool_change_point.y)
-	code._length("Z", tool_change_point.z)
-	code._comment("Return to tool change point")
-	code._command_end()
+	    # Reset the *code* object and feed it *cnc_vrml_lines* to record tool
+	    # path visualization:
+	    shop = part._shop_get()
+	    code = shop._code_get()
+	    code._start(part, tool, tool_program_number,
+	      spindle_speed, mount0, cnc_vrml_lines, tracing = tracing + 1)
+	    code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
 
-	code._finish(tracing + 1)
+	    # Start at *tool_change_point*:
+	    tool_change_point = code._tool_change_point
+	    code._command_begin()
+	    code._unsigned("G8", 49) # Disable tool offset
+	    code._mode_motion(0, code._vrml_motion_color_rapid)
+	    code._length("X", tool_change_point.x)
+	    code._length("Y", tool_change_point.y)
+	    code._length("Z", tool_change_point.z)
+	    code._comment("Return to tool change point")
+	    code._command_end()
 
-	cnc_tool_vrml._append(mount_vrml_lines)
-	cnc_tool_vrml._append(mount_vrml_stl)
+	    # We need to output a *Part* VRML for each unique (*Part*, *Mount*) combination.
+	    # This is done by keeping track of whenever a new pair comes along.
+	    part_mount_table = {}
 
-	# Now output *cnc_tool_vrml* to the *ngc_directory* if it is not a mount operation:
-	if trace_detail >= 3:
-	    print("{0}operation0='{1}' is_mount={2}".
-	      format(indent, operation0._name_get(), operation0._is_mount_get()))
-	if not operation0._is_mount_get():
-	    ezcad = part._ezcad_get()
-	    ngc_directory = ezcad._ngc_directory_get()
-	    cnc_tool_vrml_padded_text = cnc_tool_vrml._text_pad(0)
-	    wrl_file_name = "{0}.wrl".format(tool_program_number)
-	    with ngc_directory._write_open(wrl_file_name) as tool_wrl_file:
-		tool_wrl_file.write("#VRML V2.0 utf8\n")
-		tool_wrl_file.write(cnc_tool_vrml_padded_text)
-	    if trace_detail >= 2:
-		print("{0}Wrote file '{1}'".format(indent, wrl_file_name))
+	    # Perform each *operation* in *tool_operations*:
+	    pairs_size = len(pairs)
+	    for index, pair in enumerate(pairs):
+		# Grab the *tool* and its associated *feed_speed* and *spindle_speed*:
+		tool_mount = pair._mount_get()
+		tool_mount_name = tool_mount._name_get()
+		tool_operation = pair._operation_get()
+		tool_operation_name = tool_operation._name_get()
+		tool = tool_operation._tool_get()
+		tool_name = tool._name_get()
+		feed_speed = tool_operation._feed_speed_get()
+		spindle_speed = tool_operation._spindle_speed_get()
+		assert isinstance(feed_speed, Speed)
+		assert isinstance(spindle_speed, Hertz)
+		if trace_detail >= 2:
+		    print("{0}tool_op[{1}]: name={2} tool={3} feed_speed={4:i} spin_speed={5:rpm}".
+		      format(indent, index, tool_operation_name, tool_name,
+		      feed_speed, spindle_speed))
 
-	# *cnc_tool_vrml* got closed as a result of calling *_text_pad*.  However, we can still
-	# append it to *cnc_vrml* where all of the tools for given mount are visualized:
-	cnc_vrml._append(cnc_vrml_lines)
+		# Make sure we start at a safe height:
+		code._xy_rapid_safe_z_force(feed_speed, spindle_speed, tracing = tracing + 1)
 
-	# Compute *new_tool_program_number* for return; it just increments by one:
-	new_tool_program_number = tool_program_number + 1
+		# Perform the CNC generation step for *operation*:
+		is_last = (index + 1 >= pairs_size)
+		underscore_part_name = part.name_get().replace(' ', '_')
+		underscore_tool_name = tool_name.replace(' ', '_')
+		underscore_operation_comment = tool_operation._comment_get().replace(' ', '_')
+		code._line_comment("PN={0} TN={1} OC={2}".format(
+		  underscore_part_name, underscore_tool_name, underscore_operation_comment))
+		tool_operation._cnc_generate(tool_mount, mount_ngc_file,
+		  cnc_tool_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing = tracing + 1)
+
+		# Make darn we end at a safe height:
+		code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
+
+		# Build a ( *Part*, *Mount* ) pair to use as a key to *part_mount_table*:
+		#FIXME: Maybe use ( id(part), id(mount) ) instead???!!!
+		part = tool_operation._part_get()
+		part_name = part._name_get()
+		mount_name = tool_mount._name_get()
+		part_mount_key = ( part_name, mount_name )
+		if not part_mount_key in part_mount_table:
+		    if trace_detail >= 1:
+			print("{0}part_mount_key is new".format(indent, part_mount_key))
+		    part_mount_table[part_mount_key] = True
+
+	    # Safe the tool and shut down *code*:
+	    zero = L()
+	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
+	    code._dxf_xy_offset_set(zero, zero)
+
+	    # Return to *tool_change_point*:
+	    code._command_begin()
+	    code._unsigned("G8", 49)	# Disable tool offset
+	    code._mode_motion(0, code._vrml_motion_color_tool_change)
+	    code._length("X", tool_change_point.x)
+	    code._length("Y", tool_change_point.y)
+	    code._length("Z", tool_change_point.z)
+	    code._comment("Return to tool change point")
+	    code._command_end()
+
+	    code._finish(tracing + 1)
+
+	    cnc_tool_vrml._append(mount_vrml_lines)
+	    cnc_tool_vrml._append(mount_vrml_stl)
+
+	    # Now output *cnc_tool_vrml* to the *ngc_directory* if it is not a mount operation:
+	    if trace_detail >= 3:
+		print("{0}operation0='{1}' is_mount={2}".
+		  format(indent, operation0._name_get(), operation0._is_mount_get()))
+	    if not operation0._is_mount_get():
+		ezcad = part._ezcad_get()
+		ngc_directory = ezcad._ngc_directory_get()
+		cnc_tool_vrml_padded_text = cnc_tool_vrml._text_pad(0)
+		wrl_file_name = "{0}.wrl".format(tool_program_number)
+		with ngc_directory._write_open(wrl_file_name) as tool_wrl_file:
+		    tool_wrl_file.write("#VRML V2.0 utf8\n")
+		    tool_wrl_file.write(cnc_tool_vrml_padded_text)
+		if trace_detail >= 2:
+		    print("{0}Wrote file '{1}'".format(indent, wrl_file_name))
+
+	    # *cnc_tool_vrml* got closed as a result of calling *_text_pad*.  However, we can still
+	    # append it to *cnc_vrml* where all of the tools for given mount are visualized:
+	    cnc_vrml._append(cnc_vrml_lines)
+
+	    # Compute *new_tool_program_number* for return; it just increments by one:
+	    new_tool_program_number = tool_program_number + 1
 
 	# Wrap up any requested *tracing* and return *new_tool_program_number*:
 	if tracing >= 0:
@@ -13335,10 +13347,6 @@ class Part:
 	      start, stop, flags))
 	    trace_detail = 2
     
-	# Compute the radii:
-	hole_radius = hole_diameter/2
-	countersink_radius = countersink_diameter/2
-
 	# Compute *is_tip_hole*, *is_flat_hole* and *is_through_hole* from *flags*:
 	is_through_hole = 't' in flags
 	is_tip_hole = 'p' in flags
@@ -13356,10 +13364,14 @@ class Part:
 	if not is_countersink:
 	    # No countersink is required, so we will countersink to just
 	    # to just about 3/4 of the drill diameter:
-	    countersink_diameter = 0.75 * hole_diameter
+	    countersink_diameter = 1.10 * hole_diameter
 	if trace_detail >= 2:
 	     print("{0}is_through_hole={1} is_tip_hole={2} is_flat_hole={3} is_countersink={4}".
 	      format(indent, is_through_hole, is_tip_hole, is_flat_hole, is_countersink))
+
+	# Compute the radii:
+	hole_radius = hole_diameter/2
+	countersink_radius = countersink_diameter/2
 
 	# Hole axis is direction of drilling:
 	hole_axis = (start - stop).normalize()
@@ -13423,13 +13435,14 @@ class Part:
  		#
 	        #   depth = r * tan(90 - pa/2)
 		#
-		# where r is the tool radius and pa is the point angle of the tool:
+		# where r is the hole radius and pa is the point angle of the tool:
 		mill_drill_point_angle = mill_drill_tool._point_angle_get()
 		mill_drill_diameter = mill_drill_tool._diameter_get()
 		mill_drill_radius = mill_drill_diameter / 2 
+	        degrees90 = Angle(deg=90.0)
 		countersink_z_depth = \
-		  mill_drill_radius * (Angle(deg=90.0) - mill_drill_point_angle/2).tangent()
-
+		  countersink_radius * (degrees90 - mill_drill_point_angle/2).tangent()
+				
 		# Figure out where the *countersink_stop* point is:
 		countersink_comment = "{0} [countersink]".format(comment)
 		countersink_stop = start - hole_axis * countersink_z_depth.millimeters()
@@ -18102,10 +18115,13 @@ class Code:
 
 	# Write out "O# endsub" to *code_stream*:
 	code_stream = code._code_stream
-	code_stream.write("G49 (Disable tool offset)\n")
-	code_stream.write("M5 (Turn spindle off)\n")
-	code_stream.write("M9 (Turn coolant off)\n")
+	#code_stream.write("G49 ( Disable tool offset)\n") # Already done by return to change point
+	assert code._tool_program_number % 100 != 0
+	code_stream.write("M5 ( Turn spindle off)\n")
+	code_stream.write("M9 ( Turn coolant off)\n")
 	code_stream.write("O{0} endsub\n".format(code._tool_program_number))
+	code_stream.write("O{0} call)\n".format(code._tool_program_number))
+	code_stream.write("M2 ( End of Program )\n")
 	code._tool_program_number = -1
 
 	# Close *code_stream*:
@@ -18349,6 +18365,9 @@ class Code:
 	assert isinstance(mount, Mount)
 	assert isinstance(vrml, VRML_Lines)
 	assert isinstance(tracing, int)
+
+	# Make darn sure that we are not writing to the top level file:
+	assert tool_program_number % 100 != 0
 
 	# Reset *code*:
 	code._reset()
