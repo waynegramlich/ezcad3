@@ -12,7 +12,7 @@
 #   are marked in *italics* inside all comments.
 # * All variable names are in lower case with adverbs, nouns, and verbs, separated by underscore
 #   `_` characters.  Fully spelled out words are **strongly** encouraged.  Dropping vowels and
-#   and sylables is simply not done.
+#   and syllables is simply not done.
 # * All class names are like variable names, but first letter of each word is capitalized.
 #   CamelCase class names are not used.  The only exception is classes that come from imported
 #   Python libraries.  The *L* (i.e. length) and *P* classes (i.e. point) classes are an
@@ -219,6 +219,26 @@ def float_compare(left, right):
     elif left == right:
 	return 0
     return 1
+
+def string_strip(string, characters):
+    """ *str*: Remove all of *characters* from *string*.
+    """
+
+    # This code uses the *translate* function that has changed between Python 2 an 3:
+    try:
+	# Python 2.x:
+	result = string.translate(None, characters)
+    except TypeError:
+	# Python 3.x:
+	table = {ord(character): None for character in characters}
+	result = string.translate(table)
+    return result
+
+def alphanumeric_only(string):
+    """ *str*: Remove all characters that are not alphanumeric and underscore.
+    """
+
+    return string_strip(string, " !\"#$%&'()*+,-./:;<=>?[\\]^`~")
 
 # The *L*, *P*, and *Angle* classes are listed first because Python does not
 # have a good mechanism for dealing with forward references to class names.
@@ -4218,9 +4238,8 @@ class Directory:
 	signature = hashlib.sha1(content).hexdigest()
 
 	# Write out the *content* out to *file_name*:
-	output_file = directory._write_open(file_name, tracing + 1)
-	output_file.write(content)
-	output_file.close()
+	with directory._write_open(file_name, tracing + 1) as output_file:
+	    output_file.write(content)
 
 	# Wrap up any requested *tracing* and return *signature*:
 	if tracing >= 0:
@@ -4348,6 +4367,9 @@ class EZCAD3:
 	  "w":      Bounding_Box.w_get,
 	}
 
+	# Write out standard routines:
+	self._routines_write()
+
 	# Save a global copy of *ezcad*:
 	EZCAD3.ezcad = self
 
@@ -4414,6 +4436,53 @@ class EZCAD3:
 	"""
 
 	return " ".join([ "{0}".format(part._name_get()) for part in self._parts_stack ])
+
+    def _routines_write(self):
+        """ *EZCAD3*: Write out the standard routines drill cycles and the like.
+	"""
+
+	# Use *ezcad* instead of *self*:
+	ezcad = self
+
+	# Grab *ngc_directory*:
+	ngc_directory = ezcad._ngc_directory
+
+	# Construct subroutine `81.ngc` as a list of *lines* and write out to *ngc_directory*:
+	lines = []
+	lines.append("( Canned subroutine for drilling holes )")
+	lines.append("( o81 call       [#1] [#2] [#3] [#4]    [#5]      [#6] )")
+	lines.append("o81 sub        ( [F]  [X]  [Y]  [Z_TOP] [Z_RAPID] [Z_BOTTOM] )")
+	lines.append("G0 Z[#4]       ( Make sure we are at Z_TOP )")
+	lines.append("G0 X[#2] y[#3] ( Make sure we are at [X, Y] )")
+	lines.append("G0 Z[#5]       ( Rapid down to Z_RAPID )")
+	lines.append("G1 F[#1] Z[#6] ( Drill down to Z_BOTTOM )")
+	lines.append("G1 F[#1] Z[#5] ( Retract to Z_RAPID )")	# Should be a rapid
+	lines.append("G0 Z[#4]       ( Retract to Z_TOP )")
+	lines.append("o81 endsub     ( End of subroutine )")
+	lines.append("m2             ( End of File )")
+
+	# Construct subroutine `83.ngc` as a list of *lines* and write out to *ngc_directory*:
+	lines = []
+	lines.append("( Canned subroutine for drilling holes with pecking )")
+	lines.append("( o83 call          [#1] [#2] [#3] [#4]    [#5]      [#6]       [#7] ")
+	lines.append("o83 sub           ( [F]  [X]  [Y]  [Z_TOP] [Z_RAPID] [Z_BOTTOM] [Z_PECK] )")
+	lines.append("                  ( Local variables [Z]: #8 )")
+	lines.append("G0 Z[#4]               ( // Make sure we are at Z_TOP )")
+	lines.append("G0 X[#2] y[#3]         ( // Make sure we are at [X, Y] )")
+	lines.append("G0 Z[#5]               ( // Rapid to Z_RAPID )")
+	lines.append("#8 = #5                ( Z := Z_RAPID )")
+	lines.append("o831 do                ( do { )")
+	lines.append("    #8 = [#8 - #7]     (     Z := Z - Z_PECK // Bump Z down by Z_PECK)")
+	lines.append("    o832 if [#8 LT #6] (     if Z < Z_BOTTOM { )")
+	lines.append("        #8 = #6        (         Z := Z_BOTTOM )")
+	lines.append("    o832 endif         (     } )")
+	lines.append("    G1 F[#1] Z[#8]     (     // Drill down to Z )")
+	lines.append("    G1 F[#1] Z[#5]     (     // Retract to Z_RAPID )") # Should be a rapid
+	lines.append("o831 while [#8 GT #6]  ( } while ([#8 > #6]) )")
+	lines.append("G0 Z[#4]               ( // Retract to Z_TOP )")
+	lines.append("o83 endsub         ( // End of subroutine )")
+	lines.append("m2                 ( // End of File )")
+	ngc_directory._lines_write("83.ngc", lines)
 
     def _scad_directory_get(self):
 	""" *EZCAD3*: Return the directory to read/write SCAD files from/into from the *EZCAD3*
@@ -5043,6 +5112,8 @@ class Mount_Operations:
 	# Create the *mount_vrml* for drawing lines into:
 	mount_vrml_lines_name = "{0}_{1}".format(part_name, mount0._name_get())
 	mount_vrml_lines = VRML_Lines(mount_vrml_lines_name)
+	if trace_detail >= 2:
+	    print("{0}mount_vrml_lines={1}".format(indent, mount_vrml_lines))
 
 	# Output a coordinate axis shape to *mount_wrl_file*:
 	shop = part._shop_get()
@@ -5094,7 +5165,7 @@ class Mount_Operations:
 		      Mount_Operations("{0} Priority {1}".format(mount_operations._name, priority))
 		    priority_mount_operations_list.append(current_priority_mount_operations)
 
-		# Now we can take *mount* and *operation* onto the
+		# Now we can tack *mount* and *operation* onto the
                 # *current_priority_mount_operations*:
 		current_priority_mount_operations._append(mount, operation)
 	    assert len(priority_mount_operations_list) > 0
@@ -5112,6 +5183,7 @@ class Mount_Operations:
 	    mount_name = mount0._name_get()
 	    mount_vrml_stl_name = "{0}__{1}__STL".format(part_name, mount_name)
 	    mount_vrml_stl = VRML_Group(mount_vrml_stl_name)
+	    #FIXME: *mount_vrml_lines* is define before this loop!!!
 	    mount_vrml_lines_name = "{0}__{1}__Lines".format(part_name, mount_name)
 	    mount_vrml_lines = VRML_Lines(mount_vrml_lines_name)
 
@@ -5141,6 +5213,8 @@ class Mount_Operations:
 	# Now append *mount_vrml_lines* to *mount_vrml*:
 	mount_vrml._append(mount_vrml_lines)
 	mount_vrml._append(mount_vrml_stl)
+	if trace_detail >= 2:
+	    print("{0}mount_vrml_lines={1}".format(indent, mount_vrml_lines))
 
 	# Now append *mount_stl_vrml* to *mount_wrl_lines*:
 	#mount_stl_vrmls = mount_operations._stl_vrmls_get(tracing = tracing + 1)
@@ -5370,7 +5444,8 @@ class Mount_Operations:
 
 	# Do not generate any .ngc file for and *Operation_Mount*:
 	new_tool_program_number = tool_program_number
-	if not isinstance(operation0, Operation_Mount):
+	#if not isinstance(operation0, Operation_Mount):
+	if True:
 	    # Grap some values from *tool_mount_operations*:
 	    tool = operation0._tool_get()
 	    feed_speed = operation0._feed_speed_get()
@@ -5383,7 +5458,8 @@ class Mount_Operations:
 	    # Output the call to *mount_ngc_file*:
 	    tool_name = tool._name_get()
 	    if tool_name != "None":
-		mount_ngc_file.write("O{0} call ( {1} )\n".format(tool_program_number, tool_name))
+		mount_ngc_file.write("O{0} call ( T{1}: {2} )\n".
+		  format(tool_program_number, tool._number_get(), tool_name))
 
 	    # Create *cnc_tool_vrml* for recording just this *tool*:
 	    part_name = part._name_get()
@@ -5405,17 +5481,6 @@ class Mount_Operations:
 	    code._start(part, tool, tool_program_number,
 	      spindle_speed, mount0, cnc_vrml_lines, tracing = tracing + 1)
 	    code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
-
-	    # Start at *tool_change_point*:
-	    tool_change_point = code._tool_change_point
-	    code._command_begin()
-	    code._unsigned("G8", 49) # Disable tool offset
-	    code._mode_motion(0, code._vrml_motion_color_rapid)
-	    code._length("X", tool_change_point.x)
-	    code._length("Y", tool_change_point.y)
-	    code._length("Z", tool_change_point.z)
-	    code._comment("Return to tool change point")
-	    code._command_end()
 
 	    # We need to output a *Part* VRML for each unique (*Part*, *Mount*) combination.
 	    # This is done by keeping track of whenever a new pair comes along.
@@ -5471,16 +5536,6 @@ class Mount_Operations:
 	    zero = L()
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 	    code._dxf_xy_offset_set(zero, zero)
-
-	    # Return to *tool_change_point*:
-	    code._command_begin()
-	    code._unsigned("G8", 49)	# Disable tool offset
-	    code._mode_motion(0, code._vrml_motion_color_tool_change)
-	    code._length("X", tool_change_point.x)
-	    code._length("Y", tool_change_point.y)
-	    code._length("Z", tool_change_point.z)
-	    code._comment("Return to tool change point")
-	    code._command_end()
 
 	    code._finish(tracing + 1)
 
@@ -7314,10 +7369,12 @@ class Operation_Drill(Operation):
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
+	trace_detail = -1000000
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Operation_Drill._cnc_generate('{1}', *, '{2}', '{3}')".
 	      format(indent, operation_drill._name, mount._name_get(), cnc_vrml._name_get()))
+	    trace_detail = 1
 
 	# Grab some values from *operation_drill*:
 	comment = operation_drill._comment
@@ -7342,6 +7399,9 @@ class Operation_Drill(Operation):
 
 	cnc_start = cnc_transform * start
 	cnc_stop = cnc_transform * stop
+	if trace_detail >= 1:
+	    print("{0}start={1:i} cnc_start={2:i}".format(indent, start, cnc_start))
+	    print("{0}stop={1:i} cnc_stop={2:i}".format(indent, stop, cnc_stop))
 
 	top_surface_safe_z = mount._top_surface_safe_z_get()
 
@@ -10857,28 +10917,35 @@ class Part:
     def _tools_dowel_pin_search(self, tracing=-1000000):
 	""" *Part*: Find and return a *Tool_Dowel_Pin* object. """
 
+	# Use *part* instead of *self*:
+	part = self
+
 	# Verify argument types:
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_dowel_pin_search('{1}')".format(indent, self._name))
+	    trace_detail = 1
 
-	# Use *part* instead of *self*:
-	part = self
+	# Search for *dowel_pin*:
+	deep_tracing = -1000000
+	if trace_detail >= 3:
+	    deep_tracing = tracing + 1
 
 	zero = L()
 	dowel_pin = part._tools_search(Tool_Dowel_Pin._match,
-	  zero, zero, "dowel_pin", tracing = tracing + 1)
+	  zero, zero, "dowel_pin", tracing = deep_tracing)
 	assert isinstance(dowel_pin, Tool_Dowel_Pin)
 
+	# Wrap-up and requested *tracing* and return *dowel_pin*:
 	if tracing >= 0:
 	    tool_name = "NONE"
 	    if dowel_pin != None:
 		tool_name = dowel_pin._name_get()
 	    print("{0}<=Part._tools_dowel_pin_search('{1}')".format(indent, self._name, tool_name))
-
 	return dowel_pin
 
     def _tools_drill_search(self, diameter, maximum_z_depth, tracing=-1000000):
@@ -10937,7 +11004,7 @@ class Part:
 
 	# Search for a matching *end_mill_tool*:
 	search_tracing = -1000000
-	if detail_level >= 1:
+	if detail_level >= 3:
 	    search_tracing = tracing + 1
 	end_mill_tool = self._tools_search(Tool_End_Mill._match,
 	  maximum_diameter, maximum_z_depth, from_routine, search_tracing)
@@ -10969,14 +11036,19 @@ class Part:
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_mill_drill_side_search('{1}', {2}, {3})".
 	      format(indent, self._name, maximum_diameter, maximum_z_depth))
+	    trace_detail = 1
 
 	# Search for a viable *end_mill_tool*:
+	deep_tracing = -1000000
+	if trace_detail >= 3:
+	    deep_tracing = tracing + 1
 	end_mill_tool = self._tools_search(Tool_Mill_Drill._mill_drill_side_match,
-	  maximum_diameter, maximum_z_depth, "mill drill side", tracing + 1)
+	  maximum_diameter, maximum_z_depth, "mill drill side", deep_tracing)
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
@@ -17786,6 +17858,8 @@ class Code:
 			
 	# Verify argument types:
 	assert isinstance(g_complete, int) and 98 <= g_complete <= 99
+	assert isinstance(g_cycle, int) and \
+	  g_cycle in (73, 74, 76, 81, 82, 83, 84, 85, 86, 87, 88, 89)
 	assert isinstance(f, Speed)
 	assert isinstance(p, Time) or p == None
 	assert isinstance(q, L) or q == None
@@ -17804,22 +17878,47 @@ class Code:
 	vrml_points = code._vrml_points
 	code._vrml_points_append(code._vrml_motion_color_rapid, point_before)
 
-	# Perform the command:
-	code._command_begin()
-	code._unsigned("G10", g_complete)
-	code._unsigned("G9", g_cycle)
-	code._speed("F", f)
-	if isinstance(p, L):
-	    code._time("P", p)
-	if isinstance(q, L):
-	    code._length("Q", q)
-	if isinstance(r, L):
-	    code._length("R", r)
-	code._hertz("S", s)
-	code._length("X", x)
-	code._length("Y", y)
-	code._length("Z", z)
-	code._command_end(vrml_suppress=True)
+	if True:
+	    # Grab *xy_rapid_safe_z* from *mount*:
+	    mount = code._mount
+	    assert isinstance(mount, Mount)
+	    xy_rapid_safe_z = mount._xy_rapid_safe_z_get()
+
+	    # Start the command:
+	    code._command_begin()
+
+	    # The routine call can change anything, so force a reset.
+	    command_chunks = code._command_chunks
+	    command_chunks.append("o{0} call".format(g_cycle))
+	    code._reset()
+
+	    # Tack on the remaining arguments:
+	    code._speed("[]", f)		# F
+	    code._length("[]", x)		# X
+	    code._length("[]", y)		# Y
+	    code._length("[]", xy_rapid_safe_z)	# Z_TOP
+	    code._length("[]", r)		# Z_RAPID
+	    code._length("[]", z)		# Z_BOTTOM
+	    if isinstance(q, L):
+		code._length("[]", q)		# Z_PECK
+	    code._command_end()
+	else:
+	    # This is the old code that used a canned cycle rather than a subroutine call:
+	    code._command_begin()
+	    code._unsigned("G10", g_complete)
+	    code._unsigned("G9", g_cycle)
+	    code._speed("F", f)
+	    if isinstance(p, L):
+		code._time("P", p)
+	    if isinstance(q, L):
+		code._length("Q", q)
+	    if isinstance(r, L):
+		code._length("R", r)
+	    code._hertz("S", s)
+	    code._length("X", x)
+	    code._length("Y", y)
+	    code._length("Z", z)
+	    code._command_end(vrml_suppress=True)
 
 	# *g_complete* specifies whether Z ends on *z_before* or *r*:
 	if g_complete == 98:
@@ -18113,19 +18212,30 @@ class Code:
 	    indent = ' ' * tracing
 	    print("{0}=>Code._finish()".format(indent))
 
-	# Write out "O# endsub" to *code_stream*:
+	# Return to *tool_change_point*:
+	tool_change_point = code._tool_change_point
+	code._command_begin()
+	code._unsigned("G8", 49)	# Disable tool offset
+	code._mode_motion(0, code._vrml_motion_color_tool_change)
+	code._length("X", tool_change_point.x)
+	code._length("Y", tool_change_point.y)
+	code._length("Z", tool_change_point.z)
+	code._comment("Return to tool change point")
+	code._command_end()
+
+	# Write out the final commands to wrap up the subroutine and end the 
 	code_stream = code._code_stream
-	#code_stream.write("G49 ( Disable tool offset)\n") # Already done by return to change point
+	assert isinstance(code_stream, file)
 	assert code._tool_program_number % 100 != 0
 	code_stream.write("M5 ( Turn spindle off)\n")
 	code_stream.write("M9 ( Turn coolant off)\n")
 	code_stream.write("O{0} endsub\n".format(code._tool_program_number))
-	code_stream.write("O{0} call)\n".format(code._tool_program_number))
+	code_stream.write("O{0} call ( For stand-alone use of NGC file we call {0} here )\n".
+	  format(code._tool_program_number))
 	code_stream.write("M2 ( End of Program )\n")
 	code._tool_program_number = -1
 
 	# Close *code_stream*:
-	assert isinstance(code_stream, file)
 	code_stream.close()
 	code._code_stream = None
 
@@ -18366,6 +18476,10 @@ class Code:
 	assert isinstance(vrml, VRML_Lines)
 	assert isinstance(tracing, int)
 
+	# Stuff some values into *code*:
+	code._vrml = vrml
+	code._tool_program_number = tool_program_number
+
 	# Make darn sure that we are not writing to the top level file:
 	assert tool_program_number % 100 != 0
 
@@ -18422,25 +18536,34 @@ class Code:
 	# Set units to inches (G20):
 	code_stream.write("G90 G90.1 G20\n")
 
+	# Start at *tool_change_point*:
+	tool_change_point = code._tool_change_point
+	code._command_begin()
+	code._unsigned("G8", 49) # Disable tool offset
+	code._mode_motion(0, code._vrml_motion_color_rapid)
+	code._length("X", tool_change_point.x)
+	code._length("Y", tool_change_point.y)
+	code._length("Z", tool_change_point.z)
+	code._comment("Start at tool change point with tool offsets disabled")
+	code._command_end()
+
 	# Output the tool change, get the coolant on, and spindle spun up:
-	code_stream.write("M6 T{0} (Insert {1})\n".format(tool_number, tool_name))
-	code_stream.write("G43 H{0} (Enable tool offset)\n".format(tool_number))
+	code_stream.write("M6 T{0} ( Insert tool {0}: {1} )\n".format(tool_number, tool_name))
+	code_stream.write("G43 H{0} ( Enable tool offset for tool {0} )\n".format(tool_number))
 	spindle_is_on = spindle_speed > Hertz()
 	if spindle_is_on:
-	    code_stream.write("( Get the spindle up to speed.)\n")
-	    code_stream.write("S{0:rpm} M3 (Spindle on)\n".format(spindle_speed))
-	    #FIXME: Add a pause to let the spindle get up to speed???!!!
+	    code_stream.write("( Get the spindle up to speed )\n")
+	    code_stream.write("M3 S{0:rpm} ( Turn spindle on )\n".format(spindle_speed))
+	else:
+	    code_stream.write("( Spindle is off for this tool )\n")
+	    code_stream.write("( M5 ( Turn spindle off )\n")
 
-	# Use the *material* to control the coolant:
+	# Decide whether to turn coolant on or off:
 	material = part._material_get()
 	if material._needs_coolant() and spindle_is_on:
 	    code_stream.write("M8 (Coolant on)\n")
 	else:
 	    code_stream.write("M9 (Coolant off)\n")
-
-	# Stuff some values into *code*:
-	code._vrml = vrml
-	code._tool_program_number = tool_program_number
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -22463,7 +22586,7 @@ class VRML:
 	# Load up *vrml*:
 	vrml._is_open = True
 	vrml._lines = lines
-	vrml._name = name.replace(' ', '_')
+	vrml._name = alphanumeric_only(name.replace(' ', '_'))
 	vrml._pad_table = {}
 
     def _close(self):
