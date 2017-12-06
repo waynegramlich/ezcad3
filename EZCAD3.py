@@ -17235,8 +17235,9 @@ class Fastener(Part):
     def _fasten(self, comment, part, select, transform=None, tracing=-1000000):
 	""" *Fastener*: Use  the *Fastener* object (i.e. *self*) to drill a hole in *part*
 	    using its current mount for *part*.  *select* should be "thread* for a threaded
-	    hole, "close* for a close fit hole, "free" for a looser fit hole, and "access"
-	    for a free hole with room to snuggle the screw head into.
+	    hole, "close* for a close fit hole, "free" for a looser fit hole, "access"
+	    for a free hole with room to snuggle the screw head into, "set_screw" for
+	    landing suitable for a set screw.
 	"""
 
 	# Use *fastener* instead of *self*:
@@ -17245,7 +17246,8 @@ class Fastener(Part):
 	# Verify argument types:
 	assert isinstance(comment, str)
 	assert isinstance(part, Part)
-	assert isinstance(select, str) and select in ("thread", "close", "loose", "access")
+	assert isinstance(select, str) and \
+	  select in ("thread", "close", "loose", "access", "set_screw")
 	assert isinstance(transform, Transform) or transform == None
 	assert isinstance(tracing, int)
 
@@ -17261,6 +17263,7 @@ class Fastener(Part):
 	ezcad = part._ezcad_get()
 	if ezcad._stl_mode or ezcad._cnc_mode:
 	    # Process the *select* argument:
+	    flags = "t"
 	    if select == "thread":
 		#FIXME: We need to be smart and distinguish between hard and soft materials:
 		#material = part._material
@@ -17276,6 +17279,9 @@ class Fastener(Part):
 		diameter = fastener.free_fit_l
 	    elif select == "access":
 		diameter = fastener.thread75_l
+	    elif select == "set_screw":
+		diameter = 2 * fastener.major_diameter_l
+		flags = "f"
 	    else:
 		assert False, \
 		  "select='{0}', not 'thread', 'close', 'loose', 'access'".format(select)
@@ -17341,7 +17347,7 @@ class Fastener(Part):
 	    assert new_start.distance(new_end) > zero, \
 	      "Fastener.fasten: Part '{0}' (center={1:i}) misses Fastener '{2}' (center={3:i}". \
 	      format(fastener.comment_s, fastener.c, part.name_get(), part.c)
-	    part.hole(hole_name, diameter, new_start, new_end, "t", tracing = tracing + 1)
+	    part.hole(hole_name, diameter, new_start, new_end, flags, tracing = tracing + 1)
 
 	    # An "access" hole is drilled about 1/4 of the way in on to after the first
 	    # hole is drilled:
