@@ -4447,6 +4447,48 @@ class EZCAD3:
 	# Grab *ngc_directory*:
 	ngc_directory = ezcad._ngc_directory
 
+	# This is a better way to organize the routines:
+	lines = []
+	lines.append("O19 sub")
+	lines.append("  (This is a drill cycle routine that breaks chips by)")
+	lines.append("  (doing repeated drill pecks.  The arguments are:)")
+	lines.append("  (x y z_safe z_start z_stop z_step z_back feed speed)")
+	lines.append("")
+	lines.append("  (Put arguments into local variables:)")
+	lines.append("  #<x> = #1             (X coordinate to drill at)")
+	lines.append("  #<y> = #2             (Y coordinate to drill at)")
+	lines.append("  #<z_safe> = #3        (Z location above tooling)")
+	lines.append("  #<z_start> = #4       (Z location where drilling starts)")
+	lines.append("  #<z_stop> = #5        (Z location where drilling starts)")
+	lines.append("  #<z_step> = #6        (Amount to peck down by)")
+	lines.append("  #<z_back> = #7        (Amount to retrace on each peck)")
+	lines.append("  #<feed> = #8          (Downward drill feed speed)")
+	lines.append("  #<speed> = #9         (Spindle speed)")
+	lines.append("")
+	lines.append("  (Move to just above the hole:)")
+	lines.append("  G0 Z#<z_safe>                         (Make sure we are at z_safe)")
+	lines.append("  G0 X#<x> Y#<y>                        (Go to [x,y])")
+	lines.append("  G0 Z0.10000                           (Rapid down to 0.1)")
+	lines.append("  G1 F#<feed> S#<speed> Z#<z_start>     (Feed to z_start)")
+	lines.append("")
+	lines.append("  (Peck away at hole until done:)")
+	lines.append("  #<z> = #<z_start>")
+	lines.append("  O901 while [#<z> gt #<z_stop>]")
+	lines.append("    G0 Z[#<z> + #<z_back>]              (Rapid retract by z_back)")
+	lines.append("    #<z> = [#<z> - #<z_step>]           (Compute new z)")
+	lines.append("    O902 if [#<z> lt #<z_stop>]")
+	lines.append("      #<z> = #<z_stop>                  (Do not go too deep)")
+	lines.append("      O902 endif")
+	lines.append("    G1 Z#<z>                            (Drill to new z)")
+	lines.append("    O901 endwhile")
+	lines.append("  G0 Z#<z_safe>                         (All done, retract to z_safe)")
+	lines.append("  O19 endsub")
+	lines.append("")
+	lines.append("(An example call:)")
+	lines.append("O19 call [0.0] [0.0] [0.0] [-0.525] [0.100] [0.010] [10.000] [5000]")
+	lines.append("M2")
+	ngc_directory._lines_write("19.ngc", lines)
+
 	# Construct subroutine `81.ngc` as a list of *lines* and write out to *ngc_directory*:
 	lines = []
 	lines.append("( Canned subroutine for drilling holes )")
@@ -4456,15 +4498,17 @@ class EZCAD3:
 	lines.append("G0 X[#2] y[#3] ( Make sure we are at [X, Y] )")
 	lines.append("G0 Z[#5]       ( Rapid down to Z_RAPID )")
 	lines.append("G1 F[#1] Z[#6] ( Drill down to Z_BOTTOM )")
-	lines.append("G1 F[#1] Z[#5] ( Retract to Z_RAPID )")	# Should be a rapid
+	lines.append("G0 Z[#5]       ( Retract to Z_RAPID )")
 	lines.append("G0 Z[#4]       ( Retract to Z_TOP )")
 	lines.append("o81 endsub     ( End of subroutine )")
+	lines.append("o81 call [10] [0] [0] [.5] [.1] [-.5] ( Example call )")
 	lines.append("m2             ( End of File )")
+	ngc_directory._lines_write("81.ngc", lines)
 
 	# Construct subroutine `83.ngc` as a list of *lines* and write out to *ngc_directory*:
 	lines = []
 	lines.append("( Canned subroutine for drilling holes with pecking )")
-	lines.append("( o83 call          [#1] [#2] [#3] [#4]    [#5]      [#6]       [#7] ")
+	lines.append("( o83 call          [#1] [#2] [#3] [#4]    [#5]      [#6]       [#7] )")
 	lines.append("o83 sub           ( [F]  [X]  [Y]  [Z_TOP] [Z_RAPID] [Z_BOTTOM] [Z_PECK] )")
 	lines.append("                  ( Local variables [Z]: #8 )")
 	lines.append("G0 Z[#4]               ( // Make sure we are at Z_TOP )")
@@ -4477,10 +4521,11 @@ class EZCAD3:
 	lines.append("        #8 = #6        (         Z := Z_BOTTOM )")
 	lines.append("    o832 endif         (     } )")
 	lines.append("    G1 F[#1] Z[#8]     (     // Drill down to Z )")
-	lines.append("    G1 F[#1] Z[#5]     (     // Retract to Z_RAPID )") # Should be a rapid
-	lines.append("o831 while [#8 GT #6]  ( } while ([#8 > #6]) )")
+	lines.append("    G0 Z[#5]           (     // Retract to Z_RAPID )")
+	lines.append("o831 while [#8 GT #6]  ( } while [#8 > #6] )")
 	lines.append("G0 Z[#4]               ( // Retract to Z_TOP )")
 	lines.append("o83 endsub         ( // End of subroutine )")
+	lines.append("o83 call [10] [0] [0] [.5] [.1] [-.5] [.2] ( Example call )")
 	lines.append("m2                 ( // End of File )")
 	ngc_directory._lines_write("83.ngc", lines)
 
@@ -5367,7 +5412,7 @@ class Mount_Operations:
 	# Now sweep through *tool_mount_operations_list* to generate a tool path for each tool:
 	tool_program_number = priority_program_number
 	for index, tool_mount_operations in enumerate(tool_mount_operations_list):
-	    # If requested, ddo a little *trace_detail*:
+	    # If requested, do a little *trace_detail*:
 	    if trace_detail >= 2:
 		label = "Tool[{0}] before reorder".format(index)
 		tool_mount_operations._show(label, tracing = tracing + 1)
@@ -5446,11 +5491,13 @@ class Mount_Operations:
 	new_tool_program_number = tool_program_number
 	#if not isinstance(operation0, Operation_Mount):
 	if True:
-	    # Grap some values from *tool_mount_operations*:
+	    # Grab some values from *tool_mount_operations*:
 	    tool = operation0._tool_get()
 	    feed_speed = operation0._feed_speed_get()
 	    spindle_speed = operation0._spindle_speed_get()
 	    part = operation0._part_get()
+	    #assert tool._name_get() != "None", \
+	    #  "No tool for mount='{0}' of part '{1}'".format(mount0._name_get(), part._name_get())
 
 	    # Remember that *part* uses *tool*:
 	    tool._part_register(part)
@@ -7427,7 +7474,8 @@ class Operation_Drill(Operation):
 	    # Make darn sure we start a high enough Z:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 
-	    drill_depth = top_surface_safe_z - z_stop
+	    #drill_depth = top_surface_safe_z - z_stop
+	    drill_depth = cnc_start.z - cnc_stop.z
 	    trip_depth = 3 * diameter
 	    if drill_depth > trip_depth:
 		# Compute *q* which is the peck distance:
@@ -7436,8 +7484,12 @@ class Operation_Drill(Operation):
 		# The drill will *never* go below the Z value:
 		q = (drill_depth / float(pecks)) + L(inch=.005)
 
+		# For debugging, show the computation of *pecks* and *q*:
+		#code._line_comment("drill_depth={0:i} deep_depth={1:i} pecks={2} q={3:i}".
+		#  format(drill_depth, trip_depth, pecks, q))
+
 		# Use a "canned" cycle to peck out the deep hole:
-		f = feed_speed
+		f = feed_speed		#FIXME: Slow feed down by 20%!!!
 		p = None
 		r = top_surface_safe_z + L(inch=0.1000)
 		s = spindle_speed
@@ -7451,7 +7503,7 @@ class Operation_Drill(Operation):
 		p = None
 		q = None
 		r = top_surface_safe_z + L(inch=0.1000)
-		s = spindle_speed
+		s = spindle_speed      # Leave speed alone, since we are almost always under optimim
 		x = cnc_start.x
 		y = cnc_start.y
 		z = z_stop
@@ -16967,7 +17019,8 @@ class Fastener(Part):
 	fastener.flat_head_point_angle_a = Angle()
 
     def configure(self, start, end, flags,
-      head_washer_diameter = None, tail_washer_diameter = None, sides_angle = None):
+      head_washer_diameter = None, tail_washer_diameter = None, sides_angle = None,
+      tracing=-1000000):
      	""" *Fastener*: Confitugure the *Fastener* object (i.e. *self*).
 	    *comment* shows up in generated CNC.  *material* specifies the fastener material.
 	    *color* specifies the rendering color.  *start* and *end* specify the end points
@@ -16987,6 +17040,15 @@ class Fastener(Part):
 	assert isinstance(tail_washer_diameter, L) or tail_washer_diameter == None
 	assert isinstance(sides_angle, Angle) or sides_angle == None
 
+	# Perform an requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Fastener.configure('{1}', {2:i}, {3:i}, hwd={4}, twd={5}, sa={6})".
+	      format(indent, fastener._name_get(), start, end, flags,
+	      head_washer_diameter, tail_washer_diameter, sides_angle))
+	    trace_detail = 1
+
 	major_diameter = None
 	if isinstance(sides_angle, Angle):
 	    fastener.sides_angle_a = sides_angle
@@ -17004,6 +17066,7 @@ class Fastener(Part):
 		hex_nut_edge_width = L(inch = "5/32")
 		hex_nut_tip_width = L(inch = 0.180)
 		flat_head_diameter = L(inch = 0.119)
+
 	    elif flag == "#1-72":
 		major_diameter = L(inch = .0730)
 		pitch = L(inch = "1/72")
@@ -17105,6 +17168,12 @@ class Fastener(Part):
 	fastener.flat_head_diameter_l = flat_head_diameter
 	fastener.start_p = start
 	fastener.end_p = end
+
+	# Wrap up any *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Fastener.configure('{1}', {2:i}, {3:i}, hwd={4}, twd={5}, sa={6})".
+	      format(indent, fastener._name_get(), start, end, flags,
+	      head_washer_diameter, tail_washer_diameter, sides_angle))
 
     def construct(self):
 	""" *Fastener*: """
@@ -17300,6 +17369,8 @@ class Fastener(Part):
 	    if isinstance(transform, Transform):
 		start = transform * start
 		end = transform * end
+	    if trace_detail >= 1:
+		print("{0}start={1:i} end={2:i}".format(indent, start, end))
 
 	    # Clip *start* and *end* to be within the bounding box of *part* to create
 	    # *new_start* and *new_end*:
@@ -17504,7 +17575,7 @@ class Code:
 	code._g9 = 0			# (G98-99)
 	code._g10 = 0			# (G54-59)
 	code._g11 = 0			# (G4)
-	code._h = zero			# H tool offset index
+	code._h = -1			# H tool offset index
 	code._i = zero			# I coordinate
 	code._j = zero			# J coordinate
 	code._m1 = 0			# (M0-2, 30, 60)
@@ -18447,7 +18518,7 @@ class Code:
 	code._g9 = huge
 	code._g10 = huge
 	code._g11 = huge
-	code._h = zero
+	code._h = -1
 	code._i = zero
 	code._j = zero
 	code._m1 = huge
@@ -18475,7 +18546,7 @@ class Code:
 
 	# Verify argument types:
 	assert isinstance(part, Part)
-	assert isinstance(tool, Tool)
+	assert isinstance(tool, Tool) # and tool._name_get() != "None"
 	assert isinstance(tool_program_number, int)
 	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(mount, Mount)
@@ -18515,8 +18586,15 @@ class Code:
 	# Open new *code_stream*:
 	ezcad = part._ezcad_get()
 	ngc_directory = ezcad._ngc_directory_get()
-	code_file_name = "{0}.ngc".format(tool_program_number)
-	code_stream = ngc_directory._write_open(code_file_name)
+	# This is pretty ugly.  For a mount "tool", there is no need to generate a `.ngc` file.
+	# This is a bit of kludge.  We for a mount "tool", we just write everything to `/dev/null`.
+	# Otherwise, we open the *tool_program_number*`.ngc`.
+	if tool._name_get() == "None":
+	    code_file_name = "/dev/null"
+	    code_stream = open(code_file_name, "w")
+	else:
+	    code_file_name = "{0}.ngc".format(tool_program_number)
+	    code_stream = ngc_directory._write_open(code_file_name)
 	code._code_stream = code_stream
 	if trace_detail >= 2:
 	     print("{0}code_file_name='{1}' opened".format(indent, code_file_name))
@@ -18554,15 +18632,27 @@ class Code:
 	code._command_end()
 
 	# Output the tool change, get the coolant on, and spindle spun up:
+	#assert tool_number >= 0, \
+	#  "Part:'{0}' Tool:'{1}' num={2}".format(part_name, tool_name, tool_number)
+
 	code_stream.write("M6 T{0} ( Insert tool {0}: {1} )\n".format(tool_number, tool_name))
-	code_stream.write("G43 H{0} ( Enable tool offset for tool {0} )\n".format(tool_number))
+
+	# Output `G43 Htool_number` to enable tool offset:
+	code._command_begin()
+	code._unsigned("G8", 43)
+	code._unsigned("H", tool_number)
+	code._comment("Enable tool offset for tool {0}".format(tool_number))
+	code._command_end()
+
+
+	# Turn spindle on or off:
 	spindle_is_on = spindle_speed > Hertz()
 	if spindle_is_on:
 	    code_stream.write("( Get the spindle up to speed )\n")
 	    code_stream.write("M3 S{0:rpm} ( Turn spindle on )\n".format(spindle_speed))
 	else:
 	    code_stream.write("( Spindle is off for this tool )\n")
-	    code_stream.write("( M5 ( Turn spindle off )\n")
+	    code_stream.write("M5 ( Turn spindle off )\n")
 
 	# Decide whether to turn coolant on or off:
 	material = part._material_get()
@@ -18887,7 +18977,7 @@ class Code:
 
 	# Verify argument types:
 	assert isinstance(field_name, str)
-	assert isinstance(value, int) and value >= 0
+	assert isinstance(value, int) # and value >= 0, "value={0}".format(value)
 
 	#FIXME: This should probably be done using a Python dictionary:
 
@@ -20124,7 +20214,7 @@ class Shop:
 	  L(inch="1-1/2") ] )
 	tool_change_x = L(inch=-1.500)
 	tool_change_y = L()
-	tool_change_z = L(inch=5.000)
+	tool_change_z = L(inch=8.000)
 	tool_change_point = P(tool_change_x, tool_change_y, tool_change_z)
 
 	# Create *vice*:
@@ -20506,6 +20596,13 @@ class Shop:
 		for part in parts:
 		    summary_file.write("    {0}\n".format(part.name_get()))
 	summary_file.close()
+
+	# Write out the tools table:
+	with open("/tmp/tools_table.txt", "w") as tools_table_file:
+	    tools_table_file.write("Tools_Table:\n")
+	    for tool in tools:
+		tools_table_file.write("T{0}: {1}\n".format(tool._number, tool._name))
+		
 
     def _program_base_get(self):
 	""" *Shop*: Return the program base number object associated with the *Shop* object
