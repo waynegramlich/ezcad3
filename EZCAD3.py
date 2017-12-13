@@ -5177,7 +5177,7 @@ class Mount_Operations:
 
 	    # Output some heading lines for *mount_ngc_file*:
 	    mount_ngc_file.write("( Part: {0} )\n".format(part._name_get()))
-	    mount_ngc_file.write("( Tooling table: )\n")
+	    mount_ngc_file.write("( Program Number: {0} )\n".format(mount_program_number))
 
 	    # Associated with each *Operation* is a priority field that stores the number of times
 	    # that *Part.cnc_fence*() has been called for the associated *Part* object.  The rule
@@ -5229,7 +5229,7 @@ class Mount_Operations:
 	    mount_vrml_stl_name = "{0}__{1}__STL".format(part_name, mount_name)
 	    mount_vrml_stl = VRML_Group(mount_vrml_stl_name)
 	    #FIXME: *mount_vrml_lines* is define before this loop!!!
-	    mount_vrml_lines_name = "{0}__{1}__Lines".format(part_name, mount_name)
+	    #mount_vrml_lines_name = "{0}__{1}__Lines".format(part_name, mount_name)
 	    mount_vrml_lines = VRML_Lines(mount_vrml_lines_name)
 
 	    # Now generate all of the tool paths:
@@ -5473,11 +5473,13 @@ class Mount_Operations:
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
+	deep_tracing = -1000000
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Mount_Operations._cnc_tool_generate('{1}', {2}, *, '{3}')".format(indent,
 	      tool_mount_operations._name, tool_program_number, cnc_vrml._name_get()))
-	    trace_detail = 1
+	    trace_detail = 3
+	    deep_tracing = tracing + 1
 
 	# Grap some values from *tool_mount_operations*:
 	pairs = tool_mount_operations._pairs
@@ -5487,17 +5489,18 @@ class Mount_Operations:
 	mount0_cnc_transform = mount0._cnc_transform_get()
 	operation0 = pair0._operation_get()
 
+	# While *Operation_Mount._cnc_generate*() doe not actually generate any CNC code
+	# it *DOES* generate VRML for CNC visualization.  Thus, we must actually call
+	# the *_cnc_generate*() method for each *Operation_Mount* object.
+
 	# Do not generate any .ngc file for and *Operation_Mount*:
 	new_tool_program_number = tool_program_number
-	#if not isinstance(operation0, Operation_Mount):
 	if True:
 	    # Grab some values from *tool_mount_operations*:
 	    tool = operation0._tool_get()
 	    feed_speed = operation0._feed_speed_get()
 	    spindle_speed = operation0._spindle_speed_get()
 	    part = operation0._part_get()
-	    #assert tool._name_get() != "None", \
-	    #  "No tool for mount='{0}' of part '{1}'".format(mount0._name_get(), part._name_get())
 
 	    # Remember that *part* uses *tool*:
 	    tool._part_register(part)
@@ -5563,7 +5566,7 @@ class Mount_Operations:
 		code._line_comment("PN={0} TN={1} OC={2}".format(
 		  underscore_part_name, underscore_tool_name, underscore_operation_comment))
 		tool_operation._cnc_generate(tool_mount, mount_ngc_file,
-		  cnc_tool_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing = tracing + 1)
+		  cnc_tool_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing = deep_tracing)
 
 		# Make darn we end at a safe height:
 		code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
@@ -7101,8 +7104,9 @@ class Operation_Dowel_Pin(Operation):
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Operation_Dowel_Pin._cnc_generate('{1}', '{2}', '{3}')".
-	      format(indent, operation_dowel_pin._name, mount._name_get(), cnc_vrml._name_get()))
+	    print("{0}=>Operation_Dowel_Pin._cnc_generate('{1}', '{2}', '{3}', '{4}', '{5}', {6})".
+	      format(indent, operation_dowel_pin._name, mount._name_get(), cnc_vrml._name_get(),
+	             mount_vrml_lines._name_get(), mount_vrml_stl._name_get(), is_last))
 	    trace_detail = 2
 
 	# Grab some values out of *operation_dowel_pin*:
@@ -7166,10 +7170,19 @@ class Operation_Dowel_Pin(Operation):
 	code._xy_rapid(actual_plunge_point.x, actual_plunge_point.y)
 
 	# Now pause to let operator see if Z-safe is at the right height:
+	tool_alternate_number = tool._alternate_number_get()
 	code._command_begin()
 	code._unsigned("M", 6)
-	code._unsigned("T", 9)
+	code._unsigned("T", tool_alternate_number)
 	code._comment("Operator may check that Z-safe is correct")
+	code._command_end()
+
+	# Output `G43 Htool_number` to enable tool offset:
+	code._command_begin()
+	# We are already be in G43 mode, so this G-code will not show up; We are just be paranoid:
+	code._unsigned("G8", 43)
+	code._unsigned("H", tool_alternate_number)
+	code._comment("Enable tool offset for tool {0}".format(tool_alternate_number))
 	code._command_end()
 
 	# Output some information about the *dowel_point* for G-code debugging:
@@ -7187,7 +7200,7 @@ class Operation_Dowel_Pin(Operation):
 	# the dowel pin (if it is not already up against there):
 	code._command_begin()
 	code._unsigned("M", 6)
-	code._unsigned("T", 2)
+	code._unsigned("T", tool._number_get())
 	code._comment("Operator should place part against dowel pin")
 	code._command_end()
 
@@ -7207,8 +7220,9 @@ class Operation_Dowel_Pin(Operation):
 
 	# Wrap-up any *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Operation_Dowel_Pin._cnc_generate('{1}', '{2}', '{3}')".
-	      format(indent, operation_dowel_pin._name, mount._name_get(), cnc_vrml._name_get()))
+	    print("{0}<=Operation_Dowel_Pin._cnc_generate('{1}', '{2}', '{3}', '{4}', '{5}', {6})".
+	      format(indent, operation_dowel_pin._name, mount._name_get(), cnc_vrml._name_get(),
+	             mount_vrml_lines._name_get(), mount_vrml_stl._name_get(), is_last))
 
     def compare(self, dowel_pin2):
 	""" *Operation_Dowel_Pin*: Return -1, 0, or 1 depending upon whether
@@ -7416,12 +7430,14 @@ class Operation_Drill(Operation):
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
-	trace_detail = -1000000
+	deep_tracing = -1000000
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Operation_Drill._cnc_generate('{1}', *, '{2}', '{3}')".
 	      format(indent, operation_drill._name, mount._name_get(), cnc_vrml._name_get()))
-	    trace_detail = 1
+	    trace_detail = 3
+	    deep_tracing = tracing + 1
 
 	# Grab some values from *operation_drill*:
 	comment = operation_drill._comment
@@ -7496,7 +7512,7 @@ class Operation_Drill(Operation):
 		x = cnc_start.x
 		y = cnc_start.y
 		z = z_stop
-		code._drill_cycle(98, 83, f, p, q, r, s, x, y, z)
+		code._drill_cycle(98, 83, f, p, q, r, s, x, y, z, tracing = deep_tracing)
 	    else:
 		# Use a "canned" cycle to drill the hole:
 		f = feed_speed
@@ -7507,7 +7523,7 @@ class Operation_Drill(Operation):
 		x = cnc_start.x
 		y = cnc_start.y
 		z = z_stop
-		code._drill_cycle(98, 81, f, p, q, r, s, x, y, z)
+		code._drill_cycle(98, 81, f, p, q, r, s, x, y, z, tracing = deep_tracing)
 
 	    # Make darn sure we get back to a high enough Z:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
@@ -7799,12 +7815,12 @@ class Operation_Mount(Operation):
 	    print("{0}extra_start_bsw={1:i} extra_start_tne={2:i}".
 	      format(indent, extra_start_bsw, extra_start_tne))
 
-	# Write the dimentions of the initial *material* into *mount_ngc_file*:
+	# Write the dimensions of the initial *material* into *mount_ngc_file*:
 	cnc_extra_start_dx = cnc_extra_start_tne.x - cnc_extra_start_bsw.x
 	cnc_extra_start_dy = cnc_extra_start_tne.y - cnc_extra_start_bsw.y
 	cnc_extra_start_dz = cnc_extra_start_tne.z - cnc_extra_start_bsw.z
 	material = part._material_get()
-	mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3} )\n".
+	mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3}  )\n".
 	  format(cnc_extra_start_dx.absolute(), cnc_extra_start_dy.absolute(),
 	  cnc_extra_start_dz.absolute(), material))
 	selected_parallel_height = mount._selected_parallel_height_get()
@@ -7821,7 +7837,8 @@ class Operation_Mount(Operation):
 	if tooling_plate != None:
 	    corner = P(zero, zero, parallels_height)
 	    spacers = mount._spacers_get()
-	    tooling_plate._vrml_append(mount_vrml_lines, corner, spacers, tracing = tracing + 1)
+	    tooling_plate._vrml_append(mount_vrml_lines, corner, spacers, mount_ngc_file,
+	      tracing = tracing + 1)
 	    jaws_spread = tooling_plate._dx_get()
 	if trace_detail >= 1:
 	    print("{0}jaws_spread={1:i}".format(indent, jaws_spread))
@@ -8073,7 +8090,8 @@ class Operation_Multi_Mount(Operation):
 	if tooling_plate_present:
 	    # Now draw in the *tooling_plate*:
 	    corner = P(zero, zero, parallels_height)
-	    tooling_plate._vrml_append(mount_vrml_lines, corner, spacers, tracing = tracing + 1)
+	    tooling_plate._vrml_append(mount_vrml_lines, corner, spacers, mount_ngc_file,
+	      tracing = tracing + 1)
 
 	# Draw the extra material outline:        
 	extra_start_bsw, extra_start_tne = combined_multi_mount._extra_start_get()
@@ -14455,6 +14473,16 @@ class Part:
 	drill["X"] = 0.3970
 	drill["Y"] = 0.4040
 	drill["Z"] = 0.4130
+	# Fractional drills in 1/64" increments to 63/64":
+	for index in range(63):
+	    numerator = index + 1
+	    denominator = 64
+	    while number % 1 == 0:
+		numerator /= 2
+		denominator /= 2
+	    diameter = float(numerator)/float(denominator)
+	    name = "{0}/{1}".format(numerarator, denominator)
+	    drill[name] = diameter
 
 	# Create metric screw table *m*:
 	m = {}
@@ -14546,7 +14574,7 @@ class Part:
 		    diameter = drill[drill_name]
 	else:
 	    # Try imperial:
-    	# (75%, 50%, close, loose, countersink)
+	    # (75%, 50%, close, loose, countersink)
 	    values = None
 	    if screw.find("0-") == 0:
 		# Number 0 screw:
@@ -17681,6 +17709,9 @@ class Code:
 
 	# Now we can tack the current point onto *vrml_lines_points*:
 	if not vrml_suppress:
+	    assert -1000000.0 <= code._x.millimeters() <= 1000000.0
+	    assert -1000000.0 <= code._y.millimeters() <= 1000000.0
+	    assert -1000000.0 <= code._z.millimeters() <= 1000000.0
 	    code._vrml_points_append(code._vrml_motion_color, P(code._x, code._y, code._z))
 
 	# Wrap up any requested *tracing*:
@@ -17920,7 +17951,7 @@ class Code:
 	    print("{0}=>Code._contour(*, po={1:i} co={2:i} tr={3:i} cl={4} z={5:i} *)".format(
 	      ' ' * tracing, plunge_offset, contour_offset, tool_radius, clockwise, z))
 
-    def _drill_cycle(self, g_complete, g_cycle, f, p, q, r, s, x, y, z):
+    def _drill_cycle(self, g_complete, g_cycle, f, p, q, r, s, x, y, z, tracing=-1000000):
 	""" *Code*: Generate one drill cycle for the *Code* object (i.e. *self*.)  *g_complete*
 	    must be either 98 or 99 for either a G89 or G99 completion cycle.  *g_cycle* must
 	    specify one of the canned drill cycles (i.e. 73, 74, 76, 81, 82, 83, 84, 85, 86, 87,
@@ -17946,6 +17977,17 @@ class Code:
 	assert isinstance(y, L)
 	assert isinstance(z, L)
 
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	deep_tracing = -1000000
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(("{0}=>Code._drill_cycle(*, {1}, {2}, " +
+	      "f={3:I}, p={4:s}, q={5:i} r={5:i}, x={6:i}, y={7:i}, z=8:i)").
+	      format(indent, g_complete, g_cycle, f, p, q, r, x, y, z))
+	    trace_detail = 3
+	    deep_tracing = tracing + 1
+
 	# Make sure we are at reasonable Z height:
 	code._xy_rapid_safe_z_force(f, s)
 
@@ -17961,13 +18003,15 @@ class Code:
 	    assert isinstance(mount, Mount)
 	    xy_rapid_safe_z = mount._xy_rapid_safe_z_get()
 
+	    # The routine call can change anything, so force a reset.
+	    #code._reset()
+
 	    # Start the command:
 	    code._command_begin()
 
-	    # The routine call can change anything, so force a reset.
+	    # Tack on the call:
 	    command_chunks = code._command_chunks
 	    command_chunks.append("o{0} call".format(g_cycle))
-	    code._reset()
 
 	    # Tack on the remaining arguments:
 	    code._speed("[]", f)		# F
@@ -18004,10 +18048,16 @@ class Code:
             z_after = r
 	code._z = z_after
 
-	code._vrml_points_append(code._vrml_motion_color_retract, P(x, y, r))
-	code._vrml_points_append(code._vrml_motion_color_cutting, P(x, y, z))
-	code._vrml_points_append(code._vrml_motion_color_cutting, P(x, y, r))
-	code._vrml_points_append(code._vrml_motion_color_retract, P(x, y, z_after))
+	code._vrml_points_append(code._vrml_motion_color_retract, P(x, y, r), tracing=deep_tracing)
+	code._vrml_points_append(code._vrml_motion_color_cutting, P(x, y, z), tracing=deep_tracing)
+	code._vrml_points_append(code._vrml_motion_color_cutting, P(x, y, r), tracing=deep_tracing)
+	code._vrml_points_append(code._vrml_motion_color_retract, P(x, y, z_after),
+	  tracing=deep_tracing)
+
+	if tracing >= 0:
+	    print(("{0}<=Code._drill_cycle(*, {1}, {2}, " +
+	      "f={3:I}, p={4:s}, q={5:i} r={5:i}, x={6:i}, y={7:i}, z=8:i)").
+	      format(indent, g_complete, g_cycle, f, p, q, r, x, y, z))
 
     def _dxf_angle_append(self, group_code, value):
 	""" *Code*: Append {group_code} and {value} to the current DXF entity in the
@@ -19316,13 +19366,24 @@ class Code:
 	assert isinstance(color, str)
 	assert isinstance(point, P)
 	assert isinstance(tracing, int)
+	assert -1000000.00 <= point.x.millimeters() <= 1000000
+	assert -1000000.00 <= point.y.millimeters() <= 1000000
+	assert -1000000.00 <= point.z.millimeters() <= 1000000
 
 	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = tracing * ' '
+	    print("{0}=>Code._vrml_points_append(*, {1}, {2:i})".format(indent, color, point))
 
+	# A color change forces a flush:
 	vrml_current_color = code._vrml_current_color
 	if color != vrml_current_color:
 	    code._vrml_points_flush(color, tracing = tracing + 1)
 	code._vrml_points.append(point)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Code._vrml_points_append(*, {1}, {2:i})".format(indent, color, point))
 
     def _vrml_points_flush(self, new_color, tracing=-1000000):
 	""" *Code*: Flush out any vrml lines for the *Code* object (i.e. *self*).
@@ -19339,7 +19400,7 @@ class Code:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Code._vrml_pionts_flush(*)".format(indent))
+	    print("{0}=>Code._vrml_points_flush(*)".format(indent))
 	    trace_detail = 2
 
 	vrml_current_color = code._vrml_current_color
@@ -19370,7 +19431,7 @@ class Code:
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Code._vrml_pionts_flush(*)".format(indent))
+	    print("{0}<=Code._vrml_points_flush(*)".format(indent))
 
     def _vrml_reset(self):
 	""" *Code*: Reset the VRML sub-system of the *Code* object (i.e. *self*). """
@@ -20352,14 +20413,15 @@ class Shop:
 	stub = Tool.DRILL_STYLE_STUB
 	laser = True
 
+	drills = []
 	dowel_pin = shop._dowel_pin_append("3/8 Dowel Pin",
-	  1, hss, in3_8, L(inch=.900), in3_16)
+	  1, 9, hss, in3_8, L(inch=.900), in3_16)
 	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill [.9\" deep]",
 	  2, hss, in3_8, 2, L(inch=.900), degrees90)
-	drill_36 = shop._drill_append("#36 Drill",
-	  3, hss, L(inch=0.1065), 2, L(inch=1.500), degrees118, stub)
-	drill_27 = shop._drill_append("#27 drill",
-	  4, hss, L(inch=0.1440), 2, L(inch=1.750), degrees118, stub)
+	drill_36 = shop._drill_append("#36 Drill [#6-32 75% thread]",
+	  3, hss, L(inch=0.1065), 2, L(inch=1.500), "#36", degrees118, stub, drills)
+	drill_27 = shop._drill_append("#27 drill [#6-32 close]",
+	  4, hss, L(inch=0.1440), 2, L(inch=1.750), "#27", degrees118, stub, drills)
 	end_mill_3_8 = shop._end_mill_append("3/8 End Mill",
 	  5, hss, in3_8, 2, in4, not laser)		#FIXME; Cut depth should be 5/8inch
 	end_mill_1_4 = shop._end_mill_append("1/4 End Mill",
@@ -20368,38 +20430,45 @@ class Shop:
 	  7, hss, in3_4, 10, L(inch=0.875), degrees90, in1_4, in1_4)
 	dove_tail = shop._dove_tail_append("3/8 Dove Tail",
 	  8, hss, in3_8, 6, in1_4, in3_16, degrees45)
+	# Note 9 is the alternate tool dowel pin for tool 1.
 	end_mill_3_16 = shop._end_mill_append("3/16 End Mill",
 	  10, hss, in3_16, 2, in1_2, not laser)
-	drill_25 = shop._drill_append("#25 drill",
-	  11, hss, L(inch=0.1495), 2, L(inch=2.000), degrees118, stub)
-	drill_9 = shop._drill_append("#9 drill",
-	  12, hss, L(inch=0.1960), 2, L(inch=2.000), degrees118, stub)
-	drill_43 = shop._drill_append("#43 drill [4-40 75% thread] 1.5in deep",
-	  13, hss, L(inch=.0890), 2, L(inch=1.500), degrees118, stub)
-	drill_32 = shop._drill_append("#32 drill [4-40 close] 1.5in deep",
-	  14, hss, L(inch=0.1160), 2, L(inch=1.500), degrees118, stub)
-	drill_50 = shop._drill_append("#50 drill",
-	  15, hss, L(inch=0.0700), 2, L(inch=1.500), degrees118, stub)
+	drill_25 = shop._drill_append("#25 drill [#6-32 free]",
+	  11, hss, L(inch=0.1495), 2, L(inch=2.000), "#25", degrees118, stub, drills)
+	drill_9 = shop._drill_append("#9 drill [#10 close]",
+	  12, hss, L(inch=0.1960), 2, L(inch=2.000), "#9", degrees118, stub, drills)
+	drill_43 = shop._drill_append("#43 drill [#4-40 75% thread] 1.5in deep",
+	  13, hss, L(inch=.0890), 2, L(inch=1.500),  "#43", degrees118, stub, drills)
+	drill_32 = shop._drill_append("#32 drill [#4-40 close] 1.5in deep",
+	  14, hss, L(inch=0.1160), 2, L(inch=1.500), "#32", degrees118, stub, drills)
+	drill_50 = shop._drill_append("#50 drill [#0-80 free]",
+	  15, hss, L(inch=0.0700), 2, L(inch=1.500), "#50", degrees118, stub, drills)
 	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill 1in deep",
 	  16, hss, in3_8, 2, L(inch=1.000), not laser)
 	#end_mill_3_4 = shop._end_mill_append("3/4 End Mill",
 	#  13, hss, in3_4, 2, in1_3_8)
-	drill_30 = shop._drill_append("#30 drill",
-	  17, hss, L(inch=0.1285), 2, L(inch=1.750), degrees118, stub)
+	drill_30 = shop._drill_append("#30 drill [#4-40 free]",
+	  17, hss, L(inch=0.1285), 2, L(inch=1.750), "#30", degrees118, stub, drills)
 	drill_1_8 = shop._drill_append("1/8 drill",
-	  18, hss, in1_8, 2, L(inch=1.750), degrees118, stub)
+	  18, hss, in1_8, 2, L(inch=1.750), "1/8", degrees118, stub, drills)
 	drill_1_16 = shop._drill_append("1/16 drill",
-	  19, hss, in1_16, 2, L(inch=1.750), degrees118, stub)
+	  19, hss, in1_16, 2, L(inch=1.750), "1/16", degrees118, stub, drills)
 	drill_3_32 = shop._drill_append("3/32 drill",
-	  20, hss, in3_32, 2, L(inch=1.750), degrees118, stub)
-	drill_42 = shop._drill_append("#42 drill",
-	  21, hss, L(inch=0.0935), 2, L(inch=1.750), degrees118, stub)
+	  20, hss, in3_32, 2, L(inch=1.750), "3/32", degrees118, stub, drills)
+	drill_42 = shop._drill_append("#42 drill [#4-44 75%]",
+	  21, hss, L(inch=0.0935), 2, L(inch=1.750), "#42", degrees118, stub, drills)
 	drill_3_64 = shop._drill_append("3/64 drill [#0-80 75% thread] 1.05in deep",
-	  22, hss, L(inch="3/64"), 2, L(inch=1.05), degrees118, stub)
+          22, hss, L(inch="3/64"), 2, L(inch=1.05), "3/64", degrees118, stub, drills)
 	drill_52 = shop._drill_append("#52 drill [#80-80 close] 1.90in deep",
-	  23, hss, L(inch=0.0635), 2, L(inch=1.90), degrees118, stub)
+	  23, hss, L(inch=0.0635), 2, L(inch=1.90), "#52", degrees118, stub, drills)
 	drill_19 = shop._drill_append("#19 drill [M4x.7 close] 1.90in deep",
-	  24, hss, L(inch=0.1660), 2, L(inch=1.90), degrees118, stub)
+	  24, hss, L(inch=0.1660), 2, L(inch=1.90), "M4x.7", degrees118, stub, drills)
+
+	# Write out the `drills_summary.txt` file:
+	drills.sort(key=lambda drill: drill._diameter.millimeters())
+	with open("/tmp/drills_summary.txt", "w") as drill_file:
+	    for drill in drills:
+		drill._summary_write(drill_file)
 
 	# Laser "tools":
 	laser_007 = shop._end_mill_append("Laser_007",
@@ -20475,7 +20544,8 @@ class Shop:
 	self._tool_append(tool_dove_tail)
 	return tool_dove_tail
 
-    def _dowel_pin_append(self, name, number, material, diameter, maximum_z_depth, tip_depth):
+    def _dowel_pin_append(self,
+      name, number, alternate_number, material, diameter, maximum_z_depth, tip_depth):
 	""" *Shop*: Create and return a *Tool_Dowel_Pin* object that contains a dowel pin.
 	    The returned *Tool* object contains *name*, *number*, *material*, *diameter*,
 	    *maximum_z_depth*, and *tip_depth*.   The returned *Tool* object, is also
@@ -20485,6 +20555,7 @@ class Shop:
 	# Verify argument types:
 	assert isinstance(name, str)
 	assert isinstance(number, int) and number >= 0
+	assert isinstance(alternate_number, int) and alternate_number >= 0
 	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
 	assert isinstance(diameter, L)
 	assert isinstance(maximum_z_depth, L)
@@ -20493,14 +20564,14 @@ class Shop:
 	# Create the dowel pin *tool_dowel_pin*, add it to the *Shop* object (i.e. *self) tool list,
 	# and return the *tool*:
 	tool_dowel_pin = Tool_Dowel_Pin(name,
-	  number, material, diameter, maximum_z_depth, tip_depth)
+	  number, alternate_number, material, diameter, maximum_z_depth, tip_depth)
 	tool_dowel_pin._feed_speed_set(Speed(in_per_sec = 1.000))
 	self._tool_append(tool_dowel_pin)
 	#print("tool_dowel_pin=", tool_dowel_pin)
 	return tool_dowel_pin
 
-    def _drill_append(self,
-      name, number, material, diameter, flutes_count, maximum_z_depth, point_angle, drill_kind):
+    def _drill_append(self, name, number, material, diameter,
+      flutes_count, maximum_z_depth, drill_name, point_angle, drill_kind, drills):
 	""" *Shop*: Create and return a *Tool_Dowel_Pin* object that contains a dowel pin.
 	    The returned *Tool* object contains *name*, *number*, *material*, *diameter*,
 	    *flutes_count*, *maximum_z_depth*, and *tip_depth*.   The returned *Tool* object,
@@ -20515,13 +20586,18 @@ class Shop:
 	assert isinstance(diameter, L) and diameter > zero
 	assert isinstance(flutes_count, int) and flutes_count > 0
 	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+	assert isinstance(drill_name, str)
+	assert isinstance(point_angle, Angle)
+	assert isinstance(drill_kind, int)
+	assert isinstance(drills, list)
 
 	# Create the dowel pin *tool_dowel_pin*, add it to the *Shop* object (i.e. *self) tool list,
 	# and return the *tool*:
-	tool_dowel_pin = Tool_Drill(name,
-	  number, material, diameter, flutes_count, maximum_z_depth, point_angle, drill_kind)
-	self._tool_append(tool_dowel_pin)
-	return tool_dowel_pin
+	tool_drill = Tool_Drill(name, number, material, diameter,
+	  drill_name, flutes_count, maximum_z_depth, point_angle, drill_kind)
+	self._tool_append(tool_drill)
+	drills.append(tool_drill)
+	return tool_drill
 
     def _end_mill_append(self,
       name, number, material, diameter, flutes_count, maximum_z_depth, is_laser):
@@ -20780,6 +20856,12 @@ class Time:
     def __init__(self, sec=0.0, min=0.0):
 	self._seconds = sec + min * 60.0 
 
+    def __format__(self, format):
+	""" *Time*: Return the *Time* object (i.e. *self) as a string formated by *format*.
+	"""
+
+	return "{0}".format(self._seconds)
+
 class Tool:
     """ *Tool*: A tool is a tool that can be used to manufacture a part. """
 
@@ -20822,7 +20904,13 @@ class Tool:
     MATERIAL_LAST = 9
 
     def __init__(self, name, number, kind, material, diameter, flutes_count, maximum_z_depth):
-	""" *Tool*: Initialize a *Tool* object (i.e. *self*).
+	""" *Tool*: Initialize a *Tool* object (i.e. *self*).  *name* is the tool name
+	    and *number* is the slot in the tool table to put the tool.  *number* is negative
+	    if there is no actual tool (i.e. for a mount operation.)  *kind* specifies
+	    what kind of tool it is.  *material* specifies the material tha the tool is made
+	    out of (e.g. HSS, Carbide, etc.).  *diameter* is the tool diameter.  Flutes count
+	    specifies the number of flutes on the tool.  *maximum_z_depth* is maximum depth
+	    that the tool can go into the material being worked on.
 	"""
 
 	# Use *tool* instead of *self*:
@@ -20830,6 +20918,7 @@ class Tool:
 
 	# Verify argument types:
 	assert isinstance(name, str)
+	assert isinstance(number, int)
 	assert isinstance(kind, int) and Tool.KIND_NONE < kind < Tool.KIND_LAST
 	assert isinstance(material, int)
 	assert isinstance(diameter, L)
@@ -21104,18 +21193,26 @@ class Tool_Dove_Tail(Tool):
 
 class Tool_Dowel_Pin(Tool):
 
-    def __init__(self, name, number, material, diameter, maximum_z_depth, tip_depth):
+    def __init__(self,
+      name, number, alternate_number, material, diameter, maximum_z_depth, tip_depth):
 	""" *Tool_Dowel_Pin*: Initialize *Tool_Dowel_Pin* object (i.e. *self*) with *name*,
 	    *number*, *material*, *diameter*, *maximum_z_depth*, and *tip_depth*.  *material*
 	    is the tool material (e.g. HSS, carbide, ...), *diameter* is the dowel pin diameter,
 	    *maximum_z_depth* is the maximum distance the entire dowel pin can go down below
 	    the part top surface, and *tip_depth* is the amount of the dowel pin at the tip
 	    that is not *diameter* round.  (Dowel pins can have a flat, round or conical tip.)
+	    There are conceptually two dowel pins to work around a LinuxCNC bug.  These are
+	    *number* and *alternate_number*.  They must both have the same tool offset in
+	    LinuxCNC.
 	"""
+
+	# Use *tool_dowel_pin* instead of *self*:
+	tool_dowel_pin = self
 
 	# Verify argument types:
 	assert isinstance(name, str)
-	assert isinstance(number, int)
+	assert isinstance(number, int) and number > 0
+	assert isinstance(alternate_number, int) and alternate_number > 0
 	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
 	assert isinstance(diameter, L)
 	assert isinstance(maximum_z_depth, L)
@@ -21125,10 +21222,19 @@ class Tool_Dowel_Pin(Tool):
 	Tool.__init__(self,
 	  name, number, Tool.KIND_DOWEL_PIN, material, diameter, 0, maximum_z_depth)
 
-	self._feed_speed_set(Speed(in_per_sec=1.0))
+	# Force the speed to be slow:
+	tool_dowel_pin._feed_speed_set(Speed(in_per_sec=1.0))
 
 	# Load up *self*:
-	self._tip_depth = tip_depth		# Tip portion that is not vertical
+	tool_dowel_pin._tip_depth = tip_depth		# Tip portion that is not vertical
+	tool_dowel_pin._alternate_number = alternate_number
+
+    def _alternate_number_get(self):
+	""" *Tool_Dowel_Pin*: Return the alternate tool number for the *Tool_Dowel_Pin* object
+	    (i.e. *self*.)
+	"""
+
+	return self._alternate_number
 
     @staticmethod
     def _match(tool, parameter1, parameter2, from_string, tracing):
@@ -21164,8 +21270,8 @@ class Tool_Dowel_Pin(Tool):
 
 class Tool_Drill(Tool):
 
-    def __init__(self,
-      name, number, material, diameter, flutes_count, maximum_z_depth, point_angle, drill_style):
+    def __init__(self, name, number, material, diameter, drill_name,
+      flutes_count, maximum_z_depth, point_angle, drill_style):
 	""" *Tool_Drill*: Initialize *Tool_Drill* object (i.e. *self*) with *name*, *number*,
 	    *material*, *diameter*, *flutes_count*, *maximum_z_depth*, *point_angle*, and
 	    *drill_style*.
@@ -21177,6 +21283,7 @@ class Tool_Drill(Tool):
 	assert isinstance(number, int) and number >= 0
 	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
 	assert isinstance(diameter, L) and diameter > zero
+	assert isinstance(drill_name, str)
 	assert isinstance(flutes_count, int) and flutes_count > 0 
 	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
 	assert isinstance(point_angle, Angle) and point_angle > Angle()
@@ -21188,6 +21295,7 @@ class Tool_Drill(Tool):
 	  material, diameter, flutes_count, maximum_z_depth)
 	self._point_angle = point_angle
 	self._drill_style = drill_style
+	self._drill_name = drill_name
 
     def _drill_style_get(self):
 	""" *Tool_Drill*: Return the drill style for the *Tool_Drill* object (i.e. *self*). """
@@ -21240,6 +21348,36 @@ class Tool_Drill(Tool):
 	""" *Tool_Drill*: Return the point angle for the *Tool_Drill* object (i.e. *self*). """
 
 	return self._point_angle
+
+    def _summary_write(self, drill_file):
+	""" *Tool_Drill*: Write a summary of the *Tool_Drill* object (i.e. *self*) out to
+	    *drill_file*:
+	"""
+
+	# Use *tool_drill* instead of *self*:
+	tool_drill = self
+
+	diameter = tool_drill._diameter
+	number = tool_drill._number
+	drill_name = tool_drill._drill_name
+	name = tool_drill._name
+
+	# Find the closest collet:
+	denominator = 64
+	for numerator in range(1, 65):
+	    test_diameter = L(inch=float(numerator) / float(denominator))
+	    if test_diameter >= diameter:
+		break
+
+	# Simplify the fraction:
+	while numerator % 2 == 0:
+	    numerator /= 2
+	    denominator /= 2
+
+	# Write out one line:
+	drill_file.write("T{0}\t{1}(={2:i})\tcollet={3}/{4}in\t{5}\n".
+	  format(number, drill_name, diameter, numerator, denominator, name))
+
 
     def _tip_depth_get(self):
 	""" *Tool_Drill*: Return the tip depth for the *Tool_Drill* object (i.e. *self*). """
@@ -21865,7 +22003,7 @@ class Tooling_Plate:
 
 	return self._spacer_dz
 
-    def _vrml_append(self, vrml, corner, spacers, tracing = -1000000):
+    def _vrml_append(self, vrml, corner, spacers, mount_ngc_file, tracing = -1000000):
 	""" *Tooling_Plate*: Write out a VRML visulazation of *Tooling_Plate* (i.e. *self*)
 	    to *vrml*.  The bottom north west *corner* coordinate is specified.
 	"""
@@ -21878,6 +22016,7 @@ class Tooling_Plate:
 	assert isinstance(corner, P)
 	assert isinstance(tracing, int)
 	assert isinstance(spacers, list)
+	assert isinstance(mount_ngc_file, file)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
@@ -21942,6 +22081,10 @@ class Tooling_Plate:
 	    row2 = spacer[3]
 	    assert column1 <= column2
 	    assert row1 <= row2
+
+	    # Provide a hint for the tooling plate spacers:
+	    hole_count = (column2 - column1) + (row2 - row1) + 1
+	    mount_ngc_file.write("( Spacer[{0}]: {1} holes )\n".format(index, hole_count))
 
 	    # Draw the box outline of the *spacer*:
 	    x1 = left_column_x + hole_pitch * float(column1)
