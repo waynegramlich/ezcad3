@@ -5176,8 +5176,8 @@ class Mount_Operations:
 		print("{0}mount_ngc_file_name='{1}' opened".format(indent, mount_ngc_file_name))
 
 	    # Output some heading lines for *mount_ngc_file*:
-	    mount_ngc_file.write("( Part: {0} )\n".format(part._name_get()))
-	    mount_ngc_file.write("( Program Number: {0} )\n".format(mount_program_number))
+	    mount_ngc_file.write("( Part: '{0}'    Program_Number: {1}    Mount: '{2}' )\n".
+	      format(part._name_get(), mount_program_number, mount0._name_get()))
 
 	    # Associated with each *Operation* is a priority field that stores the number of times
 	    # that *Part.cnc_fence*() has been called for the associated *Part* object.  The rule
@@ -7839,7 +7839,7 @@ class Operation_Mount(Operation):
 	    spacers = mount._spacers_get()
 	    tooling_plate._vrml_append(mount_vrml_lines, corner, spacers, mount_ngc_file,
 	      tracing = tracing + 1)
-	    jaws_spread = tooling_plate._dx_get()
+	    jaws_spread = tooling_plate._dy_get()
 	if trace_detail >= 1:
 	    print("{0}jaws_spread={1:i}".format(indent, jaws_spread))
 
@@ -11070,7 +11070,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part._tools_end_mill_search('{1}', {2:i}, {3:i}, '{4}')".
 	      format(indent, self._name, maximum_diameter, maximum_z_depth, from_routine))
-	    detail_level = 1
+	    detail_level = 3
 
 	# Search for a matching *end_mill_tool*:
 	search_tracing = -1000000
@@ -17983,7 +17983,7 @@ class Code:
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print(("{0}=>Code._drill_cycle(*, {1}, {2}, " +
-	      "f={3:I}, p={4:s}, q={5:i} r={5:i}, x={6:i}, y={7:i}, z=8:i)").
+	      "f={3:I}, p={4:s}, q={5} r={6:i}, x={7:i}, y={8:i}, z={9:i})").
 	      format(indent, g_complete, g_cycle, f, p, q, r, x, y, z))
 	    trace_detail = 3
 	    deep_tracing = tracing + 1
@@ -18056,7 +18056,7 @@ class Code:
 
 	if tracing >= 0:
 	    print(("{0}<=Code._drill_cycle(*, {1}, {2}, " +
-	      "f={3:I}, p={4:s}, q={5:i} r={5:i}, x={6:i}, y={7:i}, z=8:i)").
+	      "f={3:I}, p={4:s}, q={5} r={6:i}, x={7:i}, y={8:i}, z={9:i})").
 	      format(indent, g_complete, g_cycle, f, p, q, r, x, y, z))
 
     def _dxf_angle_append(self, group_code, value):
@@ -19106,7 +19106,7 @@ class Code:
 		previous_value = 0x12345
 
 	assert matched, "Unrecognized field name {0}".format(field_name)
-	if previous_value != value or field_name == "G1":
+	if previous_value != value or field_name == "G1" or field_name == "G8":
 	    code._command_chunks.append("{0}{1}".format(field_name[0], value))
 
     def old__vice_xy_set(self, vice_x, vice_y):
@@ -20253,12 +20253,15 @@ class Shop:
 	tools = []
 
 	# Tooling plate with #4 holes:
-	no4_close_fit_diameter = L(inch=.1160)
-	no4_75_percent_thread_diameter = L(inch=.0890)
-	no4_50_percent_thread_diameter = L(inch=.0960)
-	tooling_plate = Tooling_Plate("Wayne's TP", L(inch=6.0), L(inch=6.0), L(inch=.250),
-	  11, 11, L(inch=.500), no4_close_fit_diameter, no4_75_percent_thread_diameter,
-	  no4_50_percent_thread_diameter, L(inch=0.250), L(inch=0.500))
+	no4_close_fit_diameter         = L(inch=0.1160) # #4-40 close = #32 drill
+	no4_75_percent_thread_diameter = L(inch=0.0890) # #4-40 75%   = #43 drill
+	no4_50_percent_thread_diameter = L(inch=0.0960) # #4-40 50%   = #41 drill
+	no6_close_fit_diameter         = L(inch=0.1440) # #6-32 close = #27 drill
+	no6_75_percent_thread_diameter = L(inch=0.1065)	# #6-32 75%   = #36 drill
+	no6_50_percent_thread_diameter = L(inch=0.1160)	# #6-32 50%   = #32 drill
+	tooling_plate = Tooling_Plate("Wayne's TP", L(inch=9.500), L(inch=4.500), L(inch=.500),
+	  19, 9, L(inch=.500), no6_close_fit_diameter, no6_75_percent_thread_diameter,
+	  no6_50_percent_thread_diameter, L(inch=0.250), L(inch=0.500))
 
 	# Create *parallels*:
 	parallels_length    = L(inch=6.000)
@@ -20291,6 +20294,7 @@ class Shop:
 	shop._changed = False		# Marker used by {update@Length}
 	shop._cnc_generate = False	# {true} => do cnc code generation
 	shop._code = Code()		# Code genertion object
+	shop._drills = drills = []	# List of drills
 	#dxf_table = {}			# Table of DXF base names
 	shop._extra1 = P()		# Temporary extra bounding box point
 	shop._extra2 = P()		# Temporary extra bounding box point
@@ -20408,12 +20412,12 @@ class Shop:
 	in1_2 =  L(inch="1/2")
 	in5_8 =  L(inch="5/8")
 	in3_4 =  L(inch="3/4")
+	in1   =  L(inch=1.000)
 	in4   =  L(inch=4.000)
 
 	stub = Tool.DRILL_STYLE_STUB
 	laser = True
 
-	drills = []
 	dowel_pin = shop._dowel_pin_append("3/8 Dowel Pin",
 	  1, 9, hss, in3_8, L(inch=.900), in3_16)
 	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill [.9\" deep]",
@@ -20423,7 +20427,7 @@ class Shop:
 	drill_27 = shop._drill_append("#27 drill [#6-32 close]",
 	  4, hss, L(inch=0.1440), 2, L(inch=1.750), "#27", degrees118, stub, drills)
 	end_mill_3_8 = shop._end_mill_append("3/8 End Mill",
-	  5, hss, in3_8, 2, in4, not laser)		#FIXME; Cut depth should be 5/8inch
+	  5, hss, in3_8, 2, in5_8, not laser)
 	end_mill_1_4 = shop._end_mill_append("1/4 End Mill",
 	  6, hss, in1_4, 2, in1_2, not laser)
 	double_angle = shop._double_angle_append("3/4 Double Angle",
@@ -20463,12 +20467,6 @@ class Shop:
 	  23, hss, L(inch=0.0635), 2, L(inch=1.90), "#52", degrees118, stub, drills)
 	drill_19 = shop._drill_append("#19 drill [M4x.7 close] 1.90in deep",
 	  24, hss, L(inch=0.1660), 2, L(inch=1.90), "M4x.7", degrees118, stub, drills)
-
-	# Write out the `drills_summary.txt` file:
-	drills.sort(key=lambda drill: drill._diameter.millimeters())
-	with open("/tmp/drills_summary.txt", "w") as drill_file:
-	    for drill in drills:
-		drill._summary_write(drill_file)
 
 	# Laser "tools":
 	laser_007 = shop._end_mill_append("Laser_007",
@@ -20679,6 +20677,31 @@ class Shop:
 	    for tool in tools:
 		tools_table_file.write("T{0}: {1}\n".format(tool._number, tool._name))
 		
+	# Create a dictionary of collets and fill the with the range of acceptable sizes.
+        # These values came off the ER-16 collets listed in the shars.com catalog:
+	# We start with *collets* where each triple is ( collet_name, largest, smallest ):
+	collets = (
+	  ("1/32",  L(inch=0.031), L(inch=0.012)),	# 1/32
+	  ("1/16",  L(inch=0.062), L(inch=0.023)),	# 2/32
+	  ("3/32",  L(inch=0.093), L(inch=0.054)),	# 3/32
+	  ("1/8",   L(inch=0.125), L(inch=0.086)),	# 4/32
+	  ("5/32",  L(inch=0.156), L(inch=0.117)),	# 5/32
+	  ("3/16",  L(inch=0.187), L(inch=0.148)),	# 6/32
+	  ("7/32",  L(inch=0.218), L(inch=0.179)),	# 7/32
+	  ("1/4",   L(inch=0.250), L(inch=0.211)),	# 8/32
+	  ("9/32",  L(inch=0.281), L(inch=0.242)),	# 9/32
+	  ("5/16",  L(inch=0.312), L(inch=0.273)),	# 10/32
+	  ("11/32", L(inch=0.343), L(inch=0.304)),	# 11/32
+	  ("3/8",   L(inch=0.375), L(inch=0.336)),	# 12/32
+	  ("13/32", L(inch=0.406), L(inch=0.367)) )	# 13/32
+	
+	# Write out the `drills_summary.txt` file:
+	drills = shop._drills
+	drills.sort(key=lambda drill: drill._diameter.millimeters())
+	with open("/tmp/drills_summary.txt", "w") as drill_file:
+	    for drill in drills:
+		drill._summary_write(drill_file, collets)
+
 
     def _program_base_get(self):
 	""" *Shop*: Return the program base number object associated with the *Shop* object
@@ -20748,7 +20771,7 @@ class Shop:
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}=>Shop._surface_speeds_lookup(*, '{1}', '{2}')=>{3:i}".format(indent,
+	    print("{0}<=Shop._surface_speeds_lookup(*, '{1}', '{2}')=>{3:i}".format(indent,
               part_material, tool_material, speed_range))
 
 	return speed_range
@@ -21022,6 +21045,12 @@ class Tool:
 	parts = tool._parts
 	if part not in parts:
 	    parts.append(part)
+
+    def _parts_get(self):
+	""" *Tool*: Return the *Part*'s that use the *Tool* object (i.e. *self*.)
+	"""
+
+	return self._parts
 
     def _priority_get(self):
 	""" *Tool*: Return the priority of the *Tool* object (i.e. *self*). """
@@ -21349,7 +21378,7 @@ class Tool_Drill(Tool):
 
 	return self._point_angle
 
-    def _summary_write(self, drill_file):
+    def _summary_write(self, drill_file, collets):
 	""" *Tool_Drill*: Write a summary of the *Tool_Drill* object (i.e. *self*) out to
 	    *drill_file*:
 	"""
@@ -21357,27 +21386,30 @@ class Tool_Drill(Tool):
 	# Use *tool_drill* instead of *self*:
 	tool_drill = self
 
-	diameter = tool_drill._diameter
-	number = tool_drill._number
+	# Verify argument types:
+	assert isinstance(drill_file, file)
+	assert isinstance(collets, tuple)
+
+	# Grab some extra values from *tool_drill*:
+	diameter   = tool_drill._diameter
 	drill_name = tool_drill._drill_name
-	name = tool_drill._name
+	name       = tool_drill._name
+	number     = tool_drill._number
+	parts      = tool_drill._parts
 
-	# Find the closest collet:
-	denominator = 64
-	for numerator in range(1, 65):
-	    test_diameter = L(inch=float(numerator) / float(denominator))
-	    if test_diameter >= diameter:
-		break
-
-	# Simplify the fraction:
-	while numerator % 2 == 0:
-	    numerator /= 2
-	    denominator /= 2
+	# Find ER16 collets that can take the *tool_drill*:
+	collet_names = []
+	extra = L(inch=0.001)
+	for collet in collets:
+	    collet_name = collet[0]
+	    largest = collet[1]  + extra
+	    smallest = collet[2] - extra
+	    if smallest <= diameter <= largest:
+		collet_names.append(collet_name)
 
 	# Write out one line:
-	drill_file.write("T{0}\t{1}(={2:i})\tcollet={3}/{4}in\t{5}\n".
-	  format(number, drill_name, diameter, numerator, denominator, name))
-
+	drill_file.write("T{0:<4} {1:<5}(={2:i}in) ({3:>3} parts) collets={4:<20} {5}\n".
+	  format(number, drill_name, diameter, len(parts), collet_names, name))
 
     def _tip_depth_get(self):
 	""" *Tool_Drill*: Return the tip depth for the *Tool_Drill* object (i.e. *self*). """
@@ -21422,7 +21454,7 @@ class Tool_End_Mill(Tool):
 	    less than or equal to *maximum_diameter*.  If *maximim_diameter* is negative,
 	    it will match any end drill.  A positive number that increases with the diameter
 	    is returned if a match occurs.  Otherwise, -1.0 is returned if there is no match.
-	    *from_routine* is the name of the calling routine and is used for debuggion only.
+	    *from_routine* is the name of the calling routine and is used for debugging only.
 	"""
 
 	# Set *debug* to *True* to get some tracing:
@@ -21460,7 +21492,7 @@ class Tool_End_Mill(Tool):
 		  format(indent, tool._name, maximum_diameter, maximum_z_depth, from_routine))
 
 	    # Somehow, the type *bool_* (from numpy) occasionally gets returned. The cast
-    	# using bool() works around the problem.  This is just weird:
+	    # using bool() works around the problem.  This is just weird:
 	    diameter_ok = bool(maximum_diameter < zero) or bool(tool_diameter <= maximum_diameter)
 	    assert isinstance(diameter_ok, bool)
 	    tool._search_results_append(diameter_ok,
@@ -21630,7 +21662,7 @@ class Tooling_Plate:
     """ *Tooling_Plate*: A *Tooling_Plate* object represents a flat plate of holes
 	onto which parts can be mounted."""
 
-    def __init__(self, name, dx, dy, dz, rows, columns, hole_pitch,
+    def __init__(self, name, dx, dy, dz, columns, rows, hole_pitch,
       hole_diameter, soft_drill_diameter, steel_drill_diameter, spacer_width, spacer_dz):
 	""" *Tooling_Plate*:  Initialize the *Tooling_Plate* object to contain
 	    *dx*, *dy*, *dz*, *rows*, *columns*, *hole_diameter*, *soft_drill_diameter*,
@@ -21645,8 +21677,8 @@ class Tooling_Plate:
 	assert isinstance(dx, L)
 	assert isinstance(dy, L)
 	assert isinstance(dz, L)
-	assert isinstance(rows, int) and rows > 0
 	assert isinstance(columns, int) and columns > 0
+	assert isinstance(rows, int) and rows > 0
 	assert isinstance(hole_pitch, L)
 	assert isinstance(hole_diameter, L)
 	assert isinstance(soft_drill_diameter, L)
