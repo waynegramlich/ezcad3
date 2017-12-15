@@ -12440,6 +12440,7 @@ class Part:
 
 	# Perform an requested *tracing*:
 	trace_detail = -1
+	deep_tracing = -1000000
 	if tracing < 0 and part._tracing >= 0:
 	    tracing = part._tracing
 	if tracing >= 0:
@@ -12447,6 +12448,7 @@ class Part:
             print("{0}=>Part.round_pocket('{1}', {2:i}, {3:i} {4:i}, '{5}'".
 	      format(indent, comment, diameter, start, stop, flags))
 	    trace_detail = 2
+	    #deep_tracing = tracing + 1
 	if trace_detail >= 1:
 	    print("{0}start-stop={1:i}".format(indent, start - stop))
 
@@ -12471,30 +12473,40 @@ class Part:
 		print("{0}hole_axis={1:m} new_start={2:i} new_stop={3:i}".
 		  format(indent, hole_axis, new_start, new_stop))
 	    part._scad_cylinder(comment, Color("black"), diameter, diameter,
-	      new_start, new_stop, lines, pad, 24, degrees0, tracing = tracing + 1)
+	      new_start, new_stop, lines, pad, 24, degrees0, tracing = deep_tracing)
 
 	# Perform the CNC:
 	if ezcad._cnc_mode:
 	    hole_z_depth = start.distance(stop)
 	    end_mill_tool = part._tools_end_mill_search(diameter,
-	      hole_z_depth, "round_pocket", tracing + 1)
+	      hole_z_depth, "round_pocket", deep_tracing)
 	    assert end_mill_tool != None, \
 	      "Could not find end mill for '{0}' round pocket".format(comment)
+	    if trace_detail >= 1:
+		print("{0}hole_z_depth={1:i} end_mill='{2}'".
+	          format(indent, hole_z_depth, end_mill_tool._name_get()))
 
-	    # Process the 't' flag to make the pocket go all the way through *part8:
+	    # Process the 't' flag to make the pocket go all the way through *part*:
+	    new_start = start
+	    new_stop = stop
 	    hole_kind = Part.HOLE_FLAT
-	    extra = L(inch=0.250).millimeters()
+	    extra = L(inch=0.025).millimeters()
 	    if 't' in flags:
 		# Extend *stop* so that it end .250inch further "down":
 		hole_axis = (start - stop).normalize()
-		stop -= hole_axis * extra
+		new_stop = stop - hole_axis * extra
 		hole_kind = Part.HOLE_THROUGH
+	    if trace_detail >= 1:
+		print("{0}start={1:i} new_start={2:i} hole_axis={3:m}".
+		  format(indent, start, new_start, hole_axis))
+		print("{0}stop={1:i} new_stop={2:i}".
+		  format(indent, stop, new_stop))
 
 	    # Create *operation_round_pocket* and stuff it into the *part* operation list:
 	    zero = L()
 	    operation_round_pocket = Operation_Round_Pocket(part, comment, 0, end_mill_tool,
-	      Operation.ORDER_END_MILL_ROUND_POCKET, None, diameter, zero, hole_kind, start, stop,
-	      end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
+	      Operation.ORDER_END_MILL_ROUND_POCKET, None, diameter, zero, hole_kind, new_start,
+	      new_stop, end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
 	      tracing = tracing + 1)
 	    part._operation_append(operation_round_pocket)
 
