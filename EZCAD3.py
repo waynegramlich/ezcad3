@@ -5251,7 +5251,9 @@ class Mount_Operations:
 	    next_mount_program_number -= next_mount_program_number % 10
 
 	    # Write out the final G-code lines to *mount_ngc_file*:
-	    mount_ngc_file.write("G53 Y0.0 ( Move the work to the front )\n")
+	    # FIXME: Read tool change point from *vice*:
+	    mount_ngc_file.write("G49 G0 X-1.5 Y0 Z8 ( [FIXME!!!] Return to tool change point )\n")
+	    mount_ngc_file.write("G53 G0 Y0.0 ( Move the work to the front )\n")
 	    mount_ngc_file.write("M2\n")
 	    mount_ngc_file.flush()
 
@@ -10984,20 +10986,23 @@ class Part:
 	      format(indent, part._name, stl_vrml._name_get()))
 	return stl_vrml
 
-    def _tools_dowel_pin_search(self, tracing=-1000000):
-	""" *Part*: Find and return a *Tool_Dowel_Pin* object. """
+    def _tools_dowel_pin_search(self, preferred_diameter, tracing=-1000000):
+	""" *Part*: Find and return a *Tool_Dowel_Pin* object that has as diameter that
+	    is closest to *preferred_diameter*. """
 
 	# Use *part* instead of *self*:
 	part = self
 
 	# Verify argument types:
+	assert isinstance(preferred_diameter, L)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Part._tools_dowel_pin_search('{1}')".format(indent, self._name))
+	    print("{0}=>Part._tools_dowel_pin_search('{1}', {2:i})".
+	      format(indent, self._name, preferred_diameter))
 	    trace_detail = 1
 
 	# Search for *dowel_pin*:
@@ -11007,7 +11012,7 @@ class Part:
 
 	zero = L()
 	dowel_pin = part._tools_search(Tool_Dowel_Pin._match,
-	  zero, zero, "dowel_pin", tracing = deep_tracing)
+	  preferred_diameter, zero, "dowel_pin", tracing = deep_tracing)
 	assert isinstance(dowel_pin, Tool_Dowel_Pin)
 
 	# Wrap-up and requested *tracing* and return *dowel_pin*:
@@ -11015,7 +11020,8 @@ class Part:
 	    tool_name = "NONE"
 	    if dowel_pin != None:
 		tool_name = dowel_pin._name_get()
-	    print("{0}<=Part._tools_dowel_pin_search('{1}')".format(indent, self._name, tool_name))
+	    print("{0}<=Part._tools_dowel_pin_search('{1}', {2:i})".
+	      format(indent, self._name, preferred_diameter))
 	return dowel_pin
 
     def _tools_drill_search(self, diameter, maximum_z_depth, tracing=-1000000):
@@ -11610,14 +11616,15 @@ class Part:
 	      format(indent, part._name, comment, material, color, start_diameter, end_diameter,
               start, end, sides, sides_angle, welds, flags))
 
-    def dowel_pin(self, comment, dowel_point, plunge_point, tracing=-1000000):
+    def dowel_pin(self, comment, dowel_point, plunge_point, preferred_diameter, tracing=-1000000):
 	""" *Part*: Request that a dowel pin be used to align the *Part* object (i.e. *self*).
 	    The dowel pin will come down at *plunge_point* and move to *dowel_point* and
 	    then back.  Only the x and y values of *plunge_point* and *dowel_point* are used.
 	    *dowel_point* should be aligned with the actual material point to pushed against.
 	    This operation is for experts.  Most people should be using either *vice_mount()*
 	    with either the 'l' or 'r' flag set or *tooling_plate_mount()*.  *comment* will
-	    show up in any generated G code.
+	    show up in any generated G code.  *preferred_diameter* specifies the preferred
+	    diameter of the dowel pin.
 	"""
 
 	# Use *part* instead of *self*:
@@ -11627,6 +11634,7 @@ class Part:
 	assert isinstance(comment, str)
 	assert isinstance(dowel_point, P)
 	assert isinstance(plunge_point, P)
+	assert isinstance(preferred_diameter, L)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
@@ -11642,7 +11650,7 @@ class Part:
 	ezcad = part._ezcad
 	if ezcad._cnc_mode:
 	    # Find the *tool_dowel_pin* to use :a
-	    tool_dowel_pin = part._tools_dowel_pin_search(tracing = tracing + 1)
+	    tool_dowel_pin = part._tools_dowel_pin_search(preferred_diameter, tracing = tracing + 1)
 	    assert isinstance(tool_dowel_pin, Tool_Dowel_Pin), "No dowel pin tool found"
 
 	    # Grab some values from *tool_dowel_pin*:
@@ -13177,6 +13185,8 @@ class Part:
 		    print("{0}STL mode started".format(indent))
 
 		top_surface_transform = mount._top_surface_transform_get()
+		transformed_start_point = top_surface_transform * start_point
+		transformed_end_point   = top_surface_transform * end_point
 		if trace_detail >= 2:
 		    print("{0}mount='{1}'".format(indent, mount._name_get() ))
 		    print("{0}top_surface_transform={1:v}".format(indent, top_surface_transform))
@@ -13194,25 +13204,42 @@ class Part:
 		# We always contour a little *to_extra* on top.  We contour *bottom_extra*
 		# on the bottom if the *flags* has the 't` flag for "through":
 		zero = L()
+		top_extra = L(mm=1.0)
 		bottom_extra = zero
 		if 't' in flags:
 		    # Through hole flag specified:
 		    bottom_extra = L(mm=1.0)
-		height = (end_point - start_point).length()
-		top_extra = L(mm=1.0)
+		if trace_detail >= 2:
+		    print("{0}top_extra={1:i} bottom_extra={2:i}".
+		      format(indent, top_extra, bottom_extra))
+
+		# Now compute the transformed start and end points adjusted by *top_extra*
+		# and *bottom_extra*:
+		transformed_start_point = top_surface_transform * start_point
+		transformed_end_point   = top_surface_transform * end_point
+		if trace_detail >= 2:
+		    print("{0}transformed_start_point={1:i}".
+		      format(indent, transformed_start_point))
+		    print("{0}transformed_end_point={1:i}".format(indent, transformed_end_point))
+		height = transformed_start_point.z - transformed_end_point.z
+		total_height = bottom_extra + height + top_extra
+		if trace_detail >= 1:
+		    print("{0}bottom_extra={1:i} height={2:i} top_extra={3:i}".
+		      format(indent, bottom_extra, height, top_extra))
+		    print("{0}total_height={1:i}".format(indent, total_height))
 
 		# Generate the OpenSCAD commands to `linear_extrude` and translate and transform
 		# the contour to the correct location.  Remember perform all OpenScad operations
-                # in "reverse" order:
+		# are in "reverse" order:
 		difference_lines = part._scad_difference_lines
 		pad = ' ' * 4
 		difference_lines.append("{0}// Contour '{1}' start={2:m} end={3:m}".
 		  format(pad, contour._name_get(), start_point, end_point))
 		top_surface_transform.reverse()._scad_lines_append(difference_lines, pad)
 		difference_lines.append("{0}translate([0, 0, {1:m}])".
-		  format(pad, -(bottom_extra + height)))
+		  format(pad, transformed_end_point.z - bottom_extra))
 		difference_lines.append("{0}linear_extrude(height = {1:m}) {{".
-		  format(pad, bottom_extra + height + top_extra))
+		  format(pad, total_height))
 		contour._scad_lines_polygon_append(difference_lines, pad, True, tracing_plus_one)
 		difference_lines.append("{0}}} // linear_extrude".format(pad))
 
@@ -13262,11 +13289,11 @@ class Part:
 		z_stop = cnc_start_point.z - cnc_end_point.z
 		if trace_detail >= 2:
 		    print("{0}z_stop={1:i}".format(indent, z_stop))
-		mill_drill_tool = \
-		  part._tools_mill_drill_side_search(smallest_inner_diameter, z_stop, tracing + 1)
+		mill_drill_tool = part._tools_mill_drill_side_search(smallest_inner_diameter,
+		  z_stop, tracing = tracing_plus_one)
 		have_mill_drill = isinstance(mill_drill_tool, Tool_Mill_Drill)
 		end_mill_tool = part._tools_end_mill_search(smallest_inner_diameter,
-		  z_stop, "contour", tracing + 1)
+		  z_stop, "contour", tracing = tracing_plus_one)
 		have_end_mill = isinstance(end_mill_tool, Tool_End_Mill)
 		if trace_detail >= 2:
 		    print("{0}mill_drill_tool='{1}'".format(indent, mill_drill_tool))
@@ -13578,36 +13605,38 @@ class Part:
 	    #FIXME: We need to use *Operaton_Round_Pocket* when we are generating a .dxf file!!!:
 	    if (is_through_hole or is_tip_hole) and mill_drill_tool != None and \
 	      drill_tool != None: # and not end_mill_tool_is_laser:
+		# Make sure we have both a *mill_drill_tool* and a *drill_tool*:
 		assert isinstance(mill_drill_tool, Tool_Mill_Drill)
 		assert isinstance(drill_tool, Tool_Drill)
+
 		# Worry about countersinking first:
 		operation_countersink = None
-
-		# With the *mill_drill_tool* we can actually countersink or at least
-		# spot drill where the drill needs to go:
-		# Compute the depth of the countersink "cone hole" drill using the formula:
- 		#
-	        #   depth = r * tan(90 - pa/2)
-		#
-		# where r is the hole radius and pa is the point angle of the tool:
-		mill_drill_point_angle = mill_drill_tool._point_angle_get()
-		mill_drill_diameter = mill_drill_tool._diameter_get()
-		mill_drill_radius = mill_drill_diameter / 2 
-	        degrees90 = Angle(deg=90.0)
-		countersink_z_depth = \
-		  countersink_radius * (degrees90 - mill_drill_point_angle/2).tangent()
+		if not drill_tool._is_center_cut_get():
+		    # With the *mill_drill_tool* we can actually countersink or at least
+		    # spot drill where the drill needs to go:
+		    # Compute the depth of the countersink "cone hole" drill using the formula:
+		    #
+		    #   depth = r * tan(90 - pa/2)
+		    #
+		    # where r is the hole radius and pa is the point angle of the tool:
+		    mill_drill_point_angle = mill_drill_tool._point_angle_get()
+		    mill_drill_diameter = mill_drill_tool._diameter_get()
+		    mill_drill_radius = mill_drill_diameter / 2 
+		    degrees90 = Angle(deg=90.0)
+		    countersink_z_depth = \
+		      countersink_radius * (degrees90 - mill_drill_point_angle/2).tangent()
 				
-		# Figure out where the *countersink_stop* point is:
-		countersink_comment = "{0} [countersink]".format(comment)
-		countersink_stop = start - hole_axis * countersink_z_depth.millimeters()
+		    # Figure out where the *countersink_stop* point is:
+		    countersink_comment = "{0} [countersink]".format(comment)
+		    countersink_stop = start - hole_axis * countersink_z_depth.millimeters()
 
-		# Create *operation_counterink* and append it to the *part* operations:
-		sub_priority = 0
-		operation_countersink = Operation_Drill(part, countersink_comment,
-		  sub_priority, mill_drill_tool, Operation.ORDER_MILL_DRILL_COUNTERSINK,
-		  None, countersink_diameter, Part.HOLE_TIP,
-		  start, countersink_stop, True, tracing = tracing + 1)
-		part._operation_append(operation_countersink, tracing = tracing + 1)
+		    # Create *operation_counterink* and append it to the *part* operations:
+		    sub_priority = 0
+		    operation_countersink = Operation_Drill(part, countersink_comment,
+		      sub_priority, mill_drill_tool, Operation.ORDER_MILL_DRILL_COUNTERSINK,
+		      None, countersink_diameter, Part.HOLE_TIP,
+		      start, countersink_stop, True, tracing = tracing + 1)
+		    part._operation_append(operation_countersink, tracing = tracing + 1)
 
 		# Now focus on drilling:
 		if is_through_hole:
@@ -15466,8 +15495,9 @@ class Part:
 	    # Perform a dowel pin operation:
 	    zero = L()
 	    plunge_point = dowel_point - P(L(inch=1.000), zero, zero)
+	    preferred_diameter = L(inch="3/8")
 	    part.dowel_pin("tooling plate dowel pin",
-	      dowel_point, plunge_point, tracing = tracing + 1)
+	      dowel_point, plunge_point, preferred_diameter, tracing = tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -15769,13 +15799,14 @@ class Part:
 	assert isinstance(jaw_surface, str) and len(jaw_surface) == 1 and jaw_surface in "tbnsew"
 	assert isinstance(flags, str)
 	for flag in flags:
-	    assert flag in "lr", "Flag '{0}' is not allowed for flags argument".format(flag)
+	    assert flag in "lr46", "Flag '{0}' is not allowed for flags argument".format(flag)
 	assert isinstance(extra_dx, L) and extra_dx >= zero
 	assert isinstance(extra_dy, L) and extra_dy >= zero
 	assert isinstance(extra_top_dz, L) and extra_top_dz >= zero
 	assert isinstance(extra_bottom_dz, L) and extra_bottom_dz >= zero
 
 	# Preform any requested *tracing*:
+	detail_tracing = -1000000
 	trace_detail = -1
 	if tracing < 0 and part._tracing >= 0:
  	    tracing = part._tracing
@@ -15786,6 +15817,7 @@ class Part:
 	      part._name, name, top_surface, jaw_surface, flags,
 	      extra_dx, extra_dy, extra_top_dz, extra_bottom_dz))
 	    trace_detail = 3
+	    detail_tracing = tracing + 1
 
 	# We do not need to do anything until we are in CNC mode:
 	ezcad = part._ezcad_get()
@@ -16226,11 +16258,17 @@ class Part:
 		    print("{0}cnc_dowel_point={1:i} cnc_plunge_point={2:i}".format(
 		      indent, cnc_dowel_point, cnc_plunge_point))
 
+		# Determine the *preferred_diameter* from *flags*:
+		if '6' in flags:
+		    preferred_diameter = L(inch=0.1065)	# #6-32 75% thread (#36 drill)
+		elif '4' in flags:
+		    preferred_diameter = L(inch=0.0890)	# #4-40 75% thread (#43 drill)
+		else:
+		    preferred_diameter = L(inch="3/8")
+
 		# Perform the dowel pin operation:
-		detail_tracing = -1000000
-		if trace_detail >= 3:
-		    detail_tracing = tracing + 1
-		part.dowel_pin(dowel_pin_comment, cnc_dowel_point, cnc_plunge_point, detail_tracing)
+		part.dowel_pin(dowel_pin_comment,
+		  cnc_dowel_point, cnc_plunge_point, preferred_diameter, detail_tracing)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -16687,7 +16725,9 @@ class Part:
 		      operation_multi_mount, tracing = tracing + 1)
 
 		    # Create the dowel pin operation:
-		    dowel_pin_tool = part._tools_dowel_pin_search(tracing = tracing)
+		    preferred_diameter = L(inch="3/8")
+		    dowel_pin_tool = \
+		      part._tools_dowel_pin_search(preferred_diameter, tracing = tracing)
 		    assert isinstance(dowel_pin_tool, Tool_Dowel_Pin)
 		    plunge_point = dowel_pin + P(L(inch=-0.700), zero, zero)
 		    operation_dowel_pin = Operation_Dowel_Pin(part, "Multi Mount Dowel Pin",
@@ -20427,17 +20467,21 @@ class Shop:
 	in1   =  L(inch=1.000)
 	in4   =  L(inch=4.000)
 
+	center_cut = True
+	no_center_cut = not center_cut
 	stub = Tool.DRILL_STYLE_STUB
 	laser = True
 
 	dowel_pin = shop._dowel_pin_append("3/8 Dowel Pin",
 	  1, 9, hss, in3_8, L(inch=.900), in3_16)
-	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill [.9\" deep]",
+	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill",
 	  2, hss, in3_8, 2, L(inch=.900), degrees90)
-	drill_36 = shop._drill_append("#36 Drill [#6-32 75% thread]",
-	  3, hss, L(inch=0.1065), 2, L(inch=1.500), "#36", degrees118, stub, drills)
-	drill_27 = shop._drill_append("#27 drill [#6-32 close]",
-	  4, hss, L(inch=0.1440), 2, L(inch=1.750), "#27", degrees118, stub, drills)
+	drill_36 = shop._drill_append("#36 [#6-32 75% thread]",
+	  3, hss, L(inch=0.1065), 2, L(inch=1.500), "#36", degrees118, stub, center_cut, drills)
+	dowel_36 = shop._dowel_pin_append("#36 Dowel Pin",
+	  3, 53, hss, L(inch=0.1065), L(inch=1.500), zero)
+	drill_27 = shop._drill_append("#27 [#6-32 close]",
+	  4, hss, L(inch=0.1440), 2, L(inch=1.750), "#27", degrees118, stub, center_cut, drills)
 	end_mill_3_8 = shop._end_mill_append("3/8 End Mill",
 	  5, hss, in3_8, 2, in5_8, not laser)
 	end_mill_1_4 = shop._end_mill_append("1/4 End Mill",
@@ -20449,36 +20493,39 @@ class Shop:
 	# Note 9 is the alternate tool dowel pin for tool 1.
 	end_mill_3_16 = shop._end_mill_append("3/16 End Mill",
 	  10, hss, in3_16, 2, in1_2, not laser)
-	drill_25 = shop._drill_append("#25 drill [#6-32 free]",
-	  11, hss, L(inch=0.1495), 2, L(inch=2.000), "#25", degrees118, stub, drills)
-	drill_9 = shop._drill_append("#9 drill [#10 close]",
-	  12, hss, L(inch=0.1960), 2, L(inch=2.000), "#9", degrees118, stub, drills)
-	drill_43 = shop._drill_append("#43 drill [#4-40 75% thread] 1.5in deep",
-	  13, hss, L(inch=.0890), 2, L(inch=1.500),  "#43", degrees118, stub, drills)
-	drill_32 = shop._drill_append("#32 drill [#4-40 close] 1.5in deep",
-	  14, hss, L(inch=0.1160), 2, L(inch=1.500), "#32", degrees118, stub, drills)
-	drill_50 = shop._drill_append("#50 drill [#0-80 free]",
-	  15, hss, L(inch=0.0700), 2, L(inch=1.500), "#50", degrees118, stub, drills)
-	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill 1in deep",
+	drill_25 = shop._drill_append("#25 [#6-32 free]",
+          11, hss, L(inch=0.1495), 2, L(inch=2.000), "#25", degrees118, stub, no_center_cut, drills)
+	drill_9 = shop._drill_append("#9 [#10 close]",
+	  12, hss, L(inch=0.1960), 2, L(inch=2.000), "#9", degrees118, stub, no_center_cut, drills)
+	drill_43 = shop._drill_append("#43 [#4-40 75% thread]",
+	  13, hss, L(inch=.0890), 2, L(inch=1.500),  "#43", degrees118, stub, center_cut, drills)
+	dowel_43 = shop._dowel_pin_append("#43 Dowel Pin",
+	  13, 63, hss, L(inch=0.0890), L(inch=1.500), zero)
+	drill_32 = shop._drill_append("#32 [#4-40 close]",
+	  14, hss, L(inch=0.1160), 2, L(inch=1.500), "#32", degrees118, stub, center_cut, drills)
+	drill_50 = shop._drill_append("#50 [#0-80 free]",
+	  15, hss, L(inch=0.0700), 2, L(inch=1.500), "#50", degrees118, stub, no_center_cut, drills)
+	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill",
 	  16, hss, in3_8, 2, L(inch=1.000), not laser)
 	#end_mill_3_4 = shop._end_mill_append("3/4 End Mill",
 	#  13, hss, in3_4, 2, in1_3_8)
-	drill_30 = shop._drill_append("#30 drill [#4-40 free]",
-	  17, hss, L(inch=0.1285), 2, L(inch=1.750), "#30", degrees118, stub, drills)
-	drill_1_8 = shop._drill_append("1/8 drill",
-	  18, hss, in1_8, 2, L(inch=1.750), "1/8", degrees118, stub, drills)
-	drill_1_16 = shop._drill_append("1/16 drill",
-	  19, hss, in1_16, 2, L(inch=1.750), "1/16", degrees118, stub, drills)
-	drill_3_32 = shop._drill_append("3/32 drill",
-	  20, hss, in3_32, 2, L(inch=1.750), "3/32", degrees118, stub, drills)
-	drill_42 = shop._drill_append("#42 drill [#4-44 75%]",
-	  21, hss, L(inch=0.0935), 2, L(inch=1.750), "#42", degrees118, stub, drills)
-	drill_3_64 = shop._drill_append("3/64 drill [#0-80 75% thread] 1.05in deep",
-          22, hss, L(inch="3/64"), 2, L(inch=1.05), "3/64", degrees118, stub, drills)
-	drill_52 = shop._drill_append("#52 drill [#80-80 close] 1.90in deep",
-	  23, hss, L(inch=0.0635), 2, L(inch=1.90), "#52", degrees118, stub, drills)
-	drill_19 = shop._drill_append("#19 drill [M4x.7 close] 1.90in deep",
-	  24, hss, L(inch=0.1660), 2, L(inch=1.90), "M4x.7", degrees118, stub, drills)
+	drill_30 = shop._drill_append("#30 [#4-40 free]",
+	  17, hss, L(inch=0.1285), 2, L(inch=1.750), "#30", degrees118, stub, no_center_cut, drills)
+	drill_1_8 = shop._drill_append("1/8",
+	  18, hss, in1_8, 2, L(inch=1.750), "1/8", degrees118, stub, no_center_cut, drills)
+	drill_1_16 = shop._drill_append("1/16",
+	  19, hss, in1_16, 2, L(inch=1.750), "1/16", degrees118, stub, no_center_cut, drills)
+	drill_3_32 = shop._drill_append("3/32",
+	  20, hss, in3_32, 2, L(inch=1.750), "3/32", degrees118, stub, no_center_cut, drills)
+	drill_42 = shop._drill_append("#42 [#4-44 75%]",
+	  21, hss, L(inch=0.0935), 2, L(inch=1.750), "#42", degrees118, stub, no_center_cut, drills)
+	drill_3_64 = shop._drill_append("3/64 [#0-80 75% thread]",
+          22, hss, L(inch="3/64"), 2, L(inch=1.05), "3/64", degrees118, stub, no_center_cut, drills)
+	drill_52 = shop._drill_append("#52 [#80-80 close]",
+	  23, hss, L(inch=0.0635), 2, L(inch=1.90), "#52", degrees118, stub, no_center_cut, drills)
+	drill_19 = shop._drill_append("#19 [M4x.7 close]",
+	  24, hss, L(inch=0.1660), 2, L(inch=1.90), "M4x.7", degrees118, stub, no_center_cut,
+          drills)
 
 	# Laser "tools":
 	laser_007 = shop._end_mill_append("Laser_007",
@@ -20581,11 +20628,13 @@ class Shop:
 	return tool_dowel_pin
 
     def _drill_append(self, name, number, material, diameter,
-      flutes_count, maximum_z_depth, drill_name, point_angle, drill_kind, drills):
+      flutes_count, maximum_z_depth, drill_name, point_angle, drill_kind, is_center_cut, drills):
 	""" *Shop*: Create and return a *Tool_Dowel_Pin* object that contains a dowel pin.
 	    The returned *Tool* object contains *name*, *number*, *material*, *diameter*,
-	    *flutes_count*, *maximum_z_depth*, and *tip_depth*.   The returned *Tool* object,
-	    is also appended to the tool list of the *Shop* (i.e. *self*.)
+	    *flutes_count*, *maximum_z_depth*, *drill_name*, *point_angle*, *drill_kind*, and
+	    *is_center_cut*.  *drills* is a list that the created *Tool_Drill* object is
+	    appended to.  The returned *Tool_Drill* object, is also appended to the tool
+	    list of the *Shop* (i.e. *self*.)
 	"""
 
 	# Verify argument types:
@@ -20599,12 +20648,13 @@ class Shop:
 	assert isinstance(drill_name, str)
 	assert isinstance(point_angle, Angle)
 	assert isinstance(drill_kind, int)
+	assert isinstance(is_center_cut, bool)
 	assert isinstance(drills, list)
 
 	# Create the dowel pin *tool_dowel_pin*, add it to the *Shop* object (i.e. *self) tool list,
 	# and return the *tool*:
 	tool_drill = Tool_Drill(name, number, material, diameter,
-	  drill_name, flutes_count, maximum_z_depth, point_angle, drill_kind)
+	  drill_name, flutes_count, maximum_z_depth, point_angle, drill_kind, is_center_cut)
 	self._tool_append(tool_drill)
 	drills.append(tool_drill)
 	return tool_drill
@@ -20684,10 +20734,22 @@ class Shop:
 	summary_file.close()
 
 	# Write out the tools table:
+	color_code = ["BLK", "BRN", "RED", "ORG", "YEL", "GRN", "BLU", "VIO", "GRY", "WHT"]
 	with open("/tmp/tools_table.txt", "w") as tools_table_file:
 	    tools_table_file.write("Tools_Table:\n")
+	    tools_table_file.write("Tool Colors  Diameter Cut Depth Name\n")
+	    tools_table_file.write("============================================================\n")
 	    for tool in tools:
-		tools_table_file.write("T{0}: {1}\n".format(tool._number, tool._name))
+		number = tool._number_get()
+		number_tens = (number / 10) % 10
+		number_ones = number % 10
+		#print("{0}: {1} {2}".format(number, number_tens, number_ones))
+		maximum_z_depth = tool._maximum_z_depth_get()
+		diameter = tool._diameter_get()
+		name = tool._name_get()
+		tools_table_file.write("T{0:02d}: {1}-{2} {3:i} {4:i}  {5}\n".format(
+		  number, color_code[number_tens], color_code[number_ones],
+		  diameter, maximum_z_depth, name))
 		
 	# Create a dictionary of collets and fill the with the range of acceptable sizes.
         # These values came off the ER-16 collets listed in the shars.com catalog:
@@ -20711,6 +20773,8 @@ class Shop:
 	drills = shop._drills
 	drills.sort(key=lambda drill: drill._diameter.millimeters())
 	with open("/tmp/drills_summary.txt", "w") as drill_file:
+	    drill_file.write("Tool Drill Diameter Cut Depth Cnt Collets              Name\n")
+	    drill_file.write("==================================================================\n")
 	    for drill in drills:
 		drill._summary_write(drill_file, collets)
 
@@ -20793,21 +20857,27 @@ class Shop:
 	    Duplicate tool numbers cause an assertion failure.
 	"""
 
+	# Use *shop* instead of *self*:
+	shop = self
+
 	# Verify argument types:
 	assert isinstance(new_tool, Tool)
 
-	# Search for duplicate *new_number* in *tools*:
-	new_number = new_tool._number_get()
-	new_name = new_tool._name_get()
-	tools = self._tools
-	for tool in tools:
-	    number = tool._number_get()
-	    assert new_number != number, \
-	      "Tool number {0} is conflicts between '{1}' and '{2}'".format(
-	     number, new_tool._name_get(), tool._name_get())
-	    name = tool._name_get()
-	    assert new_name != name, \
-	      "Tool name '{0}' has already been added (tool number {1}".format(name, number)
+	# Grab the *tools* list from *shop*:
+	tools = shop._tools
+
+	# Only allow dowel pins to be duplicated in *tools*:
+	if not isinstance(new_tool, Tool_Dowel_Pin):
+	    new_number = new_tool._number_get()
+	    new_name = new_tool._name_get()
+	    for tool in tools:
+		number = tool._number_get()
+		assert new_number != number, \
+		  "Tool number {0} is conflicts between '{1}' and '{2}'".format(
+		 number, new_tool._name_get(), tool._name_get())
+		name = tool._name_get()
+		#assert new_name != name, \
+		#  "Tool name '{0}' has already been added (tool number {1}".format(name, number)
 
 	# Append *new_tool* to *tools*:
 	tools.append(new_tool)
@@ -21278,29 +21348,30 @@ class Tool_Dowel_Pin(Tool):
 	return self._alternate_number
 
     @staticmethod
-    def _match(tool, parameter1, parameter2, from_string, tracing):
+    def _match(tool, preferred_diameter, parameter2, from_string, tracing=-1000000):
 	""" *Tool_Dowel_Pin*: Return priority of match *tool* matching a dowel pin.
 	"""
 	
 	# Verify argument types:
 	assert isinstance(tool, Tool)
-	assert isinstance(parameter1, L)
+	assert isinstance(preferred_diameter, L)
 	assert isinstance(parameter2, L)
 	assert isinstance(from_string, str)
 	assert isinstance(tracing, int)
 
-	# Return *priority* of 1 if *tool* is a *Tool_Dowel_Pin* object or -1
-	# otherwise:
+	# Determine the *priority* depending upon whether *tool* is a dowel pin and
+	# how close the diameter is to the *preferred_diameter*.  A perfect match returns 100.0
+        # and gets smaller as the diameter mismatch grows:
 	priority = -1.0
 	if isinstance(tool, Tool_Dowel_Pin):
-	    priority = 1.0
+	    priority = 100.0 - (tool._diameter - preferred_diameter).absolute().millimeters()
 
-	# Set *debug* to *True* to enable tracing:
-	debug = False
-	#debug = True
-	if debug:
-	    print("Tool_Dowel_Pin.match()".
-	      format(tool._name_get(), from_string, priority))
+	    # Set *debug* to *True* to enable tracing:
+	    debug = False
+	    #debug = True
+	    if debug:
+		print("Tool_Dowel_Pin.match(): Tool:'{0}' preferred_diameter={1:i} priorit={2}".
+	      format(tool._name_get(), preferred_diameter, priority))
 	return priority
 
     def _tip_depth_get(self):
@@ -21312,10 +21383,10 @@ class Tool_Dowel_Pin(Tool):
 class Tool_Drill(Tool):
 
     def __init__(self, name, number, material, diameter, drill_name,
-      flutes_count, maximum_z_depth, point_angle, drill_style):
+      flutes_count, maximum_z_depth, point_angle, drill_style, is_center_cut):
 	""" *Tool_Drill*: Initialize *Tool_Drill* object (i.e. *self*) with *name*, *number*,
-	    *material*, *diameter*, *flutes_count*, *maximum_z_depth*, *point_angle*, and
-	    *drill_style*.
+	    *material*, *diameter*, *flutes_count*, *maximum_z_depth*, *point_angle*,
+	    *drill_style*, and *is_center_cut*.
 	"""
 
 	# Verify argument types:
@@ -21330,6 +21401,7 @@ class Tool_Drill(Tool):
 	assert isinstance(point_angle, Angle) and point_angle > Angle()
 	assert isinstance(drill_style, int) and \
 	  Tool.DRILL_STYLE_NONE < drill_style < Tool.DRILL_STYLE_LAST
+	assert isinstance(is_center_cut, bool)
 
 	# Load up the *Tool_Drill* object (i.e. *self*):
 	Tool.__init__(self, name, number, Tool.KIND_DRILL,
@@ -21337,11 +21409,19 @@ class Tool_Drill(Tool):
 	self._point_angle = point_angle
 	self._drill_style = drill_style
 	self._drill_name = drill_name
+	self._is_center_cut = is_center_cut
 
     def _drill_style_get(self):
 	""" *Tool_Drill*: Return the drill style for the *Tool_Drill* object (i.e. *self*). """
 
 	return self._drill_style
+
+    def _is_center_cut_get(self):
+	""" *Tool_Drill*: Return whether the *Tool_Drill* object (i.e. *self*) is a center
+	    cut drill.
+	"""
+
+	return self._is_center_cut
 
     @staticmethod
     def _match(tool, desired_diameter, maximum_z_depth, from_routine, tracing):
@@ -21403,11 +21483,12 @@ class Tool_Drill(Tool):
 	assert isinstance(collets, tuple)
 
 	# Grab some extra values from *tool_drill*:
-	diameter   = tool_drill._diameter
-	drill_name = tool_drill._drill_name
-	name       = tool_drill._name
-	number     = tool_drill._number
-	parts      = tool_drill._parts
+	diameter        = tool_drill._diameter
+	maximum_z_depth = tool_drill._maximum_z_depth
+	drill_name      = tool_drill._drill_name
+	name            = tool_drill._name
+	number          = tool_drill._number
+	parts           = tool_drill._parts
 
 	# Find ER16 collets that can take the *tool_drill*:
 	collet_names = []
@@ -21419,9 +21500,11 @@ class Tool_Drill(Tool):
 	    if smallest <= diameter <= largest:
 		collet_names.append(collet_name)
 
+	color_code = ["BLK", "BRN", "RED", "ORG", "YEL", "GRN", "BLU", "VIO", "GRY", "WHT"]
+
 	# Write out one line:
-	drill_file.write("T{0:<4} {1:<5}(={2:i}in) ({3:>3} parts) collets={4:<20} {5}\n".
-	  format(number, drill_name, diameter, len(parts), collet_names, name))
+	drill_file.write("T{0:02d}  {1:<5} {2:i} {3:i}  {4:>3} {5:<20} {6}\n".
+	  format(number, drill_name, diameter, maximum_z_depth, len(parts), collet_names, name))
 
     def _tip_depth_get(self):
 	""" *Tool_Drill*: Return the tip depth for the *Tool_Drill* object (i.e. *self*). """
