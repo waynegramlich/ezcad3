@@ -11079,7 +11079,7 @@ class Part:
 	# Verify argument types:
 	zero = L()
 	assert isinstance(maximum_diameter, L)
-	assert isinstance(maximum_z_depth, L)
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth >= zero
 	assert isinstance(from_routine, str)
 	assert isinstance(tracing, int)
 
@@ -13164,7 +13164,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.contour('{1}, '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
 	      format(indent, part._name, comment, start_point, end_point, extra, flags))
-	    trace_detail = 2
+	    trace_detail = 3
 
 	# *tracing_plus_one* is only set to a positive valued when *trace_detail* is high:
 	tracing_plus_one = -1000000
@@ -13299,7 +13299,11 @@ class Part:
 		# a mill drill in preference to an end-mill because that way we can overlap
 		# with any top chamfering hole countersinking (i.e. one fewer tool change).
 		# Otherwise use an end mill:
-		z_stop = cnc_start_point.z - cnc_end_point.z
+		z_stop = (cnc_start_point.z - cnc_end_point.z).absolute()
+		assert isinstance(z_stop, L)
+		assert z_stop >= zero
+		#if z_stop > zero:
+		#    print("Part '{0}' has problems".format(part._name))
 		if trace_detail >= 2:
 		    print("{0}z_stop={1:i}".format(indent, z_stop))
 		mill_drill_tool = part._tools_mill_drill_side_search(smallest_inner_diameter,
@@ -13360,12 +13364,11 @@ class Part:
 		   part._name, comment, smallest_inner_diameter, z_stop)
 
 		# Figure out *point_angle* and *tip_depth*:
-		point_angle = Angle(deg=180)	# End-mills are flat
+		point_angle = Angle(deg=180)		# End-mills are flat
 		tip_depth = zero			# End-mills have no tip
 		if isinstance(mill_tool, Tool_Mill_Drill):
 		    # Alternatively, mill drills have both a *point_angle* and a *tip_depth*:
-		    point_angle = mill_drill._point_angle_get()
-		    tip_depth = mill_tool.tip_depth(point_angle)
+		    tip_depth = mill_tool._tip_depth_get()
 
 		# Schedule the operation if we found a tool, otherwise error:
 		mill_operation = None
@@ -13526,74 +13529,124 @@ class Part:
 	assert isinstance(sides_angle, Angle)
 	assert isinstance(tracing, int)
 
-	# Some constants:
-	zero = L()
-	degrees0 = Angle(deg=0.0)
-
 	# Perform any requested *tracing*:
 	if tracing < 0 and part._tracing >= 0:
 	    tracing = part._tracing
 	trace_detail = -1
+	indent = ""
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.countersink_hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, {6:i}, '{7}')".
 	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
 	      start, stop, flags))
 	    trace_detail = 2
-    
-	# Compute *is_tip_hole*, *is_flat_hole* and *is_through_hole* from *flags*:
-	is_through_hole = 't' in flags
-	is_tip_hole = 'p' in flags
-	is_flat_hole = 'f' in flags
-	assert is_through_hole or is_tip_hole or is_flat_hole, \
-	  "Specify 't' for through hole, 'p' for tip hole or 'f' for flat hole in flags argument"
-	assert     is_through_hole and not is_tip_hole and not is_flat_hole or \
-               not is_through_hole and     is_tip_hole and not is_flat_hole or \
-               not is_through_hole and not is_tip_hole and     is_flat_hole,   \
-	  "Only specify one of 't', 'p', or 'f' for flags argument"
-	
-	# Figure out how deep we want the countsink "cone hole" to go:
-	zero = L()
-	is_countersink = countersink_diameter > zero
-	if not is_countersink:
-	    # No countersink is required, so we will countersink to just
-	    # to just about 3/4 of the drill diameter:
-	    countersink_diameter = 1.10 * hole_diameter
-	if trace_detail >= 2:
-	     print("{0}is_through_hole={1} is_tip_hole={2} is_flat_hole={3} is_countersink={4}".
-	      format(indent, is_through_hole, is_tip_hole, is_flat_hole, is_countersink))
 
-	# Compute the radii:
-	hole_radius = hole_diameter/2
-	countersink_radius = countersink_diameter/2
-
-	# Hole axis is direction of drilling:
-	hole_axis = (start - stop).normalize()
-
-	# Compute *hole_kind*:
-	hole_stop = stop
-	if is_tip_hole:
-	    hole_kind = Part.HOLE_TIP
-	elif is_flat_hole:
-	    hole_kind = Part.HOLE_FLAT
-	    try_flat = True
-	elif is_through_hole:
-	    hole_kind = Part.HOLE_THROUGH
-	    hole_stop = stop - hole_axis * hole_diameter.millimeters()
-	else:
-	    assert False, "No hole kind specified"
-	if trace_detail >= 1:
-	     print("{0}hole_kind={1}".format(indent, hole_kind))
-	 
 	#FIXME: Why *stl_mode* with *cnc_mode*???!!!
 	ezcad = part._ezcad
-	if ezcad._cnc_mode or ezcad._stl_mode:
+	cnc_mode = ezcad._cnc_mode
+	stl_mode = ezcad._stl_mode
+	if cnc_mode or stl_mode:
 	    if trace_detail >= 0:
-		print("{0}cnc/stl mode".format(indent))
+		print("{0}cnc_mode={1} stl_mode={2}".format(indent, cnc_mode, stl_mode))
+
+	    # Specify ome constants:
+	    zero = L()
+	    degrees0 = Angle(deg=0.0)
+
+	    # Compute *is_tip_hole*, *is_flat_hole* and *is_through_hole* from *flags*:
+	    is_through_hole = 't' in flags
+	    is_tip_hole = 'p' in flags
+	    is_flat_hole = 'f' in flags
+	    assert is_through_hole or is_tip_hole or is_flat_hole, \
+	      "Specify 't' for through hole, 'p' for tip hole or 'f' for flat hole in flags"
+	    assert     is_through_hole and not is_tip_hole and not is_flat_hole or \
+	      not is_through_hole and     is_tip_hole and not is_flat_hole or \
+	      not is_through_hole and not is_tip_hole and     is_flat_hole,   \
+	      "Only specify one of 't', 'p', or 'f' for flags argument"
+	
+	    # Figure out how deep we want the countsink "cone hole" to go:
+	    is_countersink = countersink_diameter > zero
+	    if not is_countersink:
+		# No countersink is required, so we will countersink to just
+		# to just about 3/4 of the drill diameter:
+		countersink_diameter = 1.10 * hole_diameter
+	    if trace_detail >= 2:
+		 print("{0}is_through_hole={1} is_tip_hole={2} is_flat_hole={3} is_countersink={4}".
+		   format(indent, is_through_hole, is_tip_hole, is_flat_hole, is_countersink))
+
+	    # Compute the radii:
+	    hole_radius = hole_diameter/2
+	    countersink_radius = countersink_diameter/2
+
+	    # The hole is drilled in relation to the *top_surface_transform* from *mount*:
+	    mount = part._current_mount
+	    top_surface_transform = mount._top_surface_transform_get()
+
+	    # Compute the transfromed *bsw*, *tne*, *start*, and *stop*:
+	    bsw = part.bsw
+	    tne = part.tne
+	    top_surface_bsw    = top_surface_transform * bsw
+	    top_surface_tne    = top_surface_transform * tne
+	    top_surface_start  = top_surface_transform * start
+	    top_surface_stop   = top_surface_transform * stop
+
+	    # Now we want to be sure that *start* is higher than *stop* in the Z axis.  The
+	    # inversion of *start* and *stop* will happen as a side effect of the *fasten*
+	    # operation.
+	    if top_surface_start.z < top_surface_stop.z:
+		start, stop = stop, start
+		top_surface_start, top_surface_stop = top_surface_stop, top_surface_start
+
+	    # Make sure that the drill is aligned with the Z axis:
+	    slop = L(inch=.0001)
+	    if not top_surface_stop.x - slop <= top_surface_start.x <= top_surface_stop.x + slop \
+	      or not top_surface_stop.y - slop <= top_surface_start.y <= top_surface_stop.y + slop:
+		print("Z axis not aligned for hole '{0}' in part '{1}'".format(comment, part._name))
+
+	    # Make sure that that the drill operation does not start above *top_z*:
+	    top_z    = top_surface_tne.z
+	    bottom_z = top_surface_bsw.z
+	    if top_z < bottom_z:
+		top_z, bottom_z = bottom_z, top_z
+
+	    # Compute the *start_z*, *hole_kind*, and *stop_z*:
+	    start_z = top_surface_start.z
+	    stop_z = top_surface_stop.z
+	    if is_tip_hole:
+		hole_kind = Part.HOLE_TIP
+	    elif is_flat_hole:
+		hole_kind = Part.HOLE_FLAT
+		try_flat = True
+		hole_z_depth = start_z - stop_z
+	    elif is_through_hole:
+		hole_kind = Part.HOLE_THROUGH
+
+		# Modifiy *stop* to reflect the new stop location:
+		top_surface_stop -= P(zero, zero, L(inch=.100))
+		stop_z = top_surface_stop.z
+		stop = top_surface_transform.reverse() * top_surface_stop
+	    else:
+		assert False, "No hole kind specified"
+	    hole_z_depth = start_z - stop_z
+	    assert hole_z_depth > zero
+
+	    # Print out some tracing infromation:
+	    if trace_detail >= 1:
+		print("{0}hole_kind={1}".format(indent, hole_kind))
+	    if trace_detail >= 2 or hole_z_depth <= zero:
+		print("{0}start={1:i}".format(indent, start))
+		print("{0}stop={1:i}".format(indent, stop))
+		print("{0}top_surface_start={1:i}".format(indent, top_surface_start))
+		print("{0}top_surface_stop={1:i}".format(indent, top_surface_stop))
+		print("{0}start_z={1:i}".format(indent, start_z))
+		print("{0}stop_z={1:i}".format(indent, stop_z))
+		print("{0}hole_z_depth={1:i}".format(indent, hole_z_depth))
+		print("{0}top_surface_tne={1:i} tne={2:i}".format(indent, top_surface_tne, tne))
+		print("{0}top_surface_bsw={1:i} bsw={2:i}".format(indent, top_surface_bsw, bsw))
+
 	    success = False
 	    spot_operation = None
-	    hole_z_depth = start.distance(hole_stop)
-	    
+
 	    # Search for useful tools:
 	    deep_tracing = -1000000
 	    if trace_detail >= 3:
@@ -13647,7 +13700,8 @@ class Part:
 				
 		    # Figure out where the *countersink_stop* point is:
 		    countersink_comment = "{0} [countersink]".format(comment)
-		    countersink_stop = start - hole_axis * countersink_z_depth.millimeters()
+		    countersink_stop = start - P(zero, zero, countersink_z_depth)
+		    countersink_stop_z = countersink_stop.z
 
 		    # Create *operation_counterink* and append it to the *part* operations:
 		    sub_priority = 0
@@ -13657,16 +13711,11 @@ class Part:
 		      start, countersink_stop, True, tracing = tracing + 1)
 		    part._operation_append(operation_countersink, tracing = tracing + 1)
 
-		# Now focus on drilling:
-		if is_through_hole:
-		    drill_tip_depth = drill_tool._tip_depth_get()
-		    hole_stop = stop - hole_axis * drill_tip_depth.millimeters()
-
 		# Now drill the hole:
 		sub_priority = 1
 		operation_drill = Operation_Drill(part, comment, sub_priority, drill_tool,
 		  Operation.ORDER_DRILL, operation_countersink, hole_diameter, hole_kind,
-		  start, hole_stop, False, tracing = tracing + 1)
+		  start, stop, False, tracing = tracing + 1)
 		part._operation_append(operation_drill, tracing = tracing + 1)
 		success = True
 	    elif (is_flat_hole or is_through_hole) and end_mill_tool != None:
@@ -14033,6 +14082,9 @@ class Part:
 	    generated RS-274 code or error messages:
 	"""
 
+	# Use *part* instead of *self*:
+	part = self
+
 	# Verify argument types:
 	assert isinstance(comment, str)
 	assert isinstance(diameter, L)
@@ -14045,21 +14097,24 @@ class Part:
 
 	# Perform any requested *tracing*:
 	#if tracing == -1000000:
-	#    tracing = self._tracing
+	#    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
-	      format(indent, self._name, comment, diameter, start, stop, flags))
+	      format(indent, part._name, comment, diameter, start, stop, flags))
 
 	# Perform the hole using the richer *countesink_hole* operation:
 	zero = L()
-	self.countersink_hole(comment, diameter, zero, start, stop, flags,
+	ezcad = part._ezcad_get()
+	if ezcad._cnc_mode:
+	    assert start.distance(stop) > zero, "start={0:i} stop={1:i}".format(start, stop)
+	part.countersink_hole(comment, diameter, zero, start, stop, flags,
 	   sides=sides, sides_angle=sides_angle, tracing = tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
-	      format(indent, self._name, comment, diameter, start, stop, flags))
+	      format(indent, part._name, comment, diameter, start, stop, flags))
 
     def lathe(self, comment, material, color, start, end, contour, faces, tracing = -1000000):
 	""" *Part*: Add a a circular symetry object to the *Part* object (i.e. *self*).
@@ -17517,7 +17572,8 @@ class Fastener(Part):
 	    #assert new_start.distance(new_end) > zero, \
 	    #  "Fastener.fasten: Zero length '{0}': s={1:i} ns={2:i} e={3:i} ne={4:i}".format(
 	    #  fastener.comment_s, start, new_start, end, new_end)
-	    assert new_start.distance(new_end) > zero, \
+	    epsilon = L(inch=.00000001)
+	    assert new_start.distance(new_end) > epsilon, \
 	      "Fastener.fasten: Part '{0}' (center={1:i}) misses Fastener '{2}' (center={3:i}". \
 	      format(fastener.comment_s, fastener.c, part.name_get(), part.c)
 	    part.hole(hole_name, diameter, new_start, new_end, flags, tracing = tracing + 1)
@@ -20496,7 +20552,7 @@ class Shop:
 
 	dowel_pin = shop._dowel_pin_append("3/8 Dowel Pin",
 	  1, 9, hss, in3_8, L(inch=.900), in3_16)
-	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill",
+	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill [.9in]",
 	  2, hss, in3_8, 2, L(inch=.900), degrees90)
 	drill_36 = shop._drill_append("#36 [#6-32 75% thread]",
 	  3,     hss, L(inch=0.1065), 2, L(inch=1.500), "#36", degrees118, stub, center_cut, drills)
@@ -20506,7 +20562,7 @@ class Shop:
 	  4, hss, L(inch=0.1440), 2,  L(inch=1.875), "#27", degrees118, stub, center_cut, drills)
 	dowel_27 = shop._dowel_pin_append("#27 Dowel Pin",
 	  4, 54, hss, L(inch=0.1440), L(inch=1.875), zero)
-	end_mill_3_8 = shop._end_mill_append("3/8 End Mill",
+	end_mill_3_8 = shop._end_mill_append("3/8 End Mill [5/8in]",
 	  5, hss, in3_8, 2, in5_8, not laser)
 	end_mill_1_4 = shop._end_mill_append("1/4 End Mill",
 	  6, hss, in1_4, 2, in1_2, not laser)
@@ -20530,9 +20586,9 @@ class Shop:
 	dowel_32 = shop._dowel_pin_append("#32 Dowel Pin",
 	  14, 64, hss, L(inch=0.1160), L(inch=1.625), zero)
 	drill_50 = shop._drill_append("#50 [#0-80 free]",
-	  15, hss, L(inch=0.0700), 2, L(inch=0.750), "#50", degrees118, stub, no_center_cut, drills)
-	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill",
-	  16, hss, in3_8, 2, L(inch=1.000), not laser)
+	  15, hss, L(inch=0.0700), 4, L(inch=0.750), "#50", degrees118, stub, no_center_cut, drills)
+	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill [1.5in]",
+	  16, hss, in3_8, 4, L(inch=1.500), not laser)
 	#end_mill_3_4 = shop._end_mill_append("3/4 End Mill",
 	#  13, hss, in3_4, 2, in1_3_8)
 	drill_30 = shop._drill_append("#30 [#4-40 free]",
@@ -21593,11 +21649,10 @@ class Tool_End_Mill(Tool):
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
-	    trace_detail = 0
 	    indent = ' ' * tracing
-	if trace_detail >= 1:
 	    print("{0}=>Tool_End_Mill._match('{1}', {2:i}, {3:i}, '{4}')".
 	      format(indent, tool._name, maximum_diameter, maximum_z_depth, from_routine))
+	    trace_detail = 1
 
 	# Grab some values from *tool*:
 	tool_diameter = tool._diameter
@@ -21626,12 +21681,12 @@ class Tool_End_Mill(Tool):
 		if trace_detail >= 1:
 		    print("{0}Tool_End_Mill._match: max_z_depth:{1:i} tool_maximum_z_depth:{2:i}".
 		      format(indent, maximum_z_depth, tool_maximum_z_depth))
-		z_depth_ok = -maximum_z_depth <= tool_maximum_z_depth
+		z_depth_ok = maximum_z_depth <= tool_maximum_z_depth
 		#tool._search_results_append(z_depth_ok,
 		#  "Max Z depth {0:i} <= Tool Max Z Depth {1:i}".format(
 		#  -maximum_z_depth, tool_maximum_z_depth))
 		if z_depth_ok:
-		    if trace_detail >= 0:
+		    if trace_detail >= 1:
 			print("{0}Tool_End_Mill.match: z_depth ok".format(indent))
 		    priority = (tool_diameter * 100.0 - tool_maximum_z_depth).inches()
 		    if tool._is_laser:
