@@ -5238,6 +5238,7 @@ class Mount_Operations:
 	    mount_vrml_lines = VRML_Lines(mount_vrml_lines_name)
 
 	    # Now generate all of the tool paths:
+	    path_bounding_box = Bounding_Box()
 	    priority_program_number = mount_program_number
 	    mount_vrml = VRML_Group(part._name_get())
 	    for index, priority_mount_operations in enumerate(priority_mount_operations_list):
@@ -5248,7 +5249,7 @@ class Mount_Operations:
 		# Now we can generate all the tool operations that are at the same pirority:	
 		priority_program_number = \
 		  priority_mount_operations._cnc_priority_generate(priority_program_number + 1,
-		  mount_ngc_file, mount_vrml, mount_vrml_lines, mount_vrml_stl,
+		  mount_ngc_file, mount_vrml, mount_vrml_lines, mount_vrml_stl, path_bounding_box,
 		  tracing = tracing + 1)
 
 	    # The *next_mount_program_number* must be divisible by 10:
@@ -5258,8 +5259,11 @@ class Mount_Operations:
 	    # Write out the final G-code lines to *mount_ngc_file*:
 	    # FIXME: Read tool change point from *vice*:
 	    mount_ngc_file.write("G49 G0 X-1.5 Y0 Z8 ( [FIXME!!!] Return to tool change point )\n")
-	    mount_ngc_file.write("G53 G0 Y0.0 ( Move the work to the front )\n")
+	    #mount_ngc_file.write("G53 G0 Y0.0 ( Move the work to the front )\n")
 	    mount_ngc_file.write("M2\n")
+	    mount_ngc_file.write("( Path Bounding Box: {0:i} )\n".format(path_bounding_box))
+	    mount_ngc_file.write("( Path Bounding Box Volume: {0:i} )\n".
+	      format(path_bounding_box.volume_get()))
 	    mount_ngc_file.flush()
 
 	# Now append *mount_vrml_lines* to *mount_vrml*:
@@ -5299,8 +5303,8 @@ class Mount_Operations:
 	      indent, mount_operations._name, mount_program_number, next_mount_program_number))
         return next_mount_program_number
 
-    def _cnc_priority_generate(self, priority_program_number,
-      mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
+    def _cnc_priority_generate(self, priority_program_number, mount_ngc_file,
+      cnc_vrml, mount_vrml_lines, mount_vrml_stl, path_bounding_box, tracing=-1000000):
         """ *Mount_Operations*: Generate CNC code for each *Operation* in the *Mount_Operations*
 	    object (i.e. *self*), where each *Operation* in the *Mount_Operations* object
 	    must have the same priority.  This routine is responsible for regrouping tools to
@@ -5318,6 +5322,9 @@ class Mount_Operations:
 	assert isinstance(priority_program_number, int)
 	assert isinstance(mount_ngc_file, file)
 	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(path_bounding_box, Bounding_Box)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -5447,7 +5454,7 @@ class Mount_Operations:
 	    # Now generate the tool path for *reordered_tool_mount_operations*:
 	    tool_program_number = reordered_tool_mount_operations._cnc_tool_generate(
 	      tool_program_number, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl,
-              tracing = tracing + 1)
+              path_bounding_box, tracing = tracing + 1)
 
 	# Compute *new_priority_program_number* (no change from *tool_program_number*):
 	new_priority_program_number = tool_program_number
@@ -5458,8 +5465,8 @@ class Mount_Operations:
 	      mount_operations._name, priority_program_number, cnc_vrml._name_get()))
 	return new_priority_program_number
 
-    def _cnc_tool_generate(self, tool_program_number,
-      mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, tracing=-1000000):
+    def _cnc_tool_generate(self, tool_program_number, mount_ngc_file,
+      cnc_vrml, mount_vrml_lines, mount_vrml_stl, path_bounding_box, tracing=-1000000):
         """ *Mount_Operations*: Generate CNC code for each *Operation* in *Mount_Operations*
 	    object (i.e. *self*.)  Each operation must use the exact same tool.  The generated
 	    tool `.ngc` file is numbered with *tool_program_number* and the next usable tool
@@ -5476,11 +5483,15 @@ class Mount_Operations:
 	assert isinstance(cnc_vrml, VRML_Group)
 	assert isinstance(mount_vrml_lines, VRML_Lines)
 	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(path_bounding_box, Bounding_Box)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	deep_tracing = -1000000
+	#if tool_program_number == 2303:
+	#    print("***********************************************************************")
+	#    tracing = 5
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Mount_Operations._cnc_tool_generate('{1}', {2}, *, '{3}')".format(indent,
@@ -5500,7 +5511,7 @@ class Mount_Operations:
 	# it *DOES* generate VRML for CNC visualization.  Thus, we must actually call
 	# the *_cnc_generate*() method for each *Operation_Mount* object.
 
-	# Do not generate any .ngc file for and *Operation_Mount*:
+	# Do not generate any .ngc file for an *Operation_Mount*:
 	new_tool_program_number = tool_program_number
 	if True:
 	    # Grab some values from *tool_mount_operations*:
@@ -5537,7 +5548,13 @@ class Mount_Operations:
 	    code = shop._code_get()
 	    code._start(part, tool, tool_program_number,
 	      spindle_speed, mount0, cnc_vrml_lines, tracing = tracing + 1)
+	    if trace_detail >= 2:
+		print("{0}A code._vrml_points={1}".format(indent,
+		  ["{0:i}".format(vrml_point) for vrml_point in code._vrml_points]))
 	    code._dxf_xy_offset_set(part._dxf_x_offset_get(), part._dxf_y_offset_get())
+	    if trace_detail >= 2:
+		print("{0}B code._vrml_points={1}".format(indent,
+		  ["{0:i}".format(vrml_point) for vrml_point in code._vrml_points]))
 
 	    # We need to output a *Part* VRML for each unique (*Part*, *Mount*) combination.
 	    # This is done by keeping track of whenever a new pair comes along.
@@ -5561,9 +5578,14 @@ class Mount_Operations:
 		    print("{0}tool_op[{1}]: name={2} tool={3} feed_speed={4:i} spin_speed={5:rpm}".
 		      format(indent, index, tool_operation_name, tool_name,
 		      feed_speed, spindle_speed))
+		    print("{0}C code._vrml_points={1}".format(indent,
+		      ["{0:i}".format(vrml_point) for vrml_point in code._vrml_points]))
 
 		# Make sure we start at a safe height:
 		code._xy_rapid_safe_z_force(feed_speed, spindle_speed, tracing = tracing + 1)
+		if trace_detail >= 2:
+		    print("{0}D code._vrml_points={1}".format(indent,
+		      ["{0:i}".format(vrml_point) for vrml_point in code._vrml_points]))
 
 		# Perform the CNC generation step for *operation*:
 		is_last = (index + 1 >= pairs_size)
@@ -5572,6 +5594,9 @@ class Mount_Operations:
 		underscore_operation_comment = tool_operation._comment_get().replace(' ', '_')
 		code._line_comment("PN={0} TN={1} OC={2}".format(
 		  underscore_part_name, underscore_tool_name, underscore_operation_comment))
+		if trace_detail >= 2:
+		    print("{0}E code._vrml_points={1}".format(indent,
+		      ["{0:i}".format(vrml_point) for vrml_point in code._vrml_points]))
 		tool_operation._cnc_generate(tool_mount, mount_ngc_file,
 		  cnc_tool_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing = deep_tracing)
 
@@ -5594,6 +5619,8 @@ class Mount_Operations:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 	    code._dxf_xy_offset_set(zero, zero)
 
+	    # Update *path_bounding_box*:
+	    path_bounding_box.bounding_box_expand(code._bounding_box_get())
 	    code._finish(tracing + 1)
 
 	    cnc_tool_vrml._append(mount_vrml_lines)
@@ -7465,7 +7492,6 @@ class Operation_Drill(Operation):
 	# Get *shop* and *code*:
 	cnc_transform = mount._cnc_transform_get()
 	shop = part._shop_get()
-
 	code = shop._code_get()
 
 	radius = diameter / 2
@@ -7478,7 +7504,9 @@ class Operation_Drill(Operation):
 	    print("{0}start={1:i} cnc_start={2:i}".format(indent, start, cnc_start))
 	    print("{0}stop={1:i} cnc_stop={2:i}".format(indent, stop, cnc_stop))
 	    print("{0}is_laser={1}".format(indent, is_laser))
-
+	if trace_detail >= 2:
+	    print("{0}E code._vrml_points={1}".
+	      format(indent, ["{0:i}".format(vrml_point) for vrml_point in code._vrml_points ]))
 	top_surface_safe_z = mount._top_surface_safe_z_get()
 	if is_laser:
 	    code._dxf_circle(x, y, diameter)
@@ -7503,7 +7531,7 @@ class Operation_Drill(Operation):
 		print("{0}z_start={1:i} z_stop={2:i}".format(indent, z_start, z_stop))
 
 	    # Make darn sure we start a high enough Z:
-	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
+	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed, tracing=deep_tracing)
 
 	    #drill_depth = top_surface_safe_z - z_stop
 	    drill_depth = cnc_start.z - cnc_stop.z
@@ -7541,7 +7569,7 @@ class Operation_Drill(Operation):
 		code._drill_cycle(98, 81, f, p, q, r, s, x, y, z, tracing = deep_tracing)
 
 	    # Make darn sure we get back to a high enough Z:
-	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
+	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed, tracing = deep_tracing)
 
 	    if is_last:
 		code._command_begin()
@@ -9762,7 +9790,7 @@ class Part:
 	#print("<=Part._color_material_update({0}, {1}): c={2} m={3}".
 	#  format(color, material, self._color, self._material))
 
-    def _cnc_part_generate(self, part_program_number, tracing):
+    def _cnc_part_generate(self, part_program_number, tracing=-1000000):
 	""" *Part*: Flush out the CNC code for the *Part* object (i.e. *self*) using
 	    *part_program_number* to for the first .ncg file generated.
 	"""
@@ -10841,7 +10869,7 @@ class Part:
 	    This only work if the *Part* object is not an assembly.
 	"""
 
-	# Use *part* instea of *self*:
+	# Use *part* instead of *self*:
 	part = self
 
 	# Verify argument types:
@@ -10863,7 +10891,7 @@ class Part:
 	    triangles = stl._triangles_get()
 	    color_name = part._color._name_get()
 	    stl_vrml = VRML_Triangles(part._name, color_name, colors, tracing = tracing + 1)
-	    part._stl_vrml = stl_vmrl
+	    part._stl_vrml = stl_vrml
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -17698,20 +17726,22 @@ class Code:
 	zero = L()
 
 	# Load up *self*:
-	code._code_stream = None	# Code stream to write G-codes to
-	code._command_started = False	# At begining of RS274 command line
-	code._command_chunks = []	# RS274 line broken into space separated chunks
-	code._comment_chunks = []	# RS274 comment broken into space separated chunks
-	code._dxf = ""			# Text for dxf file
-	code._dxf_lines = []		# List of lines to write out to .dxf file
-	code._dxf_x_offset = zero	# DXF X offset
-	code._dxf_y_offset = zero	# DXF Y offset
-	code._is_laser = False		# True if tool is a laser
-	code._mount  = None		# *Mount* object to use for current batch of G-code
-	code._tool_program_number = -1	# Tool program number
-	code._tool_wrl_lines = None	# The lines to be written into the tool VRML file
-	code._tool_change_point = None	# Tool change location relative to viceo origin
-	code._mount_wrl_lines = None	# The lines to be written into the mount VRML file
+	bounding_box = Bounding_Box()
+	code._bounding_box = bounding_box # Bounding box that encloses all path trajectories
+	code._code_stream = None	  # Code stream to write G-codes to
+	code._command_started = False     # At begining of RS274 command line
+	code._command_chunks = []         # RS274 line broken into space separated chunks
+	code._comment_chunks = []         # RS274 comment broken into space separated chunks
+	code._dxf = ""                    # Text for dxf file
+	code._dxf_lines = []              # List of lines to write out to .dxf file
+	code._dxf_x_offset = zero         # DXF X offset
+	code._dxf_y_offset = zero         # DXF Y offset
+	code._is_laser = False            # True if tool is a laser
+	code._mount  = None               # *Mount* object to use for current batch of G-code
+	code._tool_program_number = -1    # Tool program number
+	code._tool_wrl_lines = None       # The lines to be written into the tool VRML file
+	code._tool_change_point = None    # Tool change location relative to viceo origin
+	code._mount_wrl_lines = None      # The lines to be written into the mount VRML file
 
 	# Construct the *g1_table*:
 	g1_values_list = (0, 1, 2, 3, 33, 38, 73, 76, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89)
@@ -17763,6 +17793,12 @@ class Code:
 	# Reset VRML fields here.  Note: routine acessses some of the G-code variable,
 	# so it must be called last:
 	code._vrml_reset()
+
+    def _bounding_box_get(self):
+	""" *Code*: Return the *Bounding_Box* associated with the *Code* object (i.e. *self*.)
+	"""
+
+	return self._bounding_box
 
     def _command_begin(self):
 	""" *Code*: Start a new RS274 command in the *Code* object (i.e. *self*). """
@@ -17842,7 +17878,8 @@ class Code:
 	    assert -1000000.0 <= code._x.millimeters() <= 1000000.0
 	    assert -1000000.0 <= code._y.millimeters() <= 1000000.0
 	    assert -1000000.0 <= code._z.millimeters() <= 1000000.0
-	    code._vrml_points_append(code._vrml_motion_color, P(code._x, code._y, code._z))
+	    code._vrml_points_append(code._vrml_motion_color, P(code._x, code._y, code._z),
+	      tracing = tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -18119,13 +18156,13 @@ class Code:
 	    deep_tracing = tracing + 1
 
 	# Make sure we are at reasonable Z height:
-	code._xy_rapid_safe_z_force(f, s)
+	code._xy_rapid_safe_z_force(f, s, tracing = tracing + 1)
 
 	# Remember *z_before* so we can set z to the correct height at the end of the cycle:
 	z_before = code._z
 	point_before = P(x, y, z_before)
 	vrml_points = code._vrml_points
-	code._vrml_points_append(code._vrml_motion_color_rapid, point_before)
+	code._vrml_points_append(code._vrml_motion_color_rapid, point_before, tracing = tracing + 1)
 
 	if True:
 	    # Grab *xy_rapid_safe_z* from *mount*:
@@ -18152,7 +18189,12 @@ class Code:
 	    code._length("[]", z)		# Z_BOTTOM
 	    if isinstance(q, L):
 		code._length("[]", q)		# Z_PECK
-	    code._command_end()
+	    code._command_end(vrml_suppress=True, tracing=tracing+1)
+
+	    # When the drill cycle is done, it will be at (*x*, *y*, *xy_rapid_save_z*):
+	    code._x = x
+	    code._y = y
+	    code._z = xy_rapid_safe_z
 	else:
 	    # This is the old code that used a canned cycle rather than a subroutine call:
 	    code._command_begin()
@@ -18178,11 +18220,12 @@ class Code:
             z_after = r
 	code._z = z_after
 
-	code._vrml_points_append(code._vrml_motion_color_retract, P(x, y, r), tracing=deep_tracing)
-	code._vrml_points_append(code._vrml_motion_color_cutting, P(x, y, z), tracing=deep_tracing)
-	code._vrml_points_append(code._vrml_motion_color_cutting, P(x, y, r), tracing=deep_tracing)
-	code._vrml_points_append(code._vrml_motion_color_retract, P(x, y, z_after),
-	  tracing=deep_tracing)
+	color_retract = code._vrml_motion_color_retract
+	color_cutting = code._vrml_motion_color_cutting
+	code._vrml_points_append(color_retract, P(x, y, r),       tracing=deep_tracing)
+	code._vrml_points_append(color_cutting, P(x, y, z),       tracing=deep_tracing)
+	code._vrml_points_append(color_cutting, P(x, y, r),       tracing=deep_tracing)
+	code._vrml_points_append(color_retract, P(x, y, z_after), tracing=deep_tracing)
 
 	if tracing >= 0:
 	    print(("{0}<=Code._drill_cycle(*, {1}, {2}, " +
@@ -18490,6 +18533,9 @@ class Code:
 	code_stream.write("O{0} call ( For stand-alone use of NGC file we call {0} here )\n".
 	  format(code._tool_program_number))
 	code_stream.write("M2 ( End of Program )\n")
+	code_stream.write("( Path bounding box: {0:i} )\n".format(code._bounding_box))
+	code_stream.write("( Path bounding box volume: {0:i} )\n".
+	  format(code._bounding_box.volume_get()))
 	code._tool_program_number = -1
 
 	# Close *code_stream*:
@@ -18686,6 +18732,7 @@ class Code:
 
 	# Reset the *code* object:
 	code._begin = True
+	code._bounding_box = Bounding_Box()
 	code._f = Speed(mm_per_sec=huge)
 	code._g1 = huge
 	code._g2 = huge
@@ -18750,7 +18797,7 @@ class Code:
 	    print("{0}=>Code._start('{1}', '{2}', {3}, {4:rpm}, '{5}')".
 	      format(indent, part._name_get(), tool._name_get(),
 	        tool_program_number, spindle_speed, mount._name_get()))
-	    trace_detail = 1
+	    trace_detail = 2
 
 	# Grab some values from *part* and *tool*:
 	part_name = part._name_get()
@@ -18785,9 +18832,13 @@ class Code:
 	tool_change_point = vice._tool_change_point_get()
 	code._tool_change_point = tool_change_point
 
-	# Now initialize *vrml_points* so that it starts at *tool_change_point*:
+	# Clear out *vrml_points* and intialize the location to be at *tool_change_point*:
 	vrml_points = code._vrml_points
+	del vrml_points[:]
 	vrml_points.append(tool_change_point)
+	if trace_detail >= 2:
+	    print("{0}SA code._vrml_points={1}".
+	      format(indent, [ "{0:i}".format(vrml_point) for vrml_point in vrml_points ]))
 
 	# Output a descriptive header comment:
 	code_stream.write("( Part {0}: Tool {1} Program: {2} )\n".
@@ -18800,8 +18851,11 @@ class Code:
 	# Set units to inches (G20):
 	code_stream.write("G90 G90.1 G20\n")
 
+	if trace_detail >= 2:
+	    print("{0}SB code._vrml_points={1}".
+	      format(indent, [ "{0:i}".format(vrml_point) for vrml_point in code._vrml_points ]))
+
 	# Start at *tool_change_point*:
-	tool_change_point = code._tool_change_point
 	code._command_begin()
 	code._unsigned("G8", 49) # Disable tool offset
 	code._mode_motion(0, code._vrml_motion_color_rapid)
@@ -18809,7 +18863,10 @@ class Code:
 	code._length("Y", tool_change_point.y)
 	code._length("Z", tool_change_point.z)
 	code._comment("Start at tool change point with tool offsets disabled")
-	code._command_end()
+	code._command_end(vrml_suppress = True, tracing = tracing + 1)
+	if trace_detail >= 2:
+	    print("{0}SC code._vrml_points={1}".
+	      format(indent, [ "{0:i}".format(vrml_point) for vrml_point in code._vrml_points ]))
 
 	# Output the tool change, get the coolant on, and spindle spun up:
 	#assert tool_number >= 0, \
@@ -18823,7 +18880,9 @@ class Code:
 	code._unsigned("H", tool_number)
 	code._comment("Enable tool offset for tool {0}".format(tool_number))
 	code._command_end()
-
+	if trace_detail >= 2:
+	    print("{0}SE code._vrml_points={1}".
+	      format(indent, [ "{0:i}".format(vrml_point) for vrml_point in code._vrml_points ]))
 
 	# Turn spindle on or off:
 	spindle_is_on = spindle_speed > Hertz()
@@ -19500,16 +19559,31 @@ class Code:
 	assert -1000000.00 <= point.y.millimeters() <= 1000000
 	assert -1000000.00 <= point.z.millimeters() <= 1000000
 
+	# Grab *vrml_points* from *code*:
+	vrml_points = code._vrml_points
+
+	# Expand *code* bounding box to include *point*:
+	code._bounding_box.point_expand(point)
+
 	# Perform any requested *tracing*:
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = tracing * ' '
 	    print("{0}=>Code._vrml_points_append(*, {1}, {2:i})".format(indent, color, point))
+	    trace_detail = 2
 
 	# A color change forces a flush:
+	if trace_detail >= 2:
+	    print("{0}before vrm_points={1}".
+	      format(indent, [ "{0:i}".format(vrml_point) for vrml_point in vrml_points ]))
 	vrml_current_color = code._vrml_current_color
 	if color != vrml_current_color:
 	    code._vrml_points_flush(color, tracing = tracing + 1)
-	code._vrml_points.append(point)
+	if len(vrml_points) == 0 or vrml_points[-1] != point:
+	    vrml_points.append(point)
+	if trace_detail >= 2:
+	    print("{0}after vrm_points={1}".
+	      format(indent, [ "{0:i}".format(vrml_point) for vrml_point in vrml_points ]))
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -19536,9 +19610,9 @@ class Code:
 	vrml_current_color = code._vrml_current_color
 	vrml_points = code._vrml_points
 	if trace_detail >= 2:
-	    print("{0}vrml_current_color='{1}'".format(indent, vrml_current_color))
-	    print("{0}vrml_points={1}".
-	      format(indent, [ "{0:i}".format(point) for point in vrml_points ]))
+	    print("{0}before vrml_current_color='{1}'".format(indent, vrml_current_color))
+	    print("{0}before vrml_points={1}".
+	      format(indent, [ "{0:i}".format(vrml_point) for vrml_point in vrml_points ]))
 	if new_color != vrml_current_color:
 	    # The path color has changed, so we need to flush out *vrml_lines_points* using the
 	    # current color:
@@ -19558,6 +19632,10 @@ class Code:
 		zero = L()
 		vrml_points.append(P(zero, zero, zero))
 	    code._vrml_current_color = new_color
+	if trace_detail >= 2:
+	    print("{0}after vrml_current_color='{1}'".format(indent, vrml_current_color))
+	    print("{0}after vrml_points={1}".
+	      format(indent, [ "{0:i}".format(vrml_point) for vrml_point in vrml_points ]))
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
