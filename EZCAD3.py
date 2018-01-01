@@ -17501,7 +17501,7 @@ class Fastener(Part):
 	assert isinstance(comment, str)
 	assert isinstance(part, Part)
 	assert isinstance(select, str) and \
-	  select in ("thread", "close", "loose", "access", "set_screw")
+	  select in ("thread", "close", "loose", "thread_access", "close_access", "set_screw")
 	assert isinstance(transform, Transform) or transform == None
 	assert isinstance(tracing, int)
 
@@ -17531,14 +17531,17 @@ class Fastener(Part):
 		diameter = fastener.close_fit_l
 	    elif select == "free":
 		diameter = fastener.free_fit_l
-	    elif select == "access":
+	    elif select == "thread_access":
 		diameter = fastener.thread75_l
+	    elif select == "close_access":
+		diameter = fastener.close_fit_l
 	    elif select == "set_screw":
 		diameter = 2 * fastener.major_diameter_l
 		flags = "f"
 	    else:
 		assert False, \
-		  "select='{0}', not 'thread', 'close', 'loose', 'access'".format(select)
+		  "select='{0}' not 'thread', 'close', 'loose', 'thread_access' or 'close_access'".\
+                  format(select)
 
 	    # Grab *start* and *end* from *fastener*:
 	    start = fastener.start_p
@@ -17608,7 +17611,7 @@ class Fastener(Part):
 
 	    # An "access" hole is drilled about 1/4 of the way in on to after the first
 	    # hole is drilled:
-	    if select == "access":
+	    if select == "thread_access" or select == "close_access":
 		#print("Access hole {0}".format(fastener.comment_s))
 		#print("Access hole: ns={0:i} ne={1:i} depth={2:i}".
 		#  format(new_start, new_end, new_start.distance(new_end)))
