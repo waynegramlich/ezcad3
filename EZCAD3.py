@@ -8,7 +8,7 @@
 #
 # The standards are:
 #
-# * All comments are written Markdown.  This means that references to variables and class names
+# * All comments are written in Markdown.  This means that references to variables and class names
 #   are marked in *italics* inside all comments.
 # * All variable names are in lower case with adverbs, nouns, and verbs, separated by underscore
 #   `_` characters.  Fully spelled out words are **strongly** encouraged.  Dropping vowels and
@@ -5120,6 +5120,65 @@ class Mount_Operations:
 	    print("{0}<=Mount_Operations.__init__('{1}', '{2}')".
 	      format(indent, mount._name_get(), operation._name_get()))
 
+    def _cnc_dowel_pin_optimize(self, tracing=-1000000):
+	""" *Mount_Operations*: Sweep through the *Mount_Operations* object (i.e. *self*)
+	    and replace the *Operation_Dowel_Pin* *Tool* with a better dowel pin.
+	"""
+
+	# Use *mount_operations* instead of *self*:
+	mount_operations = self
+	
+	# Verify argument types:
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Mount_Operations._cnc_dowel_pin_optimize".format(indent))
+	    trace_detail = 2
+	if trace_detail >= 2:
+	    mount_operations._show("cnc_dowel_point_optimize", tracing = tracing + 1)
+
+	# Grab some values from *mount_operations*:
+	pairs = mount_operations._pairs
+
+	# Search through *pairs* for a *Operation_Dowel_Pin* followed by an *Operation_Drill*:
+	size = len(pairs)
+	for index, pair in enumerate(pairs):
+	    operation = pair._operation_get()
+	    if isinstance(operation, Operation_Dowel_Pin):
+		# We have a dowel pin, see if there is a next operation:
+		if index + 1 < size:
+		    # Grab the *next_operation* after *operation*:
+		    next_pair = pairs[index + 1]
+		    next_operation = next_pair._operation_get()
+		    next_tool = next_operation._tool_get()
+
+		    # Get the *shop* object so we can search it:
+		    mount = pair._mount_get()
+		    part = mount._part_get()
+		    ezcad = part._ezcad_get()
+		    shop = ezcad._shop_get()
+
+		    # Search *shop* for *Tool_Dowel_Pin* that matches with *next_tool*:
+		    dowel_pin_tool = shop._dowel_pin_search(next_tool)
+		    if isinstance(dowel_pin_tool, Tool_Dowel_Pin):
+			# Replace the dowel pin in *operation* with *dowel_pin_tool*:
+			operation._tool_set(dowel_pin_tool)
+			if trace_detail >= 1:
+			    print("{0}Replacing dowel pin".format(indent))
+
+			# We did the replacement, so we are done with the search:
+			break
+
+		# We only deal with the first dowel pin, so we can stop the search now:
+                break
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Mount_Operations._cnc_dowel_pin_optimize".format(indent))
+
     def _cnc_mount_generate(self, mount_program_number, tracing=-1000000):
         """ *Mount_Operations*: Output the CNC G-code and associated VRML path visualization
 	    files for the *Mount_Operations* object (i.e. *self*).  The first G-code file
@@ -5401,6 +5460,8 @@ class Mount_Operations:
 	regrouped_mount_operations._pairs = regrouped_pairs
 	if trace_detail >= 2:
 	    regrouped_mount_operations._show("regrouped operations", tracing = tracing + 1)
+
+	regrouped_mount_operations._cnc_dowel_pin_optimize(tracing = tracing + 1)
 
 	# Create *tool_mount_operations_list* where each entry is a *Mount_Operations* object
         # that consists entirely of operations on a single *Tool* object:
@@ -6776,6 +6837,13 @@ class Operation:
 	""" *Operation*: Return the tool field of the *Operation* object (i.e. *self*). """
 
 	return self._tool
+
+    def _tool_set(self, tool):
+	""" *Operation*: Set the tool field of the *Operation* object (i.e. *self*) to *tool*.
+	"""
+
+	assert isinstance(tool, Tool)
+	self._tool = tool
 
 class Operation_Contour(Operation):
     """ *Operation_Contour* is a class that represents a contour operation.
@@ -15904,7 +15972,7 @@ class Part:
 	assert isinstance(jaw_surface, str) and len(jaw_surface) == 1 and jaw_surface in "tbnsew"
 	assert isinstance(flags, str)
 	for flag in flags:
-	    assert flag in "lr46", "Flag '{0}' is not allowed for flags argument".format(flag)
+	    assert flag in "lr", "Flag '{0}' is not allowed for flags argument".format(flag)
 	assert isinstance(extra_dx, L) and extra_dx >= zero
 	assert isinstance(extra_dy, L) and extra_dy >= zero
 	assert isinstance(extra_top_dz, L) and extra_top_dz >= zero
@@ -16364,12 +16432,13 @@ class Part:
 		      indent, cnc_dowel_point, cnc_plunge_point))
 
 		# Determine the *preferred_diameter* from *flags*:
-		if '6' in flags:
-		    preferred_diameter = L(inch=0.1065)	# #6-32 75% thread (#36 drill)
-		elif '4' in flags:
-		    preferred_diameter = L(inch=0.0890)	# #4-40 75% thread (#43 drill)
-		else:
-		    preferred_diameter = L(inch="3/8")
+		#if '6' in flags:
+		#    preferred_diameter = L(inch=0.1065)	# #6-32 75% thread (#36 drill)
+		#elif '4' in flags:
+		#    preferred_diameter = L(inch=0.0890)	# #4-40 75% thread (#43 drill)
+		#else:
+		#    preferred_diameter = L(inch="3/8")
+		preferred_diameter = L(inch="3/8")
 
 		# Perform the dowel pin operation:
 		part.dowel_pin(dowel_pin_comment,
@@ -17371,6 +17440,16 @@ class Fastener(Part):
 	diameter = fastener.thread75_l
 	fastener.cylinder(fastener.comment_s, fastener.material, fastener.color,
 	  diameter, diameter, fastener.start_p, fastener.end_p, 16, Angle(deg=0.0), "", "")
+
+    def length_get(self):
+        """ *Fastener*: Return the length of the *Fastener* object (i.e. *self*.) """
+
+	# Use *fastener* instead of *self*:
+	fastener = self
+
+	# Return the length:
+	return fastener.start_p.distance(fastener.end_p)
+
 
     def nut_ledge(self, part = None, flags = ""):
 	""" *Fastener*: Cut out ledge for a screw and a nut. """
@@ -20645,6 +20724,8 @@ class Shop:
 	  4, 54, hss, L(inch=0.1440), L(inch=1.875), zero)
 	end_mill_3_8 = shop._end_mill_append("3/8 End Mill [5/8in]",
 	  5, hss, in3_8, 2, in5_8, not laser)
+	dowl_pin_end_mill_3_8 = shop._dowel_pin_append("3/8in Dowel Pin",
+	  5, 55, hss, in3_8, in5_8, zero)
 	end_mill_1_4 = shop._end_mill_append("1/4 End Mill",
 	  6, hss, in1_4, 2, in1_2, not laser)
 	double_angle = shop._double_angle_append("3/4 Double Angle",
@@ -20789,6 +20870,29 @@ class Shop:
 	self._tool_append(tool_dowel_pin)
 	#print("tool_dowel_pin=", tool_dowel_pin)
 	return tool_dowel_pin
+
+    def _dowel_pin_search(self, tool):
+	""" *Shop*: Return the *Tool_Dowel_Pin* that matches *tool* from the *Shop* object
+	    (i.e. *self*) and *None* otherwise.
+	"""
+
+	# Use *shop* instead of *self*:
+	shop = self
+
+	# Verify argument types:
+	assert isinstance(tool, Tool)
+
+	# Search *tools* for a *Tool_Dowel_Pin* that matches *number*:
+	dowel_pin_tool = None
+	desired_tool_number = tool._number_get()
+	for tool in shop._tools:
+	    if tool._number_get() == desired_tool_number and isinstance(tool, Tool_Dowel_Pin):
+		# We have a match:
+		dowel_pin_tool = tool
+		break
+
+	return dowel_pin_tool
+
 
     def _drill_append(self, name, number, material, diameter,
       flutes_count, maximum_z_depth, drill_name, point_angle, drill_kind, is_center_cut, drills):
