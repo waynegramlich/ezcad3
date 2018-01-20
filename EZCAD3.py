@@ -4644,7 +4644,7 @@ class Mount:
 	    print("{0}=>Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i}, {6}, {7:i})".
 	      format(indent, name, part._name_get(), mount_translate_point, top_surface_safe_z,
 	      xy_rapid_safe_z, is_tooling_plate_mount, selected_parallel_height))
-	    trace_detail = 1
+	    trace_detail = 2
 
 	# Create *cnc_transform*:
 	if trace_detail >= 2:
@@ -5317,7 +5317,7 @@ class Mount_Operations:
 
 	    # Write out the final G-code lines to *mount_ngc_file*:
 	    # FIXME: Read tool change point from *vice*:
-	    mount_ngc_file.write("G49 G0 X-1.5 Y0 Z8 ( [FIXME!!!] Return to tool change point )\n")
+	    mount_ngc_file.write("G49 G0 X-1.5 Y0 Z8 ( Return to tool change point )\n")
 	    #mount_ngc_file.write("G53 G0 Y0.0 ( Move the work to the front )\n")
 	    mount_ngc_file.write("M2\n")
 	    mount_ngc_file.write("( Path Bounding Box: {0:i} )\n".format(path_bounding_box))
@@ -7162,7 +7162,6 @@ class Operation_Dowel_Pin(Operation):
 	    if isinstance(follows, Operation):
 		follows_name = follows._name_get()
 	    part_name = part._name_get()
-
             print(("{0}=>Operation_Dowel_Pin.__init__('{1}', '{2}', {3}, '{4}', '{5}', " +
 	      "{6:i}, {7:rpm}, {8:i}, dp={9:i}, pp={10:i})").format(
 	      pad, part_name, comment, sub_priority, tool._name_get(), follows_name,
@@ -7180,6 +7179,7 @@ class Operation_Dowel_Pin(Operation):
 
 	# Wrap up any *tracing*:
         if tracing >= 0:
+	    operation_dowel_pin._tracing = tracing
             print(("{0}<=Operation_Dowel_Pin.__init__('{1}', '{2}', {3}, '{4}', '{5}', " +
 	      "{6:i}, {7:rpm}, {8:i}, dp={9:i}, pp={10:i})").format(
 	      pad, part_name, comment, sub_priority, tool._name_get(), follows_name,
@@ -7204,6 +7204,9 @@ class Operation_Dowel_Pin(Operation):
 	assert isinstance(tracing, int)
 
 	# Perform any *tracing*:
+	if tracing < 0 and operation_dowel_pin._tracing >= 0:
+	    tracing = operation_dowel_pin._tracing
+	    print("***************************")
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
@@ -7216,11 +7219,12 @@ class Operation_Dowel_Pin(Operation):
 	cnc_dowel_point  = operation_dowel_pin._dowel_point
 	cnc_plunge_point = operation_dowel_pin._plunge_point
 	comment          = operation_dowel_pin._comment
-	diameter         = operation_dowel_pin._diameter
 	tool             = operation_dowel_pin._tool
 	part             = operation_dowel_pin._part_get()
 
 	# Grab some values out of *tool*:
+	tool_name       = tool._name_get()
+	diameter        = tool._diameter_get()
 	tip_depth       = tool._tip_depth_get()
 	maximum_z_depth = tool._maximum_z_depth_get()
 
@@ -7258,7 +7262,9 @@ class Operation_Dowel_Pin(Operation):
 	# coordinate of *actual_dowel_point*:
 	actual_plunge_point = P(cnc_plunge_point.x, cnc_plunge_point.y, actual_z)
 	if trace_detail >= 1:
+	    print("{0}tool_name='{1}'".format(indent, tool_name))
 	    print("{0}cnc_dowel_point={1:i}".format(indent, cnc_dowel_point))
+	    print("{0}actual_dowel_point={1:i}".format(indent, actual_dowel_point))
 	    print("{0}actual_plunge_point={1:i}".format(indent, actual_plunge_point))
 
 	# Define the speed and feed for these operations:
@@ -7295,8 +7301,9 @@ class Operation_Dowel_Pin(Operation):
 	# Move slowly down to *z_stop*:
 	code._z_feed(ipm10, rpm0, actual_plunge_point.z, "dowel_pin")
 
-	# Move slowly to (*dowel_pin_x*, *dowel_pin_y*).  This may cause the material in the
+	# Move slowly to (*actual_x*, *actual_y*).  This may cause the material in the
 	# vice to slide over:
+	code._line_comment("actual_dowel_point={0:i}".format(actual_dowel_point))
 	code._xy_feed(ipm10, rpm0, actual_x, actual_y)
 
 	# Now pause again, to let the operator move piece up against the
@@ -7931,7 +7938,7 @@ class Operation_Mount(Operation):
 	cnc_extra_start_dy = cnc_extra_start_tne.y - cnc_extra_start_bsw.y
 	cnc_extra_start_dz = cnc_extra_start_tne.z - cnc_extra_start_bsw.z
 	material = part._material_get()
-	mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3}  )\n".
+	mount_ngc_file.write("( Initial dimensions X:{0:i}in x Y:{1:i}in x Z:{2:i}in of {3}  )\n".
 	  format(cnc_extra_start_dx.absolute(), cnc_extra_start_dy.absolute(),
 	  cnc_extra_start_dz.absolute(), material))
 	selected_parallel_height = mount._selected_parallel_height_get()
@@ -8265,8 +8272,10 @@ class Operation_Round_Pocket(Operation):
 
 	# Initialize superclass:
 	cnc_start = start
-	Operation.__init__(self, "Round_Pocket", Operation.KIND_ROUND_POCKET,
+	Operation.__init__(operation_round_pocket, "Round_Pocket", Operation.KIND_ROUND_POCKET,
 	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start)
+	if tracing >= 0:
+	    operation_round_pocket._tracing = tracing
 
 	# Load up *operation_round_pocket*:
 	operation_round_pocket._diameter = diameter
@@ -8297,23 +8306,27 @@ class Operation_Round_Pocket(Operation):
 	assert isinstance(is_last, bool)
 	assert isinstance(tracing, int)
 
-	# Use *round_pocket* instead of *self*:
-	round_pocket = self
+	# Use *operation_round_pocket* instead of *self*:
+	operation_round_pocket = self
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
+	if tracing < 0 and operation_round_pocket._tracing >= 0:
+	    tracing = operation_round_pocket._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Operation_Round_Pocket._cnc_generate('{1}', '{2}', *, '{3}')".
-	      format(indent, round_pocket._name, mount._name_get(), cnc_vrml._name_get()))
+	      format(indent, operation_round_pocket._name, mount._name_get(), cnc_vrml._name_get()))
 	    trace_detail = 2
 
-	# Extract some values from *round_pocket*:
-	part = round_pocket._part
-	diameter = round_pocket._diameter
-	start = round_pocket._start
-	stop = round_pocket._stop
-	tool = round_pocket._tool
+	# Extract some values from *operation_round_pocket*:
+	comment   = operation_round_pocket._comment
+	diameter  = operation_round_pocket._diameter
+	hole_kind = operation_round_pocket._hole_kind
+	part      = operation_round_pocket._part
+	start     = operation_round_pocket._start
+	stop      = operation_round_pocket._stop
+	tool      = operation_round_pocket._tool
 
 	# The *top_surface_transform* has been previously set orient the material correctly for CNC:
 	cnc_transform = mount._cnc_transform_get()
@@ -8332,10 +8345,8 @@ class Operation_Round_Pocket(Operation):
 
 	# Extract some values from *tool*:
 	tool_diameter = tool._diameter_get()
-	comment = round_pocket._comment
 	f = tool._feed_speed_get()
 	s = tool._spindle_speed_get()
-	hole_kind = round_pocket._hole_kind
 
 	# Figure out if *tool* is a laser:
 	is_laser = tool._is_laser_get()
@@ -8388,11 +8399,13 @@ class Operation_Round_Pocket(Operation):
 		
 		# Get to proper depth:
 		z = z_start - depth_per_pass * float(depth_pass + 1)
+		if trace_detail >= 2:
+		    print("{0}z={1:i}".format(indent, z))
 
 		if is_through:
 		    # We are going all the way through, so we can ignore the material in the middle:
 		    code._xy_feed(f, s, x, y + radius_remove)
-		    code._z_feed(z_feed, s, z, "round_pocket_pocket")
+		    code._z_feed(z_feed, s, z, "round_pocket_pocket", tracing=tracing+1)
 		    code._xy_ccw_feed(f, s, radius_remove, x, y - radius_remove)
 		    code._xy_ccw_feed(f, s, radius_remove, x, y + radius_remove)
 		else:
@@ -8408,7 +8421,8 @@ class Operation_Round_Pocket(Operation):
 			code._line_comment("radius pass {0} of {1}: pass_remove={2:i}".
 			  format(radius_index + 1, radius_passes, pass_remove))
 			code._xy_feed(f, s, x, y + pass_remove)
-			code._z_feed(z_feed, s, z, "round_pocket_pocket[{0}]".format(radius_index))
+			code._z_feed(z_feed, s, z, "round_pocket_pocket[{0}]".format(radius_index),
+			  tracing=tracing + 1)
 			code._xy_ccw_feed(f, s, pass_remove, x, y - pass_remove)
 			code._xy_ccw_feed(f, s, pass_remove, x, y + pass_remove)
 		    code._line_comment("radius passes done")
@@ -8445,7 +8459,7 @@ class Operation_Round_Pocket(Operation):
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Operation_Round_Pocket._cnc_generate('{1}', '{2}', *, '{3}')".
-	      format(indent, round_pocket._name, mount._name_get(), cnc_vrml._name_get()))
+	      format(indent, operation_round_pocket._name, mount._name_get(), cnc_vrml._name_get()))
 
     def compare(self, pocket2):
 	""" *Operation_Pocket*: Return -1, 0, 1 if *pocket1* (i.e. *self*)
@@ -12609,7 +12623,7 @@ class Part:
 	    hole_kind = Part.HOLE_FLAT
 	    extra = L(inch=0.025).millimeters()
 	    if 't' in flags:
-		# Extend *stop* so that it end .250inch further "down":
+		# Extend *stop* so that it ends .250inch further "down":
 		hole_axis = (start - stop).normalize()
 		new_stop = stop - hole_axis * extra
 		hole_kind = Part.HOLE_THROUGH
@@ -13635,7 +13649,7 @@ class Part:
 	    print("{0}=>Part.countersink_hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, {6:i}, '{7}')".
 	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
 	      start, stop, flags))
-	    trace_detail = 2
+	    trace_detail = 3
 
 	#FIXME: Why *stl_mode* with *cnc_mode*???!!!
 	ezcad = part._ezcad
@@ -13713,7 +13727,7 @@ class Part:
 	    elif is_flat_hole:
 		hole_kind = Part.HOLE_FLAT
 		try_flat = True
-		hole_z_depth = start_z - stop_z
+		#hole_z_depth = start_z - stop_z
 	    elif is_through_hole:
 		hole_kind = Part.HOLE_THROUGH
 
@@ -13724,7 +13738,8 @@ class Part:
 	    else:
 		assert False, "No hole kind specified"
 	    hole_z_depth = start_z - stop_z
-	    assert hole_z_depth > zero
+	    assert hole_z_depth >= zero, \
+	      "start_z={0:i} stop_z={1:i} hole_z_depth={2:i}".format(start_z, stop_z, hole_z_depth)
 
 	    # Print out some tracing infromation:
 	    if trace_detail >= 1:
@@ -15551,10 +15566,21 @@ class Part:
 	      (rows_spanned * plate_hole_pitch) / 2)
 	    z = selected_parallel_height + plate_dz + plate_spacer_dz + part_dz
 	    plate_translate_point = P(x, y, z)
-	    top_surface_safe_z = z + (extra_dz - part_dz)
+	    top_surface_safe_z = z + (extra_dz - part_dz).maximum(zero)
 	    xy_rapid_safe_z = top_surface_safe_z + L(inch=0.500)
 
 	    # Create the *tooling_plate_mount*:
+	    if trace_detail >= 2:
+		print("{0}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!".format(indent))
+		print("{0}selected_parallel_height={1:i}".format(indent, selected_parallel_height))
+		print("{0}plate_dz={1:i}".format(indent, plate_dz))
+		print("{0}plate_spacer_dz={1:i}".format(indent, plate_spacer_dz))
+		print("{0}part_dz={1:i}".format(indent, part_dz))
+		print("{0}top_surface_safe_z={1:i}".format(indent, top_surface_safe_z))
+		print("{0}xy_rapid_safe_z={1:i}".format(indent, xy_rapid_safe_z))
+		print("{0}plate_mount.top_transform={1:v}".format(indent, top_transform))
+		print("{0}plate_mount.plate_translate_point={1:i}".
+		  format(indent, plate_translate_point))
 	    plate_mount = Mount(plate_mount_name, part, top_transform,
 	      plate_translate_point, top_surface_safe_z, xy_rapid_safe_z, True,
 	      selected_parallel_height, tracing = deep_tracing)
@@ -16002,7 +16028,7 @@ class Part:
 	    x_axis = P(one, zero, zero).normalize()
 	    y_axis = P(zero, one, zero).normalize()
 	    z_axis = P(zero, zero, one).normalize()
-	    if trace_detail >= 3:
+	    if trace_detail >= 4:
 		print("{0}x_axis={1:m} y_axis={2:m} z_axis={3:m}".
 		  format(indent, x_axis, y_axis, z_axis))
 
@@ -16251,7 +16277,7 @@ class Part:
 		"rotate jaw surface to point north in vice", jaw_axis, jaw_rotate_angle,
 		tracing = tracing + 1)
 	    if trace_detail >= 2:
-		print("{0}top_surface_transform 2={1:v}".format(indent, top_surface_transform))
+		print("{0}top_surface_transform 3={1:v}".format(indent, top_surface_transform))
 
 	    # Register the block with the *bom* (Bill Of Materials):
 	    bom = part._bom
@@ -16277,9 +16303,9 @@ class Part:
 	    part_dx = 2 * half_part_dx
 	    part_dy = 2 * half_part_dy
 	    part_dz = 2 * half_part_dz
-	    #if trace_detail >= 2:
-	    #	print("{0}part_dimensions: dx={1:i} dy={2:i} dz={3:i} volume={4:i}".
-	    #	  format(indent, part_dx, part_dy, part_dz, bounding_box.volume_get()))
+	    if trace_detail >= 2:
+	    	print("{0}part dimensions in vice: dx={1:i} dy={2:i} dz={3:i}".
+	    	  format(indent, part_dx, part_dy, part_dz))
 
 	    # Grab the associated *parallels_heights* from *parallels* and get
 	    # *smallest_parallel_height*:
@@ -16294,12 +16320,13 @@ class Part:
 	    epsilon = L(inch=.000001)
 	    for index, parallel_height in enumerate(parallels_heights):
 		# Use *epsilon* to deal with rounding errors:
-		trial_top_surface_z = parallel_height + extra_bottom_dz + part_dz - epsilon
+		trial_top_surface_z = \
+		  parallel_height + extra_bottom_dz + part_dz + extra_top_dz - epsilon
 		if parallel_height > selected_parallel_height and \
 		  trial_top_surface_z <= vice_jaw_dz:
 		    selected_parallel_height = parallel_height
 		    if trace_detail >= 3:
-			print("{0}Parallel[{1}]: parellel_height={2:i} trial_top_surface_z={2:i}".
+			print("{0}Parallel[{1}]: parellel_height={2:i} trial_top_surface_z={3:i}".
 			  format(indent, index, parallel_height, trial_top_surface_z))
 	    if trace_detail >= 1:
 		print("{0}parallels_heights={1}".format(indent,
@@ -16312,7 +16339,7 @@ class Part:
 	    cnc_xy_rapid_safe_z = cnc_top_surface_safe_z + L(inch=0.5)
 	    if trace_detail >= 1:
 		print(("{0}cnc_top_surface_z={1:i} " +
-		  "cnc_top_surface_safe_z={2:i} cnc_xy_rapid_safe_z={2:i}").
+		  "cnc_top_surface_safe_z={2:i} cnc_xy_rapid_safe_z={3:i}").
 		  format(indent, cnc_top_surface_z, cnc_top_surface_safe_z, cnc_xy_rapid_safe_z))
 
 	    # Process *flags* to figure out if a dowel pin operation is needed:
@@ -16345,6 +16372,11 @@ class Part:
 		    part_centered_in_vice = False
 		else:
 		    assert False, "Internal error: Neither left or right dowel pin is specified"
+	    if trace_detail >= 3:
+		print("{0}is_left_dowel_pin={1} is_right_dowel_pin={2}".
+		  format(indent, is_left_dowel_pin, is_right_dowel_pin))
+		print("{0}part_centered_in_vice={1} vice_x={2:i} vice_y={3:i}".
+		  format(indent, part_centered_in_vice, vice_x, vice_y))
 
 	    # Now we can compute *mount_translate_point* which tranlates the *part* from the
 	    # machine origin to the correct location in the *vice*:
@@ -16373,8 +16405,8 @@ class Part:
 	      part._bounding_box_get(top_transform, tracing = tracing + 1)
 
 	    # Now add in the extra material:
-	    top_extra_start_bsw = top_bounding_bsw - P(extra_dx/2, extra_dy/2, -extra_bottom_dz)
-	    top_extra_start_tne = top_bounding_tne + P(extra_dx/2, extra_dy/2,  extra_top_dz)
+	    top_extra_start_bsw = top_bounding_bsw - P(extra_dx/2, extra_dy/2, extra_bottom_dz)
+	    top_extra_start_tne = top_bounding_tne + P(extra_dx/2, extra_dy/2, extra_top_dz)
 
 	    # Now reverse the extra material back into the original *part* locations:
 	    top_reverse_transform = top_transform.reverse()
@@ -16431,16 +16463,8 @@ class Part:
 		    print("{0}cnc_dowel_point={1:i} cnc_plunge_point={2:i}".format(
 		      indent, cnc_dowel_point, cnc_plunge_point))
 
-		# Determine the *preferred_diameter* from *flags*:
-		#if '6' in flags:
-		#    preferred_diameter = L(inch=0.1065)	# #6-32 75% thread (#36 drill)
-		#elif '4' in flags:
-		#    preferred_diameter = L(inch=0.0890)	# #4-40 75% thread (#43 drill)
-		#else:
-		#    preferred_diameter = L(inch="3/8")
-		preferred_diameter = L(inch="3/8")
-
 		# Perform the dowel pin operation:
+		preferred_diameter = L(inch="3/8")
 		part.dowel_pin(dowel_pin_comment,
 		  cnc_dowel_point, cnc_plunge_point, preferred_diameter, detail_tracing)
 
@@ -20691,6 +20715,7 @@ class Shop:
 	degrees45 = Angle(deg=45.0)
 	degrees90 = Angle(deg=90.0)
 	degrees118 = Angle(deg=118.0)
+	degrees135 = Angle(deg=135.0)
 
 	# Some common inch sizes:
 	in1_16 = L(inch="1/16")
@@ -20751,6 +20776,8 @@ class Shop:
 	  15, hss, L(inch=0.0700), 4, L(inch=0.750), "#50", degrees118, stub, no_center_cut, drills)
 	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill [1.5in]",
 	  16, hss, in3_8, 4, L(inch=1.500), not laser)
+	dowel_3_8_long = shop._dowel_pin_append("3/8 Dowel Pin [1.5in]",
+	  16, 66, hss, in3_8, L(inch=1.500), zero)
 	#end_mill_3_4 = shop._end_mill_append("3/4 End Mill",
 	#  13, hss, in3_4, 2, in1_3_8)
 	drill_30 = shop._drill_append("#30 [#4-40 free]",
@@ -20763,13 +20790,16 @@ class Shop:
 	  20, hss, in3_32, 2, L(inch=1.750), "3/32", degrees118, stub, no_center_cut, drills)
 	drill_42 = shop._drill_append("#42 [#4-44 75%]",
 	  21, hss, L(inch=0.0935), 2, L(inch=1.750), "#42", degrees118, stub, no_center_cut, drills)
+	drill_52 = shop._drill_append("#52 [#0-80 close]",
+	  22, hss, L(inch=0.0635), 2, L(inch=1.90), "#52", degrees118, stub, center_cut, drills)
 	drill_3_64 = shop._drill_append("3/64 [#0-80 75% thread]",
-          22, hss, L(inch="3/64"), 2, L(inch=1.05), "3/64", degrees118, stub, no_center_cut, drills)
-	drill_52 = shop._drill_append("#52 [#80-80 close]",
-	  23, hss, L(inch=0.0635), 2, L(inch=1.90), "#52", degrees118, stub, no_center_cut, drills)
+          23, hss, L(inch="3/64"), 2, L(inch=1.05), "3/64", degrees118, stub, center_cut, drills)
 	drill_19 = shop._drill_append("#19 [M4x.7 close]",
-	  24, hss, L(inch=0.1660), 2, L(inch=2.00), "M4x.7", degrees118, stub, no_center_cut,
-          drills)
+	  24, hss, L(inch=0.1660), 2, L(inch=2.00), "M4x.7", degrees118, stub, center_cut, drills)
+	drill_6mm = shop._drill_append("6mm drill [1.1in]",
+	  25, hss, L(mm=6.00),     2, L(mm=28.00), "6mm", degrees135, stub, center_cut, drills)
+	drill_8mm = shop._drill_append("8mm drill [3in]",
+	  26, hss, L(mm=8.00),    2, L(inch="2-61/64"), "8mm", degrees135, stub, center_cut, drills)
 
 	# Laser "tools":
 	#laser_007 = shop._end_mill_append("Laser_007",
@@ -21691,7 +21721,7 @@ class Tool_Drill(Tool):
 	return self._is_center_cut
 
     @staticmethod
-    def _match(tool, desired_diameter, maximum_z_depth, from_routine, tracing):
+    def _match(tool, desired_diameter, maximum_z_depth, from_routine, tracing=-1000000):
 	""" *Tool_Drill*:  Return the diameter of *tool*, provided it is a *Drill_Tool*
 	    object with a diameter that is very close to *desired_diameter* and
 	    can reach at least to *maximum_z_depth*.  If no match occurs, -1.0 is returned.
@@ -21706,10 +21736,12 @@ class Tool_Drill(Tool):
 	assert isinstance(tracing, int)
 
 	# Perform any requested tracing*:
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Tool_Drill._match('{1}', {2:i}, {3:i}, '{4}')".
 	      format(indent, tool, desired_diameter, maximum_z_depth, from_routine))
+	    trace_detail = 3
 
 	# Priority is negative if *tool* is not a *Tool_Drill* object:
 	priority = -1.0
@@ -21719,6 +21751,9 @@ class Tool_Drill(Tool):
 		# If the *tool* *diameter* is very close to *desired_diameter* we have match::
 		diameter = tool._diameter
 		epsilon = L(inch=0.00001)
+		if trace_detail >= 3:
+		    print("{0}desiried_diameter={1:i} diameter={2:i}".
+		      format(indent, desired_diameter, diameter))
 		if (desired_diameter - diameter).absolute() < epsilon:
 		    # We have a match; set *priority* to the diameter:
 		    priority = diameter.millimeters()
@@ -21848,9 +21883,9 @@ class Tool_End_Mill(Tool):
 	is_end_mill = isinstance(tool, Tool_End_Mill)
 	tool._search_results_append(is_end_mill, "Is end mill")
 	if is_end_mill:
-	    if trace_detail >= 0:
-		print("{0}=>Tool_End_Mill.match('{1}', {2:i}, {3:i}, '{4}')".
-		  format(indent, tool._name, maximum_diameter, maximum_z_depth, from_routine))
+	    #if trace_detail >= 0:
+	    #	print("{0}=>Tool_End_Mill.match('{1}', {2:i}, {3:i}, '{4}')".
+	    #	  format(indent, tool._name, maximum_diameter, maximum_z_depth, from_routine))
 
 	    # Somehow, the type *bool_* (from numpy) occasionally gets returned. The cast
 	    # using bool() works around the problem.  This is just weird:
@@ -21872,20 +21907,20 @@ class Tool_End_Mill(Tool):
 		#  -maximum_z_depth, tool_maximum_z_depth))
 		if z_depth_ok:
 		    if trace_detail >= 1:
-			print("{0}Tool_End_Mill.match: z_depth ok".format(indent))
+			print("{0}Tool_End_Mill._match: z_depth ok".format(indent))
 		    priority = (tool_diameter * 100.0 - tool_maximum_z_depth).inches()
 		    if tool._is_laser:
 			priority = tool_diameter.inches()
 
-	    if trace_detail >= 0:
-		print("{0}<=Tool_End_Mill._match('{1}', {2:i}, {3:i}, '{4}') => {5}".format(
-		  indent, tool._name, maximum_diameter, maximum_z_depth, from_routine, priority))
+	    #if trace_detail >= 0:
+	    #	print("{0}<=Tool_End_Mill._match('{1}', {2:i}, {3:i}, '{4}') => {5}".format(
+	    #	  indent, tool._name, maximum_diameter, maximum_z_depth, from_routine, priority))
 
 	assert isinstance(priority, float)
 
 	# Wrap up any requested *tracing*:
 	if trace_detail >= 1:
-	    print("{0}=>Tool_End_Mill._match('{1}', {2:i}, {3:i}, '{4}') => {5}".
+	    print("{0}<=Tool_End_Mill._match('{1}', {2:i}, {3:i}, '{4}') => {5}".
 	      format(indent, tool._name, maximum_diameter, maximum_z_depth, from_routine, priority))
 
 	return priority
