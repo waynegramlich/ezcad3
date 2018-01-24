@@ -6426,8 +6426,9 @@ class Multi_Mounts:
 	    trace_detail = 2
 
 	zero = L()
+	big = L(inch=123456789.0)
 	bounding_box = Bounding_Box()
-	left_most_edge = L(inch=123456789.0)
+	left_most_edge = big
 	left_most_index = -1
 	multi_mounts_list = multi_mounts._multi_mounts_list
 	for index, multi_mount in enumerate(multi_mounts_list):
@@ -9940,8 +9941,7 @@ class Part:
 		ezcad._stl_mode = True
 		if trace_detail >= 1:
 		    print("{0}[{1}]:'{2} (Part:'{3}'".format(indent, index, name, part._name_get()))
-		#part._multi_mount_process(name, multi_mounts, tracing + 1)
-		part._multi_mount_process(name, multi_mounts, tracing=5)
+		part._multi_mount_process(name, multi_mounts, tracing + 1)
 		ezcad._cnc_mode = False
 		ezcad._stl_mode = False
 
@@ -16772,8 +16772,9 @@ class Part:
 	hole00_extra_start_bsw, hole00_extra_start_tne, dowel_pin00 = \
 	  multi_mounts._extra_start_dowel_pin_get(tooling_plate, tracing = tracing + 1)
 	if trace_detail >= 2:
-	    print("{0}hole00_extra_start_bsw{1:i} hole00_extra_start_tne={2:i} dowel_pin00={3:i}".
-	      format(indent, hole00_extra_start_bsw, hole00_extra_start_tne, dowel_pin00))
+	    print("{0}hole00_extra_start_bsw={1:i}".format(indent, hole00_extra_start_bsw))
+	    print("{0}hole00_extra_start_tne={1:i}".format(indent, hole00_extra_start_tne))
+	    print("{0}dowel_pin00={1:i}".format(indent, dowel_pin00))
 
 	# Define some constants:
 	zero = L()
@@ -16812,7 +16813,7 @@ class Part:
 	    print("{0}tooling_plate: hole_0_0={1:i}".format(indent, hole_0_0))
 	    print("{0}tooling_plate: spacer_dz={1:i}".format(indent, tooling_plate_spacer_dz))
 
-	# Grab seom values from *vice*:
+	# Grab some values from *vice*:
 	vice = shop._vice_get()
 	parallels = vice._parallels_get()
 	jaw_volume = vice._jaw_volume_get()
@@ -16821,7 +16822,7 @@ class Part:
 	jaw_dx = jaw_volume.x
 	jaw_dy = jaw_volume.y
 	jaw_dz = jaw_volume.z
-	jaws_spread = tooling_plate_dy
+	jaws_spread = tooling_plate_dy if is_tooling_plate else zero
 
 	# Initialize some values prior to the loop which fills them in:
 	combined_multi_mount = None
@@ -16879,7 +16880,7 @@ class Part:
 
 		# Now compute both *offset* and *center* that specifies the offset from
 		# *hole_0_0* to the upper left mounting hole for *multi_mount_part*.  *center*
-		# specifies the distance from the upper left mountin hole to the center of
+		# specifies the distance from the upper left mounting hole to the center of
                 # *multi_mount_part*:
 		offset = P(column_dx, -row_dy, zero)
 		if rotate_degrees % 180 == 0:
@@ -16975,37 +16976,25 @@ class Part:
 		      format(indent, index, combined_mount._name_get()))
 
 		# Update the *extra_bounding_box*:
+		combined_mount_cnc_transform = combined_mount._cnc_transform_get()
 		extra_start_bsw, extra_start_tne = multi_mount_mount._extra_start_get()
-		reverse_cnc_transform = multi_mount_mount._cnc_transform_get().reverse()
-		part_extra_start_bsw = reverse_cnc_transform * extra_start_bsw
-		part_extra_start_tne = reverse_cnc_transform * extra_start_tne
-		forward_cnc_transform = combined_mount._cnc_transform_get()
-		new_extra_start_bsw = forward_cnc_transform * part_extra_start_bsw
-		new_extra_start_tne = forward_cnc_transform * part_extra_start_tne
-		final_extra_start_bsw, final_extra_start_tne = \
-		   new_extra_start_bsw.minimum_maximum(new_extra_start_tne)
-
-		#final_extra_start_bsw = forward_cnc_transform * part.bsw
-		#final_extra_start_tne = forward_cnc_transform * part.tne
-
-		extra_bounding_box.point_expand(final_extra_start_bsw)
-		extra_bounding_box.point_expand(final_extra_start_tne)
+		cnc_extra_start_bsw = combined_mount_cnc_transform * extra_start_bsw
+		cnc_extra_start_tne = combined_mount_cnc_transform * extra_start_tne
+		extra_bounding_box.point_expand(cnc_extra_start_bsw)
+		extra_bounding_box.point_expand(cnc_extra_start_tne)
+		if not is_tooling_plate:
+		    extra_dy = (cnc_extra_start_tne.y - cnc_extra_start_bsw.y).absolute()
+		    jaws_spread = jaws_spread.maximum(extra_dy)
 		if trace_detail >= 2:
-		    print("{0}[{1}]: multi_mount_mount_part='{2}' multi_mount_mount name='{3}'".
+		    print("{0}[{1}]: combined_mount.part='{2}' combined_mount.name='{3}'".
 		      format(indent, index,
-		      multi_mount_mount._part_get()._name_get(), multi_mount_mount._name_get()))
+		      combined_mount._part_get()._name_get(), combined_mount._name_get()))
 		    print("{0}[{1}]: extra_start_bsw={2:i} extra_start_tne={3:i}".
 		      format(indent, index, extra_start_bsw, extra_start_tne))
-		    print("{0}[{1}]: reverse_cnc_transform={2:v}".
-		      format(indent, index, reverse_cnc_transform))
-		    print("{0}[{1}]: part_extra_start_bsw={2:i} part_extra_start_tne={3:i}".
-		      format(indent, index, part_extra_start_bsw, part_extra_start_tne))
-		    print("{0}[{1}]: forward_cnc_transform={2:v}".
-		      format(indent, index, forward_cnc_transform))
-		    print("{0}[{1}]: new_extra_start_bsw={2:i} new_extra_start_tne={3:i}".
-		      format(indent, index, new_extra_start_bsw, new_extra_start_tne))
-		    print("{0}[{1}]: final_extra_start_bsw={2:i} final_extra_start_tne={3:i}".
-		      format(indent, index, new_extra_start_bsw, final_extra_start_tne))
+		    print("{0}[{1}]: combined_mount.cnc_transform={2:v}".
+		      format(indent, index, combined_mount_cnc_transform))
+		    print("{0}[{1}]: cnc_extra_start_bsw={2:i} cnc_extra_start_tne={3:i}".
+		      format(indent, index, cnc_extra_start_bsw, cnc_extra_start_tne))
 
 		# Generate some reasonble looking *spacers* for the CNC visualization:
 		if rotate_degrees % 180 == 90:
@@ -22283,11 +22272,13 @@ class Tooling_Plate:
 	return self._dz
 
     def _extra_material_get(self, mount, column, row, rotate, tracing=-1000000):
-        """ *Tooling_Plate*: With the *Tooling_Plate* object (i.e. *self*) oriented with the (0,0)
-	    hole located just under the CNC machine origin (i.e. the top surface) return the
-	    bounding box for the *Part* associated with *mount*.  The part is rotated by *rotate*
-	    such that it is oriented so that its upper left mounting hole is at (*column*, *row*).
-	    *rotate* must be a multiple of 90 degrees.
+        """ *Tooling_Plate*: Return the extra material bounding box for the *Part* asociated with
+	    *mount* using the *Tooling_Plate* object (i.e. self).  The extra material bounding box
+	    is specified a by a BSW (Bottom South West) point and a TNE (Top North East) point.
+	    The extra material bounding box is positioned such that the *Part* upper left mounting
+	    hole is positioned over the machine origin (i.e. top surface transfrom.)   The *Part*
+	    is rotated around a Z axis that goes through the *Part* center and *rotate* must be
+	    a multiple of 90 degrees.)
 	"""
 
 	# Use *tooling_plate* instead of *self*:
@@ -22339,88 +22330,83 @@ class Tooling_Plate:
 	zero = L()
 	one = L(mm=1.000)
 	z_axis = P(zero, zero, one)
-	mount_translate_point = mount._mount_translate_point_get()
-	rotate_transform = Transform().                       \
-	  translate("CNC=>TS", -mount_translate_point). \
-	  rotate("rotate@Z_Axis", z_axis, rotate).     \
-          translate("TS=>CNC", mount_translate_point)
+	rotate_transform = Transform().rotate("rotate@Z_Axis", z_axis, rotate)
+	extra_start_bsw, extra_start_tne = mount._extra_start_get()
 	if trace_detail >= 3:
 	    print("{0}mount='{1}'".format(indent, mount._name_get()))
-	    print("{0}mount_translate_point={1:i}".format(indent, mount_translate_point))
 	    print("{0}rotate_transform={1:v}".format(indent, rotate_transform))
+	    print("{0}extra_start_bsw={1:i} extra_start_tne={2:i}".
+	      format(indent, extra_start_bsw, extra_start_tne))
 
-	# Figure out where everything is located from the original CNC mount:
+	# Figure out where everything is in TS (i.e. top surface) coordinates:
 	part = mount._part_get()
-	cnc_transform   = mount._cnc_transform_get()
-	cnc_part_bsw    = cnc_transform * part.bsw
-	cnc_part_center = cnc_transform * part.c
-	cnc_part_tne    = cnc_transform * part.tne
-	cnc_part_volume = (cnc_part_tne - cnc_part_bsw).absolute()
-	cnc_hole_bsw    = cnc_part_center + P(-columns_dx/2,  rows_dy/2, -cnc_part_volume.z/2)
-	cnc_hole_tne    = cnc_part_center + P( columns_dx/2, -rows_dy/2,  cnc_part_volume.z/2)
-	extra_start_bsw, extra_start_tne = mount._extra_start_get()
-	cnc_extra_start_bsw = cnc_transform * extra_start_bsw
-	cnc_extra_start_tne = cnc_transform * extra_start_tne
+	ts_transform       = mount._top_surface_transform_get()
+	ts_part_bsw        = ts_transform * part.bsw
+	ts_part_center     = ts_transform * part.c
+	ts_part_tne        = ts_transform * part.tne
+	ts_part_volume     = (ts_part_tne - ts_part_bsw).absolute()
+	ts_hole_bsw        = ts_part_center + P(-columns_dx/2, -rows_dy/2, -ts_part_volume.z/2)
+	ts_hole_tne        = ts_part_center + P( columns_dx/2,  rows_dy/2,  ts_part_volume.z/2)
+	ts_extra_start_bsw = ts_transform * extra_start_bsw
+	ts_extra_start_tne = ts_transform * extra_start_tne
 	if trace_detail >= 3:
 	    print("{0}part='{1}' mount='{2}'".
 	      format(indent, part._name_get(), mount._name_get()))
-	    print("{0}cnc_part_bsw={1:i} cnc_part_center={2:i} cnc_part_tne={3:i}".
-	      format(indent, cnc_part_bsw, cnc_part_center, cnc_part_tne))
-	    print("{0}cnc_part_volume={1:i}".format(indent, cnc_part_volume))
-	    print("{0}cnc_hole_bsw={1:i} cnc_hole_tne={2:i}".
-	      format(indent, cnc_hole_bsw, cnc_hole_tne))
-	    print("{0}extra_start_bsw={1:i} extra_start_tne={2:i}".
-	      format(indent, extra_start_bsw, extra_start_tne))
-	    print("{0}cnc_extra_start_bsw={1:i} cnc_extra_start_tne={2:i}".
-	      format(indent, cnc_extra_start_bsw, cnc_extra_start_tne))
+	    print("{0}ts_part_bsw={1:i} ts_part_center={2:i} ts_part_tne={3:i}".
+	      format(indent, ts_part_bsw, ts_part_center, ts_part_tne))
+	    print("{0}ts_part_volume={1:i}".format(indent, ts_part_volume))
+	    print("{0}ts_hole_bsw={1:i} ts_hole_tne={2:i}".
+	      format(indent, ts_hole_bsw, ts_hole_tne))
+	    print("{0}ts_extra_start_bsw={1:i} ts_extra_start_tne={2:i}".
+	      format(indent, ts_extra_start_bsw, ts_extra_start_tne))
 
 	# Push a bunch of interesting points through the *rotate_transform*:
-	rotated_cnc_part_bsw    = rotate_transform * cnc_part_bsw
-	rotated_cnc_part_center = rotate_transform * cnc_part_center
-	rotated_cnc_part_tne    = rotate_transform * cnc_part_tne
-	rotated_cnc_volume      = (rotated_cnc_part_tne - rotated_cnc_part_bsw).absolute()
-	rotated_cnc_hole_bsw    = rotate_transform * cnc_hole_bsw
-	rotated_cnc_hole_tne    = rotate_transform * cnc_hole_tne
-	rotated_cnc_extra_start_bsw = rotate_transform * cnc_extra_start_bsw
-	rotated_cnc_extra_start_tne = rotate_transform * cnc_extra_start_tne
+	rotated_ts_part_bsw    = rotate_transform * ts_part_bsw
+	rotated_ts_part_center = rotate_transform * ts_part_center
+	rotated_ts_part_tne    = rotate_transform * ts_part_tne
+	rotated_ts_volume      = (rotated_ts_part_tne - rotated_ts_part_bsw).absolute()
+	rotated_ts_hole_bsw    = rotate_transform * ts_hole_bsw
+	rotated_ts_hole_tne    = rotate_transform * ts_hole_tne
+	rotated_ts_extra_start_bsw = rotate_transform * ts_extra_start_bsw
+	rotated_ts_extra_start_tne = rotate_transform * ts_extra_start_tne
 	if trace_detail >= 3:
-	    print("{0}rotated_cnc_part_bsw={1:i} rotated_cnc_part_tne={2:i}".
-	      format(indent, rotated_cnc_part_bsw, rotated_cnc_part_tne))
-	    print("{0}rotated_cnc_volume={1:i}".
-	      format(indent, rotated_cnc_volume))
-	    print("{0}rotated_cnc_part_center={1:i} == cnc_part_center={2:i}".
-	      format(indent, rotated_cnc_part_center, cnc_part_center))
-	    print("{0}rotated_cnc_hole_bsw={1:i} rotated_cnc_hole_tne={2:i}".
-	      format(indent, rotated_cnc_hole_bsw, rotated_cnc_hole_tne))
-	    print("{0}rotated_cnc_extra_start_bsw={1:i} rotated_cnc_extra_start_tne={2:i}".
-	      format(indent, rotated_cnc_extra_start_bsw, rotated_cnc_extra_start_tne))
+	    print("{0}rotated_ts_part_bsw={1:i} rotated_ts_part_tne={2:i}".
+	      format(indent, rotated_ts_part_bsw, rotated_ts_part_tne))
+	    print("{0}rotated_ts_volume={1:i}".
+	      format(indent, rotated_ts_volume))
+	    print("{0}rotated_ts_part_center={1:i} == ts_part_center={2:i}".
+	      format(indent, rotated_ts_part_center, ts_part_center))
+	    print("{0}rotated_ts_hole_bsw={1:i} rotated_ts_hole_tne={2:i}".
+	      format(indent, rotated_ts_hole_bsw, rotated_ts_hole_tne))
+	    print("{0}rotated_ts_extra_start_bsw={1:i} rotated_ts_extra_start_tne={2:i}".
+	      format(indent, rotated_ts_extra_start_bsw, rotated_ts_extra_start_tne))
 
 	# Fixup the corners after the *rotate_transform*:
-	fixed_cnc_part_bsw, fixed_cnc_part_tne       = \
-	  rotated_cnc_part_bsw.minimum_maximum(rotated_cnc_part_tne)
-	fixed_cnc_part_volume = (fixed_cnc_part_tne - fixed_cnc_part_bsw).absolute()
-	fixed_cnc_hole_bsw, fixed_cnc_hole_tne       = \
-	  rotated_cnc_hole_bsw.minimum_maximum(rotated_cnc_hole_tne)
+	fixed_ts_part_bsw, fixed_ts_part_tne       = \
+	  rotated_ts_part_bsw.minimum_maximum(rotated_ts_part_tne)
+	fixed_ts_part_volume = (fixed_ts_part_tne - fixed_ts_part_bsw).absolute()
+	fixed_ts_hole_bsw, fixed_ts_hole_tne       = \
+	  rotated_ts_hole_bsw.minimum_maximum(rotated_ts_hole_tne)
 	fixed_extra_start_bsw, fixed_extra_start_tne = \
-	  rotated_cnc_extra_start_bsw.minimum_maximum(rotated_cnc_extra_start_tne)
+	  rotated_ts_extra_start_bsw.minimum_maximum(rotated_ts_extra_start_tne)
 	if trace_detail >= 3:
-	    print("{0}fixed_cnc_part_bsw={1:i} fixed_cnc_part_tne={2:i}".
-	      format(indent, fixed_cnc_part_bsw, fixed_cnc_part_tne))
-	    print("{0}fixed_cnc_part_volume={1:i}".
-	      format(indent, fixed_cnc_part_volume))
-	    print("{0}fixed_cnc_hole_bsw={1:i} fixed_cnc_hole_tne={2:i}".
-	      format(indent, fixed_cnc_hole_bsw, fixed_cnc_hole_tne))
+	    print("{0}fixed_ts_part_bsw={1:i} fixed_ts_part_tne={2:i}".
+	      format(indent, fixed_ts_part_bsw, fixed_ts_part_tne))
+	    print("{0}fixed_ts_part_volume={1:i}".
+	      format(indent, fixed_ts_part_volume))
+	    print("{0}fixed_ts_hole_bsw={1:i} fixed_ts_hole_tne={2:i}".
+	      format(indent, fixed_ts_hole_bsw, fixed_ts_hole_tne))
 	    print("{0}fixed_extra_start_bsw={1:i} fixed_extra_start_tne={2:i}".
 	      format(indent, fixed_extra_start_bsw, fixed_extra_start_tne))
 	
 	# Compute *final_extra_start_bsw* and *final_extra_start_tne*:
-	cnc_hole_upper_left = P(fixed_cnc_hole_bsw.x, fixed_cnc_hole_tne.y, zero)
+	ts_hole_upper_left = P(fixed_ts_hole_bsw.x, fixed_ts_hole_tne.y, zero)
 	corner_offset = P(column * hole_pitch, -row * hole_pitch, zero)
-	final_extra_start_bsw = fixed_extra_start_bsw - cnc_hole_upper_left + corner_offset
-	final_extra_start_tne = fixed_extra_start_tne - cnc_hole_upper_left + corner_offset
+	final_extra_start_bsw = fixed_extra_start_bsw - ts_hole_upper_left + corner_offset
+	final_extra_start_tne = fixed_extra_start_tne - ts_hole_upper_left + corner_offset
 	if trace_detail >= 3:
-	    print("{0}cnc_hole_upper_left={1:i} corner_offset={2:i}".
-	     format(indent, cnc_hole_upper_left, corner_offset))
+	    print("{0}ts_hole_upper_left={1:i} corner_offset={2:i}".
+	     format(indent, ts_hole_upper_left, corner_offset))
 	    print("{0}final_extra_start_bsw={1:i} final_extra_start_tne={2:i}".
 	      format(indent, final_extra_start_bsw, final_extra_start_tne))
 
