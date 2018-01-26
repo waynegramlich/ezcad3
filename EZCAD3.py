@@ -4405,7 +4405,6 @@ class EZCAD3:
 	part_name = part._name_get()
 	key = part_name + ":" + mount_name
 	assert not key in mounts, "Mount {0} has already been created".format(key)
-	#assert key != "?"	# For finding where a mount occurs
 	mounts[key] = mount
 
     def _multi_mounts_list_get(self):
@@ -4639,8 +4638,8 @@ class Mount:
 	    vice or on a tooling plate.  *top_surface_safe_z* is the machine Z axis altitude
 	    above which is safe to prerform rapid moves (i.e. G0) in the Z direction.
 	    *xy_rapid_safe_z* is the machine Z axis alitude above which it is safe to perform
-	    rapid moves in the X and Y direction.  *is_tooling_palte_mount* is *True* if the
-	    art is mounted on a tooling plate and *False* otherwise. *selected_parallel_height*
+	    rapid moves in the X and Y direction.  *is_tooling_plate_mount* is *True* if the
+	    part is mounted on a tooling plate and *False* otherwise. *selected_parallel_height*
 	    is the height of the parallels to use.
 	"""
 
@@ -5768,7 +5767,7 @@ class Mount_Operations:
 	    print("{0}=>Mount_Operations._extend('{1}', '{2}' '{3}')".
 	      format(indent, to_mount_operations._name_get(),
 	      to_mount._name_get(), from_mount_operations._name_get()))
-	    trace_detail = 1
+	    trace_detail = 2
 
 	# Extract values from *to_mount_operations* and *from_mount_operations*:
 	to_pairs = to_mount_operations._pairs
@@ -5777,6 +5776,9 @@ class Mount_Operations:
 	# Set the stripping flags:
 	strip_mounts = 'M' in flags
 	strip_dowel_pins = 'D' in flags
+	if trace_detail >= 1:
+	    print("{0}len(from_pairs)={1} len_to_pairs={2}".
+	      format(indent, len(from_pairs), len(to_pairs)))
 
 	# Transfer the from *from_pairs* to *to_pairs*:
 	for index, from_pair in enumerate(from_pairs):
@@ -7036,7 +7038,7 @@ class Operation_Contour(Operation):
       part, comment, sub_priority, mill_tool, order, follows, feed_speed, spindle_speed,
       z_start, z_stop, contour, offset, effective_tool_radius, passes, tracing = -1000000):
 	""" *Operation_Contour*: Initialize the *Operation_Contour* object (i.e. *self*)
-	    with *part*, *comment*, *sub_priorit*, *mill_tool*, *order*, *follows*,
+	    with *part*, *comment*, *sub_priority*, *mill_tool*, *order*, *follows*,
 	    *z_start*, *z_stop*, 
 	"""
 
@@ -7110,17 +7112,11 @@ class Operation_Contour(Operation):
 	assert isinstance(is_last, bool)
 	assert isinstance(tracing, int)
 
-	# Kludge for debugging:
-	#if operation_contour._part._name_get() == "GB_Top" and \
-	#  mount._name_get() == "Top_Tooling_Plate":
-	#    print("=======================================================================")
-	#    tracing = 15
-
 	# Perform an requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = " " * tracing
-	    print("{0}=>Operation_Contour._cnc_generate('{1}', *, '{2}', '{3}')".
+	    print("{0}=>Operation_Contour._cnc_generate('{1}', '{2}', '{3}', *, *, *)".
 	      format(indent, operation_contour._name, mount._name_get(), cnc_vrml._name_get()))
 	    trace_detail = 3
 
@@ -7163,9 +7159,11 @@ class Operation_Contour(Operation):
 	offset = operation_contour._offset
 	radius = operation_contour._effective_tool_radius
 
-	# Force the *contour* to use *mount* for *cnc_transform*:
+	# Force the *contour* to the *cnc_transform* from *mount* to perform the projection:
 	cnc_transform = mount._cnc_transform_get()
 	contour._project(cnc_transform, tracing=tracing_plus_one)
+	if trace_detail >= 2:
+	    print("{0}mount.cnc_transform={1:v}".format(indent, cnc_transform))
 
 	# Do the setup step for doing the contour:
 	contour._radius_center_and_tangents_compute(tracing = tracing_plus_one)
@@ -7195,7 +7193,7 @@ class Operation_Contour(Operation):
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Operation_Contour._cnc_generate('{1}', *, '{2}', '{3}')".
+	    print("{0}<=Operation_Contour._cnc_generate('{1}', '{2}', '{3}', *, *, *)".
 	      format(indent, operation_contour._name, mount._name_get(), cnc_vrml._name_get()))
 
     def compare(self, contour2):
@@ -8202,8 +8200,10 @@ class Operation_Multi_Mount(Operation):
     def _cnc_generate(self, combined_multi_mount,
       mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
         """ *Operation_Multi_Mount*: Perform CNC visualization the *Operation_Multi_Mount* object
-	    (i.e. *self*).  This ultimate results in mount tooling being rendered into
-	    *mount_vrml_lines* and parts being rendering into *mount_vrml_stl*.
+	    (i.e. *self*).  This ultimately results in CNC tool paths being rendered into
+	    *cnc_vrm", mount tooling being rendered into *mount_vrml_lines* and parts being
+	    rendering into *mount_vrml_stl*.  The top level G code is written to *mount_ngc_file*.
+	    *is_last* is not used for this operation.
 	"""
 
 	# Use *operation_multi_mount* instead of *self*:
@@ -8302,6 +8302,15 @@ class Operation_Multi_Mount(Operation):
 	parallels._vrml_append(mount_vrml_lines,
 	  parallels_height, jaws_spread, tracing = tracing + 1)
 
+	# Show the vice jaws in *mount_vrml_lines*:
+	vice_jaw_volume = vice._jaw_volume_get()
+	corner1 = P(zero,               zero,        zero)
+	corner2 = P(vice_jaw_volume.x,  zero,        vice_jaw_volume.z)
+	mount_vrml_lines._box_outline("yellow", corner1, corner2)
+	corner1 = P(zero,              -jaws_spread, zero)
+	corner2 = P(vice_jaw_volume.x, -jaws_spread, vice_jaw_volume.z)
+	mount_vrml_lines._box_outline("yellow", corner1, corner2)
+
 	# Show the coordinate axes:
 	vice._coordinates_vrml_append(mount_vrml_lines)
 	
@@ -8314,13 +8323,8 @@ class Operation_Multi_Mount(Operation):
 	mount_extra_start_dy = mount_extra_start_tne.y - mount_extra_start_bsw.y	
 	mount_extra_start_dz = mount_extra_start_tne.z - mount_extra_start_bsw.z
 
-	# Write the *material* dimensions out to *mount_ngc_file*:
-	material = part._material_get()
-	mount_ngc_file.write("( Initial dimensions {0:i}in x {1:i}in x {2:i}in of {3} )\n".
-	  format(mount_extra_start_dx, mount_extra_start_dy, mount_extra_start_dz, material))
-
+	# Draw the tooling plate if *tooling_plate_present*:
 	if tooling_plate_present:
-	    # Now draw in the *tooling_plate*:
 	    corner = P(zero, zero, parallels_height)
 	    tooling_plate._vrml_append(mount_vrml_lines, corner, spacers, mount_ngc_file,
 	      tracing = tracing + 1)
@@ -8331,6 +8335,14 @@ class Operation_Multi_Mount(Operation):
 	if trace_detail >= 2:
 	    print("{0}mount_name='{1}' extra_start_bsw={2:i} extra_start_tne={3:i}".
 	      format(indent, combined_mount._name_get(), extra_start_bsw, extra_start_tne))
+
+	# Write the *material* dimensions out to *mount_ngc_file*:
+	material = part._material_get()
+	extra_start_dx = extra_start_tne.x - extra_start_bsw.x
+	extra_start_dy = extra_start_tne.x - extra_start_bsw.y
+	extra_start_dz = extra_start_tne.x - extra_start_bsw.z
+	mount_ngc_file.write("( Initial dimensions X:{0:i}in x Y:{1:i}in x Z:{2:i}in of {3} )\n".
+	  format(extra_start_dx, extra_start_dy, extra_start_dz, material))
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -8343,6 +8355,13 @@ class Operation_Multi_Mount(Operation):
 	"""
 
 	return True
+
+    def _jaws_spread_set(self, jaws_spread):
+	""" *Operation_Multi_Mount*: Set the vice jaws spread for the *Operation_Multi_Mount*
+	    object (i.e. *self*) to *jaws_spread*:
+	"""
+
+	self._jaws_spread = jaws_spread
 
 class Operation_Round_Pocket(Operation):
     """ *Operation_Round_Pocket* is a class that implements a round pocket
@@ -9942,6 +9961,7 @@ class Part:
 		if trace_detail >= 1:
 		    print("{0}[{1}]:'{2} (Part:'{3}'".format(indent, index, name, part._name_get()))
 		part._multi_mount_process(name, multi_mounts, tracing + 1)
+		#part._multi_mount_process(name, multi_mounts, tracing = 5)
 		ezcad._cnc_mode = False
 		ezcad._stl_mode = False
 
@@ -10108,6 +10128,7 @@ class Part:
 	# Peform dimension updating for *part*:
 	
 	#part._tracing = tracing + 1
+	part._priority = 0
 	part.construct()
 
 	# See if anything changed:
@@ -10681,6 +10702,7 @@ class Part:
 	    print("{0}==>Part.construct('{1}') ****************".format(indent, part_name))
 	ezcad._stl_mode = True
 	ezcad._cnc_mode = True
+	part._priority = 0
 	if tracing >= 0:
 	    part._tracing = tracing + 1
 	    part.construct()
@@ -16884,9 +16906,9 @@ class Part:
                 # *multi_mount_part*:
 		offset = P(column_dx, -row_dy, zero)
 		if rotate_degrees % 180 == 0:
-		    center = P(delta_x/2, -delta_y/2, zero)
+		    xy_center = P(delta_x/2, -delta_y/2, zero)
 		else:
-		    center = P(delta_y/2, -delta_x/2, zero)
+		    xy_center = P(delta_y/2, -delta_x/2, zero)
 
 		# Figure out the *part* dimensions:
 		part_bsw = multi_mount_part.bsw
@@ -16915,7 +16937,8 @@ class Part:
 		      format(indent, index, part_dx, part_dy, part_dz))
 
 		# Find the smallest parallel that just clears the top of the *vice* for *part_dz*:
-		selected_parallel_height = parallels._select(part_dz, vice)
+		#selected_parallel_height = parallels._select(part_dz, vice)
+		selected_parallel_height = tooling_plate._parallels_height_get()
 		if trace_detail >= 2:
 		    print("{0}[{1}]: selected_parallel_height={2:i}".
 		      format(indent, index, selected_parallel_height))
@@ -16926,6 +16949,29 @@ class Part:
 		    print("{0}[{1}]: part_dz={2:i}".
 		      format(indent, index, part_dz))
 
+		# Figure out how much extra material there is:
+		extra_start_bsw, extra_start_tne = multi_mount_mount._extra_start_get()
+		transformed_extra_start_bsw = rotated_top_surface_transform * extra_start_bsw
+		transformed_extra_start_tne = rotated_top_surface_transform * extra_start_tne
+		fixed_extra_start_bsw, fixed_extra_start_tne = \
+		  transformed_extra_start_bsw.minimum_maximum(transformed_extra_start_tne)
+		extra_top_z = fixed_extra_start_tne.z - top_surface_tne.z
+		if trace_detail >= 2:
+		    print("{0}part.name='{1}'".format(indent, part._name_get()))
+		    print("{0}part_bsw={1:i}".format(indent, part_bsw))
+		    print("{0}part_tne={1:i}".format(indent, part_tne))
+		    print("{0}transformed_part_bsw={1:i}".format(indent, transformed_part_bsw))
+		    print("{0}transformed_part_tne={1:i}".format(indent, transformed_part_tne))
+		    print("{0}extra_start_bsw={1:i}".format(indent, extra_start_bsw))
+		    print("{0}extra_start_tne={1:i}".format(indent, extra_start_tne))
+		    print("{0}transformed_extra_start_bsw={1:i}".
+		      format(indent, transformed_extra_start_bsw))
+		    print("{0}transformed_extra_start_tne={1:i}".
+		      format(indent, transformed_extra_start_tne))
+		    print("{0}fixed_extra_start_bsw={1:i}".format(indent, fixed_extra_start_bsw))
+		    print("{0}fixed_extra_start_tne={1:i}".format(indent, fixed_extra_start_tne))
+		    print("{0}extra_top_z={1:i}".format(indent, extra_top_z))
+
 		# Figure out where *top_surface_z* is and compute the *top_surface* point:
 		if is_tooling_plate:
 		    top_surface_z = selected_parallel_height + \
@@ -16933,6 +16979,7 @@ class Part:
 		else:
 		    top_surface_z = selected_parallel_height + part_dz
 		top_surface = P(zero, zero, top_surface_z)
+		top_surface_z += extra_top_z
 		if trace_detail >= 2:
 		    print("{0}[{1}]: selected_parallel_height={2:i}".
 		      format(indent, index, selected_parallel_height))
@@ -16945,20 +16992,22 @@ class Part:
 		    print("{0}[{1}]: top_surface_z={2:i}".
 		      format(indent, index, top_surface_z))
 
-		# Create *rotated_top_surface_transform* which deals with the *rotate* value
-		# from *multi_mount*:
-		combined_mount_translate_point = hole_0_0 + offset + center + top_surface
+		# Compute *combined_mount_translate_point* which specifies how to map the
+		# part from the machine top surface to the correct location on the multi-mount:
+		combined_mount_translate_point = hole_0_0 + offset + xy_center + top_surface
 		if trace_detail >= 2:
-		    print("{0}[{1}]: part='{2}' mount='{3}'".
-		      format(indent, index, part._name_get(), mount_name))
+		    print("{0}[{1}]: multi_mount_part='{2}' mount='{3}'".
+		      format(indent, index, multi_mount_part._name_get(), mount_name))
 		    print("{0}[{1}]: min_col={2} max_col={3} min_row={4} max_row={5}".format(indent,
 		      index, minimum_column, maximum_column, minimum_row, maximum_row))
 		    print("{0}[{1}]: delta_rows={2} delta_columns={3} delta_x={4:i} delta_y={5:i}".
 		      format(indent, index, delta_rows, delta_columns, delta_x, delta_y))
-		    print("{0}[{1}]: column_dx={2:i} row_dy={3:i} center={4:i} offset={5:i}".
-		      format(indent, index, column_dx, row_dy, center, offset))
-		    print("{0}[{1}]: hole_0_0={2:i} top_surface={3:i} ".
-		      format(indent, index, hole_0_0, top_surface))
+		    print("{0}[{1}]: column_dx={2:i} row_dy={3:i} xy_center={4:i} offset={5:i}".
+		      format(indent, index, column_dx, row_dy, xy_center, offset))
+		    print("{0}[{1}]: hole_0_0={2:i}".format(indent, index, hole_0_0))
+		    print("{0}[{1}]: offset={2:i}".format(indent, index, offset))
+		    print("{0}[{1}]: xy_center={2:i}".format(indent, index, xy_center))
+		    print("{0}[{1}]: top_surface={2:i}".format(indent, index, top_surface))
 		    print("{0}[{1}]: combined_mount_translate_point={2:i}".
 		      format(indent, index, combined_mount_translate_point))
 
@@ -16971,19 +17020,18 @@ class Part:
 		  rotated_top_surface_transform, combined_mount_translate_point,
 		  top_surface_safe_z, xy_rapid_safe_z, True, selected_parallel_height)
 		multi_mount._combined_mount_set(combined_mount)
-		if trace_detail >= 2:
-		    print("{0}[{1}]: combined_mount='{2}'".
-		      format(indent, index, combined_mount._name_get()))
 
 		# Update the *extra_bounding_box*:
 		combined_mount_cnc_transform = combined_mount._cnc_transform_get()
 		extra_start_bsw, extra_start_tne = multi_mount_mount._extra_start_get()
+		combined_mount._extra_start_set(extra_start_bsw, extra_start_tne)
 		cnc_extra_start_bsw = combined_mount_cnc_transform * extra_start_bsw
 		cnc_extra_start_tne = combined_mount_cnc_transform * extra_start_tne
 		extra_bounding_box.point_expand(cnc_extra_start_bsw)
 		extra_bounding_box.point_expand(cnc_extra_start_tne)
 		if not is_tooling_plate:
-		    extra_dy = (cnc_extra_start_tne.y - cnc_extra_start_bsw.y).absolute()
+		    extra_dy = extra_bounding_box.tne_get().y - extra_bounding_box.bsw_get().y
+		    #extra_dy = (cnc_extra_start_tne.y - cnc_extra_start_bsw.y).absolute()
 		    jaws_spread = jaws_spread.maximum(extra_dy)
 		if trace_detail >= 2:
 		    print("{0}[{1}]: combined_mount.part='{2}' combined_mount.name='{3}'".
@@ -17013,7 +17061,7 @@ class Part:
 		    print("{0}[{1}]: unique_columns={2} unique_rows={3} spacers={4}".
                           format(indent, index, unique_columns, unique_rows, spacers))
 		    
-		# The first time through the loop, both *comined_multi_mount* and
+		# The first time through the loop, both *combined_multi_mount* and
                 # *combined_operations* are initialized:
 		if combined_multi_mount == None:
 		    origin = P(zero, zero, zero)
@@ -17047,6 +17095,9 @@ class Part:
 		# skipping the *Operation_Mount* and *Operation_Dowel_Pin* operations:
 		combined_operations._extend(combined_mount,
 		  multi_mount_mount_operations, "MD", tracing = tracing + 1)
+		#print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+		#combined_operations._extend(combined_mount,
+		#  multi_mount_mount_operations, "MD", tracing = 5)
 
 	    # Stuff the bounding box into *combined_multi_mount* for CNC visualization:
 	    extra_start_bsw = extra_bounding_box.bsw_get()
@@ -17056,6 +17107,10 @@ class Part:
 		print("{0}mount_name='{1}' extra_start_bsw={2:i} extra_start_tne={3:i}".
 		  format(indent, combined_multi_mount._name_get(),extra_start_bsw, extra_start_tne))
 		combined_operations._show("Multi Mount operations")
+	    if not is_tooling_plate:
+		extra_dy = extra_bounding_box.tne_get().y - extra_bounding_box.bsw_get().y
+		operation_multi_mount._jaws_spread_set(extra_dy)
+
 	    #temporary_bsw, temporary_tne = combined_multi_mount._extra_start_get()
 	    #assert temporary_bsw == extra_start_bsw
 	    #assert temporary_tne == extra_start_tne
