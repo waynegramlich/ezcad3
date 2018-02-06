@@ -1,4 +1,4 @@
-####################################################################################################
+###################################################################################################
 #<-----------------------------------------100 characters----------------------------------------->#
 #
 # EZCAD Coding Standards/Style
@@ -158,11 +158,15 @@
 #   path generation.
 #
 # * *Multi_Mount*: A *Multi_Mount* object specifies *Part*, the name of a *Mount* associated
-#   with the part, a rotation *Angle*, and an offset (dx, dy).
+#   with the part, a rotation *Angle*, and an offset (dx, dy).  This is the fundamental
+#   unit of the *Multi_Mounts* object.
 #
 # * *Multi_Mounts*: A *Multi_Mounts* object is basically just a list of *Multi_Mount* objects.
 #   A *Multi_Mounts* object is used to generate a coherent CNC path for multiple parts as a
 #   single set of combined CNC operations.  Multi-mounts are discussed much more below.
+#   With *Multi_Mounts*, a mixture of parts can be machined together.  They can all be the
+#   same part, at different locations in the material, or a mixuture of parts.  The user
+#   is responsible for keeping the parts from overlapping each other in the material.
 #
 # * *Mount_Operation*: A *Mount_Operation* specifies a binding between a *Mount* and an
 #   *Operation*.
@@ -183,7 +187,16 @@
 # a couple of points that specify where the extra material is.  If fact, there actually
 # two pairs of points.
 #
-# {To be continued...}
+# Multi_Mounts:
+#
+# Frankly, the data structures for supporting multi-mounts evolved over time and are
+# probably not entirely correct.  Originally, everything was *Part* centeric.  CNC code
+# was generated for a single part.  Eventually, the concept of making multiple parts
+# out of a single piece of material was conceieved.  Thus, the concept of a *Multi_Mount*
+# was created.  A *Multi_Mount* is basically a *Part* that has a different *Mount* object
+# than what is used for doing the CNC for a single *Part*.  The *Multi_Mounts* object can
+# be thought of as a super *Part* that makes multiple parts out of one piece of material.
+# The code is ugly and hard to understand and should probably be ripped out and redone.
 
 # Imported libraries:
 import hashlib				# Used to create unique hash for `.scad` files
@@ -191,6 +204,7 @@ import math				# Primarily used for trigonmic functions
 import numpy				# Used for 4x4 afine matrix transforms
 import os				# Used for operating system functions
 import subprocess			# Used to run `openscad` program.
+import sys				# System stuff
 
 # Some stand-alone routine definitions:
 
@@ -4327,8 +4341,10 @@ class EZCAD3:
 	self._minor = minor
 	self._mounts = {}
 	self._multi_mounts_list = []
+	self._multi_mounts_table = {}
 	self._ngc_directory = ngc_directory
 	self._parts_stack = []
+	self._plates_table = {}
 	self._scad_directory = scad_directory
 	self._shop = Shop("Wayne's Shop")
 	self._stl_directory = stl_directory
@@ -4407,6 +4423,29 @@ class EZCAD3:
 	assert not key in mounts, "Mount {0} has already been created".format(key)
 	mounts[key] = mount
 
+    def _multi_mounts_find(self, multi_mounts_name):
+	""" *EZCAD3*: Find/create the *Multi_Mounts* object associated with the *multi_mounts_name*
+	    and return it.
+	"""
+
+	# Use *ezcad* instead of *self*:
+	ezcad = self
+
+	# Verify argument types:
+	assert isinstance(multi_mounts_name, str) and not ' ' in multi_mounts_name
+
+	# Finde/create the *multi_mounts* object:
+	multi_mounts_table = ezcad._multi_mounts_table
+	if multi_mounts_name in multi_mounts_table:
+	    multi_mounts = multi_mounts_table[multi_mounts_name]
+	else:
+	    multi_mounts = Multi_Mounts(multi_mounts_name)
+	    multi_mounts_table[multi_mounts_name] = multi_mounts
+	    #print("Create Multi_Mounts('{0}') id={1}".format(multi_mounts_name, id(multi_mounts)))
+
+	# Return the result:
+	return multi_mounts
+
     def _multi_mounts_list_get(self):
 	""" *EZCAD3*: Return the list of *Multi_Mounts* objects from the *EZCAD3* object
 	    (i.e. *self*.)
@@ -4456,6 +4495,43 @@ class EZCAD3:
 	"""
 
 	return " ".join([ "{0}".format(part._name_get()) for part in self._parts_stack ])
+
+    def _plate_lookup(self, name):
+	""" *EZCAD3*: Return the *Plate* object associated with *name*.  *None* is returned
+	    if there is no such association.
+	"""
+
+	result = None
+	plates_table = self._plates_table
+	if name in plates_table:
+	    result = plates_table[name]
+	return result
+
+    def _plate_register(self, plate):
+	""" *EZCAD3*: Register *plate* with the *EZCAD3* object (i.e. *self*):
+	"""
+	
+	# Use *ezcad* instead of *self*:
+	ezcad = self
+
+	# Stuff *plate* into *plates_table* checking for duplicates:
+	plates_table = ezcad._plates_table
+	plate_name = plate._name_get()
+	assert not plate_name in plates_table, "Duplicate create of Plate '{0}'".format(plate_name)
+	plates_table[plate_name] = plate
+
+    def _plates_process(self):
+	""" *EZCAD3*: Process any queued *Plate* objects associated with the *EZCAD3* object
+	    (i.e. *self*.)
+	"""
+
+	# Use *ezcad* instead of *self*:
+	ezcad = self
+
+	# Process each *plate* in *plates_table*:
+	plates_table = ezcad._plates_table
+	for plate in plates_table.values():
+	    plate._process()
 
     def _routines_write(self):
         """ *EZCAD3*: Write out the standard routines drill cycles and the like.
@@ -4600,6 +4676,9 @@ class EZCAD3:
 	# Process *part*:
 	part.process(self, tracing = tracing + 1)
 
+	# Process any *plate* objects:
+	ezcad._plates_process()
+
 	# Clean up any directories:
 	self._dxf_directory._clean_up(tracing = tracing + 1)
 	self._ngc_directory._clean_up(tracing = tracing + 1)
@@ -4688,6 +4767,7 @@ class Mount:
 	mount._mount_translate_point = mount_translate_point	# Translate from CNC origin to mount
         mount._name = name					# Mount name
 	mount._part = part					# Part that is mounted
+	mount._program_number = -1				# Program num of top level .ngc file
 	mount._selected_parallel_height = selected_parallel_height # Height of the parallel to use
 	mount._spacers = []					# Tooling plate spacer locations
 	mount._stl_vrml = None					# STL *VRML* object for mount
@@ -5081,7 +5161,7 @@ class Mount_Operation:
 	return self._operation
 
 class Mount_Operations:
-    """ *Mount_Operations*: Provides a list of *Mount* *Operation* pairs.
+    """ *Mount_Operations*: Provides a list of *Mount*/*Operation* pairs.
     """
 
     def __init__(self, name, tracing=-1000000):
@@ -5103,6 +5183,7 @@ class Mount_Operations:
 	# Load up *mount_operations*:
 	mount_operations._name = name
 	mount_operations._pairs = []
+	mount_operations._multi_mounts = None
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -5224,9 +5305,14 @@ class Mount_Operations:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Mount_Operations._cnc_mount_generate('{1}', {2})".format(
-	      indent, mount_operations._name, mount_program_number))
-	    trace_detail = 2
+	    print("{0}=>Mount_Operations._cnc_mount_generate('{1}', {2}) id={3}".format(
+	      indent, mount_operations._name, mount_program_number, id(mount_operations)))
+	    trace_detail = 1
+
+	# Stuff *mount_program_number* into *mount_operations*:
+	multi_mounts = mount_operations._multi_mounts_get()
+	if isinstance(multi_mounts, Multi_Mounts):
+	    multi_mounts._program_number_set(mount_program_number)
 
 	# Grab some values from *mount_operations*:
 	pairs = mount_operations._pairs
@@ -5861,6 +5947,30 @@ class Mount_Operations:
 	      format(indent, mount_operations._name))
 	return first_mount
 
+    def _multi_mounts_get(self):
+	""" *Mount_Operations*: Return any *Multi_Mounts* object associtated with the
+	    *Mount_Operations* object (i.e. *self*.)  If there is not associated *Multi_Mounts*
+	    object, *None* is returned.
+	"""
+
+	return self._multi_mounts
+
+
+    def _multi_mounts_set(self, multi_mounts):
+	""" *Mount_Operations*: Set the *Multi_Mounts* object associated with the
+	    *Mount_Operations* object (i.e. *self*) to *multi_mounts*.
+	"""
+
+	# Use *mount_operations* instead of *self*:
+	mount_operations = self
+
+	# Verify argument types:
+	assert isinstance(multi_mounts, Multi_Mounts)
+
+	# Stuff *multi_mounts* into *mount_operations*:
+	mount_operations._multi_mounts = multi_mounts
+
+
     def _name_get(self):
 	""" *Mount_Operations*: Return the name associated with the *Mount_Operarions* object
 	    (i.e. *self*.)
@@ -5881,6 +5991,13 @@ class Mount_Operations:
 	"""
 
 	self._pairs.extend(extend_pairs)
+
+    def _program_number_get(self):
+	""" *Mount_Operations*: Return the `.ngc` file program number associated wit the
+	    *Mount_Operations* object (i.e. *self*.)
+	"""
+
+	return self._program_number
 
     def _show(self, label, tracing=-1000000):
 	""" *Mount_Operations*: Print out the *Mount_Operations* object (i.e. *self*) in
@@ -6013,8 +6130,8 @@ class Multi_Mount:
 	""" *Multi_Mount: Initialize the *Multi_Mount* object (i.e. *self*) to
 	    start using the *Mount* object specified by *part* and *mount_name* with
 	    a rotations of *rotate* which must be a mulitple of 90 degrees.  This
-	    initialize is frequently augmented by the *Multi_Mount*.*dx_dy*() method
-	    by the *Multi_Mount*.*tooling_plate*() method.
+	    initialization is frequently augmented by the *Multi_Mount*.*dx_dy*() method
+	    and by the *Multi_Mount*.*tooling_plate*() method.
 	"""
 
 	# Use *multi_mount* instead of *self*:
@@ -6338,9 +6455,39 @@ class Multi_Mounts:
 	
 
 	# Load up *multi_mounts*:
+	multi_mounts._combined_multi_mount = None
 	multi_mounts._multi_mounts_list = []
+	multi_mounts._multi_mounts_table = {}
 	multi_mounts._name = name
 	multi_mounts._part = None
+	multi_mounts._program_number = -1
+
+    def _combined_multi_mount_get(self):
+	""" *Multi_Mounts*: Return the combined multi *Mount* for the *Multi_Mounts* object
+	    (i.e. *self*.)
+	"""
+
+	# Return *combined_multi_mount* after verifying that it was set properly.
+	multi_mounts = self
+	combined_multi_mount = multi_mounts._combined_multi_mount
+	if combined_multi_mount == None:
+	    assert False, "combined_multi_mount not set"
+	assert isinstance(combined_multi_mount, Mount)
+	return combined_multi_mount
+
+    def _combined_multi_mount_set(self, combined_multi_mount):
+	""" *Multi_Mounts*: Set the combined multi *Mount* for the *Multi_Mounts* object
+	    (i.e. *self*.)
+	"""
+
+	# Use *multi_mounts* instead of *self*:
+	multi_mounts = self
+
+	# Verify argument types:
+	assert isinstance(combined_multi_mount, Mount)
+
+	# Stuff *combined_multi_mount* into *multi_mounts*:
+	multi_mounts._combined_multi_mount = combined_multi_mount
 
     def _copy(self, mount_name, tracing = -1000000):
 	""" *Multi_Mounts*: Return of copy of the *Multi_Mounts* object (i.e. *self*)
@@ -6361,6 +6508,7 @@ class Multi_Mounts:
 	      format(indent, multi_mounts._name, mount_name))
 
 	new_multi_mounts = Multi_Mounts(mount_name)
+	new_mulit_mounts._program_number = mulit_mounts._program_number
 	new_multi_mounts_list = new_multi_mounts._multi_mounts_list
 	replace_name = None
 	for index, multi_mount in enumerate(multi_mounts._multi_mounts_list):
@@ -6566,6 +6714,8 @@ class Multi_Mounts:
 	    print("{0}=>Multi_Mounts._copy('{1}', '{2}')".
 	      format(indent, multi_mounts._name, mount_name))
 
+	assert old_mount_name in multi_mounts._name, \
+	  "'{0}' does not contain '{1}'".format(multi_mounts._name, old_mount_name)
 	new_multi_mounts = Multi_Mounts(multi_mounts._name.replace(old_mount_name, new_mount_name))
 	new_multi_mounts_list = new_multi_mounts._multi_mounts_list
 	replace_name = None
@@ -6613,8 +6763,21 @@ class Multi_Mounts:
 	assert isinstance(part, Part)
 
 	# Make sure we set *part* only once:
-	assert multi_mounts._part == None
+	#assert multi_mounts._part == None
 	multi_mounts._part = part
+
+    def _program_number_get(self):
+	""" *Multi_Mounts*: Return the `.ngc` file program number for the *Multi_Mounts* object.
+	"""
+
+	return self._program_number
+
+    def _program_number_set(self, program_number):
+	""" *Multi_Mounts*: Save *program_number* into the *Multi_Mounts_Object* (i.e. *self*.)
+	"""
+
+	assert isinstance(program_number, int)
+	self._program_number = program_number
 
     def _size_get(self):
 	""" *Multi_Mounts*: Returns the number of *Multi_Mount* objects in the *Multi_Mounts*
@@ -6638,12 +6801,23 @@ class Multi_Mounts:
 	assert isinstance(column, int) and column >= 0
 	assert isinstance(row, int) and row >= 0
 
-	# Create *multi_mount*:
-	multi_mount = Multi_Mount(part, mount_name, rotate)
-	multi_mount.tooling_plate(column, row)
+	# Create a table key:
+	part_name = part._name_get()
+	key = (part_name, mount_name, rotate.degrees(), column, row)
+	multi_mounts_table = multi_mounts._multi_mounts_table
+	multi_mounts_list  = multi_mounts._multi_mounts_list
 
-	# Append to the *list*:
-	multi_mounts._multi_mounts_list.append(multi_mount)
+	# See whether or not this *key* is a repeat:
+	if not key in multi_mounts_table:
+	    # This is the first time for this *key*:
+
+	    # Create *multi_mount* and register *rotate*, *column* and *row*:
+	    multi_mount = Multi_Mount(part, mount_name, rotate)
+	    multi_mount.tooling_plate(column, row)
+
+	    # Insert *multi_mount* into *multi_mounts_table* and *multi_mounts_list*:
+	    multi_mounts_table[key] = multi_mount
+	    multi_mounts_list.append(multi_mount)
 
 class Operation:
     """ *Operation* is a class that represents a manufacturing operation.
@@ -10489,40 +10663,6 @@ class Part:
 
 	return self._ezcad
 
-    def place_fasten(self, comment, transform, fastener, select, tracing=-1000000):
-	""" *Part*: Fasten *fastener* to the *Part* object (i.e. *self*) after applying
-	    *transform* to move *fastener* to a new location.  "select* must be one of
-	    "thread", "close", or "free" to specify the hole diameter.  *comment* is used
-	    for debugging.
-	"""
-
-	# Use *part* instead of *self*:
-        part = self
-
-	# Verify argument types:
-        assert isinstance(comment, str)
-	assert isinstance(transform, Transform)
-        assert isinstance(fastener, Fastener)
-	assert isinstance(select, str)
-	assert isinstance(tracing, int)
-
-	# Perform any requested *tracing*:
-	if tracing < 0 and part._tracing >= 0:
-	    tracing = part._tracing
-	trace_detail = -1
-	if tracing >= 0:
-	    indent = ' ' * tracing
-	    print("{0}=>Part.place_fasten('{1}', '{2}', *, '{3}')".
-	      format(indent, part._name, comment, fastener._name_get()))
-
-	fastener._fasten(comment, part, select, transform=transform, tracing = tracing + 1)
-
-
-	# Wrap up any requested *tracing*:
-	if tracing >= 0:
-	    print("{0}<=Part.place_fasten('{1}', '{2}', *, '{3}')".
-	      format(indent, part._name, comment, fastener._name_get()))
-
     def fasten(self, comment, fastener, select, tracing=-1000000):
 	""" *Part*: Use *fastener* to drill a hole from the *Part* object (i.e. *self*).
 	    *select* is one of "thread", "close", or "free" to specify the desired hole
@@ -10795,10 +10935,11 @@ class Part:
 	mount_name = mount._name_get()
 
 	# Make sure we have no duplicates:
-	#assert not mount_name in mount_operations_table, \
-	#  "Mount name '{0}' previously used for Part '{1}'!".format(mount_name, part._name)
+	assert not mount_name in mount_operations_table, \
+	  "Mount name '{0}' previously used for Part '{1}'!".format(mount_name, part._name)
 
 	# Create a new *mount_operations* object:
+	assert mount_name not in mount_operations_table
 	mount_operations = Mount_Operations(mount_name)
 	mount_operations_table[mount_name] = mount_operations
 	mount_operations_list.append(mount_operations)
@@ -11024,6 +11165,66 @@ class Part:
 	    operations.insert(to_index, operation)
 	    to_index = to_index + 1
 	part._operations_index()
+
+    def place_fasten(self, comment, transform, fastener, select, tracing=-1000000):
+	""" *Part*: Fasten *fastener* to the *Part* object (i.e. *self*) after applying
+	    *transform* to move *fastener* to a new location.  "select* must be one of
+	    "thread", "close", or "free" to specify the hole diameter.  *comment* is used
+	    for debugging.
+	"""
+
+	# Use *part* instead of *self*:
+        part = self
+
+	# Verify argument types:
+        assert isinstance(comment, str)
+	assert isinstance(transform, Transform)
+        assert isinstance(fastener, Fastener)
+	assert isinstance(select, str)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing < 0 and part._tracing >= 0:
+	    tracing = part._tracing
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.place_fasten('{1}', '{2}', *, '{3}')".
+	      format(indent, part._name, comment, fastener._name_get()))
+
+	fastener._fasten(comment, part, select, transform=transform, tracing = tracing + 1)
+
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part.place_fasten('{1}', '{2}', *, '{3}')".
+	      format(indent, part._name, comment, fastener._name_get()))
+
+    def plate(self, name, dx, dy, dz, first_letter):
+	""" *Part*: Create and return a *Plate* object using the *Part* object (i.e. *self*)
+	    register the global plate name.
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(name, str)
+	assert isinstance(dx, L)
+	assert isinstance(dy, L)
+	assert isinstance(dz, L)
+	assert isinstance(first_letter, str) and len(first_letter) == 1
+
+	# Make sure that the returned *plate* is created exacty once:
+	ezcad = part._ezcad
+	plate = ezcad._plate_lookup(name)
+	if plate == None:
+	    # Create and register the *plate*:
+	    plate = Plate(name, dx, dy, dz, first_letter)
+	    ezcad._plate_register(plate)
+
+	assert isinstance(plate, Plate)
+	return plate
 
     def _plunge_x_get(self):
 	""" *Part*: Return the plunge X of the *Part* (i.e. *self*). """
@@ -12385,6 +12586,9 @@ class Part:
 	ezcad._stl_directory._clean_up(tracing = tracing + 1)
 	ezcad._wrl_directory._clean_up(tracing = tracing + 1)
 
+	# Process any *plate* objects:
+	ezcad._plates_process()
+
 	# Write out the tools summary:
 	shop = ezcad._shop_get()
 	shop._tools_summary_write()
@@ -12421,7 +12625,7 @@ class Part:
 	      multi_mounts._name_replace_copy(old_name, new_name, tracing = tracing + 1)
 
 	    # Now do the *multi_mount* operation on *new_multi_mounts*:
-	    part.multi_mount(new_multi_mounts)
+	    part.multi_mount(new_multi_mounts, None, False, 0)
 
 	# Wrap up any requested tracing*:
 	if tracing >= 0:
@@ -15475,6 +15679,24 @@ class Part:
 
 	print("No manufacture method for '{0}'".format(self))
 
+    def multi_mounts_find(self, multi_mounts_name):
+	""" *Part*: Return the *Multi_Mounts* object that matches *multi_mouns_name* using
+	    the *Part* object (i.e. *self*) as an anchor to start the search.
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(multi_mounts_name, str) and not ' ' in multi_mounts_name
+
+	# Create/find the *Multi_Mounts* object associated with *multi_mounts_name*:
+	ezcad = part._ezcad_get()
+	multi_mounts = ezcad._multi_mounts_find(multi_mounts_name)
+
+	return multi_mounts
+
+
     def string(self, string_path):
 	""" Part dimensions: Return the {String} associated with {string_path}
 	    starting from {self}. """
@@ -16718,7 +16940,7 @@ class Part:
 	      format(indent, extra_bsw, extra_tne, mount_translate_point, selected_parallel_height))
 	return mount_translate_point, selected_parallel_height
 
-    def multi_mount(self, multi_mounts, tracing=-1000000):
+    def multi_mount(self, multi_mounts, plate, rotate, sort_order, tracing=-1000000):
 	""" *Part*: Set up a multi mounted CNC tool for the *Part* object (i.e. *self*) that
 	    consists of *multi_mounts*.
 	"""
@@ -16728,7 +16950,10 @@ class Part:
 
 	# Verify argument types:
 	assert isinstance(multi_mounts, Multi_Mounts)
+	assert isinstance(plate, Plate) or plate == None
 	assert isinstance(tracing, int)
+	assert isinstance(rotate, bool)
+	assert isinstance(sort_order, int) or isinstance(sort_order, float)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
@@ -16751,13 +16976,17 @@ class Part:
 		print("{0}multi-mounts: part='{1}' name='{2}'".
 		  format(indent, part._name, multi_mounts._name_get()))
 
+	    # Deal with *plate*:
+	    if isinstance(plate, Plate):
+		plate._multi_mounts_add(multi_mounts, rotate, sort_order)
+
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Part.multi_mount('{1}', '{2}')".
 	      format(indent, part._name, multi_mounts._name_get()))
 
     def _multi_mount_process(self, name, multi_mounts, tracing=-1000000):
-	""" *Part*: Process the multi mount for the *Part* object (i.e. *self*)
+	""" *Part*: Process the *multi_mounts* for the *Part* object (i.e. *self*)
 	    using *multi_mounts*.
 	"""
 
@@ -16802,6 +17031,7 @@ class Part:
 	zero = L()
 	origin = P(zero, zero, zero)
 
+	# Grab some values from *tooling_plate*:
 	tooling_plate_hole_pitch = tooling_plate._hole_pitch_get()
 	tooling_plate_rows       = tooling_plate._rows_get()
 	tooling_plate_columns    = tooling_plate._columns_get()
@@ -17069,6 +17299,8 @@ class Part:
 		    combined_multi_mount = Mount(combined_multi_mount_name,
 		      part, Transform(), origin, top_surface_safe_z, xy_rapid_safe_z, True,
 		      selected_parallel_height)
+		    multi_mounts._combined_multi_mount_set(combined_multi_mount)
+
 		    combined_operations = part._mount_register(combined_multi_mount)
 		    comment = ""
 		    operation_multi_mount = Operation_Multi_Mount(part, multi_mounts,
@@ -17095,6 +17327,7 @@ class Part:
 		# skipping the *Operation_Mount* and *Operation_Dowel_Pin* operations:
 		combined_operations._extend(combined_mount,
 		  multi_mount_mount_operations, "MD", tracing = tracing + 1)
+		combined_operations._multi_mounts_set(multi_mounts)
 		#print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 		#combined_operations._extend(combined_mount,
 		#  multi_mount_mount_operations, "MD", tracing = 5)
@@ -17125,226 +17358,6 @@ class Part:
 	if tracing >= 0:
 	    print("{0}<=Part._multi_mount_process('{1}', '{2}', *)".
 	      format(indent, part._name, name))
-
-    def xxx_multi_mount_process(self, part, xxx):
-	# Before we do anything we need to compute the *extra_bounding_box* that contains
-	# all the *multi_mounts*:
-	extra_bounding_box = Bounding_Box()
-	tooling_plate_mounts_count = 0
-	vice_mounts_count = 0
-	for index, multi_mount in enumerate(multi_mounts._multi_mounts_get()):
-	    # Grab some values from *multi_mount*:
-	    multi_mount_part = multi_mount._part_get()
-	    multi_mount_name = multi_mount._mount_name_get()
-	    multi_mount_dx = multi_mount._dx_get()
-	    multi_mount_dy = multi_mount._dy_get()
-
-	    # Lookup *from_operations*:
-	    from_operations = multi_mount_part._mount_operations_lookup(multi_mount_name)
-	    from_pair0 = from_operations._fetch(0)
-	    from_mount0 = from_pair0._mount_get()
-	    from_operation0 = from_pair0._operation_get()
-		
-	    from_top_surface_transform = from_mount0._top_surface_transform_get()
-
-	    # Count up the *vice_mounts_count* and *tooling_plate_mounts_count*:
-	    if from_mount0._is_vice_mount_get():
-		vice_mounts_count += 1
-	    elif from_mount0._is_tooling_plate_mount_get():
-		tooling_plate_mounts_count += 1
-	    else:
-		assert False, "Unknown mount kind"
-
-	    from_part = from_operation0._part_get()
-	    from_part_bsw = from_part.bsw
-	    from_part_tne = from_part.tne
-	    from_part_volume = from_part_tne - from_part_bsw
-	    if trace_detail >= 2:
-		print("{0}[{1}]:from_part_bsw={2:i} from_part_tne={3:i} from_part_volume={4:i}".
-                  format(indent, index, from_part_bsw, from_part_tne, from_part_volume))
-
-	    # Compute *modified_top_surface_transform* which is *offset* by (dx, dy):
-	    offset = P(multi_mount_dx, multi_mount_dy, zero)
-	    if trace_detail >= 2:
-		print("{0}[{1}]: offset={2:i}".format(indent, index, offset))
-	    modified_top_surface_transform = \
-	      from_top_surface_transform.translate(multi_mount_name, offset)
-
-	    # Now we can get the extra start values:
-	    assert multi_mount_part._extra_start_stop_available, \
-	      "No extra material information available for Part '{0}'". \
-	      format(multi_mount_part._name_get())
-	    from_extra_bsw, from_extra_tne = \
-	      multi_mount_part._extra_start_fetch(modified_top_surface_transform,
-	      tracing = tracing + 1)
-	    if trace_detail >= 2:
-		print("{0}[{1}]: from_extra_bsw={2:i} from_extra_tne={3:i}".
-		  format(indent, index, from_extra_bsw, from_extra_tne))
-		print("{0}[{1}]: final_extra_volume={2:i}".
-		  format(indent, index, from_extra_tne - from_extra_bsw))
-
-	    # Finally, we can expand the *extra_bounding_box*:
-	    extra_bounding_box.point_expand(from_extra_bsw)
-	    extra_bounding_box.point_expand(from_extra_tne)
-	    if trace_detail >= 2:
-		print("{0}[{1}]: extra_bounding_box={2:i}".
-		  format(indent, index, extra_bounding_box))
-
-	# Make sure that we know whether we are dealing with a *tooling_plate_mount* or not:
-	is_tooling_plate_mount = None
-	if vice_mounts_count > 0:
-	    assert tooling_plate_mounts_count == 0, "Mixed vice and tooling plate mounts"
-	    is_tooling_plate_mount = False
-	elif tooling_plate_mounts_count > 0:
-	    assert vice_mounts_count == 0, "Mixed vice and tooling plate mounts"
-	    is_tooling_plate_mount = True
-	else:
-	    assert False, "No mounts encountered"
-	if trace_detail >= 1:
-	    print("{0}vice_mounts_count={1} tooling_plate_mounts_count={2}".
-	      format(indent, vice_mounts_count, tooling_plate_mounts_count))
-
-	# Grab *extra_start_bsw* and *extra_start_tne* from *extra_bounding_box*:
-	final_extra_start_bsw = extra_bounding_box.bsw_get()
-	final_extra_start_tne = extra_bounding_box.tne_get()
-	if trace_detail >= 1:
-	    print("{0}final_extra_start_bsw={1:i} final_extra_start_tne={2:i}".
-	      format(indent, final_extra_start_bsw, final_extra_start_tne))
-
-	# Use *Part._vice_mount_helper* to determine what parallel height to use and
-	# where the center of the top surface of the extera material is:
-	mount_translate_point, parallel_height = part._vice_mount_helper(
-	  final_extra_start_bsw, final_extra_start_tne, is_tooling_plate_mount,
-	  tracing = tracing + 1)
-
-	# *combined_multi_mount* is the global *Mount* object that is used for this routine:
-	top_surface_transform = Transform()
-	top_surface_safe_z = final_extra_start_tne.z + mount_translate_point.z
-	xy_rapid_safe_z = top_surface_safe_z + L(inch=0.500)
-	combined_multi_mount = Mount(name, part, top_surface_transform, mount_translate_point,
-	  top_surface_safe_z, xy_rapid_safe_z, is_tooling_plate_mount, tracing = tracing + 1)
-	if trace_detail >= 1:
-	    print("{0}combined_multi_mount: name='{1}'".
-	      format(indent, combined_multi_mount._name_get()))
-
-	# Store the extra material information into *combined_multi_mount*:
-	reverse_top_surface_transform = top_surface_transform.reverse()
-	combined_multi_mount._extra_start_store(reverse_top_surface_transform,
-	  final_extra_start_bsw, final_extra_start_tne, tracing = tracing + 1)
-	combined_multi_mount._extra_stop_store(reverse_top_surface_transform,
-	  final_extra_start_bsw, final_extra_start_tne, tracing = tracing + 1)
-
-	# Start *combined_operations* which will have all of the operations needed
-	# for the multi mount merged in:
-	combined_operations = part._mount_register(combined_multi_mount)
-
-	# Now iterate throug
-	shop = ezcad._shop_get()
-	vice = shop._vice_get()
-	comment = "{0} Mount".format(name)
-	jaws_spread = final_extra_start_tne.y - final_extra_start_bsw.y
-	tooling_plate = None
-	if is_tooling_plate_mount:
-	    tooling_plate = shop._tooling_plate_get()
-	    jaws_spread = tooling_plate._dy_get()
-
-	# Iterate through *multi_mounts* to build up the *first_mount* and *spacers* lists:
-	first_mounts = []
-	spacers = []
-	for multi_mount in multi_mounts._multi_mounts_get():
-	    # Determine *first_mount* and tack onto *first_mounts* list:
-	    multi_mount_part = multi_mount._part_get()
-	    multi_mount_name = multi_mount._mount_name_get()
-	    mount_operations = \
-	      multi_mount_part._mount_operations_lookup(multi_mount_name, tracing = tracing + 1)
-	    first_mount = mount_operations._first_mount_get()
-	    first_mounts.append(first_mount)
-
-	    # For a tooling plate, figure out what *new spacer*'s to append to *spacers*:
-	    if is_tooling_plate_mount:
-		column, row = multi_mount._column_row_get()
-		first_mount_spacers = first_mount._spacers_get()
-		assert len(first_mount_spacers) > 0
-		if trace_detail >= 1:
-		    print("{0}first_mount_spacers={1}".format(indent, first_mount_spacers))
-		for spacer in first_mount_spacers:
-		    column0 = spacer[0]
-		    row0 = spacer[1]
-		    column1 = spacer[2]
-		    row1 = spacer[3]
-		    new_spacer = (column0 + column, row0 + row, column1 + column, row1 + row)
-		    spacers.append(new_spacer)
-	if trace_detail >= 1:
-	    print("{0}spacers={1}".format(indent, spacers))
-	    #if is_tooling_plate_mount:
-	    #    assert False
-	assert len(first_mounts) > 0
-
-	# Now construct the *operation_multi_mount* and stuff it into *combined_operations*
-	# as the first operation:
-	operation_multi_mount = Operation_Multi_Mount(part, multi_mounts, comment, vice,
-	  jaws_spread, parallel_height, tooling_plate, spacers, tracing = tracing + 1)
-	combined_operations._append(combined_multi_mount,
-	  operation_multi_mount, tracing = tracing + 1)
-
-	# Now visit each *multi_mount* and append its operations to *compbined_operations*:
-	extend_flags = "M"
-	for index, multi_mount in enumerate(multi_mounts._multi_mounts_get()):
-	    # Grab some values from *multi_mount*:
-	    multi_mount_part = multi_mount._part_get()
-	    multi_mount_name = multi_mount._mount_name_get()
-	    multi_mount_dx = multi_mount._dx_get()
-	    multi_mount_dy = multi_mount._dy_get()
-	    if trace_detail >= 2:
-		print("{0}[{1}]: part_name='{2}' mount_name='{3}'".
-		  format(indent, index, multi_mount_part._name, multi_mount_name))
-
-	    # Lookup up *from_operations*:
-	    from_operations = multi_mount_part._mount_operations_lookup(multi_mount_name)
-	    if trace_detail >= 3:
-		from_operations._show("{0}[{1}]".
-		  format(multi_mount_part._name, multi_mount_name))
-	    from_pair0 = from_operations._fetch(0)
-	    from_mount0 = from_pair0._mount_get()
-	    from_mount0_part = from_mount0._part_get()
-	    from_operations0 = from_pair0._operation_get()
-	    assert isinstance(from_operations0, Operation_Mount)
-	    from_mount0_top_surface_transform = from_mount0._top_surface_transform_get()
-	    from_mount0_mount_translate_point = from_mount0._mount_translate_point_get()
-	    from_top_surface_safe_z = from_mount0._top_surface_safe_z_get()
-	    from_xy_rapid_safe_z = from_mount0._xy_rapid_safe_z_get()
-		
-	    # Create *new_mount* that is *offset*:
-	    offset = P(multi_mount_dx, multi_mount_dy, zero)
-	    new_mount_translate_point = from_mount0_mount_translate_point + offset
-	    new_mount_name = "{0}[{1}]".format(multi_mount_name, index)
-	    new_mount = Mount(new_mount_name, from_mount0_part,
-	      from_mount0_top_surface_transform, new_mount_translate_point,
-	      from_top_surface_safe_z, from_xy_rapid_safe_z,
-	      is_tooling_plate_mount, tracing = tracing + 1)
-	    if trace_detail >= 2:
-		print("{0}new_mount_name='{1}' new_mount_translate_point='{2}'".
-		  format(indent, new_mount_name, new_mount_translate_point))
-
-	    # Update the extra material bondaries for *new_material*:
-	    reverse_from_top_surface_transform = from_top_surface_transform.reverse()
-	    new_mount._extra_start_store(reverse_from_top_surface_transform,
-	      final_extra_start_bsw, final_extra_start_tne, tracing = tracing + 1)
-	    new_mount._extra_stop_store(reverse_from_top_surface_transform,
-	      final_extra_start_bsw, final_extra_start_tne, tracing = tracing + 1)
-
-	    # Now copy *from_operations* into *combined_operations* using *new_mount*
-	    # to *offset* the *multi_mount_part*:
-	    combined_operations._extend(new_mount,
-	      from_operations, extend_flags, tracing = tracing + 1)
-	    extend_flags = "MD"
-	if trace_detail >= 3:
-	    combined_operations._show("combined_operatons")
-
-	# Perform any requested *tracing*:
-	if tracing >= 0:
-	    print("{0}<=Part._multi_mount_process('{1}', '{2}', *)".
-	      format(indent, 0, part._name, name))
 
 class Place:
     """ *Place*: Represents a part placement in the visualization. """
@@ -17397,6 +17410,266 @@ class Place:
 	"""
 
 	return self._transform
+
+class Plate:
+    """ *Plate*: Represents a plate of material to be cut up into smaller plates for machining.
+    """
+
+    def __init__(self, name, dx, dy, dz, first_letter):
+	""" *Plate*: Initialize the *Plate* object to be named *name* and have dimensions of
+	    *dx* x *dy* x *dz* where *dx* and *dy* are the length and width and *dz* is the
+	    thickness.
+	"""
+
+	# Use *plate* instead of *self*:
+	plate = self
+
+	# Verify the argument types:
+	assert isinstance(name, str)
+	assert isinstance(dx, L)
+	assert isinstance(dy, L)
+	assert isinstance(dz, L)
+	assert isinstance(first_letter, str) and len(first_letter) == 1
+
+	# Load *name*, *dx*, *dy* and *dz* into *plate*:
+	plate._dx = dx
+	plate._dy = dy
+	plate._dz = dz
+	plate._first_letter = first_letter
+	plate._name = name
+	plate._triples = []
+
+    def _multi_mounts_add(self, multi_mounts, rotate, sort_order):
+	""" *Plate*: Add a *multi_mount* to the *Plate* (i.e. *self*) multi-mounts list with a
+	    a sort order of *sort_order* and a rotate of *True* or *False*.
+	"""
+
+	# Use *plate* instead of *self*:
+	plate = self
+
+	# Verify argument types:
+	assert isinstance(multi_mounts, Multi_Mounts)
+	assert isinstance(rotate, bool)
+	assert isinstance(sort_order, int) or isinstance(sort_order, float)
+	
+	# Create a *triple* and append it to *triples*:
+	triple = (multi_mounts, rotate, sort_order)
+	triples = plate._triples
+	triples.append(triple)
+	
+    def _name_get(self):
+        """ *Plate*: Return the *name* associated with the *Plate* object (i.e. *self*):
+	"""
+
+	return self._name
+
+    def _process(self, tracing=-1000000):
+        """ *Plate*: Write the contents of the *Plate* object (i.e. *self*) out to a file.
+	    This involves computing the content as well.
+	"""
+
+	# Use *plate* instead of *triples*:
+	plate = self
+
+	# Verify argument types:
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Plate.process('{1})".format(indent, plate._name))
+	    trace_detail = 1
+
+	# Define some constants:
+	zero = L()
+	cell_size = L(inch=0.250)
+	thousandth = L(inch=0.001)
+
+	# Sort *triples* by the sort order:
+	triples = plate._triples
+	triples.sort(key=lambda triple: triple[2])
+	
+	# Grab some values from *plate*:
+	dx           = plate._dx
+	dy           = plate._dy
+	dz           = plate._dz
+	name         = plate._name
+	first_letter = plate._first_letter
+	character_offset = ord(first_letter)
+
+	# Compute the cells grid sizes:
+	cells_dx = int((dx + thousandth) / cell_size)
+	cells_dy = int((dy + thousandth) / cell_size)
+	if trace_detail >= 1:
+	    print("{0}cells_dx={1} cells_dy={2}".format(indent, cells_dx, cells_dy))
+
+	
+	# Create the *cells_grid* which is *cells_dx* by *cells_dy* in size:
+	# Note 1: Start with an initial row of all -1's.
+	initial_row = [ -1 for cell_x in range(cells_dx) ]
+	# Note 2: The code `list(initial_row)` returns a shallow copy of *initial_row*.
+	cells_grid = [ list(initial_row) for cell_y in range(cells_dy) ]
+	# Note 3: *cells_grid* is accessed with Y index first (e.g. *cells_grid[y][x]* .)
+
+	# Create the *empty_indices* which contains the X index for the first empty position
+	# for each row in *cells_grid*.  Initialize everything to 0:
+	empty_indices = [ 0 for cell_y in range(cells_dy) ]
+	if trace_detail >= 1:
+	    print("{0}len(empty_indices)={1}".format(indent, len(empty_indices)))
+
+	# Open *plate_file* to contain the results:
+	plate_name = plate._name
+	plate_file_name = "/tmp/{0}_plate.txt".format(plate_name)
+	if trace_detail >= 1:
+		print("{0}plate_file_name='{1}'".format(indent, plate_file_name))
+	with open(plate_file_name, "w") as plate_file:
+	    # Write first line of newly opened *plate_file*:
+	    plate_file.write("Plate: {0} {1:i} x {2:i} x {3:i}\n".format(name, dx, dy, dz))
+
+	    # Visit each *triple* in *triples*:
+	    for index, triple in enumerate(triples):
+		# Pull the 3 values out of *triple*:
+		multi_mounts = triple[0]
+		rotate       = triple[1]
+		sort_order   = triple[2]
+
+		# Grab the *program_number* from *multi_mounts*:
+		program_number = multi_mounts._program_number_get()
+		if trace_detail >= 1:
+		    print("{0}[{1}]: multi_mounts_name='{2}'".
+		      format(indent, index, multi_mounts._name_get()))
+		    print("{0}[{1}]: program_number={2}".format(indent, index, program_number))
+		    print("{0}[{1}]: rotate={2}".format(indent, index, rotate))
+		    print("{0}[{1}]: sort_order={2}".format(indent, index, sort_order))
+		
+		# Figure out the size of the *multi_mounts*:
+		combined_multi_mount = multi_mounts._combined_multi_mount_get()
+		extra_start_bsw, extra_start_tne = combined_multi_mount._extra_start_get()
+		extra_start_dx = extra_start_tne.x - extra_start_bsw.x
+		extra_start_dy = extra_start_tne.y - extra_start_bsw.y
+		extra_start_dz = extra_start_tne.z - extra_start_bsw.z
+		if trace_detail >= 1:
+		    print("{0}[{1}]: multi_mounts_name='{2}'".
+		     format(indent, index, multi_mounts._name_get()))
+		    print("{0}[{1}]: combined_multi_mount._name={2}".
+		      format(indent, index, combined_multi_mount._name_get()))
+		    print("{0}[{1}]: extra_start_bsw={2:i}".
+		      format(indent, index, extra_start_bsw))
+		    print("{0}[{1}]: extra_start_tne={2:i}".
+		      format(indent, index, extra_start_tne))
+
+		# Now round the sizes up to be in multiple of cells:
+		multi_mount_cells_dx = int(math.ceil((extra_start_dx / cell_size)))
+		multi_mount_cells_dy = int(math.ceil((extra_start_dy / cell_size)))
+		multi_mount_cells_dz = int(math.ceil((extra_start_dz / cell_size)))
+
+		# Deal with *rotate* by swapping *mutli_mount_cells_dx* and *mulit_mount_cells_dy*:
+		if rotate:
+		    multi_mount_cells_dx, multi_mount_cells_dy = \
+		      multi_mount_cells_dy, multi_mount_cells_dx
+		    swapped = " Swapped"
+		if trace_detail >= 1:
+		    rotated = " Rotated" if rotate else ""
+		    print("{0}[{1}]: multi_mount_cells_dx='{2}'{3}".
+		      format(indent, index, multi_mount_cells_dx, rotated))
+		    print("{0}[{1}]: multi_mount_cells_dy='{2}'{3}".
+		      format(indent, index, multi_mount_cells_dy, rotated))
+		    print("{0}[{1}]: multi_mount_cells_dz='{2}'".
+		      format(indent, index, multi_mount_cells_dz))
+
+		# Now find a place in *cells_grid* to stuff this *multi_mounts*:
+		if trace_detail >= 3:
+		    print("{0}empty_indices={1}".format(indent, empty_indices))
+		match_found = False
+		for y_search_index in range(cells_dy - multi_mount_cells_dy):
+		    #print("y_search_index={0}".format(y_search_index))
+		    empty_index = empty_indices[y_search_index]
+		    if empty_index + multi_mount_cells_dx <= cells_dx:
+			# We have room for at least one row, now check that all rows are available:
+			if trace_detail >= 2:
+			    print("{0}possible match at {1}".format(indent, y_search_index))
+			match_found = True
+			for y_index in range(y_search_index, y_search_index + multi_mount_cells_dy):
+			    if empty_indices[y_index] > empty_index:
+				match_found = False	
+				break
+
+			# If *match* found fill in the appropriate portion of *cells_grid*:
+			if match_found:
+			    if trace_detail >= 1:
+				print("{0}We have a match at x={1} y={2}".
+				  format(indent, empty_index, y_search_index))
+			    new_empty_index = empty_index + multi_mount_cells_dx
+			    if trace_detail >= 2:
+				print("{0}empty_index={1} new_empty_index={2} index={3}".
+				  format(indent, empty_index, new_empty_index, index))
+
+			    # Perform the actual filling of *cells_grid*:
+			    match_x_index = empty_index
+			    match_y_index = y_search_index
+			    for y_index in \
+			      range(y_search_index, y_search_index + multi_mount_cells_dy):
+				empty_indices[y_index] = new_empty_index
+				row = cells_grid[y_index]
+				for x_index in range(empty_index, new_empty_index):
+				    # *index* corresonds to *triple* index:
+				    row[x_index] = index
+
+			    # For extreme tracing, print out the *cells_grid*:
+			    if trace_detail >= 3:
+				debug_file = sys.stderr
+				for yy_index in range(cells_dy):
+				    row = cells_grid[yy_index]
+				    for xx_index in range(cells_dx):
+					grid_value = row[xx_index]
+					character = chr(grid_value + character_offset) \
+					  if grid_value >= 0 else '.'
+					debug_file.write(character)
+				    debug_file.write("\n")
+
+			    # Move onto next *multi_mounts*:
+			    break
+
+		# Generate the initial *summary_line* for this *triple*:
+		multi_mounts_name = multi_mounts._name_get()
+		summary_line = \
+		  "[{0}]: {1:>3} {2:>5} {3:5.2f} x {4:5.2f} x {5:3.2f} {6} {7:<30}".format(
+		  chr(index + character_offset), sort_order, program_number,
+		  (cell_size * multi_mount_cells_dx).inches(),
+		  (cell_size * multi_mount_cells_dy).inches(),
+		  extra_start_dz.inches(),
+		  'R' if rotate else '-', multi_mounts_name)
+
+		# Inform use when no *match_found*:
+		if match_found:
+		    summary_line += " ({0:5.2f}:{1:5.2f}) ({2:5.2f}:{3:5.2f})".format(
+                      (cell_size * match_x_index).inches(),
+		      (cell_size * match_y_index).inches(),
+                      (cell_size * (match_x_index + multi_mount_cells_dx)).inches(),
+		      (cell_size * (match_y_index + multi_mount_cells_dy)).inches())
+		else:
+		    print("[{0}]: Could not find a place for '{1}' in plate '{2}'".
+		      format(chr(index + character_offset), multi_mounts_name, plate_name))
+
+		# Write *summary_line* out to *plate_file*:
+		plate_file.write(summary_line)
+		plate_file.write('\n')
+		if trace_detail >= 1:
+		    print("{0}[{1}]: Sumary_line='{2}'".format(indent, index, summary_line))
+
+	    # Print out the *cells_grid*:
+	    for y_index in range(cells_dy):
+		row = cells_grid[y_index]
+		for x_index in range(cells_dx):
+		    grid_value = row[x_index]
+		    character = chr(grid_value + character_offset) if grid_value >= 0 else '.'
+		    plate_file.write(character)
+		plate_file.write("\n")
+
+	# Wrap-up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Plate.process('{1})".format(indent, plate._name))
 
 class Fastener(Part):
     """ *Fastener*: Represent a fastener (i.e. screw, bolt, etc.) to attach parts.  """
