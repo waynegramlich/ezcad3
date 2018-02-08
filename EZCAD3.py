@@ -4423,7 +4423,7 @@ class EZCAD3:
 	assert not key in mounts, "Mount {0} has already been created".format(key)
 	mounts[key] = mount
 
-    def _multi_mounts_find(self, multi_mounts_name):
+    def _multi_mounts_find(self, multi_mounts_name, cell_dx, cell_dy):
 	""" *EZCAD3*: Find/create the *Multi_Mounts* object associated with the *multi_mounts_name*
 	    and return it.
 	"""
@@ -4433,13 +4433,15 @@ class EZCAD3:
 
 	# Verify argument types:
 	assert isinstance(multi_mounts_name, str) and not ' ' in multi_mounts_name
+	assert isinstance(cell_dx, int) and cell_dx >= 0
+	assert isinstance(cell_dy, int) and cell_dy >= 0
 
 	# Finde/create the *multi_mounts* object:
 	multi_mounts_table = ezcad._multi_mounts_table
 	if multi_mounts_name in multi_mounts_table:
 	    multi_mounts = multi_mounts_table[multi_mounts_name]
 	else:
-	    multi_mounts = Multi_Mounts(multi_mounts_name)
+	    multi_mounts = Multi_Mounts(multi_mounts_name, cell_dx, cell_dy)
 	    multi_mounts_table[multi_mounts_name] = multi_mounts
 	    #print("Create Multi_Mounts('{0}') id={1}".format(multi_mounts_name, id(multi_mounts)))
 
@@ -5190,9 +5192,10 @@ class Mount_Operations:
 	    indent = ' ' * tracing
 	    print("{0}<=Mount_Operations.__init('{1}')".format(indent, name))
 
-    def _append(self, mount, operation, tracing=-100000):
+    def _append(self, mount, operation, prepend=False, tracing=-100000):
 	""" *Mount_Operations*: Append the pair of (*mount*, *operation*) to the *Mount_Operations*
-	    object (i.e. *self*) list.
+	    object (i.e. *self*) list.  If the optional *prepend* argument is *True*, the pair
+	    is prepended to the *Mount_Operations* object instead being appended.
 	"""
 
 	# Use *mount_operations* instead of *self*:
@@ -5201,13 +5204,14 @@ class Mount_Operations:
 	# Verify argument types:
 	assert isinstance(mount, Mount)
 	assert isinstance(operation, Operation)
+	assert isinstance(prepend, bool)
 	assert isinstance(tracing, int)
 
 	# Perform any requesting *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Mount_Operations.__init__('{1}', '{2}')".
-	      format(indent, mount._name_get(), operation._name_get()))
+	    print("{0}=>Mount_Operations._append('{1}', '{2}', '{3}', {4})".format(indent,
+	      mount_operations._name, mount._name_get(), operation._name_get(), prepend))
 
 	# Grab the fields of *mount_operations*:
 	pairs = mount_operations._pairs
@@ -5218,14 +5222,17 @@ class Mount_Operations:
 	mount_operation_name = "{0}[{1}]".format(name, pairs_size)
 	mount_operation = Mount_Operation(mount_operation_name, mount, operation)
 
-	# Append *mount_operation* to *pairs*:
-	pairs.append(mount_operation)
+	# Append/prepend *mount_operation* to *pairs*:
+	if prepend:
+	    pairs.insert(0, mount_operation)
+	else:
+	    pairs.append(mount_operation)
 	
 	# Wrap up any requesting *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}<=Mount_Operations.__init__('{1}', '{2}')".
-	      format(indent, mount._name_get(), operation._name_get()))
+	    print("{0}<=Mount_Operations._append('{1}', '{2}', '{3}', {4})".format(indent,
+	      mount_operations._name, mount._name_get(), operation._name_get(), prepend))
 
     def _cnc_dowel_pin_optimize(self, tracing=-1000000):
 	""" *Mount_Operations*: Sweep through the *Mount_Operations* object (i.e. *self*)
@@ -5328,7 +5335,7 @@ class Mount_Operations:
 	assert isinstance(operation0, Operation_Mount) or \
 	  isinstance(operation0, Operation_Multi_Mount), \
 	  "Got operation '{0}' instead of Operation_Mount or Operation_Multi_Mount". \
-	  format(operation.__class__.__name__)
+	  format(operation0.__class__.__name__)
 
 	# Create the *mount_vrml* for drawing lines into:
 	mount_vrml_lines_name = "{0}_{1}".format(part_name, mount0._name_get())
@@ -5992,6 +5999,34 @@ class Mount_Operations:
 
 	self._pairs.extend(extend_pairs)
 
+    def _prepend(self, mount, operation, tracing=-100000):
+	""" *Mount_Operations*: Prepend the pair of (*mount*, *operation*) to the *Mount_Operations*
+	    object (i.e. *self*) list.
+	"""
+
+	# Use *mount_operations* instead of *self*:
+	mount_operations = self
+
+	# Verify argument types:
+	assert isinstance(mount, Mount)
+	assert isinstance(operation, Operation)
+	assert isinstance(tracing, int)
+
+	# Perform any requesting *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Mount_Operations._prepend('{1}', '{2}', '{3}')".format(indent,
+	      mount_operations._name, mount._name_get(), operation._name_get()))
+
+	# Prepend the *mount*/*operation pair to *mount*:
+	mount_operations._append(mount, operation, prepend=True, tracing = tracing+1)
+
+	# Wrap up any requesting *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=Mount_Operations._prepend'{1}', '{2}')".
+	      format(indent, mount._name_get(), operation._name_get()))
+
     def _program_number_get(self):
 	""" *Mount_Operations*: Return the `.ngc` file program number associated wit the
 	    *Mount_Operations* object (i.e. *self*.)
@@ -6234,12 +6269,10 @@ class Multi_Mount:
 	    print("{0}=>Multi_Mount._copy('{1}', '{2}')".
 	      format(indent, multi_mount._mount_name, mount_name))
 
-	new_multi_mount = \
-	  Multi_Mount(multi_mount._part, mount_name, multi_mount._rotate, tracing = tracing + 1)
+	new_multi_mount = Multi_Mount(multi_mount._part, mount_name, multi_mount._rotate,
+	  tracing = tracing + 1)
 	new_multi_mount._column         = multi_mount._column
 	new_multi_mount._combined_mount = multi_mount._combined_mount
-	new_multi_mount._dx             = multi_mount._dx
-	new_multi_mount._dy             = multi_mount._dy
 	new_multi_mount._extra_bsw      = multi_mount._extra_bsw
 	new_multi_mount._extra_tne      = multi_mount._extra_tne
 	new_multi_mount._row            = multi_mount._row
@@ -6443,7 +6476,7 @@ class Multi_Mounts:
     """ *Multi_Mounts* is basically just a list of *Multi_Mount* objects.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, cell_dx, cell_dy):
 	""" *Multi_Mounts*:  Initialize the *Multi_Mounts* object (i.e. *self*) to be named *name*.
 	"""
 
@@ -6452,15 +6485,32 @@ class Multi_Mounts:
 
 	# Verify argument types:
 	assert isinstance(name, str)
-	
+	assert isinstance(cell_dx, int) and cell_dx >= 0
+	assert isinstance(cell_dy, int) and cell_dy >= 0
 
 	# Load up *multi_mounts*:
+	multi_mounts._cell_dx = cell_dx
+	multi_mounts._cell_dy = cell_dy
 	multi_mounts._combined_multi_mount = None
 	multi_mounts._multi_mounts_list = []
 	multi_mounts._multi_mounts_table = {}
 	multi_mounts._name = name
 	multi_mounts._part = None
 	multi_mounts._program_number = -1
+
+    def _cell_dx_get(self):
+	""" *Multi_Mounts*: Return the cell dx offset associated with the *Multi_Mounts*
+	    object (i.e. *self*.)
+	"""
+
+	return self._cell_dx
+
+    def _cell_dy_get(self):
+	""" *Multi_Mounts*: Return the cell dy offset associated with the *Multi_Mounts*
+	    object (i.e. *self*.)
+	"""
+
+	return self._cell_dy
 
     def _combined_multi_mount_get(self):
 	""" *Multi_Mounts*: Return the combined multi *Mount* for the *Multi_Mounts* object
@@ -6716,7 +6766,9 @@ class Multi_Mounts:
 
 	assert old_mount_name in multi_mounts._name, \
 	  "'{0}' does not contain '{1}'".format(multi_mounts._name, old_mount_name)
-	new_multi_mounts = Multi_Mounts(multi_mounts._name.replace(old_mount_name, new_mount_name))
+	new_multi_mount_name = multi_mounts._name.replace(old_mount_name, new_mount_name)
+	new_multi_mounts = \
+	  Multi_Mounts(new_multi_mount_name, multi_mounts._cell_dx, multi_mounts._cell_dy)
 	new_multi_mounts_list = new_multi_mounts._multi_mounts_list
 	replace_name = None
 	for index, multi_mount in enumerate(multi_mounts._multi_mounts_list):
@@ -8232,7 +8284,6 @@ class Operation_Mount(Operation):
 	    mount_ngc_file.write("( Parallels height {0:i}in for tooling plate )\n".
 	      format(selected_parallel_height))
 	else:
-	    selected_parallel_height = mount._selected_parallel_height_get()
 	    mount_ngc_file.write("( Parallels height {0:i}in )\n".format(selected_parallel_height))
 
 	# If there is a tooling plate, visualize that into *cnc_vrml_lines*:
@@ -8517,6 +8568,8 @@ class Operation_Multi_Mount(Operation):
 	extra_start_dz = extra_start_tne.x - extra_start_bsw.z
 	mount_ngc_file.write("( Initial dimensions X:{0:i}in x Y:{1:i}in x Z:{2:i}in of {3} )\n".
 	  format(extra_start_dx, extra_start_dy, extra_start_dz, material))
+	parallels_height = combined_multi_mount._selected_parallel_height_get()
+	mount_ngc_file.write("( Parallels Height: {0:i}in)\n".format(parallels_height))
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -15679,7 +15732,7 @@ class Part:
 
 	print("No manufacture method for '{0}'".format(self))
 
-    def multi_mounts_find(self, multi_mounts_name):
+    def multi_mounts_find(self, multi_mounts_name, cell_dx=0, cell_dy=0):
 	""" *Part*: Return the *Multi_Mounts* object that matches *multi_mouns_name* using
 	    the *Part* object (i.e. *self*) as an anchor to start the search.
 	"""
@@ -15689,10 +15742,12 @@ class Part:
 
 	# Verify argument types:
 	assert isinstance(multi_mounts_name, str) and not ' ' in multi_mounts_name
+	assert isinstance(cell_dx, int) and cell_dx >= 0
+	assert isinstance(cell_dy, int) and cell_dy >= 0
 
 	# Create/find the *Multi_Mounts* object associated with *multi_mounts_name*:
 	ezcad = part._ezcad_get()
-	multi_mounts = ezcad._multi_mounts_find(multi_mounts_name)
+	multi_mounts = ezcad._multi_mounts_find(multi_mounts_name, cell_dx, cell_dy)
 
 	return multi_mounts
 
@@ -17054,10 +17109,7 @@ class Part:
 	    hole_0_0 = P(tooling_plate_extra_dx / 2, -tooling_plate_extra_dy / 2, zero)
 	else:
 	    hole_0_0 = P(-hole00_extra_start_bsw.x, -hole00_extra_start_tne.y, zero)
-	dowel_pin = dowel_pin00 + hole_0_0
 	if trace_detail >= 2:
-	    print("{0}hole_0_0={1:i} dowel_pin={2:i}".
-	      format(indent, hole_0_0, dowel_pin, dowel_pin))
 	    print("{0}tooling_plate: columns_dx={1:i} rows_dy={2:i}".
 	      format(indent, tooling_plate_columns_dx, tooling_plate_rows_dy))
 	    print("{0}tooling_plate: extra_dx={1:i} extra_dy={1:i}".
@@ -17292,36 +17344,25 @@ class Part:
                           format(indent, index, unique_columns, unique_rows, spacers))
 		    
 		# The first time through the loop, both *combined_multi_mount* and
-                # *combined_operations* are initialized:
+                # *combined_operations* are initialized.  *combined_multi_mount* is the
+		# *Mount* object that is used for the *Operation_Multi_Mount* and
+		# *Operation_Dowel_Pin* operations.  Also, the final extra material is
+		# eventually stuffed into *combined_multi_mount*:
 		if combined_multi_mount == None:
+		    # *null_transform* is not actually used by the either the
+		    # *Operation_Mulit_Mount* or *Operation_Dowel_Pin* operations:
+		    null_transform = Transform()
+
+		    # Create *combined_multi_mount*:
 		    origin = P(zero, zero, zero)
 		    combined_multi_mount_name = "{0}_Combined_Multi_Mount".format(name)
 		    combined_multi_mount = Mount(combined_multi_mount_name,
-		      part, Transform(), origin, top_surface_safe_z, xy_rapid_safe_z, True,
+		      part, null_transform, origin, top_surface_safe_z, xy_rapid_safe_z, True,
 		      selected_parallel_height)
 		    multi_mounts._combined_multi_mount_set(combined_multi_mount)
 
+		    # Create *combined_operations*:
 		    combined_operations = part._mount_register(combined_multi_mount)
-		    comment = ""
-		    operation_multi_mount = Operation_Multi_Mount(part, multi_mounts,
-		      comment, vice, jaws_spread, selected_parallel_height, tooling_plate, spacers,
-		      is_tooling_plate, tracing = tracing + 1)
-		    combined_operations._append(combined_multi_mount,
-		      operation_multi_mount, tracing = tracing + 1)
-
-		    # Create the dowel pin operation:
-		    preferred_diameter = L(inch="3/8")
-		    dowel_pin_tool = \
-		      part._tools_dowel_pin_search(preferred_diameter, tracing = tracing)
-		    assert isinstance(dowel_pin_tool, Tool_Dowel_Pin)
-		    plunge_point = dowel_pin + P(L(inch=-0.700), zero, zero)
-		    operation_dowel_pin = Operation_Dowel_Pin(part, "Multi Mount Dowel Pin",
-		      0, dowel_pin_tool, Operation.ORDER_DOWEL_PIN, None,
-		      dowel_pin_tool._feed_speed_get(), dowel_pin_tool._spindle_speed_get(),
-		      dowel_pin_tool._diameter_get(), dowel_pin, plunge_point,
-		      tracing = tracing + 1)
-		    combined_operations._append(combined_multi_mount,
-		      operation_dowel_pin, tracing = tracing + 1)
 
 		# Copy the operations from *multi_mount_mount_operations* to *combined_operations*
 		# skipping the *Operation_Mount* and *Operation_Dowel_Pin* operations:
@@ -17331,6 +17372,12 @@ class Part:
 		#print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 		#combined_operations._extend(combined_mount,
 		#  multi_mount_mount_operations, "MD", tracing = 5)
+
+	    # Create *operation_multi_mount* for eventual prepending to *combined_operations*:
+	    comment = ""
+	    operation_multi_mount = Operation_Multi_Mount(part, multi_mounts,
+	      comment, vice, jaws_spread, selected_parallel_height, tooling_plate, spacers,
+	      is_tooling_plate, tracing = tracing + 1)
 
 	    # Stuff the bounding box into *combined_multi_mount* for CNC visualization:
 	    extra_start_bsw = extra_bounding_box.bsw_get()
@@ -17343,6 +17390,27 @@ class Part:
 	    if not is_tooling_plate:
 		extra_dy = extra_bounding_box.tne_get().y - extra_bounding_box.bsw_get().y
 		operation_multi_mount._jaws_spread_set(extra_dy)
+
+	    # Create *operation_dowel_pin* for eventual prepending to *combined_operations*:
+	    dowel_pin_point = extra_bounding_box.bw_get()
+	    preferred_diameter = L(inch="3/8")
+	    dowel_pin_tool = \
+	      part._tools_dowel_pin_search(preferred_diameter, tracing = tracing)
+	    assert isinstance(dowel_pin_tool, Tool_Dowel_Pin)
+	    plunge_point = dowel_pin_point + P(L(inch=-0.700), zero, zero)
+	    operation_dowel_pin = Operation_Dowel_Pin(part, "Multi Mount Dowel Pin",
+	      0, dowel_pin_tool, Operation.ORDER_DOWEL_PIN, None,
+	      dowel_pin_tool._feed_speed_get(), dowel_pin_tool._spindle_speed_get(),
+	      dowel_pin_tool._diameter_get(), dowel_pin_point, plunge_point,
+	      tracing = tracing + 1)
+
+	    # Prepend *operation_dowel_pin* and *operation_multi_mount* to
+	    # *combined_operations* in reverse order so that the mount operation
+	    # comes first:
+	    combined_operations._prepend(combined_multi_mount,
+	      operation_dowel_pin, tracing = tracing + 1)
+	    combined_operations._prepend(combined_multi_mount,
+	      operation_multi_mount, tracing = tracing + 1)
 
 	    #temporary_bsw, temporary_tne = combined_multi_mount._extra_start_get()
 	    #assert temporary_bsw == extra_start_bsw
@@ -17439,7 +17507,7 @@ class Plate:
 	plate._name = name
 	plate._triples = []
 
-    def _multi_mounts_add(self, multi_mounts, rotate, sort_order):
+    def _multi_mounts_add(self, multi_mounts, rotate, sort_order, cell_dx=0, cell_dy=0):
 	""" *Plate*: Add a *multi_mount* to the *Plate* (i.e. *self*) multi-mounts list with a
 	    a sort order of *sort_order* and a rotate of *True* or *False*.
 	"""
@@ -17451,9 +17519,11 @@ class Plate:
 	assert isinstance(multi_mounts, Multi_Mounts)
 	assert isinstance(rotate, bool)
 	assert isinstance(sort_order, int) or isinstance(sort_order, float)
+	assert isinstance(cell_dx, int) and cell_dx >= 0
+	assert isinstance(cell_dy, int) and cell_dy >= 0
 	
 	# Create a *triple* and append it to *triples*:
-	triple = (multi_mounts, rotate, sort_order)
+	triple = (multi_mounts, rotate, sort_order, cell_dx, cell_dy)
 	triples = plate._triples
 	triples.append(triple)
 	
@@ -17529,16 +17599,21 @@ class Plate:
 
 	    # Visit each *triple* in *triples*:
 	    for index, triple in enumerate(triples):
-		# Pull the 3 values out of *triple*:
+		# Pull the 5 values out of *triple*:
 		multi_mounts = triple[0]
 		rotate       = triple[1]
 		sort_order   = triple[2]
 
-		# Grab the *program_number* from *multi_mounts*:
-		program_number = multi_mounts._program_number_get()
+		# Grab some values from *multi_mount*:
+		multi_mounts_name = multi_mounts._name_get()
+		program_number    = multi_mounts._program_number_get()
+		cell_dx           = multi_mounts._cell_dx_get()
+		cell_dy           = multi_mounts._cell_dy_get()
 		if trace_detail >= 1:
 		    print("{0}[{1}]: multi_mounts_name='{2}'".
-		      format(indent, index, multi_mounts._name_get()))
+		      format(indent, index, multi_mount_name))
+		    print("{0}[{1}]: cell_dx={1} cell_dy={2}".
+		      format(indent, index, cell_dx, cell_dy))
 		    print("{0}[{1}]: program_number={2}".format(indent, index, program_number))
 		    print("{0}[{1}]: rotate={2}".format(indent, index, rotate))
 		    print("{0}[{1}]: sort_order={2}".format(indent, index, sort_order))
@@ -17550,8 +17625,8 @@ class Plate:
 		extra_start_dy = extra_start_tne.y - extra_start_bsw.y
 		extra_start_dz = extra_start_tne.z - extra_start_bsw.z
 		if trace_detail >= 1:
-		    print("{0}[{1}]: multi_mounts_name='{2}'".
-		     format(indent, index, multi_mounts._name_get()))
+		    print("{0}[{1}]: multi_mount_name='{2}'".
+		     format(indent, index, multi_mount._name_get()))
 		    print("{0}[{1}]: combined_multi_mount._name={2}".
 		      format(indent, index, combined_multi_mount._name_get()))
 		    print("{0}[{1}]: extra_start_bsw={2:i}".
@@ -17578,14 +17653,14 @@ class Plate:
 		    print("{0}[{1}]: multi_mount_cells_dz='{2}'".
 		      format(indent, index, multi_mount_cells_dz))
 
-		# Now find a place in *cells_grid* to stuff this *multi_mounts*:
+		# Now find a place in *cells_grid* to stuff this *multi_mount*:
 		if trace_detail >= 3:
 		    print("{0}empty_indices={1}".format(indent, empty_indices))
 		match_found = False
 		for y_search_index in range(cells_dy - multi_mount_cells_dy):
 		    #print("y_search_index={0}".format(y_search_index))
 		    empty_index = empty_indices[y_search_index]
-		    if empty_index + multi_mount_cells_dx <= cells_dx:
+		    if empty_index + multi_mount_cells_dx <= cells_dx + cell_dx:
 			# We have room for at least one row, now check that all rows are available:
 			if trace_detail >= 2:
 			    print("{0}possible match at {1}".format(indent, y_search_index))
@@ -17600,19 +17675,20 @@ class Plate:
 			    if trace_detail >= 1:
 				print("{0}We have a match at x={1} y={2}".
 				  format(indent, empty_index, y_search_index))
-			    new_empty_index = empty_index + multi_mount_cells_dx
+
+			    # Perform the actual filling of *cells_grid*:
+			    match_x_index = empty_index + cell_dx
+			    match_y_index = y_search_index + cell_dy
+			    new_empty_index = match_x_index + multi_mount_cells_dx
 			    if trace_detail >= 2:
 				print("{0}empty_index={1} new_empty_index={2} index={3}".
 				  format(indent, empty_index, new_empty_index, index))
-
-			    # Perform the actual filling of *cells_grid*:
-			    match_x_index = empty_index
-			    match_y_index = y_search_index
-			    for y_index in \
-			      range(y_search_index, y_search_index + multi_mount_cells_dy):
+			    for y_index in range(match_y_index,
+			      match_y_index + multi_mount_cells_dy):
 				empty_indices[y_index] = new_empty_index
 				row = cells_grid[y_index]
-				for x_index in range(empty_index, new_empty_index):
+				for x_index in range(empty_index + cell_dx,
+				  new_empty_index + cell_dx):
 				    # *index* corresonds to *triple* index:
 				    row[x_index] = index
 
@@ -17628,11 +17704,10 @@ class Plate:
 					debug_file.write(character)
 				    debug_file.write("\n")
 
-			    # Move onto next *multi_mounts*:
+			    # Move onto next *multi_mount*:
 			    break
 
 		# Generate the initial *summary_line* for this *triple*:
-		multi_mounts_name = multi_mounts._name_get()
 		summary_line = \
 		  "[{0}]: {1:>3} {2:>5} {3:5.2f} x {4:5.2f} x {5:3.2f} {6} {7:<30}".format(
 		  chr(index + character_offset), sort_order, program_number,
