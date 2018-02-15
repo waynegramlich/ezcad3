@@ -2311,6 +2311,13 @@ class Material:
 
 	return self._generic
 
+    def _is_plastic(self):
+        """ *Material*: Return *True* if the *Material* object (i.e. *self*) is plastic
+	    and *False* otherwise.
+	"""
+
+	return self._generic.lower() == "plastic"
+
     def _is_steel(self):
         """ *Material*: Return *True* if the *Material* object (i.e. *self*) is steel
 	    (or iron) and *False* otherwise.
@@ -5706,8 +5713,8 @@ class Mount_Operations:
 	    # Output the call to *mount_ngc_file*:
 	    tool_name = tool._name_get()
 	    if tool_name != "None":
-		mount_ngc_file.write("O{0} call ( T{1}: {2} )\n".
-		  format(tool_program_number, tool._number_get(), tool_name))
+		mount_ngc_file.write("O{0} call ( T{1}: {2} Priority: {3})\n".format(
+		  tool_program_number, tool._number_get(), tool_name, operation0._priority_get()))
 
 	    # Create *cnc_tool_vrml* for recording just this *tool*:
 	    part_name = part._name_get()
@@ -9213,6 +9220,9 @@ class Operation_Simple_Pocket(Operation):
 	# Figure out the *maximum_pass_depth*:
 	# FIXME: Half tool radius is really conservative.  *tool_radius* should work fine:
 	maximum_pass_depth = tool_radius / 2
+	material = part._material_get()
+	if material._is_plastic():
+	    maximum_pass_depth = tool_radius
 	if is_laser:
 	    maximum_pass_depth = tool_maximum_z_depth
 	if trace_detail >= 2:
@@ -16420,8 +16430,8 @@ class Part:
 	    assert flag in "lr", "Flag '{0}' is not allowed for flags argument".format(flag)
 	assert isinstance(extra_dx, L) and extra_dx >= zero
 	assert isinstance(extra_dy, L) and extra_dy >= zero
-	assert isinstance(extra_top_dz, L) and extra_top_dz >= zero
-	assert isinstance(extra_bottom_dz, L) and extra_bottom_dz >= zero
+	assert isinstance(extra_top_dz, L) # and extra_top_dz >= zero
+	assert isinstance(extra_bottom_dz, L) # and extra_bottom_dz >= zero
 
 	# Preform any requested *tracing*:
 	detail_tracing = -1000000
@@ -21284,8 +21294,8 @@ class Shop:
 	  14, 64, hss, L(inch=0.1160), L(inch=1.625), zero)
 	drill_50 = shop._drill_append("#50 [#0-80 free]",
 	  15, hss, L(inch=0.0700), 4, L(inch=0.750), "#50", degrees118, stub, no_center_cut, drills)
-	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill [1.5in]",
-	  16, hss, in3_8, 4, L(inch=1.500), not laser)
+	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill [1.6in]",
+	  16, hss, in3_8, 4, L(inch=1.600), not laser)
 	dowel_3_8_long = shop._dowel_pin_append("3/8 Dowel Pin [1.5in]",
 	  16, 66, hss, in3_8, L(inch=1.500), zero)
 	#end_mill_3_4 = shop._end_mill_append("3/4 End Mill",
@@ -22359,7 +22369,7 @@ class Tool_End_Mill(Tool):
     def _match(tool, maximum_diameter, maximum_z_depth, from_routine, tracing):
 	""" *Tool_End_Mill*: Verify that *tool* is both an end mill and that it has a diameter
 	    less than or equal to *maximum_diameter*.  If *maximim_diameter* is negative,
-	    it will match any end drill.  A positive number that increases with the diameter
+	    it will match any end mill.  A positive number that increases with the diameter
 	    is returned if a match occurs.  Otherwise, -1.0 is returned if there is no match.
 	    *from_routine* is the name of the calling routine and is used for debugging only.
 	"""
