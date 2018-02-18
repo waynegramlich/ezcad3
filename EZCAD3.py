@@ -103,7 +103,7 @@
 #   by specifying a start point an end point and a diameter.
 #
 # Neither the additive phase nor the subtractive phase actually cares about mounts.
-# If the desried output is going to be manufactured by a 3D printer, no mounts are
+# If the desired output is going to be manufactured by a 3D printer, no mounts are
 # actually needed and the generated `.stl` file can be simply fed into the 3D printer
 # tool chain.  However, if the part is going to be constructed using a mill or laser
 # counter, mounting is very definitely something that needs to be performed by the part
@@ -131,8 +131,9 @@
 # In addition to all of this, there is also a technique call multi-mount that is used
 # to combine the mounts of several parts together to make multiple parts at the same
 # time using combined CNC paths.  The multi-mount stuff had a greater impact on EZCAD
-# that was initially expected.  In order to make the multi-mounts work, they have to
-# be queued up to occur *after* all of the regular mounts have occurred.
+# than was initially expected.  In order to make the multi-mounts work, they have to
+# be queued up to occur *after* all of the regular mounts have occurred.  This is to
+# ensure that tool paths for all *Part*'s have been determined.
 #
 # There are a number of Python classes that are used to support CNC path generation.
 # These classes are listed below with a short description of what the class does:
@@ -176,6 +177,9 @@
 #   object is the fundamental unit of CNC path planning.  Within a *Mount_Operations* list,
 #   the *Mount_Operation* objects can be rearranged (with some constraints) to produce more
 #   efficient CNC tool paths.
+#
+# * *Plate*: A *Plate* specifies a bunch of *Multi_Mounts*.  It is used to figure out how
+#   to cut the various *Multi_Mounts* chunks from a larger chunk of material.
 #
 # Now it is time to talk about extra material.  In order to support exterior contouring and
 # facing (by the way, facing operations have not been implemented yet) there needs to be some
@@ -5312,7 +5316,7 @@ class Mount_Operations:
 	mount_operations = self
 
 	# Verify argument types:
-        assert isinstance(mount_program_number, int)
+        assert isinstance(mount_program_number, int) and mount_program_number > 0
         assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -5336,6 +5340,9 @@ class Mount_Operations:
 	operation0 = pair0._operation_get()
 	part = operation0._part_get()
 	part_name = part._name_get()
+
+	# Tack *mount_program_number* ont the program numbers list of *part*:
+	part._program_numbers_append(mount_program_number)
 
 	# For now the first *operation0* must always be an *Operation_Mount* or an
 	# *Operation_Multi_Mount*: 
@@ -6193,16 +6200,17 @@ class Multi_Mount:
 	# Stuff values into *multi_mount*:
 	zero = L()
 	big = L(mm=123.4567890)
-	multi_mount._column         = -1	
-	multi_mount._combined_mount = None
-	multi_mount._dx             = -big
-	multi_mount._dy             = -big
-	multi_mount._extra_bsw      = None
-	multi_mount._extra_tne      = None
-	multi_mount._mount_name     = mount_name
-	multi_mount._part           = part
-	multi_mount._rotate         = rotate
-	multi_mount._row            = -1
+	multi_mount._column          = -1	
+	multi_mount._combined_mount  = None	# The *Mount* used to for overall setup
+	multi_mount._dx              = -big
+	multi_mount._dy              = -big
+	multi_mount._extra_bsw       = None
+	multi_mount._extra_tne       = None
+	multi_mount._mount_name      = mount_name
+	multi_mount._part            = part
+	multi_mount._program_numbers = []
+	multi_mount._rotate          = rotate
+	multi_mount._row             = -1
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -6746,6 +6754,15 @@ class Multi_Mounts:
 	      format(indent, multi_mounts._name, result))
 	return result
 
+    def _multi_mounts_get(self):
+	""" *Multi_Mounts*: Return the list of *Multi_Mount* objects from the the *Multi_Mounts*
+	    object (i.e. *self*):
+	"""
+
+	multi_mounts_list = self._multi_mounts_list
+	assert isinstance(multi_mounts_list, list)
+	return multi_mounts_list
+
     def _name_get(self):
 	""" *Multi_Mounts*: Return the name of the *Multi_Mounts* object (i.e. *self*).
 	"""
@@ -6796,13 +6813,6 @@ class Multi_Mounts:
 	      format(indent, multi_mounts._name, mount_name, new_multi_mounts._name))
 	return new_multi_mounts
 
-    def _multi_mounts_get(self):
-	""" *Multi_Mounts*: Return the list of *Multi_Mount* objects from the the *Multi_Mounts*
-	    object (i.e. *self*):
-	"""
-
-	return self._multi_mounts_list
-
     def _part_get(self):
 	""" *Multi_Mounts*: Return the *Part* object associated witht the *Multi_Mounts* object
 	    (i.e. *self*):
@@ -6826,16 +6836,18 @@ class Multi_Mounts:
 	multi_mounts._part = part
 
     def _program_number_get(self):
-	""" *Multi_Mounts*: Return the `.ngc` file program number for the *Multi_Mounts* object.
+	""" *Multi_Mounts*: Return the program number associated with the *Multi_Mounts* object:
+	    (i.e. *self*.)	    
 	"""
 
 	return self._program_number
 
     def _program_number_set(self, program_number):
-	""" *Multi_Mounts*: Save *program_number* into the *Multi_Mounts_Object* (i.e. *self*.)
+	""" *Multi_Mounts*: Store *program_number* into the associated *Multi_Mounts* object
+	    (i.e. *self*.)
 	"""
-
-	assert isinstance(program_number, int)
+	
+	assert isinstance(program_number, int) and program_number > 0
 	self._program_number = program_number
 
     def _size_get(self):
@@ -6877,6 +6889,11 @@ class Multi_Mounts:
 	    # Insert *multi_mount* into *multi_mounts_table* and *multi_mounts_list*:
 	    multi_mounts_table[key] = multi_mount
 	    multi_mounts_list.append(multi_mount)
+
+	    # Tack the *program_number* for *part* onto the *programs_numbers* list:
+	    program_numbers = multi_mount._program_numbers
+	    program_number = part._program_number_get()
+	    program_numbers.append(program_number)
 
 class Operation:
     """ *Operation* is a class that represents a manufacturing operation.
@@ -9840,6 +9857,8 @@ class Part:
 	part._places = {}
 	part._position_count = 0
 	part._priority = 0
+	part._program_number = -1		# Top level CNC program number for part
+	part._program_numbers = []		# All program numers for part
 	part._reverse_root_transform = root_transform.reverse()
 	part._root_transform = null_transform
 	part._scad_difference_lines = []
@@ -11314,9 +11333,37 @@ class Part:
 	self._plunge_y = plunge_y
 
     def _priority_get(self):
-	""" *Part*: Return the priority of the *Part* (i.e. *self*). """
+	""" *Part*: Return the priority of the *Part* (i.e. *self*.) """
 
 	return self._priority
+
+    def _program_number_get(self):
+	""" *Part*: Return the program number associated with *Part* (i.e. *self*.)
+	"""
+
+	return self._program_number
+
+    def _program_numbers_append(self, program_number):
+        """ *Part*: Append *program_number* to the program_numbers list associated with
+	    the *Part* object (i.e. *self*.)
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	# Verify argument types:
+	assert isinstance(program_number, int) and program_number > 0, \
+	  "program_number={0}".format(program_number)
+
+	# Stuff *program_number* into *multi_mount*:
+	part._program_numbers.append(program_number)
+
+    def _program_numbers_get(self):
+	""" *Multi_Mount*: Return the program numbers list associated with the *Multi_Mount*
+	    object (i.e. *self*.)
+	"""
+
+	return self._program_numbers
 
     def _stl_file_name_get(self):
 	""" *Part*: Return the STL file name associated with the *Part* object (i.e. *self*.)
@@ -15948,6 +15995,8 @@ class Part:
 		print("{0}reverse_top_surface_transform={1:s}".
 		  format(indent, reverse_top_transform))
 	    for row in rows:
+		#FIXME: We really need to understand maximum tapping depth:
+		maximum_drill_depth = L(inch=1.000)
 		for column in columns:
 		    column_row = (column, row)
 		    if not column_row in skips_table:
@@ -15957,7 +16006,8 @@ class Part:
 			x = lower_left_x + plate_hole_pitch * column
 			y = lower_left_y + plate_hole_pitch * row
 			start = P(x, y, zero)
-			stop =  P(x, y, -part_dz)
+			drill_depth = part_dz.minimum(maximum_drill_depth)
+			stop =  P(x, y, -drill_depth)
 
 			plate_holes.append(column_row)
 
@@ -17229,8 +17279,10 @@ class Part:
 		      format(indent, index, part_dx, part_dy, part_dz))
 
 		# Find the smallest parallel that just clears the top of the *vice* for *part_dz*:
-		#selected_parallel_height = parallels._select(part_dz, vice)
-		selected_parallel_height = tooling_plate._parallels_height_get()
+		if tooling_plate_present:
+		    selected_parallel_height = tooling_plate._parallels_height_get()
+		else:
+		    selected_parallel_height = parallels._select(part_dz, vice)
 		if trace_detail >= 2:
 		    print("{0}[{1}]: selected_parallel_height={2:i}".
 		      format(indent, index, selected_parallel_height))
@@ -17742,6 +17794,33 @@ class Plate:
 		plate_file.write('\n')
 		if trace_detail >= 1:
 		    print("{0}[{1}]: Sumary_line='{2}'".format(indent, index, summary_line))
+
+		# List the *Part*'s included in the *multi_mounts* and their associated
+		# extra tasks beyond drilling tooling plate mount holes and doing the initial
+		# top level machining:
+		multi_mounts_list = multi_mounts._multi_mounts_get()
+		assert isinstance(multi_mounts_list, list)
+		for multi_mount_index, multi_mount in enumerate(multi_mounts_list):
+		    part = multi_mount._part_get()
+		    part_name = part._name_get()
+		    column, row = multi_mount._column_row_get()
+		    part_summary = "  [{0}, {1}] {2}".format(column, row, part_name)
+
+		    # Now sweep the the *program_numbers* of *part* calling out the
+		    # additional mounts that need to be performed:
+		    program_numbers = part._program_numbers_get()
+		    assert len(program_numbers) > 0
+		    program_number0 = program_numbers[0]
+		    for program_number in program_numbers:
+			base_program_number = program_number - program_number0
+			if base_program_number % 10 == 0 and base_program_number >= 20:
+			   part_summary += " " + str(program_number)
+		    if trace_detail >= 2:
+			print("{0}{1}".format(indent, part_summary))
+
+		    # Write the *part_sumary* line out to *plate_file*:
+		    plate_file.write(part_summary)
+		    plate_file.write('\n')
 
 	    # Print out the *cells_grid*:
 	    for y_index in range(cells_dy):
@@ -21268,7 +21347,7 @@ class Shop:
 	dowel_27 = shop._dowel_pin_append("#27 Dowel Pin",
 	  4, 54, hss, L(inch=0.1440), L(inch=1.875), zero)
 	end_mill_3_8 = shop._end_mill_append("3/8 End Mill [5/8in]",
-	  5, hss, in3_8, 2, in5_8, not laser)
+	  5, hss, in3_8, 4, in5_8, not laser)
 	dowl_pin_end_mill_3_8 = shop._dowel_pin_append("3/8in Dowel Pin",
 	  5, 55, hss, in3_8, in5_8, zero)
 	end_mill_1_4 = shop._end_mill_append("1/4 End Mill",
