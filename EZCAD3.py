@@ -8300,7 +8300,7 @@ class Operation_Mount(Operation):
 	cnc_extra_start_dy = cnc_extra_start_tne.y - cnc_extra_start_bsw.y
 	cnc_extra_start_dz = cnc_extra_start_tne.z - cnc_extra_start_bsw.z
 	material = part._material_get()
-	mount_ngc_file.write("( Initial dimensions X:{0:i}in x Y:{1:i}in x Z:{2:i}in of {3}  )\n".
+	mount_ngc_file.write("( Initial Dimensions X:{0:i}in x Y:{1:i}in x Z:{2:i}in of {3} )\n".
 	  format(cnc_extra_start_dx.absolute(), cnc_extra_start_dy.absolute(),
 	  cnc_extra_start_dz.absolute(), material))
 	selected_parallel_height = mount._selected_parallel_height_get()
@@ -9842,8 +9842,8 @@ class Part:
 	part._dz_original = zero
 	part._dxf_scad_lines = []
 	part._extra_start_stop_available = False # *True* when values are in extra start/stop fields
-	part._extra_start_bsw = None		# BSW extra material corner at part construct start
-	part._extra_start_tne = None		# TNE extra material corner at part construct start
+	part._extra_start_bsw = P()		# BSW extra material corner at part construct start
+	part._extra_start_tne = P()		# TNE extra material corner at part construct start
 	part._extra_stop_bsw = None		# BSW extra material corner at part construct end
 	part._extra_stop_tne = None		# TNE extra material corner at part construct end
 	part._ezcad = ezcad			# Top level *EZCAD3* object
@@ -16944,6 +16944,7 @@ class Part:
 
 		# Perform the dowel pin operation:
 		preferred_diameter = L(inch="3/8")
+
 		part.dowel_pin(dowel_pin_comment,
 		  cnc_dowel_point, cnc_plunge_point, preferred_diameter, detail_tracing)
 
@@ -16953,7 +16954,6 @@ class Part:
 	      "{6:i}, {7:i}, {8:i}, {9:i})").format(indent,
 	      part._name, name, top_surface, jaw_surface, flags,
 	      extra_dx, extra_dy, extra_top_dz, extra_bottom_dz))
-
 
     def _vice_mount_helper(self, extra_bsw, extra_tne, is_tooling_plate_mount, tracing=-1000000):
 	""" *Part*: Return a mount translate point and parallel height for the material bounding
@@ -17813,8 +17813,9 @@ class Plate:
 		    program_number0 = program_numbers[0]
 		    for program_number in program_numbers:
 			base_program_number = program_number - program_number0
-			if base_program_number % 10 == 0 and base_program_number >= 20:
-			   part_summary += " " + str(program_number)
+			if base_program_number % 10 == 0 and \
+			  (base_program_number == 0 or base_program_number >= 20):
+			    part_summary += " " + str(program_number)
 		    if trace_detail >= 2:
 			print("{0}{1}".format(indent, part_summary))
 
