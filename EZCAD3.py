@@ -336,19 +336,22 @@ class L:
     #  @returns *self* / *number*
     #
     # <I>__div__</I>() returns *self* / *number*.  *number* must be either
-    # be an *int*, *float*, or *L*.  For a divisor that is an *int* or *float*,
+    # be an *int*, *float*, *L*, or *Speed*.  For a divisor that is an *int* or *float*,
     # the returned result is of type *L*.  For a divisor that is an *L* type,
-    # the returned quotient result is of type *float*.
+    # the returned quotient result is of type *float*.  For a divisor that is of type *Speed*:
+    # the returned value is of type *Time*:
     def __div__(self, divisor):
 	""" *L*: Return {self} / {scalar}. """
 
 	# Check argument types:
 	assert isinstance(divisor, float) or \
-	  isinstance(divisor, int) or isinstance(divisor, L)
+	  isinstance(divisor, int) or isinstance(divisor, L) or isinstance(divisor, Speed)
 
 	if isinstance(divisor, L):
 	    assert divisor._mm != 0.0
 	    result = self._mm / divisor._mm
+	elif isinstance(divisor, Speed):
+	    result = Time(sec = self._mm / divisor._mm_per_sec)
 	else:
 	    assert divisor != 0.0
 	    result = L(mm = self._mm / divisor)
@@ -5717,12 +5720,6 @@ class Mount_Operations:
 	    # Remember that *part* uses *tool*:
 	    tool._part_register(part)
 
-	    # Output the call to *mount_ngc_file*:
-	    tool_name = tool._name_get()
-	    if tool_name != "None":
-		mount_ngc_file.write("O{0} call ( T{1}: {2} Priority: {3})\n".format(
-		  tool_program_number, tool._number_get(), tool_name, operation0._priority_get()))
-
 	    # Create *cnc_tool_vrml* for recording just this *tool*:
 	    part_name = part._name_get()
 	    mount_name = mount0._name_get()
@@ -5812,6 +5809,13 @@ class Mount_Operations:
 	    zero = L()
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 	    code._dxf_xy_offset_set(zero, zero)
+
+	    # Output the call to *mount_ngc_file*:
+	    tool_name = tool._name_get()
+	    if tool_name != "None":
+		mount_ngc_file.write("O{0} call ( T{1}: {2} Priority: {3} Time:{4:m})\n".format(
+		  tool_program_number, tool._number_get(), tool_name, operation0._priority_get(),
+		  code._time_get()))
 
 	    # Update *path_bounding_box*:
 	    path_bounding_box.bounding_box_expand(code._bounding_box_get())
@@ -18444,10 +18448,12 @@ class Code:
 	code._dxf_y_offset = zero         # DXF Y offset
 	code._is_laser = False            # True if tool is a laser
 	code._mount  = None               # *Mount* object to use for current batch of G-code
+	code._mount_wrl_lines = None      # The lines to be written into the mount VRML file
+	code._rapid_speed = Speed(in_per_sec = 75.0) # Should be read from Mill object
+	code._time = Time()		  # Total Tool path time
 	code._tool_program_number = -1    # Tool program number
 	code._tool_wrl_lines = None       # The lines to be written into the tool VRML file
 	code._tool_change_point = None    # Tool change location relative to viceo origin
-	code._mount_wrl_lines = None      # The lines to be written into the mount VRML file
 
 	# Construct the *g1_table*:
 	g1_values_list = (0, 1, 2, 3, 33, 38, 73, 76, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89)
@@ -19439,6 +19445,7 @@ class Code:
 	# Reset the *code* object:
 	code._begin = True
 	code._bounding_box = Bounding_Box()
+	code._time = Time()
 	code._f = Speed(mm_per_sec=huge)
 	code._g1 = huge
 	code._g2 = huge
@@ -19830,6 +19837,13 @@ class Code:
 	    else:
 		chunk = "{0}{1:I}".format(field_name[0], value)
 	    code._command_chunks.append(chunk)
+
+    def _time_get(self):
+	""" *Code*: Return the time required for the perform the tool path specified by the
+	    *Code* object (i.e. *self*:
+	"""
+
+	return self._time
 
     #FIXME: This is old code!!!
     def _old_code(self):
@@ -20414,6 +20428,14 @@ class Code:
 	    code._length("X", x)
 	    code._length("Y", y)
 	    code._command_end()
+
+	    # Estimate time it takes to perform the operation using a line segment:
+	    zero = L()
+	    p1 = P(x1, y1, zero)
+	    p2 = P(x,  y,  zero)
+	    distance = p1.distance(p2)
+	    seconds = distance / f    # feed = distance / sec  ==>  sec = distance / feed
+	    code._time += seconds
     
     def _xy_ccw_feed(self, f, s, r, x, y, rx=None, ry=None, tracing=-1000000):
 	""" *Code*: Feed to location (*x*, *y*) as a radius *r* counter clockwise  circle with a
@@ -20466,6 +20488,14 @@ class Code:
 	    code._length("Y", y)
 	    code._command_end()
 
+	    # Estimate time it takes to perform the operation using a line segment:
+	    zero = L()
+	    p1 = P(x1, y1, zero)
+	    p2 = P(x,  y,  zero)
+	    distance = p1.distance(p2)
+	    seconds = distance / f    # feed = distance / sec  ==>  sec = distance / feed
+	    code._time += seconds
+
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print("{0}<=Code._xy_ccw_feed(*, {1:i}, {2:rpm}, {3:i}, {4:i}, {5:i}) ".
@@ -20504,6 +20534,14 @@ class Code:
 	    code._length("Y", y)
 	    code._command_end()
 
+	    # Compute the time it takes to perform the operation:
+	    zero = L()
+	    p1 = P(x_before, y_before, zero)
+	    p2 = P(x,        y,        zero)
+	    distance = p1.distance(p2)
+	    seconds = distance / f    # feed = distance / sec  ==>  sec = distance / feed
+	    code._time += seconds
+
     def _xy_rapid(self, x, y):
 	""" *Code*: Perform a rapid move to (X, Y) using the *Code* object (i.e. *self*). """
 
@@ -20515,7 +20553,9 @@ class Code:
 	assert isinstance(y, L)
 
 	# Only perform the rapid if we are not already there:
-	if code._x_value() != x or code._y_value() != y:
+	x1 = code._x_value()
+	y1 = code._y_value()
+	if x1 != x or y1 != y:
 	    # Make sure we are at a safe Z height prior to performing the rapid:
 	    mount = code._mount
 	    assert code._z == mount._xy_rapid_safe_z_get()
@@ -20526,6 +20566,15 @@ class Code:
 	    code._length("X", x)
 	    code._length("Y", y)
 	    code._command_end()
+
+	    # Estimate the time it takes to perform the operation:
+	    zero = L()
+	    p1 = P(x1, y1, zero)
+	    p2 = P(x,  y,  zero)
+	    distance = p1.distance(p2)
+	    rapid_speed = code._rapid_speed
+	    seconds = distance / rapid_speed    # feed = distance / sec  ==>  sec = distance / feed
+	    code._time += seconds
 
     def _xy_rapid_safe_z_force(self, feed, speed, tracing=-100000):
 	""" *Code*: Force the tool for the *Code* object (i.e. *self*) to be at the
@@ -21862,7 +21911,23 @@ class Time:
 	""" *Time*: Return the *Time* object (i.e. *self) as a string formated by *format*.
 	"""
 
-	return "{0}".format(self._seconds)
+	if format == 'm':
+	    result = "{0:.2f}min".format(self._seconds / 60.0)
+	else:
+	    result = "{0:.2f}".format(self._seconds)
+	return result
+
+    def __add__(self, time2):
+	""" Return the sum of the *Time* object (i.e. *self*) and *time2*.
+	"""
+
+	# Use *time1* instead of *self*:
+	time1 = self
+
+	# Verify argument types:
+	assert isinstance(time2, Time)
+
+	return Time(sec=time1._seconds + time2._seconds)
 
 class Tool:
     """ *Tool*: A tool is a tool that can be used to manufacture a part. """
