@@ -5436,16 +5436,18 @@ class Mount_Operations:
 	    path_bounding_box = Bounding_Box()
 	    priority_program_number = mount_program_number
 	    mount_vrml = VRML_Group(part._name_get())
+	    total_path_time = Time()
 	    for index, priority_mount_operations in enumerate(priority_mount_operations_list):
 		if trace_detail >= 2:
 		    priority_mount_operations._show("Priority {0}".format(index),
 		      tracing = tracing + 1)
 
 		# Now we can generate all the tool operations that are at the same pirority:	
-		priority_program_number = \
+		priority_program_number, path_time = \
 		  priority_mount_operations._cnc_priority_generate(priority_program_number + 1,
 		  mount_ngc_file, mount_vrml, mount_vrml_lines, mount_vrml_stl, path_bounding_box,
 		  tracing = tracing + 1)
+		total_path_time += path_time
 
 	    # The *next_mount_program_number* must be divisible by 10:
 	    next_mount_program_number = priority_program_number + 9
@@ -5454,6 +5456,7 @@ class Mount_Operations:
 	    # Write out the final G-code lines to *mount_ngc_file*:
 	    # FIXME: Read tool change point from *vice*:
 	    mount_ngc_file.write("G49 G0 X-1.5 Y0 Z8 ( Return to tool change point )\n")
+	    mount_ngc_file.write("( Estimated time: {0:m} )\n".format(total_path_time))
 	    #mount_ngc_file.write("G53 G0 Y0.0 ( Move the work to the front )\n")
 	    mount_ngc_file.write("M2\n")
 	    mount_ngc_file.write("( Path Bounding Box: {0:i} )\n".format(path_bounding_box))
@@ -5621,6 +5624,7 @@ class Mount_Operations:
 	assert len(tool_mount_operations_list) > 0
 
 	# Now sweep through *tool_mount_operations_list* to generate a tool path for each tool:
+	total_path_time = Time()
 	tool_program_number = priority_program_number
 	for index, tool_mount_operations in enumerate(tool_mount_operations_list):
 	    # If requested, do a little *trace_detail*:
@@ -5649,9 +5653,10 @@ class Mount_Operations:
 	    tool_vrml_lines = VRML_Lines(tool_vrml_lines_name)
 
 	    # Now generate the tool path for *reordered_tool_mount_operations*:
-	    tool_program_number = reordered_tool_mount_operations._cnc_tool_generate(
+	    tool_program_number, path_time = reordered_tool_mount_operations._cnc_tool_generate(
 	      tool_program_number, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl,
               path_bounding_box, tracing = tracing + 1)
+	    total_path_time += path_time
 
 	# Compute *new_priority_program_number* (no change from *tool_program_number*):
 	new_priority_program_number = tool_program_number
@@ -5660,7 +5665,7 @@ class Mount_Operations:
 	if tracing >= 0:
             print("{0}<=Part._cnc_priority_generate('{1}', {2}, *, '{3}')".format(indent,
 	      mount_operations._name, priority_program_number, cnc_vrml._name_get()))
-	return new_priority_program_number
+	return new_priority_program_number, total_path_time
 
     def _cnc_tool_generate(self, tool_program_number, mount_ngc_file,
       cnc_vrml, mount_vrml_lines, mount_vrml_stl, path_bounding_box, tracing=-1000000):
@@ -5819,7 +5824,8 @@ class Mount_Operations:
 
 	    # Update *path_bounding_box*:
 	    path_bounding_box.bounding_box_expand(code._bounding_box_get())
-	    code._finish(tracing + 1)
+	    path_time = code._finish(tracing + 1)
+	    assert isinstance(path_time, Time)
 
 	    cnc_tool_vrml._append(mount_vrml_lines)
 	    cnc_tool_vrml._append(mount_vrml_stl)
@@ -5846,11 +5852,12 @@ class Mount_Operations:
 	    # Compute *new_tool_program_number* for return; it just increments by one:
 	    new_tool_program_number = tool_program_number + 1
 
-	# Wrap up any requested *tracing* and return *new_tool_program_number*:
+	# Wrap up any requested *tracing* and return *new_tool_program_number* and *path_time*:
 	if tracing >= 0:
-	    print("{0}<=Mount_Operations._cnc_tool_generate('{1}', {2}, *, '{3}')".format(indent,
-	      tool_mount_operations._name, tool_program_number, cnc_vrml._name_get()))
-	return new_tool_program_number
+	    print("{0}<=Mount_Operations._cnc_tool_generate('{1}', {2}, *, '{3}')=>{4}, {5:m}".
+	      format(indent, tool_mount_operations._name, tool_program_number,
+	             cnc_vrml._name_get(), new_tool_program_number, path_time))
+	return new_tool_program_number, path_time
 
     def _extend(self, to_mount, from_mount_operations, flags, tracing=-1000000):
 	""" *Mount_Operations*: Append the contents of *from_mount_operations* to the
@@ -18835,7 +18842,7 @@ class Code:
 	    must be either 98 or 99 for either a G89 or G99 completion cycle.  *g_cycle* must
 	    specify one of the canned drill cycles (i.e. 73, 74, 76, 81, 82, 83, 84, 85, 86, 87,
 	    88, or 89.)  *f* is the feed speed, *p* is pause time for some of the cycles.
-	    *q* is used for peck drilling. *r* is the retract level.  *s* is the spindle speed.
+	    *q* is used for peck drilling.  *r* is the retract level.  *s* is the spindle speed.
 	    *x* and *y* specify where to drill in the X/Y plane.  *z* specifies the final
 	    drill depth.
 	"""
@@ -18876,54 +18883,49 @@ class Code:
 	vrml_points = code._vrml_points
 	code._vrml_points_append(code._vrml_motion_color_rapid, point_before, tracing = tracing + 1)
 
-	if True:
-	    # Grab *xy_rapid_safe_z* from *mount*:
-	    mount = code._mount
-	    assert isinstance(mount, Mount)
-	    xy_rapid_safe_z = mount._xy_rapid_safe_z_get()
+	# Grab *xy_rapid_safe_z* from *mount*:
+	mount = code._mount
+	assert isinstance(mount, Mount)
+	xy_rapid_safe_z = mount._xy_rapid_safe_z_get()
 
-	    # The routine call can change anything, so force a reset.
-	    #code._reset()
+	# The routine call can change anything, so force a reset.
+	#code._reset()
 
-	    # Start the command:
-	    code._command_begin()
+	# Start the command:
+	code._command_begin()
 
-	    # Tack on the call:
-	    command_chunks = code._command_chunks
-	    command_chunks.append("o{0} call".format(g_cycle))
+	# Tack on the call:
+	command_chunks = code._command_chunks
+	command_chunks.append("o{0} call".format(g_cycle))
 
-	    # Tack on the remaining arguments:
-	    code._speed("[]", f)		# F
-	    code._length("[]", x)		# X
-	    code._length("[]", y)		# Y
-	    code._length("[]", xy_rapid_safe_z)	# Z_TOP
-	    code._length("[]", r)		# Z_RAPID
-	    code._length("[]", z)		# Z_BOTTOM
-	    if isinstance(q, L):
-		code._length("[]", q)		# Z_PECK
-	    code._command_end(vrml_suppress=True, tracing=tracing+1)
+	# Tack on the remaining arguments:
+	code._speed("[]", f)		# F
+	code._length("[]", x)		# X
+	code._length("[]", y)		# Y
+	code._length("[]", xy_rapid_safe_z)	# Z_TOP
+	code._length("[]", r)		# Z_RAPID
+	code._length("[]", z)		# Z_BOTTOM
+	if isinstance(q, L):
+	    code._length("[]", q)	# Z_PECK
+	code._command_end(vrml_suppress=True, tracing=tracing+1)
 
-	    # When the drill cycle is done, it will be at (*x*, *y*, *xy_rapid_save_z*):
-	    code._x = x
-	    code._y = y
-	    code._z = xy_rapid_safe_z
-	else:
-	    # This is the old code that used a canned cycle rather than a subroutine call:
-	    code._command_begin()
-	    code._unsigned("G10", g_complete)
-	    code._unsigned("G9", g_cycle)
-	    code._speed("F", f)
-	    if isinstance(p, L):
-		code._time("P", p)
-	    if isinstance(q, L):
-		code._length("Q", q)
-	    if isinstance(r, L):
-		code._length("R", r)
-	    code._hertz("S", s)
-	    code._length("X", x)
-	    code._length("Y", y)
-	    code._length("Z", z)
-	    code._command_end(vrml_suppress=True)
+	# When the drill cycle is done, it will be at (*x*, *y*, *xy_rapid_save_z*):
+	code._x = x
+	code._y = y
+	code._z = xy_rapid_safe_z
+
+	# Compute an estimate for how long the drill operation will take:
+	rapid_speed = code._rapid_speed
+	time = code._time
+	time += (xy_rapid_safe_z - r) / rapid_speed
+	pecks = int(math.ceil((r - z) / q)) if isinstance(q, L) else 1
+	peck_amount = (r - z) / pecks
+	for peck_index in range(pecks):
+	    peck_dz = (peck_index + 1) * peck_amount
+	    time += peck_dz / f
+	    time += peck_dz / rapid_speed
+	time += (xy_rapid_safe_z - r) / rapid_speed
+	code._time = time
 
 	# *g_complete* specifies whether Z ends on *z_before* or *r*:
 	if g_complete == 98:
@@ -19211,7 +19213,9 @@ class Code:
 	return code._dxf_y_offset
 
     def _finish(self, tracing = -1000000):
-	""" *Code*: Finish off the current block of G code (i.e. *self*.) """
+	""" *Code*: Finish off the current block of G code (i.e. *self*.)  The estimated time
+	    to perform the CNC code is returned.
+	"""
 
 	# Use *code* instead of *self*:
 	code = self
@@ -19265,15 +19269,19 @@ class Code:
 	# Flush any remaining points into *vrml_lines*:
 	code._vrml_points_flush("")
 
+	# Grab the path time:
+	time = code._time
+
 	# Reset *code*:
 	code._reset()
 
 	# Now reset all the VRML values:
 	code._vrml_reset()
 
-	# Perform any requested *tracing*:
+	# Perform any requested *tracing* and return *time*:
 	if tracing >= 0:
-	     print("{0}<=Code._finish()".format(indent))
+	     print("{0}<=Code._finish()=>{1:m}".format(indent, time))
+	return time
 
     def _g1_set(self, g1):
 	""" *Code*: Set the G1 field of the *Code* object (i.e. *self*) to *g1*. """
