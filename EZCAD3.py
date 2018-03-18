@@ -1,4 +1,4 @@
-###################################################################################################
+####################################################################################################
 #<-----------------------------------------100 characters----------------------------------------->#
 #
 # EZCAD Coding Standards/Style
@@ -4604,13 +4604,12 @@ class EZCAD3:
 	# Construct subroutine `81.ngc` as a list of *lines* and write out to *ngc_directory*:
 	lines = []
 	lines.append("( Canned subroutine for drilling holes )")
-	lines.append("( o81 call       [#1] [#2] [#3] [#4]    [#5]      [#6] )")
-	lines.append("o81 sub        ( [F]  [X]  [Y]  [Z_TOP] [Z_RAPID] [Z_BOTTOM] )")
+	lines.append("( o81 call       [#1] [#2] [#3] [#4]    [#5 ]    [#6]      [#7] )")
+	lines.append("o81 sub        ( [F]  [X]  [Y]  [Z_TOP] [Z_SAFE] [Z_RETRACT] [Z_BOTTOM] )")
 	lines.append("G0 Z[#4]       ( Make sure we are at Z_TOP )")
 	lines.append("G0 X[#2] y[#3] ( Make sure we are at [X, Y] )")
-	lines.append("G0 Z[#5]       ( Rapid down to Z_RAPID )")
-	lines.append("G1 F[#1] Z[#6] ( Drill down to Z_BOTTOM )")
-	lines.append("G0 Z[#5]       ( Retract to Z_RAPID )")
+	lines.append("G0 Z[#6]       ( Rapid down to Z_RAPID )")
+	lines.append("G1 F[#1] Z[#7] ( Drill down to Z_BOTTOM )")
 	lines.append("G0 Z[#4]       ( Retract to Z_TOP )")
 	lines.append("o81 endsub     ( End of subroutine )")
 	lines.append("o81 call [10] [0] [0] [.5] [.1] [-.5] ( Example call )")
@@ -4620,22 +4619,23 @@ class EZCAD3:
 	# Construct subroutine `83.ngc` as a list of *lines* and write out to *ngc_directory*:
 	lines = []
 	lines.append("( Canned subroutine for drilling holes with pecking )")
-	lines.append("( o83 call          [#1] [#2] [#3] [#4]    [#5]      [#6]       [#7] )")
-	lines.append("o83 sub           ( [F]  [X]  [Y]  [Z_TOP] [Z_RAPID] [Z_BOTTOM] [Z_PECK] )")
-	lines.append("                  ( Local variables [Z]: #8 )")
+	lines.append("( o83 call [#1] [#2] [#3] [#4]    [#5]     [#6]        [#7]       [#8]     )")
+	lines.append("o83 sub  ( [F]  [X]  [Y]  [Z_TOP] [Z_SAFE] [Z_RETRACT] [Z_BOTTOM] [Z_PECK] )")
+	lines.append("                  ( Local variables [Z]: #9 )")
 	lines.append("G0 Z[#4]               ( // Make sure we are at Z_TOP )")
 	lines.append("G0 X[#2] y[#3]         ( // Make sure we are at [X, Y] )")
-	lines.append("G0 Z[#5]               ( // Rapid to Z_RAPID )")
-	lines.append("#8 = #5                ( Z := Z_RAPID )")
+	lines.append("G0 Z[#5]               ( // Rapid to Z_SAFE )")
+	lines.append("G1 F[#1] Z[#6]         ( // Feed to Z_RETRACT )")
+	lines.append("#9 = #6                ( Z := Z_RETRACT )")
 	lines.append("o831 do                ( do { )")
-	lines.append("    #8 = [#8 - #7]     (     Z := Z - Z_PECK // Bump Z down by Z_PECK)")
-	lines.append("    o832 if [#8 LT #6] (     if Z < Z_BOTTOM { )")
-	lines.append("        #8 = #6        (         Z := Z_BOTTOM )")
+	lines.append("    #9 = [#9 - #8]     (     Z := Z - Z_PECK // Bump Z down by Z_PECK)")
+	lines.append("    o832 if [#9 LT #7] (     if Z < Z_BOTTOM { )")
+	lines.append("        #9 = #7        (         Z := Z_BOTTOM )")
 	lines.append("    o832 endif         (     } )")
-	lines.append("    G1 F[#1] Z[#8]     (     // Drill down to Z )")
-	lines.append("    G0 Z[#5]           (     // Retract to Z_RAPID )")
-	lines.append("o831 while [#8 GT #6]  ( } while [#8 > #6] )")
-	lines.append("G0 Z[#4]               ( // Retract to Z_TOP )")
+	lines.append("    G1 F[#1] Z[#9]     (     // Drill down to Z )")
+	lines.append("    G0 Z[#6]           (     // Rapid Retract to Z_RETRACT )")
+	lines.append("o831 while [#9 GT #7]  ( } while [#9 > #7] )")
+	lines.append("G0 Z[#4]               ( // Rapid retract to Z_TOP )")
 	lines.append("o83 endsub         ( // End of subroutine )")
 	lines.append("o83 call [10] [0] [0] [.5] [.1] [-.5] [.2] ( Example call )")
 	lines.append("m2                 ( // End of File )")
@@ -7984,6 +7984,7 @@ class Operation_Drill(Operation):
 	    #drill_depth = top_surface_safe_z - z_stop
 	    drill_depth = cnc_start.z - cnc_stop.z
 	    trip_depth = 3 * diameter
+	    z_safe = top_surface_safe_z
 	    if drill_depth > trip_depth:
 		# Compute *q* which is the peck distance:
 		pecks = int(drill_depth / trip_depth) + 1
@@ -7998,23 +7999,25 @@ class Operation_Drill(Operation):
 		# Use a "canned" cycle to peck out the deep hole:
 		f = feed_speed		#FIXME: Slow feed down by 20%!!!
 		p = None
-		r = top_surface_safe_z + L(inch=0.1000)
+		#r = top_surface_safe_z + L(inch=0.1000)
+		r = z_start
 		s = spindle_speed
 		x = cnc_start.x
 		y = cnc_start.y
 		z = z_stop
-		code._drill_cycle(98, 83, f, p, q, r, s, x, y, z, tracing = deep_tracing)
+		code._drill_cycle(98, 83, f, p, q, z_safe, r, s, x, y, z, tracing = deep_tracing)
 	    else:
 		# Use a "canned" cycle to drill the hole:
 		f = feed_speed
 		p = None
 		q = None
-		r = top_surface_safe_z + L(inch=0.1000)
+		#r = top_surface_safe_z + L(inch=0.1000)
+		r = z_start
 		s = spindle_speed      # Leave speed alone, since we are almost always under optimim
 		x = cnc_start.x
 		y = cnc_start.y
 		z = z_stop
-		code._drill_cycle(98, 81, f, p, q, r, s, x, y, z, tracing = deep_tracing)
+		code._drill_cycle(98, 81, f, p, q, z_safe, r, s, x, y, z, tracing = deep_tracing)
 
 	    # Make darn sure we get back to a high enough Z:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed, tracing = deep_tracing)
@@ -18837,7 +18840,7 @@ class Code:
 	    print("{0}=>Code._contour(*, po={1:i} co={2:i} tr={3:i} cl={4} z={5:i} *)".format(
 	      ' ' * tracing, plunge_offset, contour_offset, tool_radius, clockwise, z))
 
-    def _drill_cycle(self, g_complete, g_cycle, f, p, q, r, s, x, y, z, tracing=-1000000):
+    def _drill_cycle(self, g_complete, g_cycle, f, p, q, z_safe, r, s, x, y, z, tracing=-1000000):
 	""" *Code*: Generate one drill cycle for the *Code* object (i.e. *self*.)  *g_complete*
 	    must be either 98 or 99 for either a G89 or G99 completion cycle.  *g_cycle* must
 	    specify one of the canned drill cycles (i.e. 73, 74, 76, 81, 82, 83, 84, 85, 86, 87,
@@ -18857,6 +18860,7 @@ class Code:
 	assert isinstance(f, Speed)
 	assert isinstance(p, Time) or p == None
 	assert isinstance(q, L) or q == None
+	assert isinstance(z_safe, L)
 	assert isinstance(r, L) or r == None
 	assert isinstance(s, Hertz)
 	assert isinstance(x, L)
@@ -18898,15 +18902,20 @@ class Code:
 	command_chunks = code._command_chunks
 	command_chunks.append("o{0} call".format(g_cycle))
 
+	# Grab *x_before* and *y_before* needed for time estimation:
+	x_before = code._x
+	y_before = code._y
+
 	# Tack on the remaining arguments:
-	code._speed("[]", f)		# F
-	code._length("[]", x)		# X
-	code._length("[]", y)		# Y
+	code._speed( "[]", f)			# F
+	code._length("[]", x)			# X
+	code._length("[]", y)			# Y
 	code._length("[]", xy_rapid_safe_z)	# Z_TOP
-	code._length("[]", r)		# Z_RAPID
-	code._length("[]", z)		# Z_BOTTOM
+	code._length("[]", z_safe)		# Z_SAFE
+	code._length("[]", r)			# Z_RETRACT
+	code._length("[]", z)			# Z_BOTTOM
 	if isinstance(q, L):
-	    code._length("[]", q)	# Z_PECK
+	    code._length("[]", q)		# Z_PECK
 	code._command_end(vrml_suppress=True, tracing=tracing+1)
 
 	# When the drill cycle is done, it will be at (*x*, *y*, *xy_rapid_save_z*):
@@ -18914,9 +18923,16 @@ class Code:
 	code._y = y
 	code._z = xy_rapid_safe_z
 
+	# Compute the X/Y rapid distance:
+	dx = (x - x_before).millimeters()
+	dy = (y - y_before).millimeters()
+	xy_distance_mm = math.sqrt(dx*dx + dy*dy)
+	xy_distance = L(mm=xy_distance_mm)
+
 	# Compute an estimate for how long the drill operation will take:
 	rapid_speed = code._rapid_speed
 	time = code._time
+	time += xy_distance / rapid_speed
 	time += (xy_rapid_safe_z - r) / rapid_speed
 	pecks = int(math.ceil((r - z) / q)) if isinstance(q, L) else 1
 	peck_amount = (r - z) / pecks
