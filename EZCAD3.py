@@ -9311,7 +9311,8 @@ class Operation_Simple_Pocket(Operation):
 
 	is_laser = isinstance(tool, Tool_End_Mill) and tool._is_laser_get()
 	if is_laser:
-	    code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius, z,
+	    z_end = cnc_corner_tne.z - total_cut
+	    code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius, z_end,
 	      tool_radius, zero, spindle_speed, feed_speed, True)
 	else:
 	    # Compute the total number of rectangular paths needed:
@@ -14160,6 +14161,7 @@ class Part:
 
 	    # The hole is drilled in relation to the *top_surface_transform* from *mount*:
 	    mount = part._current_mount
+	    assert isinstance(mount, Mount)
 	    top_surface_transform = mount._top_surface_transform_get()
 
 	    # Compute the transfromed *bsw*, *tne*, *start*, and *stop*:
@@ -15751,7 +15753,7 @@ class Part:
 		difference_lines.append(polygon_command)
 
 		if trace_detail >= 2:
-		    print("{0}Part.simple_pocket: STL_MODE started".format(indent))
+		    print("{0}Part.simple_pocket: STL_MODE done".format(indent))
 
 	    if ezcad._cnc_mode:
 		if trace_detail >= 2:
@@ -21475,8 +21477,8 @@ class Shop:
 	  26, hss, L(mm=8.00),    2, L(inch="2-61/64"), "8mm", degrees135, stub, center_cut, drills)
 
 	# Laser "tools":
-	#laser_007 = shop._end_mill_append("Laser_007",
-	#  100, hss, L(inch=0.007), 2, L(inch=0.750), laser)
+	laser_007 = shop._end_mill_append("Laser_007",
+	  100, hss, L(inch=0.007), 2, L(inch=0.750), laser)
 	#laser_000 = shop._end_mill_append("Laser_000",
 	#  101, hss, L(), 2, L(inch=0.750), laser)
 
