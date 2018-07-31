@@ -6944,7 +6944,7 @@ class Operation:
     POCKET_KIND_THROUGH = 1
 
     def __init__(self, name, kind, part, comment, sub_priority, tool, order,
-      follows, feed_speed, spindle_speed, cnc_start):
+     follows, feed_speed, spindle_speed, cnc_start, tracing=-1000000):
 	""" *Operation*: Initialize an *Operation* object to contain
 	    *name*, *kind*, *part*, *comment*, *sub_priority*, *tool*,
 	    *order*, *follows*, *feed_speed*, *spindle_speed*, and *cnc_start*.
@@ -6965,6 +6965,7 @@ class Operation:
 	assert isinstance(feed_speed, Speed)
 	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(cnc_start, P)
+	assert isinstance(tracing, int)
 
 	# Load up *operation*:
 	operation._name = name
@@ -6982,7 +6983,7 @@ class Operation:
 	operation._spindle_speed = spindle_speed
 	operation._cnc_program_number = -1
 	operation._cnc_start = cnc_start		# Point in 3D space where CNC starts.
-	operation._tracing = -1000000
+	operation._tracing = tracing
 
     def _cnc_start_get(self):
         """ *Operation*: Return the CNC start point for the *Operation* object (i.e. *self*).
@@ -7326,11 +7327,12 @@ class Operation_Contour(Operation):
 	# Perform any requesteed *tracing*:
 	if tracing >= 1:
 	    indent = ' ' * tracing
-	    print(("{0}=>Operaton_Contour.__init__(*, '{1}', '{2}', {3}, '{4}', {5}, {6}," +
-	      " s={7:i} f={8:rpm} zs={9:i} ze={10:i} cntr='{11}' off={12:i} tr={13:i} p={14})").
-	      format(indent, part._name_get(), comment, sub_priority, mill_tool._name_get(),
-	      order, isinstance(follows, Operation), feed_speed, spindle_speed, z_start, z_stop,
-	      contour._name_get(), offset, effective_tool_radius, passes))
+	    print(("{0}=>Operation_Contour.__init__(*, '{1}', '{2}', {3}, '{4}', {5}, {6}," +
+	      " s={7:i} f={8:rpm} zs={9:i} ze={10:i} cntr='{11}' off={12:i} tr={13:i} p={14}," +
+              " trc={15})").format(indent, part._name_get(), comment, sub_priority,
+	      mill_tool._name_get(), order, isinstance(follows, Operation), feed_speed,
+              spindle_speed, z_start, z_stop, contour._name_get(), offset, effective_tool_radius,
+              passes, tracing))
 
 	# Initialize super class:
 	bends = contour._bends_get()
@@ -7338,7 +7340,8 @@ class Operation_Contour(Operation):
 	bend0 = bends[0]
 	cnc_start = bend0._point_get()
 	Operation.__init__(operation_contour, "Contour", Operation.KIND_CONTOUR, part, comment,
-	  sub_priority, mill_tool, order, follows, feed_speed, spindle_speed, cnc_start)
+	  sub_priority, mill_tool, order, follows, feed_speed, spindle_speed, cnc_start,
+          tracing + 1)
 
 	# Load up the rest of *self*:
 	operation_contour._z_start = z_start
@@ -7349,11 +7352,13 @@ class Operation_Contour(Operation):
 	operation_contour._passes = passes
 
 	if tracing >= 1:
-	    print(("{0}<=Operaton_Contour.__init__(*, '{1}', '{2}', {3}, '{4}', {5}, {6}," +
-	      " s={7:i} f={8:rpm} zs={9:i} ze={10:i} cntr='{11}' off={12:i} tr={13:i} p={14})").
-	      format(indent, part._name_get(), comment, sub_priority, mill_tool._name_get(),
-	      order, isinstance(follows, Operation), feed_speed, spindle_speed, z_start, z_stop,
-	      contour._name_get(), offset, effective_tool_radius, passes))
+	    print(("{0}<=Operation_Contour.__init__(*, '{1}', '{2}', {3}, '{4}', {5}, {6}," +
+	      " s={7:i} f={8:rpm} zs={9:i} ze={10:i} cntr='{11}' off={12:i} tr={13:i} p={14}," +
+              " trc={15})").format(indent, part._name_get(), comment, sub_priority,
+	      mill_tool._name_get(), order, isinstance(follows, Operation), feed_speed,
+              spindle_speed, z_start, z_stop, contour._name_get(), offset, effective_tool_radius,
+              passes, tracing))
+	    assert operation_contour._tracing >= 0
 
     def _cnc_generate(self,
       mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
@@ -7375,6 +7380,8 @@ class Operation_Contour(Operation):
 
 	# Perform an requested *tracing*:
 	trace_detail = -1
+	if tracing < 0 and operation_contour._tracing >= 0:
+	    tracing = operation_contour._tracing
 	if tracing >= 0:
 	    indent = " " * tracing
 	    print("{0}=>Operation_Contour._cnc_generate('{1}', '{2}', '{3}', *, *, *)".
@@ -14251,7 +14258,7 @@ class Part:
 		print("{0}is_through_hole={1}".format(indent, is_through_hole))
 		print("{0}is_tip_hole={1}".format(indent, is_tip_hole))
 
-	    #FIXME: We need to use *Operaton_Round_Pocket* when we are generating a .dxf file!!!:
+	    #FIXME: We need to use *Operation_Round_Pocket* when we are generating a .dxf file!!!:
 	    if (is_through_hole or is_tip_hole) and mill_drill_tool != None and \
 	      drill_tool != None: # and not end_mill_tool_is_laser:
 		# Make sure we have both a *mill_drill_tool* and a *drill_tool*:
@@ -15730,7 +15737,7 @@ class Part:
 		    for index in range(corner_sides + 1):
 			adjust = P.polar(angle, radius)
 			corner_point = bend_point + adjust
-			#print("bend_point={0} adjust={1}".format(bend_point, adjust))
+			#print("bend_point={0:i} adjust={1}".format(bend_point, adjust))
 			polygon_points.append(corner_point)
 			angle -= angle_delta
 		    start_angle -= degrees90
@@ -18754,7 +18761,7 @@ class Code:
 		if trace_detail >= 1:
 		    bend_name = bend._name_get()
 		    bend_point = bend._point_get()
-		    print("{0}bend_name='{1}' bend_point='{2}".
+		    print("{0}bend_name='{1}' bend_point='{2:i}".
 		      format(indent, bend_name, bend_point))
 
 		# Compute the *arc_radius*, *arc_start*, and *arc_end* depending upon whether
@@ -18776,8 +18783,9 @@ class Code:
 		    # For outside bends, no further adjustments are needed:
 		    arc_start = bend._incoming_tangent_compute(arc_radius)
 		    arc_end = bend._outgoing_tangent_compute(arc_radius)
-		    code._xy_feed(feed_speed, spindle_speed, arc_start.x, arc_start.y)
-		    code._xy_cw_feed(feed_speed, spindle_speed, arc_radius, arc_end.x, arc_end.y)
+		    code._xy_feed(feed_speed, spindle_speed, arc_start.x, arc_start.y, tracing + 1)
+		    code._xy_cw_feed(feed_speed, spindle_speed,
+		      arc_radius, arc_end.x, arc_end.y, tracing = tracing + 1)
 
 		if trace_detail >= 1:
 		    trace_line = "CW[{0}]: aradius={1:i} astart={2:i} aend={3:i}". \
@@ -18994,7 +19002,7 @@ class Code:
 	#assert code._is_laser
 	code._dxf_lines.append(text)
     
-    def _dxf_arc_append(self, clockwise, end_x, end_y, radius):
+    def _dxf_arc_append(self, clockwise, end_x, end_y, radius, tracing=-1000000):
 	""" *Code*: Generate a DXF arc entity that draws an arc from the current X/Y location
 	    the *Code* object (i.e. *self*) to (*end_x*,*end_y*) with radius of *radius*.
 	    The arc is drawn clockwise if *clockwise* is *True* and counter-clockwise otherwise.
@@ -19010,14 +19018,12 @@ class Code:
 	assert isinstance(radius, L)
 
 	# Perform any requested *tracing*:
-	tracing = -1000000
-	#tracing = 0
-	detail_level = -1
+	trace_detail = -1
 	if tracing >= 0:
-	    #detail_level = 3
 	    indent = ' ' * tracing
 	    print("{0}=>Code._dxf_arc_append@(cw={1}, end_x={2:i}, end_y={3:i}, radius={4:i})".
 	      format(indent, clockwise, end_x, end_y, radius))
+	    trace_detail = 3
 
 	# Compute some constants:
 	degrees0 = Angle()
@@ -19028,11 +19034,31 @@ class Code:
 	# Grab the start position ({x1}, {y1}):
 	start_x = code._x_value()
 	start_y = code._y_value()
-    
+	if trace_detail >= 1:
+	    print("{0}x_before={1:i} {2:i}".format(indent, start_x, start_y))
+
 	# What we are going to do here is fit a circle to S=(*start_x*,*start_y) and
 	# E=(*end_x*,*end_y*).  We need to find the center of the circle
-	# C=(*center_x*, *center_y*).  What we know is that the radius r = |SC| = |EC|.
+	# C=(*center_x*, *center_y*).  Note that only circle arc is shown below
+        # when in fact there are two possible solutions.  Other information is ussed
+	# to figure out which of the two circle centers to actually use:
+        # The crude ASCII art below may be useful:
+        #
+	#               .....
+	#           ..         ..
+	#        S-----+--M--------E
+	#         \    |  |       /
+	#          \   +--+      /
+	#           \     |     /
+	#            \    |    /
+	#            r\   |   /r
+	#              \  |  /
+	#               \ | /
+	#                \|/
+	#                 C
 	# 
+	#
+        # What we know is that the radius r = |SC| = |EC|.
 	# We draw a line segment from S to E and bisect it at point M.  The line that
 	# goes through from MC will be perpendicular to the line through S and E.
 	# This gives us a triangle SMC, where the angle <SMC is 90 degrees.
@@ -19044,7 +19070,7 @@ class Code:
 	#
 	# Thus,
 	#
-	#        |M|^2 = r^2C - |MS|^2                             (2)
+	#        |MC|^2 = r^2C - |MS|^2                            (2)
 	#
 	#        |MC| = sqrt(r^2 - |MS|^2)                         (3)
 	#
@@ -19054,18 +19080,26 @@ class Code:
 	s = P(start_x, start_y, zero)
 	e = P(end_x, end_y, zero)
 	
-	# Find the midpoint *m*:
+	# Find the midpoint *m* and perform any *tracing*:
 	m = (s + e) / 2
 
 	# Now compute *ms_length* and *ms_angle*
 	ms = m - s
 	ms_length = ms.length()
 	ms_angle = ms.xy_angle()
+	if trace_detail >= 2:
+	    print("{0}m={1:i} m-s={2:i} |ms|={3:i} <ms={4:d}".
+	      format(indent, m, ms, ms_length, ms_angle))
 
-	# Now compute *mc_length*
+	# Now compute *mc_length*:
 	ms_mm = ms_length.millimeters()
 	radius_mm = radius.millimeters()
-	mc_mm = math.sqrt(radius_mm * radius_mm - ms_mm * ms_mm)
+	# Unclear why the `float` cast is needed.  Without the cast, the code fails in Python2:
+	radius2_minus_ms2 = abs(radius_mm * radius_mm - ms_mm * ms_mm)
+	if radius2_minus_ms2 < 0.0:
+	    print("Code._dxf_arc_append() has a sign error")
+	    radius2_minus_ms2 = -radius2_minus_ms2
+	mc_mm = math.sqrt(radius2_minus_ms2)
 	mc_length = L(mm=mc_mm)
 
 	# Now compute *cm_angle* being 90 degrees of of *ms_angle*:
@@ -19073,16 +19107,21 @@ class Code:
 	    cm_angle = ms_angle - degrees90
 	else:
 	    cm_angle = ms_angle + degrees90
-	cm_angle = cm_angle.normalize()
+	mc_angle = cm_angle.normalize()
 
 	# Now compute center *c*:
-	center_x = m.x + mc_length.cosine(cm_angle)
-	center_y = m.y + mc_length.sine(cm_angle)
+	center_x = m.x + mc_length.cosine(mc_angle)
+	center_y = m.y + mc_length.sine(mc_angle)
 	c = P(center_x, center_y, zero)
+	if trace_detail >= 3:
+	    print("{0}c={1:i} |mc|={2:i} <mc={3:d}".format(indent, c, mc_length, mc_angle))
 
 	# Now we need the *start_angle* and *end_angle* for DXF entity:
 	start_angle = (s-c).xy_angle()
 	end_angle = (e-c).xy_angle()
+	if trace_detail >= 2:
+	    print("{0}c={1:i} mc_angle={2:d} start_angle={3:d} end_angle={4:d}".
+	      format(indent, c, mc_angle, start_angle, end_angle))
 
 	# Generate the required ARC entity:
 	code._dxf_entity_start("ARC")
@@ -19096,7 +19135,10 @@ class Code:
 	    code._dxf_angle_append(51, end_angle)
 	code._dxf_entity_stop()
     
+	# Wrap up any *tracing*:
 	if tracing >= 0:
+	    if trace_detail >= 1:
+		print("{0}x_after={1:i} y_after{2:i}".format(indent, end_x, end_y))
 	    print("{0}<=Code._dxf_arc_append@(cw={1}, end_x={2:i}, end_y={3:i}, radius={4:i})".
 	      format(indent, clockwise, end_x, end_y, radius))
 
@@ -20412,14 +20454,11 @@ class Code:
 
 	return code._x # + code._vice_x
 
-    def _xy_cw_feed(self, f, s, r, x, y, rx=None, ry=None):
+    def _xy_cw_feed(self, f, s, r, x, y, rx=None, ry=None, tracing=-1000000):
 	""" *Code*: Feed to location (*x*, *y*) with a radius *r* clockwise  circle with a
 	    feedrate of *f* and spindle speed of *s* using the *Code* object (i.e. *self*):
 	"""
     
-	# Use *code* instead of *self*:
-	code = self
-
 	# Verify routine arguments:
 	assert isinstance(f, Speed)
 	assert isinstance(s, Hertz)
@@ -20428,12 +20467,26 @@ class Code:
 	assert isinstance(y, L)
 	assert isinstance(rx, L) or rx == None
 	assert isinstance(ry, L) or ry == None
+	assert isinstance(tracing, int)
     
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Code._xy_cw_feed(*, f={1:i}, s={2:rpm}, r={3:i} x={4:i} y={5:i}, ...)".
+	      format(indent, f, s, r, x, y))
+	    trace_detail = 1
+
+	# Grab some values from the *Code* object (i.e. *self*):
+	code = self
 	x1 = code._x_value()
 	y1 = code._y_value()
 	z1 = code._z
 	x2 = x
 	y2 = y
+	if trace_detail >= 1:
+	    print("{0}x_before={1:i} y_before={2:i}".format(indent, x1, y1))
+
 	code._vrml_arc_draw(x1, y1, x2, y2, r, z1, False, rx, ry)
 
 	x_value = code._x_value()
@@ -20441,7 +20494,7 @@ class Code:
 	if x_value != x or y_value != y:
 	    # Do the laser code first:
 	    if code._is_laser:
-	    	code._dxf_arc_append(True, x, y, r)
+	    	code._dxf_arc_append(True, x, y, r, tracing + 1)
 
 	    # Now do the RS274 code and get F, R0, S, X, and Y updated:
 	    #code._xy_rapid_safe_z_force(f, s)
@@ -20463,6 +20516,14 @@ class Code:
 	    seconds = distance / f    # feed = distance / sec  ==>  sec = distance / feed
 	    code._time += seconds
     
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    if trace_detail >= 1:
+		print("{0}x_after={1:i} y_after={2:i}".format(indent, x2, y2))
+	    indent = ' ' * tracing
+	    print("{0}<=Code._xy_cw_feed(*, f={1:i}, s={2:rpm}, r={3:i} x={4:i} y={5:i}, ...)".
+	      format(indent, f, s, r, x, y))
+
     def _xy_ccw_feed(self, f, s, r, x, y, rx=None, ry=None, tracing=-1000000):
 	""" *Code*: Feed to location (*x*, *y*) as a radius *r* counter clockwise  circle with a
 	    feedrate of *f* and spindle speed of *s* using the *Code* object (i.e. *self*):
@@ -20500,7 +20561,7 @@ class Code:
 	if x1 != x or y1 != y:
 	    # Do the laser code first:
 	    if code._is_laser:
-	    	code._dxf_arc_append(False, x, y, r)
+	    	code._dxf_arc_append(False, x, y, r, tracing + 1)
     
 	    # Now do the RS274 code and get F, R0, S, X, and Y updated:
 	    #code._xy_rapid_safe_z_force(f, s)
@@ -20527,7 +20588,7 @@ class Code:
 	    print("{0}<=Code._xy_ccw_feed(*, {1:i}, {2:rpm}, {3:i}, {4:i}, {5:i}) ".
 	      format(indent, f, s, r, x, y))
 
-    def _xy_feed(self, f, s, x, y):
+    def _xy_feed(self, f, s, x, y, tracing=-1000000):
 	""" *Code*: Feed to location (*x*, *y*) with a feedrate of *f*
 	    and spindle speed of *s* using the *Code* object (i.e. *self*).
 	"""
@@ -20540,9 +20601,22 @@ class Code:
 	assert isinstance(s, Hertz)
 	assert isinstance(x, L)
 	assert isinstance(y, L)
+	assert isinstance(tracing, int)
 
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Code._xy_feed(f={1:i}, s={2:rpm}, x={3:i}, y={4:i})".
+	      format(indent, f, s, x, y))
+	    trace_detail = 1
+
+	# Grab the current (*x_before*, *y_before*) values and possibly trace them:
 	x_before = code._x_value()
 	y_before = code._y_value()
+	if trace_detail >= 1:
+	    print("{0}x_before={1:i} y_before={2:i}".format(indent, x_before, y_before))
+
 	if x_before != x or y_before != y:
 	    # Do any laser code first:
 	    if code._is_laser:
@@ -20567,6 +20641,13 @@ class Code:
 	    distance = p1.distance(p2)
 	    seconds = distance / f    # feed = distance / sec  ==>  sec = distance / feed
 	    code._time += seconds
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    if trace_detail >= 1:
+		print("{0}x_after={1:i} y_after={2:i}".format(indent, x, y))
+	    print("{0}<=Code._xy_feed(f={1:i}, s={2:rpm}, x={3:i}, y={4:i})".
+	      format(indent, f, s, x, y))
 
     def _xy_rapid(self, x, y):
 	""" *Code*: Perform a rapid move to (X, Y) using the *Code* object (i.e. *self*). """
