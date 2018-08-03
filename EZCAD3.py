@@ -949,14 +949,17 @@ class P:
 
     @staticmethod
     def polar(angle, distance):
-	""" P: """
+	""" P: Return a *P* object that corresponds to a point in the X/Y plane that is
+	    *distance away* from the origin and is rotated by *angle* from the X axis.
+	"""
 
 	assert isinstance(angle, Angle)
 	assert isinstance(distance, L)
 
 	x = distance.cosine(angle)
 	y = distance.sine(angle)
-	return P(x, y, L())
+	zero = L()
+	return P(x, y, zero)
 
     def triple(self):
         """ *P*: Return the *P* object (i.e. *self*) as an immutable tuple of 3 floats
@@ -988,6 +991,40 @@ class P:
 	    x field and {y} added to the y field. """
 
 	return P(self.part, self.x + x, self.y + y, self.z)
+
+    def xy_rotate(self, center, angle):
+	""" *Point*: Return a new *Point* that has been rotated around the Z access that
+	    goes through *center* by *angle*:
+	"""
+
+	# Verify argument types:
+	assert isinstance(center, P)
+	assert isinstance(angle, Angle)
+
+	# Grab *px*, *py*, and *pz*  from the *Point* object (i.e. *self):
+	point = self
+	px = point.x
+	py = point.y
+	pz = point.z
+
+	# Grab *cx* and *cy* from the *center*:
+	cx = center.x
+	cy = center.y
+
+	# Compute *s* (for sine) and *c* (for cosine).
+	s = angle.sine()
+	c = angle.cosine()
+
+	# Translate (px, py) to "origin* (*cx*, *cy*):
+	x = px - cx
+	y = py - cy
+
+	# Compute new rotated location (*nx*, *ny*):
+	rotated_x = x * c - y * s
+	rotated_y = x * s + y * c
+
+	# Return the new *P* object:
+	return P(rotated_x + cx, rotated_y + cy, pz)
 
     def xyz_adjust(self, x, y, z):
 	""" P dimensions: Return copy of {self} with {x} added to the
@@ -6967,6 +7004,13 @@ class Operation:
 	assert isinstance(cnc_start, P)
 	assert isinstance(tracing, int)
 
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print(("{0}=>Operation.__init__('{1}', {2}, '{3}', '{4}', {5}, '{6}', {7}, *," +
+              " {8:i} {9:rpm} {10:i} {11})").format(indent, name, kind, part._name_get(), comment,
+              sub_priority, tool._name_get(), order, feed_speed, spindle_speed, cnc_start, tracing))
+
 	# Load up *operation*:
 	operation._name = name
 	operation._kind = kind
@@ -6984,6 +7028,12 @@ class Operation:
 	operation._cnc_program_number = -1
 	operation._cnc_start = cnc_start		# Point in 3D space where CNC starts.
 	operation._tracing = tracing
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print(("{0}<=Operation.__init__('{1}', {2}, '{3}', '{4}', {5}, '{6}', {7}, *," +
+              " {8:i} {9:rpm} {10:i} {11})").format(indent, name, kind, part._name_get(), comment,
+              sub_priority, tool._name_get(), order, feed_speed, spindle_speed, cnc_start, tracing))
 
     def _cnc_start_get(self):
         """ *Operation*: Return the CNC start point for the *Operation* object (i.e. *self*).
@@ -9082,9 +9132,11 @@ class Operation_Simple_Pocket(Operation):
 	manufacturing operation.
     """
 
+    ANGLE0 = Angle()
+
     def __init__(self,
       part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed,
-        corner1, corner2, corner_radius, tool_radius, pocket_kind, tracing=-1000000):
+      corner1, corner2, corner_radius, tool_radius, pocket_kind, rotate=ANGLE0, tracing=-1000000):
 	""" *Operation_Simple_Pocket*: Initialize an *Operation_Simple_Pocket*
 	    object (i.e. *self*) to contain *part*, *comment*, *sub_priority*,
 	    *tool*, *order*, *follows*, *corner1*, *corner2*, *corner_radius*,
@@ -9108,37 +9160,41 @@ class Operation_Simple_Pocket(Operation):
 	assert isinstance(corner_radius, L)
 	assert isinstance(tool_radius, L)
 	assert isinstance(pocket_kind, int)
+	assert isinstance(rotate, Angle)
+	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print(("{0}=>Operation_Simple_Pocket.__init__(*, p='{1}', c='{2}', sp={3}, t='{4}'," +
-	      " o={5}, f={6:i}, s={7:rpm}, c1={8:i}, c2={9:i}, cr={10:i}, tr={11:i}, pk={12})").
-	      format(indent, part._name_get(), comment, sub_priority, tool._name_get(), order,
-	      feed_speed, spindle_speed, corner1, corner2, corner_radius, tool_radius, pocket_kind))
+	      " o={5}, f={6:i}, s={7:rpm}, c1={8:i}, c2={9:i}, cr={10:i}, tr={11:i}, pk={12}," +
+	      " rot={13})").format(indent, part._name_get(), comment, sub_priority,
+              tool._name_get(), order, feed_speed, spindle_speed, corner1, corner2,
+              corner_radius, tool_radius, pocket_kind, rotate))
 	    trace_detail = 2
 
 	# Initialize superclass:
 	operation_kind = Operation.KIND_SIMPLE_POCKET
 	cnc_start = (corner1 + corner2)/2
-	Operation.__init__(operation_simple_pocket, "Simple_Pocket", operation_kind,
-	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start)
+	Operation.__init__(operation_simple_pocket, "Simple_Pocket", operation_kind, part, comment,
+          sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start, tracing + 1)
 
 	# Load up the rest of *operation_simple_pocket*:
 	operation_simple_pocket._corner1 = corner1
 	operation_simple_pocket._corner2 = corner2
 	operation_simple_pocket._corner_radius = corner_radius
 	operation_simple_pocket._tool_radius = tool_radius
+	operation_simple_pocket._rotate = rotate
 	operation_simple_pocket._pocket_kind = pocket_kind
-	operation_simple_pocket._tracing = -1000000
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print(("{0}<=Operation_Simple_Pocket.__init__(*, p='{1}', c='{2}', sp={3}, t='{4}'," +
-	      " o={5}, f={6:i}, s={7:rpm}, c1={8:i}, c2={9:i}, cr={10:i}, tr={11:i}, pk={12})").
-	      format(indent, part._name_get(), comment, sub_priority, tool._name_get(), order,
-	      feed_speed, spindle_speed, corner1, corner2, corner_radius, tool_radius, pocket_kind))
+	      " o={5}, f={6:i}, s={7:rpm}, c1={8:i}, c2={9:i}, cr={10:i}, tr={11:i}, pk={12}," +
+              " rot={13})").format(indent, part._name_get(), comment, sub_priority,
+	      tool._name_get(), order, feed_speed, spindle_speed, corner1, corner2,
+              corner_radius, tool_radius, pocket_kind, rotate))
 
     def _corner_radius_get(self):
 	""" *Operation_Simple_Pocket: Return the corner radius for the *Operation_Simple_Pocket*
@@ -9174,10 +9230,11 @@ class Operation_Simple_Pocket(Operation):
 
 	# Perform any requested *tracing*:
 	part          = operation_simple_pocket._part
-	if tracing < 0 and part._tracing >= 0:
-	    tracing = part._tracing
-	if operation_simple_pocket._tracing >= 0:
-	    tracing = operation_simple_pocket._tracing
+	if tracing < 0:
+            if part._tracing >= 0:
+		tracing = part._tracing
+	    elif operation_simple_pocket._tracing >= 0:
+		tracing = operation_simple_pocket._tracing
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
@@ -9192,6 +9249,7 @@ class Operation_Simple_Pocket(Operation):
 	corner2       = operation_simple_pocket._corner2
 	part          = operation_simple_pocket._part
 	pocket_kind   = operation_simple_pocket._pocket_kind
+	rotate        = operation_simple_pocket._rotate
 	tool          = operation_simple_pocket._tool
 	tool_radius   = operation_simple_pocket._tool_radius
 
@@ -9203,6 +9261,7 @@ class Operation_Simple_Pocket(Operation):
 	feed_speed           = tool._feed_speed_get()
 	spindle_speed        = tool._spindle_speed_get()
 	tool_maximum_z_depth = tool._maximum_z_depth_get()
+	code._tool_set(tool)
 
 	# Transform *corner1* and *corner2* to mounted CNC coordinates:
 	cnc_transform = mount._cnc_transform_get()
@@ -9320,7 +9379,7 @@ class Operation_Simple_Pocket(Operation):
 	if is_laser:
 	    z_end = cnc_corner_tne.z - total_cut
 	    code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius, z_end,
-	      tool_radius, zero, spindle_speed, feed_speed, True)
+	    tool_radius, zero, spindle_speed, feed_speed, True, rotate, tracing = tracing + 1)
 	else:
 	    # Compute the total number of rectangular paths needed:
 	    paths = 0
@@ -9347,7 +9406,7 @@ class Operation_Simple_Pocket(Operation):
 		if pocket_kind == Operation.POCKET_KIND_THROUGH:
 		    # We only need to do the exterior path to a depth of *z_plunge*:
 		    code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius, z,
-		      r, zero, spindle_speed, feed_speed, True)
+		    r, zero, spindle_speed, feed_speed, True, rotate, tracing = tracing + 1)
 		elif pocket_kind == Operation.POCKET_KIND_FLAT:
 		    # Generate {paths} rectangular passes over the pocket:
 		    for path in range(paths):
@@ -9386,7 +9445,7 @@ class Operation_Simple_Pocket(Operation):
 			# Mill out a pocket at level *z*:
 		        code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius,
 			  z, tool_radius, offset, spindle_speed, feed_speed, rapid_move,
-			  tracing = tracing + 1)
+			  rotate, tracing = tracing + 1)
 		else:
 		    assert False, "Unknown pocket kind: {0}".format(pocket_kind)
 
@@ -9826,6 +9885,8 @@ class Part:
     HOLE_THROUGH = 1
     HOLE_TIP = 2
     HOLE_FLAT = 3
+
+    ANGLE0 = Angle()
 
     # Flavors of values that can be stored in a {Part}:
     def __init__(self, up, name):
@@ -13298,7 +13359,7 @@ class Part:
 	    operation_simple_pocket = Operation_Simple_Pocket(part, comment, 0,
 	      end_mill_tool, operation_order, None, end_mill_feed_speed, end_mill_spindle_speed,
 	      final_corner1, final_corner2, end_mill_radius, end_mill_radius, pocket_kind,
-	      tracing = tracing + 1)
+	      Part.ANGLE0, tracing = tracing + 1)
 	    #operation_simple_pocket._tracing = 5
 	    part._operation_append(operation_simple_pocket)
 
@@ -15611,7 +15672,7 @@ class Part:
 	  start_point, flags, countersink_diameter)
 
     def simple_pocket(self,
-      comment, corner1, corner2, radius, flags, reverse=False, tracing = -1000000):
+      comment, corner1, corner2, radius, flags, reverse=False, rotate=ANGLE0, tracing = -1000000):
 	""" *Part*: Create a simple rectangular pocket in the *Part* object (i.e. *self*)
 	    bounding corners of *bottom_corner* and *top_corner*, a corner radius if *radius*.
 	"""
@@ -15626,12 +15687,15 @@ class Part:
 	assert isinstance(radius, L)
 	assert isinstance(flags, str)
 	assert isinstance(reverse, bool)
+	assert isinstance(rotate, Angle)
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing < 0 and part._tracing >= 0:
 	    tracing = part._tracing
+	#if tracing < 0 and rotate != Part.ANGLE0:
+	#    tracing = 3
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
@@ -15655,6 +15719,7 @@ class Part:
 	    z1, z2 = transformed_corner1.z.minimum_maximum(transformed_corner2.z)
 	    x_center = (x1 + x2) / 2
 	    y_center = (y1 + y2) / 2
+	    center = P(x_center, y_center, zero)
 	    bsw_corner = P(x1, y1, z1)
 	    tne_corner = P(x2, y2, z2)
 	    if trace_detail >= 2:
@@ -15687,8 +15752,8 @@ class Part:
 		top_surface_transform_reverse._scad_lines_append(difference_lines, pad)
 
 		difference_lines.append(
-		  "{0}// Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
-		  format(pad, self._name, comment, corner1, corner2, radius, flags))
+		  "{0}// Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}', {7:d})".
+		  format(pad, self._name, comment, corner1, corner2, radius, flags, rotate))
 		#difference_lines.append(
 		#  "{0}//start={1:m} end={2:m}".format(pad, start, end))
 		#difference_lines.append(
@@ -15710,10 +15775,10 @@ class Part:
 		# First put together a list *bend_points* which are the four pocket corners
 		# moved inwards by *radius*:
 		bend_points = [
-		  P(x1 + radius, y1 + radius, zero),
-		  P(x1 + radius, y2 - radius, zero),
-		  P(x2 - radius, y2 - radius, zero),
-		  P(x2 - radius, y1 + radius, zero)
+		  P(x1 + radius, y1 + radius, zero).xy_rotate(center, rotate),
+		  P(x1 + radius, y2 - radius, zero).xy_rotate(center, rotate),
+		  P(x2 - radius, y2 - radius, zero).xy_rotate(center, rotate),
+		  P(x2 - radius, y1 + radius, zero).xy_rotate(center, rotate)
 		]
 		if reverse:
 		    bend_points.reverse()
@@ -15735,7 +15800,7 @@ class Part:
 		for bend_point in bend_points:
 		    angle = start_angle
 		    for index in range(corner_sides + 1):
-			adjust = P.polar(angle, radius)
+			adjust = P.polar(angle + rotate, radius)
 			corner_point = bend_point + adjust
 			#print("bend_point={0:i} adjust={1}".format(bend_point, adjust))
 			polygon_points.append(corner_point)
@@ -15796,7 +15861,7 @@ class Part:
 		operation_simple_pocket = Operation_Simple_Pocket(self, comment, 0,
 		  end_mill_tool, operation_order, None, end_mill_feed_speed, end_mill_spindle_speed,
 		  corner1, corner2, radius, end_mill_radius, Operation.POCKET_KIND_FLAT,
-		  tracing = tracing + 1)
+		  rotate, tracing = tracing + 1)
 		self._operation_append(operation_simple_pocket)
 
 		if trace_detail >= 2:
@@ -18470,9 +18535,10 @@ class Code:
 	code._mount_wrl_lines = None      # The lines to be written into the mount VRML file
 	code._rapid_speed = Speed(in_per_sec = 75.0) # Should be read from Mill object
 	code._time = Time()		  # Total Tool path time
+	code._tool = None		  # Currently selected tool
+	code._tool_change_point = None    # Tool change location relative to viceo origin
 	code._tool_program_number = -1    # Tool program number
 	code._tool_wrl_lines = None       # The lines to be written into the tool VRML file
-	code._tool_change_point = None    # Tool change location relative to viceo origin
 
 	# Construct the *g1_table*:
 	g1_values_list = (0, 1, 2, 3, 33, 38, 73, 76, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89)
@@ -19734,32 +19800,33 @@ class Code:
 	code._s = s
 
     def _simple_pocket_helper(self, cnc_corner_bsw, cnc_corner_tne, corner_radius, z,
-      tool_radius, offset, spindle_speed, feed_speed, rapid_move, tracing=-1000000):
-	""" *Code*: Using the *Code* object (i.e. *self*), perform one rectangular or
-	    rounded rectangular path of the currently mounted tool.  *cnc_corner_bsw* and
-	    *cnc_corner_tne* specify diagonally opposite corners of the pocket.
-	    *corner_radius* specifies the inside radius of the pocket corner.
-	    *z* specifies the Z altitude of the tool tip.  *tool_radius* specifies
-	    the radius of the end mill tool.  *offset* specifies the distance inward from
-	    the outermost rectangular path.  *spindle_speed* and and *feed_speed* specify
-	    the speed and feed for the tool.  *rapid_move* specifies whether or not to move
-	    to the start position with rapid tool movement (i.e. G0) or linear tool movement
-	    (i.e. G1) commands.
+      tool_radius, offset, spindle_speed, feed_speed, rapid_move, rotate, tracing=-1000000):
+	""" *Code*: Using the *Code* object (i.e. *self*), generate one rectangular or
+	    rounded rectangular path for the currently selected tool:
+	    * *cnc_corner_bsw* and *cnc_corner_tne* specify diagonally opposite corners
+               of the pocket.
+	    * *corner_radius* specifies the inside radius of the pocket corner.
+	    * *z* specifies the Z altitude of the tool tip.
+            * *tool_radius* specifies the radius of the end mill tool.
+	    * *offset* specifies the distance inward from the outermost rectangular path.
+	    * *spindle_speed* and and *feed_speed* specify the speed and feed for the tool.
+	    * *rapid_move* specifies whether or not to move to the start position with rapid
+	      tool movement (i.e. G0) or linear tool movement (i.e. G1) commands.
+	    * *rotate* specifies how much to rotate the pocket around its center point.
 	"""
     
-	# Use *code* instead of *self*:
-	code = self
-
 	# Verify argument types:
+	zero = L()
 	assert isinstance(cnc_corner_bsw, P)
 	assert isinstance(cnc_corner_tne, P)
-	assert isinstance(corner_radius, L)
+	assert isinstance(corner_radius, L) and corner_radius >= zero
 	assert isinstance(z, L)
 	assert isinstance(tool_radius, L)
-	assert isinstance(offset, L)
+	assert isinstance(offset, L) and offset >= zero
 	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(feed_speed, Speed)
 	assert isinstance(rapid_move, bool)
+	assert isinstance(rotate, Angle)
 
 	# Perform an requested *tracing*:
 	trace_detail = -1
@@ -19771,7 +19838,8 @@ class Code:
 	      spindle_speed, feed_speed, rapid_move))
 	    trace_detail = 2
 
-	# Stuff some debug information into a *line_coment*:
+	# Stuff some debug information into a *line_coment* for *code* (i.e. *self*):
+	code = self
 	code._line_comment(
 	  "bsw={0:i} tne={1:i} cr={2:i} off={3:i} z={4:i}".
 	  format(cnc_corner_bsw, cnc_corner_tne, corner_radius, offset, z))
@@ -19786,38 +19854,92 @@ class Code:
 	if trace_detail >= 2:
 	    print("{0}x1={1:i} y1={2:i} x2={3:i} y2={4:i}".format(indent, x1, y1, x2, y2))
     
-	# Compute the corner center coordinates:
+	# Compute the arc center locations:
 	rx1 = x1 + corner_radius
 	rx2 = x2 - corner_radius
 	ry1 = y1 + corner_radius
 	ry2 = y2 - corner_radius
-	code._line_comment("rx1={0:i} ry1={1:i} rx2={2:i} ry2={3:i}".format(rx1, ry1, rx2, ry2))
+	assert rx1 < rx2
+	assert ry1 < ry2
 	if trace_detail >= 2:
 	    print("{0}rx1={1:i} ry1={2:i} rx2={3:i} ry2={4:i}".format(indent, rx1, ry1, rx2, ry2))
 
-	# Compute the rectangle path coordinates:
-	px1 = x1 + offset
-	px2 = x2 - offset
-	py1 = y1 + offset
-	py2 = y2 - offset
-	code._line_comment("offset={0:i} px1={1:i} py1={2:i} px2={3:i} py2={4:i}".
-	  format(offset, px1, py1, px2, py2))
+	# Compute the offset X/Y coordinates:
+	ox1 = x1 + offset
+	oy1 = y1 + offset
+	ox2 = x2 - offset
+	oy2 = y2 - offset
+	code._line_comment("offset={0:i} ox1={1:i} oy1={2:i} ox2={3:i} oy2={4:i}".
+	  format(offset, ox1, oy1, ox2, oy2))
 	if trace_detail >= 2:
-	    print("{0}offset={1:i} px1={2:i} py1={3:i} px2={4:i} py2={5:i}".
-	      format(indent, offset, px1, py1, px2, py2))
-    
+	    print("{0}offset={1:i} ox1={2:i} oy1={3:i} ox2={4:i} oy2={5:i}".
+	      format(indent, offset, ox1, oy1, ox2, oy2))
+
+	# Compute the middle of the pocket:
+	middle_x = (x1 + x2) / 2
+	middle_y = (y1 + y2) / 2
+	middle = P(middle_x, middle_y, zero)
+
+	# We need to compute the following points for the pocket:
+        #
+        #             NW                NE    
+        #              *----------------*    
+	#            /                    \
+	#          /                        \
+        #       WN*    +                +    *EN
+	#         |   CNW              CNE   |
+	#         |                          |
+	#         |   CSW              CSE   |
+        #       WS*    +                +    *ES
+	#          \                        /
+	#            \                    /
+        #              *----------------*
+        #             SW                SE
+        # where:
+        #
+        # * Cxx stands for the center point for the radius of the 4 pocket corners
+        # * xx  stands for one of the end points of a flat surface.
+	sw  = P(rx1, oy1, zero)
+	se  = P(rx2, oy1,  zero)
+	cse = P(rx2, ry1, zero)
+	es  = P(ox2, ry1, zero)
+	en  = P(ox2, ry2, zero)
+	cne = P(rx2, ry2, zero)
+	ne  = P(rx2, oy2,  zero)
+	nw  = P(rx1, oy2,  zero)
+	cnw = P(rx1, ry2, zero)
+	wn  = P(ox1, ry2, zero)
+	ws  = P(ox1, ry1, zero)
+	csw = P(rx1, ry1, zero)
+
 	# Determine the starting location for this path:
-	start_x = px1
-	start_y = py1
+	start_x = ox1
+	start_y = oy1
 	if offset < corner_radius:
 	    # We have rounded corner path:
 	    start_x = rx1
-    
-	# Move to (*start_x*, *start_y*) as specified by *linear_move* argument:
+	start = P(start_x, start_y, zero)
+
+	# Compute rotated values of pocket:
+	rsw    = sw.xy_rotate(   middle, rotate)
+	rse    = se.xy_rotate(   middle, rotate)
+	rcse   = cse.xy_rotate(  middle, rotate)
+	res    = es.xy_rotate(   middle, rotate)
+	ren    = en.xy_rotate(   middle, rotate)
+	rcne   = cne.xy_rotate(  middle, rotate)
+	rne    = ne.xy_rotate(   middle, rotate)
+	rnw    = nw.xy_rotate(   middle, rotate)
+	rcnw   = cnw.xy_rotate(  middle, rotate)
+	rwn    = wn.xy_rotate(   middle, rotate)
+	rws    = ws.xy_rotate(   middle, rotate)
+	rcsw   = csw.xy_rotate(  middle, rotate)
+	rstart = start.xy_rotate(middle, rotate)
+
+	# Move to *rstart* as specified by *rapid_move* argument:
 	if rapid_move:
-	    code._xy_rapid(start_x, start_y)
+	    code._xy_rapid(rstart.x, rstart.y)
 	else:
-	    code._xy_feed(feed_speed, spindle_speed, start_x, start_y)
+	    code._xy_feed(feed_speed, spindle_speed, rstart.x, rstart.y)
     
 	# Make sure we are at the depth *z*:
 	code._z_feed(feed_speed/2, spindle_speed, z, "simple_pocket_helper")
@@ -19827,46 +19949,57 @@ class Code:
 	    # Mill out a rectangle with rounded corners in a
 	    # counter clockwise direction to force a climb cut:
     
+	    # *r* is the radius of the arc portion of the pocket path:
 	    r = corner_radius - offset
     
-	    # Bottom horizontal line from (rx1,py1) to (rx2,py1):
-	    code._xy_feed(feed_speed, spindle_speed, rx2, py1)
+	    # Bottom horizontal line from *rsw* to *rse*:
+	    code._xy_feed(feed_speed, spindle_speed, rse.x, rse.y, tracing=tracing+1)
     
-	    # Lower right arc (rx2,py1) to (px2,ry1):
-	    code._xy_ccw_feed(feed_speed, spindle_speed, r, px2, ry1, rx=rx2, ry=ry1)
+	    # Lower right arc *rse* to *res*:
+	    code._xy_ccw_feed(feed_speed,
+	      spindle_speed, r, res.x, res.y, rx=rcse.x, ry=rcse.y, tracing=tracing+1)
     
-	    # Right vertical line (px2,ry1) to (px2,ry2):
-	    code._xy_feed(feed_speed, spindle_speed, px2, ry2)
+	    # Right vertical line *res* to *ren*
+	    code._xy_feed(feed_speed, spindle_speed, ren.x, ren.y)
     
-	    # Upper right arc (px2,ry2) to (rx2, py2):
-	    code._xy_ccw_feed(feed_speed, spindle_speed, r, rx2, py2, rx=rx2, ry=ry2)
+	    # Upper right arc *ren* to *rne* with arc center at *rcne*:
+	    code._xy_ccw_feed(feed_speed, spindle_speed, r, rne.x, rne.y, rx=rcne.x, ry=rcne.y)
+
+	    # Top horizontal line *rne* to *rnw*:
+	    code._xy_feed(feed_speed, spindle_speed, rnw.x, rnw.y)
     
-	    # Top horizontal line (rx2, py2) to (rx1, py2):
-	    code._xy_feed(feed_speed, spindle_speed, rx1, py2)
+	    # Upper left arc *rnw* to *rwn* with arc center at *rcnw*:
+	    code._xy_ccw_feed(feed_speed, spindle_speed, r, rwn.x, rwn.y, rx=rcnw.x, ry=rcnw.y)
     
-	    # Upper left arc (rx1, py2) to (px1, ry2):
-	    code._xy_ccw_feed(feed_speed, spindle_speed, r, px1, ry2, rx=rx1, ry=ry2)
+	    # Left vertical line *rwn* to *rws*:
+	    code._xy_feed(feed_speed, spindle_speed, rws.x, rws.y)
     
-	    # Left vertical line (px1, ry2) to (px1, ry1):
-	    code._xy_feed(feed_speed, spindle_speed, px1, ry1)
-    
-	    # Lower left arc (px1, ry1) to (rx1, py1):
-	    code._xy_ccw_feed(feed_speed, spindle_speed, r, rx1, py1, rx=rx1, ry=ry1)
+	    # Lower left arc *rws* to *rsw* with arc center at *rcsw*:
+	    code._xy_ccw_feed(feed_speed, spindle_speed, r, rsw.x, rsw.y, rx=rcsw.x, ry=rcsw.y)
 	else:
 	    # Mill out a rectangle with "square" corners in a counter
 	    # clockwise direction to force a climb cut:
     
-	    # Bottom horizontal line from (px1, py1) to (px2, py1):
-	    code._xy_feed(feed_speed, spindle_speed, px2, py1)
+	    sq_sw = P(ox1, oy1, zero)
+	    sq_se = P(ox2, oy1, zero)
+	    sq_ne = P(ox2, oy2, zero)
+	    sq_nw = P(ox1, oy2, zero)
+	    rsq_sw = sq_sw.xy_rotate(middle, rotate)
+	    rsq_se = sq_se.xy_rotate(middle, rotate)
+	    rsq_ne = sq_ne.xy_rotate(middle, rotate)
+	    rsq_nw = sq_nw.xy_rotate(middle, rotate)
+
+	    # Bottom horizontal line from *rsq_sw to* to *rsq_se*
+	    code._xy_feed(feed_speed, spindle_speed, rsq_se.x, rsq_se.y, tracing=tracing+1)
     
-	    # Right vertical line from (px2, py1) to (px2, py2):
-	    code._xy_feed(feed_speed, spindle_speed, px2, py2)
+	    # Right vertical line from *rsq_se* to *rsq_ne*
+	    code._xy_feed(feed_speed, spindle_speed, rsq_ne.x, rsq_ne.y)
     
-	    # Top horizontal line from (px2, py2) to (px1, py2):
-	    code._xy_feed(feed_speed, spindle_speed, px1, py2)
+	    # Top horizontal line from *rsq_ne* to *rsq_nw*:
+	    code._xy_feed(feed_speed, spindle_speed, rsq_nw.x, rsq_nw.y)
     
-	    # Left vertical line from (px1, py2) to (px1, py1):
-	    code._xy_feed(feed_speed, spindle_speed, px1, py1)
+	    # Left vertical line from *rsq_nw* to *rsq_sw*:
+	    code._xy_feed(feed_speed, spindle_speed, rsq_sw.x, rsq_sw.y)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -19912,6 +20045,18 @@ class Code:
 	"""
 
 	return self._time
+
+    def _tool_set(self, tool):
+        """ *Code*: Set the current tool for the *Code* object (i.e. *self*) to *tool*:
+	"""
+
+	# Verify argument types:
+	assert isinstance(tool, Tool)
+
+	# Load *tool* into *code* (i.e. *self*):
+	code = self
+	code._tool = tool
+	code._is_laser = tool._is_laser_get()
 
     #FIXME: This is old code!!!
     def _old_code(self):
@@ -20141,16 +20286,18 @@ class Code:
 	have_radius = isinstance(radius_x, L) and isinstance(radius_y, L)
 	if have_radius:
 	    if trace_detail >= 2:
-		print("{0}rx={1:i} ry={2:i}".format(indent, rx, ry))
-		ar_dx = ax - rx
-		ar_dy = ay - ry
+		print("{0}rx={1:i} ry={2:i}".format(indent, radius_x, radius_y))
+		ar_dx = ax - radius_x
+		ar_dy = ay - radius_y
 		ar_radius = ar_dx.distance(ar_dy)
-		print("{0}ar_dx={1:i} ar_dy={2:i} ar_radius={3:i}".format(ar_dx, ar_dy, ar_radius))
+		print("{0}ar_dx={1:i} ar_dy={2:i} ar_radius={3:i}".
+		 format(indent, ar_dx, ar_dy, ar_radius))
 
-		br_dx = bx - rx
-		br_dy = by - ry
+		br_dx = bx - radius_x
+		br_dy = by - radius_y
 		br_radius = br_dx.distance(br_dy)
-		print("{0}br_dx={1:i} br_dy={2:i} br_radius={3:i}".format(br_dx, br_dy, br_radius))
+		print("{0}br_dx={1:i} br_dy={2:i} br_radius={3:i}".
+		  format(indent, br_dx, br_dy, br_radius))
 
 	# Assign *z* to *az* and *bz* for notational consistency.
 	az = z
@@ -20559,7 +20706,6 @@ class Code:
 	code._vrml_arc_draw(x1, y1, x2, y2, r, z1, True, rx, ry, tracing = tracing + 1)
 
 	if x1 != x or y1 != y:
-	    # Do the laser code first:
 	    if code._is_laser:
 	    	code._dxf_arc_append(False, x, y, r, tracing + 1)
     
