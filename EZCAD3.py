@@ -14319,14 +14319,40 @@ class Part:
 		print("{0}is_through_hole={1}".format(indent, is_through_hole))
 		print("{0}is_tip_hole={1}".format(indent, is_tip_hole))
 
-	    #FIXME: We need to use *Operation_Round_Pocket* when we are generating a .dxf file!!!:
-	    if (is_through_hole or is_tip_hole) and mill_drill_tool != None and \
-	      drill_tool != None and not end_mill_tool_is_laser:
-		# Make sure we have both a *mill_drill_tool* and a *drill_tool*:
-		assert isinstance(mill_drill_tool, Tool_Mill_Drill)
-		assert isinstance(drill_tool, Tool_Drill)
+	    # We have to decide whether we are going to do an *Operation_Drill* or an
+            # *Operation_Round_Pocket*.  We have searched for three tools -- *mill_drill_tool*,
+	    # *drill_tool* and *end_mill_tool*.  In general, we prefer to drill holes in
+            # preference to milling them out.   We are forced to mill them out when
+	    # 1. the *end_mill_tool* is a laser, indicating that we generating a .dxf file, or
+            # 2. the hole is meant to have a flat bottom, or
+            # 3. we can't find a matching drill with the correct diameter.
+	    if (end_mill_tool != None) and \
+              (end_mill_tool_is_laser or is_flat_hole or drill_tool == None):
+		# Generate an *operation_round_pocket*:
 		if trace_detail >= 1:
-		    print("{0}Use a drill".format(indent))
+		    print("{0}Mill out the hole".format(indent))
+
+		# Generate *operation_round_pocket* and append it to *part*:
+		mount = part._current_mount
+		operation_round_pocket = Operation_Round_Pocket(part, comment,
+		  0, end_mill_tool, Operation.ORDER_END_MILL_ROUND_POCKET, None,
+		  hole_diameter, countersink_diameter, hole_kind, start, stop,
+		  end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
+		  tracing = tracing + 1)
+		part._operation_append(operation_round_pocket)
+
+		#FIXME: There is no attempt an countersinking or chamfering the hole!!!
+		assert not is_countersink
+		success = True
+	    elif drill_tool != None:
+		# Generate an *operation_drill* and maybe an *operation_counter_sink*.
+                # The *operation_counter_sink* is only generated if we need 
+		if trace_detail >= 1:
+		    print("{0}Drill the hole".format(indent))
+
+		# Make sure we have both a *mill_drill_tool* and a *drill_tool*:
+		assert not is_countersink or mill_drill_tool != None
+		assert isinstance(drill_tool, Tool_Drill)
 
 		# Worry about countersinking first:
 		operation_countersink = None
@@ -14369,20 +14395,11 @@ class Part:
 		  start, stop, False, tracing = tracing + 1)
 		part._operation_append(operation_drill, tracing = tracing + 1)
 		success = True
-	    elif (is_flat_hole or is_through_hole) and end_mill_tool != None:
-		mount = part._current_mount
-		operation_round_pocket = Operation_Round_Pocket(part, comment,
-		  0, end_mill_tool, Operation.ORDER_END_MILL_ROUND_POCKET, None,
-		  hole_diameter, countersink_diameter, hole_kind, start, stop,
-		  end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
-		  tracing = tracing + 1)
-		part._operation_append(operation_round_pocket)
-		success = True
     	    else:
-		print(("Can't drill diameter {0:i} hole {1:i} deep in part '{2}'" +
-		  " flags='{3}' md={4} d={5} em={6}").
-		  format(hole_diameter, hole_z_depth, part._name, flags, mill_drill_tool != None,
-		  drill_tool != None, end_mill_tool != None))
+	    	print(("Can't drill diameter {0:i} hole {1:i} deep in part '{2}'" +
+	         " flags='{3}' md={4} d={5} em={6}").
+	         format(hole_diameter, hole_z_depth, part._name, flags, mill_drill_tool != None,
+	    	  drill_tool != None, end_mill_tool != None))
 
 	if ezcad._stl_mode:
 	    if trace_detail >= 1:
