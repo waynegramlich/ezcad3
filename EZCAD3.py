@@ -8014,7 +8014,7 @@ class Operation_Drill(Operation):
 	      format(indent, ["{0:i}".format(vrml_point) for vrml_point in code._vrml_points ]))
 	top_surface_safe_z = mount._top_surface_safe_z_get()
 	if is_laser:
-	    code._dxf_circle(x, y, diameter)
+	    code._dxf_circle(x, y, diameter, tracing=tracing + 1)
 	else:
 	    cnc_start_z = cnc_start.z
 	    cnc_stop_z  = cnc_stop.z
@@ -14188,7 +14188,7 @@ class Part:
 	    print("{0}=>Part.countersink_hole('{1}', '{2}', {3:i}, {4:i}, {5:i}, {6:i}, '{7}')".
 	      format(indent, part._name, comment, hole_diameter, countersink_diameter,
 	      start, stop, flags))
-	    trace_detail = 1
+	    trace_detail = 3
 
 	#FIXME: Why *stl_mode* with *cnc_mode*???!!!
 	ezcad = part._ezcad
@@ -14321,7 +14321,7 @@ class Part:
 
 	    #FIXME: We need to use *Operation_Round_Pocket* when we are generating a .dxf file!!!:
 	    if (is_through_hole or is_tip_hole) and mill_drill_tool != None and \
-	      drill_tool != None: # and not end_mill_tool_is_laser:
+	      drill_tool != None and not end_mill_tool_is_laser:
 		# Make sure we have both a *mill_drill_tool* and a *drill_tool*:
 		assert isinstance(mill_drill_tool, Tool_Mill_Drill)
 		assert isinstance(drill_tool, Tool_Drill)
