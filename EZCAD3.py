@@ -5728,9 +5728,6 @@ class Mount_Operations:
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	deep_tracing = -1000000
-	#if tool_program_number == 2303:
-	#    print("***********************************************************************")
-	#    tracing = 5
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Mount_Operations._cnc_tool_generate('{1}', {2}, *, '{3}')".format(indent,
@@ -5746,7 +5743,7 @@ class Mount_Operations:
 	mount0_cnc_transform = mount0._cnc_transform_get()
 	operation0 = pair0._operation_get()
 
-	# While *Operation_Mount._cnc_generate*() doe not actually generate any CNC code
+	# While *Operation_Mount._cnc_generate*() does not actually generate any CNC code
 	# it *DOES* generate VRML for CNC visualization.  Thus, we must actually call
 	# the *_cnc_generate*() method for each *Operation_Mount* object.
 
@@ -6981,10 +6978,11 @@ class Operation:
     POCKET_KIND_THROUGH = 1
 
     def __init__(self, name, kind, part, comment, sub_priority, tool, order,
-     follows, feed_speed, spindle_speed, cnc_start, tracing=-1000000):
+     follows, feed_speed, spindle_speed, cnc_start, tracing):
 	""" *Operation*: Initialize an *Operation* object to contain
 	    *name*, *kind*, *part*, *comment*, *sub_priority*, *tool*,
 	    *order*, *follows*, *feed_speed*, *spindle_speed*, and *cnc_start*.
+	    Note that *tracing* is required.
 	"""
 
 	# Use *operation* instead of *self*:
@@ -7584,6 +7582,7 @@ class Operation_Dowel_Pin(Operation):
 	assert isinstance(diameter, L)
 	assert isinstance(dowel_point, P)
 	assert isinstance(plunge_point, P)
+	assert isinstance(tracing, int)
 
 	# Perform any requested tracing:
         if tracing >= 0:
@@ -7601,7 +7600,8 @@ class Operation_Dowel_Pin(Operation):
 	zero = L()
 	cnc_start = plunge_point
 	Operation.__init__(operation_dowel_pin, "Dowel_Pin", Operation.KIND_DOWEL_PIN, part,
-	  comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start)
+	  comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start,
+	  tracing + 1)
 	# Load up the rest of *operation_dowel_pin*:
 	operation_dowel_pin._diameter = diameter	# Dowel pin diameter
 	operation_dowel_pin._dowel_point = dowel_point	# Location to move dowel to
@@ -7926,7 +7926,7 @@ class Operation_Drill(Operation):
 	cnc_start = start
 	Operation.__init__(operation_drill, "Drill", Operation.KIND_DRILL, part, comment,
 	  sub_priority, tool, order, follows, tool._feed_speed_get(), tool._spindle_speed_get(),
-          cnc_start)
+          cnc_start, tracing + 1)
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
@@ -8288,7 +8288,7 @@ class Operation_Mount(Operation):
 		assert isinstance(row_column, int) and row_column >= 0
 
 	# Perform any requested *tracing*:
-	if tracing >= 1:
+	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print(("{0}=>Operation_Mount.__init__(*, '{1}', '{2}', '{3}'," +
 	      " {4:i} {5:i}, *, {6}, {7}))").format(indent, part._name_get(), comment,
@@ -8302,7 +8302,7 @@ class Operation_Mount(Operation):
 	feed_speed = Speed()
         spindle_speed = Hertz()
 	Operation.__init__(operation_mount, "Mount", Tool.KIND_MOUNT, part, comment,
-	  sub_priority, tool, order, follows, feed_speed, spindle_speed, part.c)
+	  sub_priority, tool, order, follows, feed_speed, spindle_speed, part.c, tracing + 1)
 
 	# Load up *operation_mount*:
 	operation_mount._jaws_spread           = jaws_spread
@@ -8336,12 +8336,16 @@ class Operation_Mount(Operation):
         assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
+	if tracing < 0 and operation_mount._tracing >= 0:
+	    tracing = operation_mount._tracing
+	    indent = ' ' * tracing
+	    print("{0}*************************** Operation Mount tracing".format(indent))
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Operation_Mount._cnc_generate('{1}', '{2}', *, '{3}')".
 	      format(indent, operation_mount._name, mount._name_get(), cnc_vrml._name_get()))
-	    trace_detail = 1
+	    trace_detail = 2
 
 	# Write out the part visualization:
 	part = operation_mount._part
@@ -8356,6 +8360,11 @@ class Operation_Mount(Operation):
 	parallels_height      = operation_mount._parallels_height
 	tooling_plate         = operation_mount._tooling_plate
 	vice                  = operation_mount._vice
+	if trace_detail >= 2:
+	    tooling_plate_name = "None" if tooling_plate == None else tooling_plate._name_get()
+	    vice_name = "None" if vice == None else vice._name_get()
+	    print("{0}parallels_height={1:i} tooling_plate='{2}' vice='{3}'".
+	      format(indent, parallels_height, tooling_plate_name, vice_name))
 
 	# Grab the extra material conners from *mount* and render into *mount_vrml_lines*:
 	extra_start_bsw, extra_start_tne = mount._extra_start_get()
@@ -8500,7 +8509,8 @@ class Operation_Multi_Mount(Operation):
         spindle_speed = Hertz()
 	cnc_start = part.c
 	Operation.__init__(self, "Multi_Mount", Tool.KIND_MOUNT,
-	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start)
+	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start,
+          tracing + 1)
 
 	# Load up *operation_multi_mount*:
 	operation_multi_mount._jaws_spread = jaws_spread
@@ -8728,9 +8738,8 @@ class Operation_Round_Pocket(Operation):
 	# Initialize superclass:
 	cnc_start = start
 	Operation.__init__(operation_round_pocket, "Round_Pocket", Operation.KIND_ROUND_POCKET,
-	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start)
-	if tracing >= 0:
-	    operation_round_pocket._tracing = tracing
+	  part, comment, sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start,
+	  tracing + 1)
 
 	# Load up *operation_round_pocket*:
 	operation_round_pocket._diameter = diameter
@@ -9887,6 +9896,29 @@ class Part:
     HOLE_FLAT = 3
 
     ANGLE0 = Angle()
+    SCREW_DRILLS = {
+      "#0-80:close":   L(inch=0.0635), # #53 drill
+      "#0-80:loose":   L(inch=0.0700), # #50 drill
+      "#0-80:thread":  L(inch=0.0469), # 3/64 drill
+      "#2-56:close":   L(inch=0.0890), # #43 drill
+      "#2-56:loose":   L(inch=0.0960), # #41 drill
+      "#2-56:thread":  L(inch=0.0700), # #50 drill
+      "#4-40:close":   L(inch=0.1160), # #32 drill
+      "#4-40:loose":   L(inch=0.1285), # #30 drill
+      "#4-40:thread":  L(inch=0.0890), # #43 drill
+      "#6-32:close":   L(inch=0.1440), # #27 drill
+      "#6-32:loose":   L(inch=0.1495), # #25 drill
+      "#6-32:thread":  L(inch=0.1065), # #36 drill
+      "#10-24:close":  L(inch=0.1960), # #9 drill
+      "#10-24:loose":  L(inch=0.2010), # #7 drill
+      "#10-24:thread": L(inch=0.1495), # #25 drill
+      "#10-32:close":  L(inch=0.1960), # #9 drill
+      "#10-32:loose":  L(inch=0.2010), # #7 drill
+      "#10-32:thread": L(inch=0.1590), # #21 drill
+      "1/4-20:close":  L(inch=0.2570), # F drill
+      "1/4-20:loose":  L(inch=0.2660), # H drill
+      "1/4-20:thread": L(inch=0.2010), # #7 drill
+    }
 
     # Flavors of values that can be stored in a {Part}:
     def __init__(self, up, name):
@@ -13264,6 +13296,8 @@ class Part:
 
     def top_face(self, comment, tracing=-1000000):
 	""" *Part*: Remove extra material from the top surface of the *Part* object (i.e. *self*.)
+	    This operation basically removes the extra material that was specified using
+	    the *extra_top_dz* argument to the *Part*.*vice_mount*() method.
 	"""
 
 	# Use *part* instead of *self*:
@@ -14746,8 +14780,11 @@ class Part:
     def hole(self, comment, diameter, start, stop, flags,
       sides=-1, sides_angle=Angle(), tracing = -1000000):
 	""" *Part*:  Put a *diameter* hole long the axis from *start* down to *stop*
-	    into the *Part* object (i.e. *self*).  *comment* will show up in any
-	    generated RS-274 code or error messages:
+	    into the *Part* object (i.e. *self*).
+	    * *comment* will show up in any generated RS-274 code or error messages:
+            * *diameter* can be either a length (*L*) or a string (*str*).  If it is a
+	      a string, it is of the form "S:F", where S is a screw thread (e.g. "#0-80",
+	      "2-56", ..., "1/4-20") and F is a hole fit (either "close" or "loose").
 	"""
 
 	# Use *part* instead of *self*:
@@ -14755,13 +14792,17 @@ class Part:
 
 	# Verify argument types:
 	assert isinstance(comment, str)
-	assert isinstance(diameter, L)
+	assert isinstance(diameter, L) or isinstance(diameter, str)
 	assert isinstance(start, P)
 	assert isinstance(stop, P)
 	assert isinstance(flags, str)
 	assert isinstance(sides, int)
 	assert isinstance(sides_angle, Angle)
 	assert isinstance(tracing, int)
+
+	# If *diameter* is a string, convert it into a length:
+	if isinstance(diameter, str):
+	    diameter = Part.SCREW_DRILLS[diameter]
 
 	# Perform any requested *tracing*:
 	#if tracing == -1000000:
@@ -21722,7 +21763,7 @@ class Shop:
 
 	# Laser "tools":
 	laser_007 = shop._end_mill_append("Laser_007",
-	  100, hss, L(inch=0.007), 2, L(inch=0.750), laser)
+	  100, hss, L(inch=0.007), 2, L(inch=1.500), laser)
 	#laser_000 = shop._end_mill_append("Laser_000",
 	#  101, hss, L(), 2, L(inch=0.750), laser)
 
