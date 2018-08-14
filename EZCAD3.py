@@ -9861,7 +9861,7 @@ class Parallels:
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Parallels._wrl_write(*, '{1}', {2:i}, {3:i})".
+	    print("{0}=>Parallels._vmrl_write(*, '{1}', {2:i}, {3:i})".
 	      format(indent, vrml._name_get(), height, dy))
 
 	# Grab some values from *parallels*:
@@ -9885,7 +9885,7 @@ class Parallels:
 
 	# Wrap-up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Parallels._wrl_write(*, '{1}', {2:i}, {3:i})".
+	    print("{0}<=Parallels._vrml_write(*, '{1}', {2:i}, {3:i})".
 	      format(indent, vrml._name_get(), height, dy))
 
 class Part:
@@ -16591,7 +16591,8 @@ class Part:
 	      format(flags, comment))
 
     def vice_mount(self, name, top_surface, jaw_surface, flags,
-      extra_dx=L(), extra_dy=L(), extra_top_dz=L(), extra_bottom_dz=L(), tracing=-100000):
+      extra_dx=L(), extra_dy=L(), extra_top_dz=L(), extra_bottom_dz=L(),
+      parallel_height_extra=L(), tracing=-100000):
 	""" *Part*: Cause the *Part* object (i.e. *self*) to be mounted in a vice with
 	    *top_surface* facing upwards and *jaw_surface* mounted towards the rear vice jaw.
 	    *top_surface* and *jaw_surface* must be one of 't'" (top), 'b' (bottom), 'n' (north),
@@ -16610,7 +16611,8 @@ class Part:
 	    (Half goes on each side.)  Likewise, the optional *extra_top_dz* and *extra_bottom_dz*
 	    arguments indicate that the top and bottom of the physical part placed into the vice
 	    are padded with material on the top and/or bottom (usually to allow for top facing
-	    operations.)
+	    operations.)  *parallel_heigh_extra* indicates how much additional parrellel height
+	    to add to the parallels tooling.
 	"""
 
 	# Use *part* instead of self:
@@ -16628,6 +16630,7 @@ class Part:
 	assert isinstance(extra_dy, L) and extra_dy >= zero
 	assert isinstance(extra_top_dz, L) # and extra_top_dz >= zero
 	assert isinstance(extra_bottom_dz, L) # and extra_bottom_dz >= zero
+	assert isinstance(parallel_height_extra, L)
 
 	# Preform any requested *tracing*:
 	detail_tracing = -1000000
@@ -16945,14 +16948,18 @@ class Part:
 	    epsilon = L(inch=.000001)
 	    for index, parallel_height in enumerate(parallels_heights):
 		# Use *epsilon* to deal with rounding errors:
-		trial_top_surface_z = \
-		  parallel_height + extra_bottom_dz + part_dz + extra_top_dz - epsilon
+		trial_top_surface_z = parallel_height - \
+		  parallel_height_extra + extra_bottom_dz + part_dz + extra_top_dz - epsilon
+		if trace_detail >= 3:
+		    print(("{0}Parallel[{1}]: parallel_height={2:i} " +
+		      "trial_top_surface_z={3:i} vice_jaw_dz={4:i}").
+		      format(indent, index, parallel_height, trial_top_surface_z, vice_jaw_dz))
 		if parallel_height > selected_parallel_height and \
-		  trial_top_surface_z <= vice_jaw_dz:
+		  trial_top_surface_z >= vice_jaw_dz:
 		    selected_parallel_height = parallel_height
 		    if trace_detail >= 3:
-			print("{0}Parallel[{1}]: parellel_height={2:i} trial_top_surface_z={3:i}".
-			  format(indent, index, parallel_height, trial_top_surface_z))
+		        print("{0}Selected [{1}]".format(indent, index))
+		    break
 	    if trace_detail >= 1:
 		print("{0}parallels_heights={1}".format(indent,
 		  [parallel_height.inches() for parallel_height in parallels_heights]))
