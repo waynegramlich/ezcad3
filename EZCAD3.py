@@ -14361,7 +14361,8 @@ class Part:
             # 2. the hole is meant to have a flat bottom, or
             # 3. we can't find a matching drill with the correct diameter.
 	    if (end_mill_tool != None) and \
-              (end_mill_tool_is_laser or is_flat_hole or drill_tool == None):
+              ((end_mill_tool_is_laser and drill_tool == None) or \
+	      is_flat_hole or drill_tool == None):
 		# Generate an *operation_round_pocket*:
 		if trace_detail >= 1:
 		    print("{0}Mill out the hole".format(indent))
@@ -16018,11 +16019,11 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.tooling_plate_drill('{1}', '{2}', {3}, {4}, {5})".format(
 	      indent, part._name, plate_mount_name, rows, columns, skips))
-	    trace_detail = 2
+	    trace_detail = 3
 	    if trace_detail >= 3:
 		deep_tracing = tracing + 1
 
-	# Only do stuff if in *ezcad* is in *cnc_mode*:
+	# Only do stuff if *ezcad* is in *cnc_mode*:
 	ezcad = part._ezcad_get()
 	if ezcad._cnc_mode:
 	    # Grab the *plate* from *shop* and some associated values.
