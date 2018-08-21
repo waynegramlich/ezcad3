@@ -13422,7 +13422,7 @@ class Part:
 
 	self._tracing = 0
 
-    def translate(self, center):
+    def xxxtranslate(self, center):
 	""" *Part*: Move the origin of the *Part* object (i.e. *self*) by
 	    *center*.
 	"""
@@ -16019,7 +16019,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.tooling_plate_drill('{1}', '{2}', {3}, {4}, {5})".format(
 	      indent, part._name, plate_mount_name, rows, columns, skips))
-	    trace_detail = 3
+	    trace_detail = 2
 	    if trace_detail >= 3:
 		deep_tracing = tracing + 1
 
