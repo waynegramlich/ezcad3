@@ -16143,7 +16143,7 @@ class Part:
 		  format(indent, reverse_top_transform))
 	    for row in rows:
 		#FIXME: We really need to understand maximum tapping depth:
-		maximum_drill_depth = L(inch=1.000)
+		maximum_drill_depth = L(inch=2.110) # McMaster: 3096A357  2.11" inches deep
 		for column in columns:
 		    column_row = (column, row)
 		    if not column_row in skips_table:
@@ -21707,8 +21707,8 @@ class Shop:
 	  1, 9, hss, in3_8, L(inch=.900), in3_16)
 	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill [.9in]",
 	  2, hss, in3_8, 2, L(inch=.900), degrees90)
-	drill_36 = shop._drill_append("#36 [#6-32 75% thread]",
-	  3,     hss, L(inch=0.1065), 2, L(inch=1.500), "#36", degrees118, stub, center_cut, drills)
+	drill_36 = shop._drill_append("#36 [#6-32 75% thread]", # McMaster: 2912A211 2.5" deep drill
+	  3,     hss, L(inch=0.1065), 2, L(inch=2.500), "#36", degrees118, stub, center_cut, drills)
 	dowel_36 = shop._dowel_pin_append("#36 Dowel Pin",
 	  3, 53, hss, L(inch=0.1065), L(inch=1.500), zero)
 	drill_27 = shop._drill_append("#27 [#6-32 close]",
@@ -21733,7 +21733,7 @@ class Shop:
 	drill_9 = shop._drill_append("#9 [#10 close]",
 	  12, hss, L(inch=0.1960), 2, L(inch=2.000), "#9", degrees118, stub, no_center_cut, drills)
 	drill_43 = shop._drill_append("#43 [#4-40 75% thread]",
-	  13, hss, L(inch=.0890), 2, L(inch=1.250), "#43", degrees118, stub, center_cut, drills)
+	  13, hss, L(inch=.0890), 2, L(inch=2.110), "#43", degrees118, stub, center_cut, drills)
 	dowel_43 = shop._dowel_pin_append("#43 Dowel Pin",
 	  13, 63, hss, L(inch=0.0890), L(inch=1.250), zero)
 	drill_32 = shop._drill_append("#32 [#4-40 close]",
