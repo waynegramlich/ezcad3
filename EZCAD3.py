@@ -2547,6 +2547,21 @@ class Bounding_Box:
 	return P(self._east.average(self._west),
 	  self._north.average(self._south), self._bottom.average(self._top))
 
+    def dx_get(self):
+	""" *Bounding_Box*: Return the delta X of the *Bounding_Box* object (i.e. *self*.) """
+
+	return self._east - left._west
+
+    def dy_get(self):
+	""" *Bounding_Box*: Return the delta Y of the *Bounding_Box* object (i.e. *self*.) """
+
+	return self._north - left._south
+
+    def dz_get(self):
+	""" *Bounding_Box*: Return the delta Z of the *Bounding_Box* object (i.e. *self*.) """
+
+	return self._top - left._bottom
+
     def e_get(self):
 	""" *Bounding_Box*: Return the center of east the *Bounding_Box* object (i.e. *self*)
 	    rectangle as a point (i.e. *P*) object. """
@@ -4415,6 +4430,9 @@ class EZCAD3:
 	  "bsw":    Bounding_Box.bsw_get,
 	  "bw":     Bounding_Box.bw_get,
 	  "c":      Bounding_Box.c_get,
+          "dx":     Bounding_box.dx_get,
+          "dy":     Bounding_box.dy_get,
+          "dz":     Bounding_box.dz_get,
 	  "e":      Bounding_Box.e_get,
 	  "n":      Bounding_Box.n_get,
 	  "ne":     Bounding_Box.ne_get,
