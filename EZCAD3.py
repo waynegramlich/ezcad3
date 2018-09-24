@@ -2550,17 +2550,17 @@ class Bounding_Box:
     def dx_get(self):
 	""" *Bounding_Box*: Return the delta X of the *Bounding_Box* object (i.e. *self*.) """
 
-	return self._east - left._west
+	return self._east - self._west
 
     def dy_get(self):
 	""" *Bounding_Box*: Return the delta Y of the *Bounding_Box* object (i.e. *self*.) """
 
-	return self._north - left._south
+	return self._north - self._south
 
     def dz_get(self):
 	""" *Bounding_Box*: Return the delta Z of the *Bounding_Box* object (i.e. *self*.) """
 
-	return self._top - left._bottom
+	return self._top - self._bottom
 
     def e_get(self):
 	""" *Bounding_Box*: Return the center of east the *Bounding_Box* object (i.e. *self*)
@@ -9406,7 +9406,8 @@ class Operation_Simple_Pocket(Operation):
 	if is_laser:
 	    z_end = cnc_corner_tne.z - total_cut
 	    code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius, z_end,
-	    tool_radius, zero, spindle_speed, feed_speed, True, rotate, tracing = tracing + 1)
+	      tool_radius, zero, spindle_speed, feed_speed, True, rotate,
+	      comment = comment, tracing = tracing + 1)
 	else:
 	    # Compute the total number of rectangular paths needed:
 	    paths = 0
@@ -9433,7 +9434,8 @@ class Operation_Simple_Pocket(Operation):
 		if pocket_kind == Operation.POCKET_KIND_THROUGH:
 		    # We only need to do the exterior path to a depth of *z_plunge*:
 		    code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius, z,
-		    r, zero, spindle_speed, feed_speed, True, rotate, tracing = tracing + 1)
+		      r, zero, spindle_speed, feed_speed, True, rotate,
+		      comment = operation._comment, tracing = tracing + 1)
 		elif pocket_kind == Operation.POCKET_KIND_FLAT:
 		    # Generate {paths} rectangular passes over the pocket:
 		    for path in range(paths):
@@ -9472,7 +9474,7 @@ class Operation_Simple_Pocket(Operation):
 			# Mill out a pocket at level *z*:
 		        code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius,
 			  z, tool_radius, offset, spindle_speed, feed_speed, rapid_move,
-			  rotate, tracing = tracing + 1)
+			  rotate, comment=comment, tracing = tracing + 1)
 		else:
 		    assert False, "Unknown pocket kind: {0}".format(pocket_kind)
 
@@ -18479,10 +18481,11 @@ class Fastener(Part):
 	    #  "Fastener.fasten: Zero length '{0}': s={1:i} ns={2:i} e={3:i} ne={4:i}".format(
 	    #  fastener.comment_s, start, new_start, end, new_end)
 	    epsilon = L(inch=.00000001)
-	    assert new_start.distance(new_end) > epsilon, \
+	    if new_start.distance(new_end) < epsilon:
 	      "Fastener.fasten: Part '{0}' (center={1:i}) misses Fastener '{2}' (center={3:i}". \
 	      format(fastener.comment_s, fastener.c, part.name_get(), part.c)
-	    part.hole(hole_name, diameter, new_start, new_end, flags, tracing = tracing + 1)
+	    else:
+		part.hole(hole_name, diameter, new_start, new_end, flags, tracing = tracing + 1)
 
 	    # An "access" hole is drilled about 1/4 of the way in on to after the first
 	    # hole is drilled:
@@ -19884,7 +19887,8 @@ class Code:
 	code._s = s
 
     def _simple_pocket_helper(self, cnc_corner_bsw, cnc_corner_tne, corner_radius, z,
-      tool_radius, offset, spindle_speed, feed_speed, rapid_move, rotate, tracing=-1000000):
+      tool_radius, offset, spindle_speed, feed_speed, rapid_move, rotate, comment="",
+      tracing=-1000000):
 	""" *Code*: Using the *Code* object (i.e. *self*), generate one rectangular or
 	    rounded rectangular path for the currently selected tool:
 	    * *cnc_corner_bsw* and *cnc_corner_tne* specify diagonally opposite corners
@@ -19911,6 +19915,7 @@ class Code:
 	assert isinstance(feed_speed, Speed)
 	assert isinstance(rapid_move, bool)
 	assert isinstance(rotate, Angle)
+	assert isinstance(comment, str)
 
 	# Perform an requested *tracing*:
 	trace_detail = -1
