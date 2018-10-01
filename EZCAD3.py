@@ -4779,18 +4779,22 @@ class Mount:
       top_surface_safe_z, xy_rapid_safe_z, is_tooling_plate_mount, selected_parallel_height,
       tracing=-1000000):
 	""" *Mount*: Initialize the *Mount* object (i.e. *self*) to contain *name*, *part*,
-	    *top_surface_transform*, and *mount_translate_point*.  *name* is provides a
-	    mount name for debugging purposes.  *part* is the *Part* object being mounted.
-	    *top_surface_translate* is *Transform* object that moves the part from 3D space
-	    to located such that entire part is located under the machine origin oriented
-	    properly for machining.  The machine origin should just touch the top surface of
-	    the part.  *mount_translate_point* is the final part translation to mount in a
-	    vice or on a tooling plate.  *top_surface_safe_z* is the machine Z axis altitude
-	    above which is safe to prerform rapid moves (i.e. G0) in the Z direction.
-	    *xy_rapid_safe_z* is the machine Z axis alitude above which it is safe to perform
-	    rapid moves in the X and Y direction.  *is_tooling_plate_mount* is *True* if the
-	    part is mounted on a tooling plate and *False* otherwise. *selected_parallel_height*
-	    is the height of the parallels to use.
+	    * *top_surface_transform*, and *mount_translate_point*.
+	    * *name*: provides a mount name for debugging purposes.
+	    * *part*: is the *Part* object being mounted.
+	    * *top_surface_transform*: is a *Transform* object that moves the part from 3D space
+	       to located such that entire part is located under the machine origin oriented
+	       properly for machining.  The machine origin should just touch the top surface of
+	       the part.
+	    * *mount_translate_point*: is the final part translation to mount in a vice or
+	      on a tooling plate.
+	    * *top_surface_safe_z*: is the machine Z axis altitude above which is safe to
+	      prerform rapid moves (i.e. G0) in the Z direction.
+	    * *xy_rapid_safe_z*: is the machine Z axis alitude above which it is safe to perform
+	      rapid moves in the X and Y direction.
+	    * *is_tooling_plate_mount*: is *True* if the part is mounted on a tooling plate
+	      and *False* otherwise.
+	    * *selected_parallel_height*: is the height of the parallels to use.
 	"""
 
 	# Use *mount* instead of *self*:
@@ -10304,26 +10308,82 @@ class Part:
 	      format(indent, part._name, final_bsw, final_tne))
 	return final_bsw, final_tne
 
-    def _current_mount_get(self):
-	""" *Part*: Return the current mount for the *Part* object (i.e. *self*.)
+    def chip_clear(self, comment, fastener, flags="", flip=False, tracing=-1000000):
+	""" *Part*: Cause a chip clearance hole to be produced in the *Part* object (i.e. *self*)
+	    for *fastener*.
+	    * *comment*: specifies a comment for the chip clearance hole.
+	    * *fastener*: specifies a *Fastener* object to generate the chip clearance hole for.
+	    * *flags*: currently just an empty string.
+	    * *flip*: specifies with *fastener end-point to use.
+	      If *flip* is *True*, the *start* fastener point is used; otherwise the *end*
+	      fastener point is used.  (See *Fastener*.*configure*() for the *start* and
+              *end* arguments.  *fl
 	"""
 
-	# Use *part* instead of *self*:
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(fastener, Fastener)
+	assert isinstance(flags, str)
+	assert isinstance(flip , bool)
+	assert isinstance(tracing, int)
+
+	# Grab the *current_mount* from *part* (i.e. *self*):
 	part = self
+	ezcad = part._ezcad
+	if ezcad._cnc_mode:
+	    if tracing >= 0:
+		indent = tracing * ' '
+		print("{0}=>Part.chip_clear('{1}', '{2}', '{3}', '{4}', {5})".
+		  format(indent, part._name, comment, fastener._name_get(), flags, flip))
+	    clearance_center = fastener._start_get() if flip else fastener._end_get()
+	    if tracing >= 0:
+		print("{0}clearance_center={1:i}".format(indent, clearance_center))
 
-	current_mount = part._current_mount
-	assert isinstance(current_mount, Mount)
-	return current_mount
+	    # Grab the *top_surface* transform and its reverse from *current_mount*:
+	    current_mount = part._current_mount_get()
+	    top_surface_transform = current_mount._top_surface_transform_get()
+	    top_surface_transform_reverse = top_surface_transform.reverse()
 
-    def _color_get(self):
-	""" *Part*: Return the color associated with the *Part* object (i.e. *self*.)
-	"""
+	    # Transform *clearance_center* into *transformed_clearance_center*:
+	    transformed_clearance_center = top_surface_transform * clearance_center
+	    depth = -transformed_clearance_center.z
+	    bottom_depth = -depth - L(inch="1/8")
+	    if tracing >= 0:
+		print("{0}transformed_clearance_center={1:i} bottom_depth={2:i}".
+		  format(indent, transformed_clearance_center, bottom_depth))
 
-	color = self._color
-	assert isinstance(color, Color)
-	return color
+	    # Compute *transformed_clearance_top* and *transformed_clearance_bottom*:
+	    zero = L()
+	    transformed_x = transformed_clearance_center.x
+	    transformed_y = transformed_clearance_center.y
+	    transformed_clearance_top =    P(transformed_x, transformed_y, zero)
+	    transformed_clearance_bottom = P(transformed_x, transformed_y, bottom_depth)
+	    if tracing >= 0:
+		print("{0}transformed_clearance_top={1:i}".
+		  format(indent, transformed_clearance_top))
+		print("{0}transformed_clearance_bottom={1:i}".
+		  format(indent, transformed_clearance_bottom))
 
-    def _cnc_manufacture(self, tracing = -1000000):
+	    # Now reverse back to *clearance_top* and *clearance_bottom*:
+	    clearance_top    = top_surface_transform_reverse * transformed_clearance_top
+	    clearance_bottom = top_surface_transform_reverse * transformed_clearance_bottom
+	    if tracing >= 0:
+		print("{0}transformed_clearance_top={1:i}".
+		  format(indent, transformed_clearance_top))
+		print("{0}clearance_top={1:i}".format(indent, clearance_top))
+		print("{0}clearance_bottom={1:i}".format(indent, clearance_bottom))
+
+	    # Finally, mill out the clearance hole using *clearance_top* and *clearance_bottom*:
+	    diameter = L(inch="7/16")
+	    part.hole(comment, diameter, clearance_top, clearance_bottom, "f")
+
+	    # Wrap up any requested *tracing*:
+	    if tracing >= 0:
+		indent = tracing * ' '
+		print("{0}<=Part.chip_clear('{1}', '{2}', '{3}', '{4}', {5})".
+		  format(indent, part._name, comment, fastener._name_get(), flags, flip))
+
+    def _cnc_manufacture(self, tracing=-1000000):
 	""" *Part*: Force the generation of `.ngc` and `.wrl` path files for the *Part* object.
 	"""
 
@@ -10379,28 +10439,6 @@ class Part:
 	# Mark *part* for CNC suppression:
         part._cnc_suppress = True
 
-    def _color_material_update(self, color, material):
-	""" *Part*: Update *color* and *material* for *self*. """
-
-	#print("=>Part._color_material_update({0}, {1}): c={2} m={3}".
-	#  format(color, material, self._color, self._material))
-
-	# Check argument types:
-	none_type = type(None)
-	assert type(color) == none_type or isinstance(color, Color)
-	assert type(material) == none_type or isinstance(material, Material)
-
-	# Update the *material* and *color* as appropriate:
-	if type(self._material) == none_type and isinstance(material, Material):
-	    self._material = material
-	if type(self._color) == none_type and isinstance(color, Color):
-	    self._color = color
-	if isinstance(self._material, Material):
-	    self._is_part = True
-
-	#print("<=Part._color_material_update({0}, {1}): c={2} m={3}".
-	#  format(color, material, self._color, self._material))
-
     def _cnc_part_generate(self, part_program_number, tracing=-1000000):
 	""" *Part*: Flush out the CNC code for the *Part* object (i.e. *self*) using
 	    *part_program_number* to for the first .ncg file generated.
@@ -10442,6 +10480,47 @@ class Part:
 	    print("{0}<=Part._cnc_part_generate('{1}', prog_no={2}) =>{3}".
 	      format(indent, part._name, part_program_number, next_part_program_number))
 	return next_part_program_number
+
+    def _color_get(self):
+	""" *Part*: Return the color associated with the *Part* object (i.e. *self*.)
+	"""
+
+	color = self._color
+	assert isinstance(color, Color)
+	return color
+
+    def _color_material_update(self, color, material):
+	""" *Part*: Update *color* and *material* for *self*. """
+
+	#print("=>Part._color_material_update({0}, {1}): c={2} m={3}".
+	#  format(color, material, self._color, self._material))
+
+	# Check argument types:
+	none_type = type(None)
+	assert type(color) == none_type or isinstance(color, Color)
+	assert type(material) == none_type or isinstance(material, Material)
+
+	# Update the *material* and *color* as appropriate:
+	if type(self._material) == none_type and isinstance(material, Material):
+	    self._material = material
+	if type(self._color) == none_type and isinstance(color, Color):
+	    self._color = color
+	if isinstance(self._material, Material):
+	    self._is_part = True
+
+	#print("<=Part._color_material_update({0}, {1}): c={2} m={3}".
+	#  format(color, material, self._color, self._material))
+
+    def _current_mount_get(self):
+	""" *Part*: Return the current mount for the *Part* object (i.e. *self*.)
+	"""
+
+	# Use *part* instead of *self*:
+	part = self
+
+	current_mount = part._current_mount
+	assert isinstance(current_mount, Mount)
+	return current_mount
 
     def _dimensions_update(self, ezcad, tracing):
 	""" *Part*: Update the dimensions of the *Part* object (i.e. *self*)
@@ -14674,19 +14753,29 @@ class Part:
 	half_dz = dz/2
 	self.extra_ewnstb(half_dx, half_dx, half_dy, half_dy, half_dz, half_dz)
 
-    def extrusion(self, comment, kind, material, color, start, end,
-      a_width, a_thickness, b_width, b_thickness, rotate):
-	""" Part dimensions: Create a {kind} extrusion manufactured out of
+    def extrusion(self, comment, material, color, kind, start, end,
+      a_width, a_thickness, b_width, b_thickness, rotate, tracing=-1000000):
+	""" *Part*: Create a {kind} extrusion manufactured out of
 	    {material} that goes from {start_point} to {end_point} rotated
 	    by {rotate}.  {a_width}, {a_thickness}, {b_width} and
 	    {b_thickness} specify the extra dimentions of the extrusion.
-	    The returned part is visualized using {color}. The extrusion
-	    must be aligned with one of the X, Y or Z axes. """
+	    The returned part is visualized using {color}. The extrusion *kind*
+	    must "L" Angle, or "C" for channel.
+	"""
+
+	# Perform any requested *tracing* of *part* (i.e. *self*):
+	part = self
+	if tracing >= 0:
+	    indent = tracing * ' '
+	    print(("{0}=>Part.extrusion('{1}', '{2}', *, *, k='{3}', s={4:i}, e={5:i}," +
+	      " aw={6:i}, at={7:i}, bw={8:i}, bt={9:,i} r={10:d}").format(indent, part._name,
+	      comment, kind, start, end, a_width, a_thickness, b_width, b_thickness, rotate))
 
 	# Check argument types:
 	assert isinstance(comment, str)
-	assert isinstance(color, Color)
 	assert isinstance(material, Material)
+	assert isinstance(color, Color)
+	assert kind in ("L", "C")
 	assert isinstance(start, P)
 	assert isinstance(end, P)
 	assert isinstance(a_width, L)
@@ -14695,25 +14784,7 @@ class Part:
 	assert isinstance(b_thickness, L)
 	assert isinstance(rotate, Angle)
 
-	# Define soem useful abreviations:
 	zero = L()
-
-	# Compute {extrusion_axis}, the axis along with the tube is aligned:
-	extrusion_axis = end_point - start_point
-	extrusion_axis_x = extrusion_axis.x
-	extrusion_axis_y = extrusion_axis.y
-	extrusion_axis_z = extrusion_axis.z
-	#print "start={0} end={1} extrusion_axis={2}". \
-	#  format(start_point, end_point, extrusion_axis)
-
-	# Extract coordinates from {start_point} and {end_point}:
-	x1 = start_point.x
-	y1 = start_point.y
-	z1 = start_point.z
-	x2 = end_point.x
-	y2 = end_point.y
-	z2 = end_point.z
-
 	if kind == 'L':
 	    # angLe extrusion:
 	    # We have angle material:
@@ -14738,10 +14809,13 @@ class Part:
 	    # O = origin
 	    # A goes negative from origin
 	    # B goes negative from origin
+	    contour = Contour()
 	    a1 = -a_width
 	    a2 = zero
 	    b1 = zero
 	    b2 = -b_width
+	    assert False
+
 	elif kind == 'C':
 	    # We have channel material:
 
@@ -14760,10 +14834,32 @@ class Part:
 	    # ------- O----------------------+ -----
 	    #                                    ^
 	    #         |<----- a_width ------>|   |
-	    a1 = zero
-	    a2 = a_width
-	    b1 = zero
-	    b2 = b_wdith
+
+	    # Define some X coordinates:
+	    x3 = a_width
+	    x2 = a_width - b_thickness
+	    x1 = b_thickness
+	    x0 = zero
+	    
+	    # Define some Y coordinates:
+	    y2 = b_width
+	    y1 = a_thickness
+	    y0 = zero
+
+	    # Compute the bend *radius*:
+	    minimum_thickness = a_thickness.minimum(b_thickness)
+	    radius = minimum_thickness/10
+
+	    # Fill in the contour in a clockwise direction:
+	    contour = Contour("C Channel")
+	    contour.bend_append("O", P(x0, y0, zero), radius)
+	    contour.bend_append("1", P(x0, y2, zero), radius)
+	    contour.bend_append("2", P(x1, y2, zero), radius)
+	    contour.bend_append("3", P(x1, y1, zero), radius)
+	    contour.bend_append("4", P(x2, y1, zero), radius)
+	    contour.bend_append("5", P(x2, y2, zero), radius)
+	    contour.bend_append("6", P(x3, y2, zero), radius)
+	    contour.bend_append("7", P(x3, y0, zero), radius)
 	elif kind == 'I':
 	    assert False, "I beam not defined"
 	elif kind == 'T':
@@ -14774,29 +14870,18 @@ class Part:
 	    assert False, "Z beam not defined"
 	else:
 	    assert False, "Unrecognized extrusion '{0}'".format(kind)
+	contours = [ contour ]
 
-	# Record the material in {self}:
-	self._material = material
+	zero = L()
+	start_extra = zero
+	end_extra = zero
+	self.extrude(comment, material, color, contours,
+	  start, start_extra, end, end_extra, rotate, tracing=tracing + 1)
 
-	if self.dimensions_mode():
-	     self.bounding_box_update(w, s, b, e, n, t)
-
-	# In consturct mode, output the <Block ...> line:
-	if self.construct_mode():
-	    ezcad = self.ezcad
-	    xml_stream = ezcad.xml_stream
-	    xml_stream.write('{0}<Extrusion'.format(ezcad._xml_indent))
-	    xml_stream.write(' Kind="{0}"'.format(kind))
-	    xml_stream.write(' SX="{0}" SY="{1}" SZ="{2}"'.format(x1, y1, z1))
-	    xml_stream.write(' EX="{0}" EY="{1}" EZ="{2}"'.format(x2, y2, z2))
-	    xml_stream.write(' A_Width="{0}" A_Thickness="{1}"'. \
-	      format(a_width, b_thickness))
-	    xml_stream.write(' B_Width="{0}" B_Thickness="{1}"'. \
-	      format(b_width, b_thickness))
-	    xml_stream.write(' Rotate="{0}"'.format(rotate))
-	    xml_stream.write(' Color="{0}" Transparency="{1}" Material="{2}"'. \
-	      format(color, self.transparency, material))
-	    xml_stream.write(' Comment="{0}"/>\n'.format(self.name))
+	if tracing >= 0:
+	    print(("{0}<=Part.extrusion('{1}', '{2}', *, *, k='{3}', s={4:i}, e={5:i}," +
+	      " aw={6:i}, at={7:i}, bw={8:i}, bt={9:,i} r={10:d})").format(indent, part._name,
+	      comment, kind, start, end, a_width, a_thickness, b_width, b_thickness, rotate))
 
     def hole(self, comment, diameter, start, stop, flags,
       sides=-1, sides_angle=Angle(), tracing = -1000000):
@@ -18239,6 +18324,14 @@ class Fastener(Part):
 	fastener.cylinder(fastener.comment_s, fastener.material, fastener.color,
 	  diameter, diameter, fastener.start_p, fastener.end_p, 16, Angle(deg=0.0), "", "")
 
+    def _end_get(self):
+	""" *Fastener*: Return the end point for the *Fastener* object (i.e. *self*.)
+	"""
+
+	fastener = self
+	return fastener.end_p
+
+
     def length_get(self):
         """ *Fastener*: Return the length of the *Fastener* object (i.e. *self*.) """
 
@@ -18589,6 +18682,14 @@ class Fastener(Part):
 	if tracing >= 0:
 	    print("{0}<=Fastener._fasten('{1}', '{2}', '{3}', '{4}')".
 	      format(indent, fastener._name, comment, part._name_get(), select))
+
+    def _start_get(self):
+	""" *Fastener*: Return the start point for the *Fastener* object (i.e. *self*.)
+	"""
+
+	fastener = self
+	return fastener.start_p
+
 
 # *Code* class:
 
@@ -21755,7 +21856,7 @@ class Shop:
           11, hss, L(inch=0.1495), 2, L(inch=2.000), "#25", degrees118, stub, no_center_cut, drills)
 	drill_9 = shop._drill_append("#9 [#10 close]",
 	  12, hss, L(inch=0.1960), 2, L(inch=2.000), "#9", degrees118, stub, no_center_cut, drills)
-	drill_43 = shop._drill_append("#43 [#4-40 75% thread]",
+	drill_43 = shop._drill_append("#43 [#4-40 75% thread]", # McMaster: 3096357
 	  13, hss, L(inch=.0890), 2, L(inch=2.110), "#43", degrees118, stub, center_cut, drills)
 	dowel_43 = shop._dowel_pin_append("#43 Dowel Pin",
 	  13, 63, hss, L(inch=0.0890), L(inch=1.250), zero)
