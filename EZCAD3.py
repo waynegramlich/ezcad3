@@ -16348,8 +16348,15 @@ class Part:
 	    plate_cnc_transform = plate_mount._cnc_transform_get()
 	    plate_extra_start_bsw = plate_cnc_transform * extra_start_bsw
 	    plate_extra_start_tne = plate_cnc_transform * extra_start_tne
-	    dowel_point = P(plate_extra_start_bsw.x, \
-	      (plate_extra_start_bsw.y + plate_extra_start_tne.y)/2, plate_extra_start_bsw.z)
+
+	    x_minimum = plate_extra_start_bsw.x.minimum(plate_extra_start_tne.x)
+	    y_minimum = plate_extra_start_bsw.y.minimum(plate_extra_start_tne.y)
+	    y_maximum = plate_extra_start_bsw.y.maximum(plate_extra_start_tne.y)
+	    z_minimum = plate_extra_start_bsw.z.minimum(plate_extra_start_tne.z)
+
+	    dowel_point = P(x_minimum, (y_minimum + y_maximum)/2, z_minimum)
+	    if tracing >= 2:
+		print("{0}dowel_point={1:i}".format(indent, dowel_point))
 
 	    # Specify which *spacers* to visualize:
 	    spacers = []
