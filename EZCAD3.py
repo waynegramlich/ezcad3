@@ -5063,6 +5063,27 @@ class Mount:
 
 	return self._part
 
+    def _remount(self, new_name, new_mount_translate_point, tracing=-1000000):
+	""" *Mount*: Return a new *Mount* object that is a copy of the current *Mount* object
+	    (i.e. *self*), a new mount name of *new_name*, and a new mount translate point of
+	    *new_mount_translate_point*.
+	"""
+
+	# Create *new_mount* from *old_mount* (i.e. *self*:
+	old_mount = self
+	new_mount = Mount(new_name, old_mount._part, old_mount._top_surface_transform,
+	  new_mount_translate_point, old_mount._top_surface_safe_z, old_mount._xy_rapid_safe_z,
+	  old_mount._is_tooling_plate_mount, old_mount._selected_parallel_height, tracing=tracing+1)
+
+	# Copy some more fields over:
+	new_mount._extra_start_bsw          = old_mount._extra_start_bsw
+	new_mount._extra_start_tne          = old_mount._extra_start_tne
+	new_mount._extra_stop_bsw           = old_mount._extra_stop_bsw
+	new_mount._extra_stop_tne           = old_mount._extra_stop_tne
+	new_mount._is_tooling_plate_mount   = old_mount._is_tooling_plate_mount
+	new_mount._selected_parallel_height = old_mount._selected_parallel_height
+	return new_mount
+
     def _selected_parallel_height_get(self):
 	""" *Mount*: Return the selected parallel height associated with the *Mount* object
 	    (i.e. *self*.)
@@ -16705,27 +16726,35 @@ class Part:
 
     def vice_mount(self, name, top_surface, jaw_surface, flags,
       extra_dx=L(), extra_dy=L(), extra_top_dz=L(), extra_bottom_dz=L(),
-      parallel_height_extra=L(), tracing=-100000):
+      parallel_height_extra=L(), vice_center=None, tracing=-100000):
 	""" *Part*: Cause the *Part* object (i.e. *self*) to be mounted in a vice with
-	    *top_surface* facing upwards and *jaw_surface* mounted towards the rear vice jaw.
-	    *top_surface* and *jaw_surface* must be one of 't'" (top), 'b' (bottom), 'n' (north),
-	    's' (south), 'e' (east) or 'w' (west).  *comment* is the attached to any
-	    generated G-code.  The *Part* dimensions are specified by its bounding box.
-	    This routine has a required *flags* string argument can be left empty.
-	    The *flags* argument is to support a dowel pin operation.  (See *Part.dowel_pin()*
-	    for more information about a dowel pin operation.)  When *flags* contains 'l',
-	    "l" it generates a left dowel pin operation, and when it contains 'r' it generates
-	    a right dowel pin operation.  The optional *extra_dx*, *extra_dy*, *extra_top_dz*
-	    and *extra_bottom_dz* arguments specify how much padding is added to the physical
-	    object to prior to being latched into the vice.  (Note that *extra_dx*, *extra_dy*,
-	    *extra_top_dz*, extra_bottom_dz* do *NOT* modify the *Part* object bounding_box
-	    dimensions in any way.)  The optional *extra_dx* and *extra_dy* specify that the
-	    physical part placed into the vice has been padded in the dx and dy vice coordinates.
-	    (Half goes on each side.)  Likewise, the optional *extra_top_dz* and *extra_bottom_dz*
-	    arguments indicate that the top and bottom of the physical part placed into the vice
-	    are padded with material on the top and/or bottom (usually to allow for top facing
-	    operations.)  *parallel_heigh_extra* indicates how much additional parrellel height
-	    to add to the parallels tooling.
+	    * *top_surface* facing upwards and *jaw_surface* mounted towards the rear vice jaw.
+	    * *name*: is the name assigned to the internally generated *Mount* object for
+	      for the durartion of this *Part* (i.e. *self*) being mounted in the vice.
+	    * *top_surface*: must be one of 't'" (top), 'b' (bottom), 'n' (north), 's' (south),
+	      'e' (east) or 'w' (west) and specifies which surface of this *Part* object
+	      (i. e. *self*) is facing up in the vice.
+	    * *jaw_surface*: must be one of 't'" (top), 'b' (bottom), 'n' (north), 's' (south),
+	      'e' (east) or 'w' (west) and specifies which surface of this *Part* object
+	      (i. e. *self*) is the upper vice jaw.
+	    * *flags*: is a string that specifies zero, one or more single character options
+	      that modifiy the behvior of this routine.
+	      * 'l': The 'l' flag causes a left dowel pin operation to generated.
+	      * 'r': The 'r' flag causes a right dowel pin operation to generated.
+	      The 'l' and 'r' flags are mutually exclusive.
+	    * *extra_dx*, *extra_dy*, *extra_top_dz*, *extra_bottom_dz*: (optional) specify
+	      additional material that is present around the *Part* object (i.e. *self*) when it
+	      inserted into the vice.  These values are optional and default to zero length
+	      if they are not specified at call time.
+	      * *extra_dx* is split in two and is placed on the east and west side of the part.
+	      * *extra_dy* is split in two and is placed on the north and south side of the part.
+	      * *extra_bottom_dz* is placed on the bottom of the part.
+	      * *extra_top_dz* is placed on the top of the part.
+	    * *parallel_heigh_extra*: (optional) indicates how much additional parrellel height
+	      to add to the parallels tooling.
+	    * *vice_center*: (optional) specifies the exact point in the *Part* object
+	      (i.e. *self*) that should be placed in the center of the vice.  This will override
+	      any part adjustment caused by the 'l' and 'r' flags.
 	"""
 
 	# Use *part* instead of self:
@@ -16744,6 +16773,7 @@ class Part:
 	assert isinstance(extra_top_dz, L) # and extra_top_dz >= zero
 	assert isinstance(extra_bottom_dz, L) # and extra_bottom_dz >= zero
 	assert isinstance(parallel_height_extra, L)
+	assert isinstance(vice_center, P) or vice_center == None
 
 	# Preform any requested *tracing*:
 	detail_tracing = -1000000
@@ -16752,10 +16782,11 @@ class Part:
  	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
+	    vice_center_format = "None" if vice_center == None else "{0}:i".format(vice_center)
 	    print(("{0}=>Part.vice_mount('{1}', '{2}', '{3}', '{4}', '{5}, " +
-	      "{6:i}, {7:i}, {8:i}, {9:i})").format(indent,
-	      part._name, name, top_surface, jaw_surface, flags,
-	      extra_dx, extra_dy, extra_top_dz, extra_bottom_dz))
+	      "{6:i}, {7:i}, {8:i}, {9:i}, {10:i}, {11)").format(indent,
+	      part._name, name, top_surface, jaw_surface, flags, extra_dx, extra_dy,
+	      extra_top_dz, extra_bottom_dz, paralalle_height_extra, vice_center_format))
 	    trace_detail = 3
 	    detail_tracing = tracing + 1
 
@@ -16998,8 +17029,8 @@ class Part:
 		  format(indent, left_dowel_point, right_dowel_point))
 
 	    # Now we can compute the *top_surface_transform*, which rotates the *part* bounding box
-	    # so that it is oriented correctly for the vice with the top surface located at
-	    # *cnc_top_surface_z*:
+	    # so that it is oriented such that the top surface of the bounding box is at the
+            # origin:
 	    top_surface_transform = Transform()
 	    if trace_detail >= 3:
 		print("{0}top_surface_transform 0 = {1:v}".format(indent, top_surface_transform))
@@ -17071,7 +17102,7 @@ class Part:
 		  trial_top_surface_z >= vice_jaw_dz:
 		    selected_parallel_height = parallel_height
 		    if trace_detail >= 3:
-		        print("{0}Selected [{1}]".format(indent, index))
+			print("{0}Selected [{1}]".format(indent, index))
 		    break
 	    if trace_detail >= 1:
 		print("{0}parallels_heights={1}".format(indent,
@@ -17104,11 +17135,24 @@ class Part:
 	    vice_y = -(half_part_dy + extra_dy/2)
 
 	    # Now we figure out where to put the *part* in the vice X axis.  By default, *vice_x*
-	    # is set to the dead center of the vice in X:
+	    # is set to the dead center of the vice in X.  The part position in is adjusted
+            # by the 'l' flag to ensure that the part sticks out a little to the left of the
+	    # the vice, the 'r' flag does the same but to the right of the vice.  The *vice_center*
+            # argument overrides everything and forces the *vice_center* to be in the center of
+            # the vice:
 	    vice_x = vice_jaw_dx/2
 	    part_centered_in_vice = True
-	    if dowel_pin_requested and part_dx + extra_dx < vice_jaw_dx:
-		# We can position the part to the left or the right:
+	    if isinstance(vice_center, P):
+		# Deal with *vice_center*:
+		assert not dowel_pin_requested, "vice_center is incompatible with 'l'&'r' flags"
+		transformed_vice_center = top_surface_transform * vice_center
+		#print("vice_center={0:i} transformed_vice_center={1:i}".format(
+		#  vice_center, transformed_vice_center))
+		#print("top_surface_transform={0:s}".format(top_surface_transform))
+		vice_x = transformed_vice_center.x + vice_jaw_dx/2
+		part_centered_in_vice = False
+	    elif dowel_pin_requested and part_dx + extra_dx < vice_jaw_dx:
+		# Deal with any requested dowel pin operations:
 		if is_left_dowel_pin:
 		    vice_x = half_part_dx + extra_dx/2
 		    part_centered_in_vice = False
@@ -17217,11 +17261,81 @@ class Part:
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print(("{0}<=Part.vice_mount('{1}', '{2}', '{3}', '{4}', '{5}, " +
-	      "{6:i}, {7:i}, {8:i}, {9:i})").format(indent,
-	      part._name, name, top_surface, jaw_surface, flags,
-	      extra_dx, extra_dy, extra_top_dz, extra_bottom_dz))
+	      "{6:i}, {7:i}, {8:i}, {9:i}, {10:i}, {11:i})").format(indent,
+	      part._name, name, top_surface, jaw_surface, flags, extra_dx, extra_dy,
+	      extra_top_dz, extra_bottom_dz, paralalle_height_extra, vice_center_format))
 
-    def _vice_mount_helper(self, extra_bsw, extra_tne, is_tooling_plate_mount, tracing=-1000000):
+    def vice_slide_remount(self, new_mount_name, diameter, start, stop, flags,
+      new_vice_center, tracing=-1000000):
+	""" *Part*: Drill a *diameter* hole in the *Part* object (i.e. *self*) that starts at
+	*start* and stops at *stop* using the same *flags* as *Part.hole*.  After drilling
+	the hole the following steps occur:
+	1. the milling machine lowers the drill bit into the *Part* object,
+	2. the spindle is stopped,
+	3. the milling machine operator loosens the vice,
+	4. using the staionary drill bit, the milling machine slides the part to the left/right
+	   until the point *new_vice_center* is in the center of the vice,
+	5. the machine operator closes the vice, and
+	6. the milling machine retracts the drill bit out of the *Part* object.
+	Afterwards the mount for the vice is updated with the *Part* object in a new
+	mount named *new_mount_name*:
+
+	"""
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = tracing * ' ' 
+	    print("{0}=>Part.vice_slide_remount('{0}', {1:i}, {2:i}, {3:i}, '{4}', {5;i})".
+	      format(indent, new_mount_name, diameter, start, stop, flags))
+
+	part = self
+	ezcad = part._ezcad	
+	if ezcad._cnc_mode:
+	    # Drill the hole that we care about into *part* (i.e. *self*):
+	    part.hole(new_mount_name, diameter, start, stop, flags)
+
+	    # Grab the *old_mount_translate_point* and *top_surface_transform* from *current_mount*:
+	    current_mount = part._current_mount_get()
+	    old_mount_translate_point = current_mount._mount_translate_point_get()
+	    top_surface_transform = current_mount._top_surface_transform_get()
+
+	    # Grab the *vice_jaw_dx* from *shop*:
+	    shop = part._shop_get()
+	    vice = shop._vice_get()
+	    vice_jaw_volume = vice._jaw_volume_get()
+	    vice_jaw_dx = vice_jaw_volume.x
+	    tooling_plate = None
+
+	    # Compute *new_mount_translate_point* from the old one:n
+	    transformed_new_vice_center = top_surface_transform * new_vice_center
+	    vice_x = transformed_new_vice_center.x + vice_jaw_dx/2
+	    new_mount_translate_point = \
+	      P(vice_x, old_mount_translate_point.y, old_mount_translate_point.z)
+	
+	    # Compute *jaws_spread*:
+	    part_tne = part.tne
+	    part_bsw = part.bsw
+	    transformed_part_bsw = top_surface_transform * part_bsw
+	    transformed_part_tne = top_surface_transform * part_tne
+	    jaws_spread = (transformed_part_bsw.y - transformed_part_tne.y).absolute()
+
+	    # Create *new_mount* from the *old_mount*, but with a new name and translate point:
+	    new_mount = current_mount._remount(new_mount_name, new_mount_translate_point)
+	    #part._current_mount = new_mount
+	    part._mount_register(new_mount)
+	    selected_parallel_height = new_mount._selected_parallel_height_get()
+	    spacers = []
+	    tooling_plate_present = False
+	    operation_mount = Operation_Mount(part, new_mount_name, vice, jaws_spread,
+	      selected_parallel_height, tooling_plate, spacers, tooling_plate_present, tracing + 1)
+	    part._operation_append(operation_mount)
+
+	if tracing >= 0:
+	    indent = tracing * ' ' 
+	    print("{0}<=Part.vice_slide_remount('{0}', {1:i}, {2:i}, {3:i}, '{4}', {5;i})".
+	      format(indent, new_mount_name, diameter, start, stop, flags))
+
+    def xxx_vice_mount_helper(self, extra_bsw, extra_tne, is_tooling_plate_mount, tracing=-1000000):
 	""" *Part*: Return a mount translate point and parallel height for the material bounding
 	    box specified by the corners *extra_bsw* and *extra_tne*.
 	"""
@@ -17248,11 +17362,11 @@ class Part:
 	extra_dz = extra_tne.z - extra_bsw.z
 
 	# The part is assumed to have its top surface at the machine origin.  Thus,
-        # *extra_top_dz* the same as *extra_tne.z*:
+	# *extra_top_dz* the same as *extra_tne.z*:
 	extra_top_dz = extra_tne.z
 
 	# If there is any *extra_top_dz* we will probably be doing a facing operation.
-        # For this situataion we want the part top surface to be a bit above vice surface.
+	# For this situataion we want the part top surface to be a bit above vice surface.
 	# This is done by setting *extra_facing_dz* to the desired amount above the vice:
 	zero = L()
 	extra_facing_dz = zero
@@ -17315,7 +17429,7 @@ class Part:
 	    print("{0}mount_translate_point={1:i}".format(indent, mount_translate_point))
 
 	# Wrap up any requested *tracing* and return both *mount_translate_point* and
-        # *selected_parallel_height*:
+	# *selected_parallel_height*:
 	if tracing >= 0:
 	    print("{0}<=_vice_mount_helper({1:i}, {2:i})=>{3:i}, {4:i}".
 	      format(indent, extra_bsw, extra_tne, mount_translate_point, selected_parallel_height))
@@ -17416,9 +17530,9 @@ class Part:
 	tooling_plate_hole_pitch = tooling_plate._hole_pitch_get()
 	tooling_plate_rows       = tooling_plate._rows_get()
 	tooling_plate_columns    = tooling_plate._columns_get()
-	tooling_plate_dx         = tooling_plate._dx_get()
-	tooling_plate_dy         = tooling_plate._dy_get()
-	tooling_plate_dz         = tooling_plate._dz_get()
+	tooling_plate_dx	 = tooling_plate._dx_get()
+	tooling_plate_dy	 = tooling_plate._dy_get()
+	tooling_plate_dz	 = tooling_plate._dz_get()
 	if trace_detail >= 2:
 	    print("{0}tooling_plate: hole_pitch={1:i} columns={2} rows={3}".
 	      format(indent, tooling_plate_hole_pitch, tooling_plate_columns, tooling_plate_rows))
@@ -17462,7 +17576,7 @@ class Part:
 
 	# Deal with tooling plate mounting vs. vice mounting:
 	tooling_plate_present = multi_mounts._is_tooling_plate_get(tracing = tracing + 1)
-        if True:
+	if True:
 	    # Scan across each *multi_mount*:
 	    for index, multi_mount in enumerate(multi_mounts._multi_mounts_get()):
 		# Grab some values from *multi_mount*:
