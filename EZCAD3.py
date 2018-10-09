@@ -7006,8 +7006,8 @@ class Operation:
     ORDER_DOUBLE_ANGLE_CHAMFER =	14
     ORDER_DRILL =                       15
     ORDER_VERTICAL_LATHE =		16
-    ORDER_LAST =			17
-
+    ORDER_SLIDE =			17
+    ORDER_LAST =			18
     # These constants identify what order to do operations in:
     KIND_CONTOUR = 0
     KIND_DOWEL_PIN = 1
@@ -7016,12 +7016,13 @@ class Operation:
     KIND_SIMPLE_EXTERIOR = 4
     KIND_SIMPLE_POCKET = 5
     KIND_VERTICAL_LATHE = 6
+    KIND_SLIDE = 7
 
     POCKET_KIND_FLAT = 0
     POCKET_KIND_THROUGH = 1
 
     def __init__(self, name, kind, part, comment, sub_priority, tool, order,
-     follows, feed_speed, spindle_speed, cnc_start, tracing):
+      follows, feed_speed, spindle_speed, cnc_start, tracing):
 	""" *Operation*: Initialize an *Operation* object to contain
 	    *name*, *kind*, *part*, *comment*, *sub_priority*, *tool*,
 	    *order*, *follows*, *feed_speed*, *spindle_speed*, and *cnc_start*.
@@ -7996,7 +7997,7 @@ class Operation_Drill(Operation):
               order, diameter, hole_kind, start, stop, is_countersink))
 
     def _cnc_generate(self,
-      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last,tracing=-1000000):
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
 	""" *Operation_Drill*: Generate the CNC G-code for an *Operation_Drill* object
 	    (i.e. *self*).
 	"""
@@ -8293,6 +8294,133 @@ class Operation_Drill(Operation):
 	      format(indent, operation_drill._name, result))
 	return result
 
+class Operation_Slide(Operation):
+    """ *Operation_Slide* represents the operation of sliding a piece in a vice to remount it.
+    """
+
+    def __init__(self, part, comment, tool, feed_speed, spindle_speed, cnc_start,
+      old_cnc_start, old_cnc_stop, new_cnc_stop, new_cnc_start, tracing=-1000000):
+	""" *Operation_Slide*: Initialize the *Operation_Slide* object (i.e. *self*) to
+	    contain the following:
+	    * *part*: The *Part* object being slid.
+	    * *comment*: A comment that will show up in the CNC `.ngc` files.
+	    * *tool*: The *Tool* object to use for performing the slide operation.
+	    * *feed_speed*: The feed speed to use for the sliding.
+	    * *cnc_start*: The point at which the CNC is starting at.
+	    * *old_cnc_start*: The CNC point where the hole start using the old CNC mount.
+	    * *old_cnc_stop*:  The CNC point where the hole ends using the old CNC mount.
+	    * *new_cnc_stop*: The CNC point where hole ends using the new CNC mount.
+	    * *new_cnc_start*: The CNC point where hole start using the new CNC mount.
+	"""
+
+	# Verify argument types
+	assert isinstance(part, Part)
+	assert isinstance(comment, str)
+	assert isinstance(tool, Tool_Dowel_Pin)
+	assert isinstance(feed_speed, Speed)
+	assert isinstance(spindle_speed, Hertz)
+	assert isinstance(cnc_start, P)
+	assert isinstance(old_cnc_start, P)
+	assert isinstance(old_cnc_stop, P)
+	assert isinstance(new_cnc_stop, P)
+	assert isinstance(new_cnc_start, P)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	if tracing >= 0:
+	    indent = tracing * ' '
+	    print("{0}=>Operation_Slide.__init__(...)".format(indent))
+
+	operation_slide = self
+	kind = Operation.KIND_SLIDE
+	sub_priority = 0
+	order = Operation.ORDER_SLIDE
+	follows = None
+        Operation.__init__(operation_slide, "Slide", kind, part, comment,
+          sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start, tracing + 1)
+	assert isinstance(operation_slide._spindle_speed, Hertz)
+
+	# Stuff the extra point into *operation_slide*:
+	operation_slide._new_cnc_start = new_cnc_start
+	operation_slide._new_cnc_stop  = new_cnc_stop
+	operation_slide._old_cnc_start = old_cnc_start
+	operation_slide._old_cnc_stop  = old_cnc_stop
+
+    def _cnc_generate(self,
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
+	""" *Operation_Slide: Perform the CNC operations required for the *Operation_Slide* object
+	    (i.e. *self*.)
+	"""
+
+	# Verify argument types:
+	assert isinstance(mount, Mount)
+	assert isinstance(mount_ngc_file, file)
+	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(is_last, bool)
+	assert isinstance(tracing, int)
+
+	# Retreive some values from *operation_slide* (i.e. *self*):
+	operation_slide = self
+	part          = operation_slide._part
+	old_cnc_start = operation_slide._old_cnc_start
+	old_cnc_stop  = operation_slide._old_cnc_stop
+	new_cnc_stop  = operation_slide._new_cnc_stop
+	new_cnc_start = operation_slide._new_cnc_start
+	feed_speed    = operation_slide._feed_speed
+	spindle_speed = operation_slide._spindle_speed
+	tool          = operation_slide._tool
+
+	# Grap the *cnc_transform* and *code* object:
+	cnc_transform = mount._cnc_transform_get()
+	shop = part._shop_get()
+	code = shop._code_get()
+
+	# Get the two *tool* numbers:
+	tool_number           = tool._number_get()
+	tool_alternate_number = tool._alternate_number_get()
+
+	# Start G code:
+	code._line_comment("Start Slide Operation")
+	assert spindle_speed.frequency() <= 0.0, "Spindle speed for slide is not 0.0"
+
+	# Turn off coolant since the *spindle_speed* must be zero:
+	code._command_begin()
+	code._unsigned("M", 9)
+	code._comment("Force the coolant off")
+	code._command_end()
+	
+	# Rapid over to the recently drilled slide hole:
+	code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
+	code._xy_rapid(old_cnc_start.x, old_cnc_start.y)
+
+	# Feed the drill down into the hole:
+	code._z_feed(feed_speed, spindle_speed, old_cnc_stop.z, "operaton_slide")
+
+	# Force the user to loosen the vice before the slide operation:
+	code._command_begin()
+	code._unsigned("M", 6)
+	code._unsigned("T", tool_alternate_number)
+	code._comment("Operator must loosen the vice (or the dowel pin will break)")
+	code._command_end()
+
+	# Now slide the piece to the new location:
+	code._line_comment("Now the part will be slid in the vice to its new position")
+	code._xy_feed(feed_speed, spindle_speed, new_cnc_stop.x, new_cnc_stop.y)
+
+	# Force the user to tighten the vice after the slide operation:
+	code._command_begin()
+	code._unsigned("M", 6)
+	code._unsigned("T", tool_number)
+	code._comment("Operator must tighen the vice (or precision will be lost)")
+	code._command_end()
+
+	# Retract the drill and return to tool change point:
+	code._z_feed(feed_speed, spindle_speed, new_cnc_start.z, "")
+	code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
+	code._line_comment("End Slide Operation")
+
 class Operation_Mount(Operation):
     """ *Operation_Mount* is a class that indicates that the part mount position has changed.
     """
@@ -8346,6 +8474,7 @@ class Operation_Mount(Operation):
         spindle_speed = Hertz()
 	Operation.__init__(operation_mount, "Mount", Tool.KIND_MOUNT, part, comment,
 	  sub_priority, tool, order, follows, feed_speed, spindle_speed, part.c, tracing + 1)
+
 
 	# Load up *operation_mount*:
 	operation_mount._jaws_spread           = jaws_spread
@@ -17283,10 +17412,12 @@ class Part:
 	"""
 
 	# Perform any requested *tracing*:
+	trace_detail = -1
 	if tracing >= 0:
 	    indent = tracing * ' ' 
 	    print("{0}=>Part.vice_slide_remount('{0}', {1:i}, {2:i}, {3:i}, '{4}', {5;i})".
 	      format(indent, new_mount_name, diameter, start, stop, flags))
+	    trace_detail = 2
 
 	part = self
 	ezcad = part._ezcad	
@@ -17294,44 +17425,92 @@ class Part:
 	    # Drill the hole that we care about into *part* (i.e. *self*):
 	    part.hole(new_mount_name, diameter, start, stop, flags)
 
-	    # Grab the *old_mount_translate_point* and *top_surface_transform* from *current_mount*:
-	    current_mount = part._current_mount_get()
-	    old_mount_translate_point = current_mount._mount_translate_point_get()
-	    top_surface_transform = current_mount._top_surface_transform_get()
+	    # Grab the transforms for *old_mount* from *part*:
+	    old_mount = part._current_mount_get()
+	    old_mount_translate_point = old_mount._mount_translate_point_get()
+	    old_top_surface_transform = old_mount._top_surface_transform_get()
+	    old_cnc_transform         = old_mount._cnc_transform_get()
 
-	    # Grab the *vice_jaw_dx* from *shop*:
+	    # Grab the *vice_jaw_dx* from *shop* and *vice*:
 	    shop = part._shop_get()
 	    vice = shop._vice_get()
 	    vice_jaw_volume = vice._jaw_volume_get()
 	    vice_jaw_dx = vice_jaw_volume.x
 	    tooling_plate = None
 
-	    # Compute *new_mount_translate_point* from the old one:n
-	    transformed_new_vice_center = top_surface_transform * new_vice_center
+	    # Compute *jaws_spread*:
+	    part_tne = part.tne
+	    part_bsw = part.bsw
+	    transformed_part_bsw = old_top_surface_transform * part_bsw
+	    transformed_part_tne = old_top_surface_transform * part_tne
+	    jaws_spread = (transformed_part_bsw.y - transformed_part_tne.y).absolute()
+
+	    # Find a *drill_tool* that matches *diameter*:
+	    if isinstance(diameter, str):
+		diameter = Part.SCREW_DRILLS[diameter]
+	    drill_depth = start.distance(stop).absolute()
+	    if 't' in flags:
+		# Extend *drill_depth* by *additional_z_depth*:
+		additional_z_depth = L(inch="1/8")
+		drill_depth += additional_z_depth
+		drill_axis = (start - stop).normalize()
+		new_stop = stop - drill_axis * additional_z_depth.millimeters()
+		stop = new_stop
+
+	    # Find *dowel_pin_tool* that matches *diameter*:
+	    deep_tracing = tracing + 1 if trace_detail >= 3 else -1000000
+	    dowel_pin_tool = part._tools_dowel_pin_search(diameter, deep_tracing)
+
+	    # Create *operation_side* and append it to *part*:
+	    comment = ""
+	    feed_speed = dowel_pin_tool._feed_speed_get()
+	    spindle_speed = Hertz() # The spindle is off for this operaton:
+	    
+	    # Compute *new_mount_translate_point* from the *old_mount_translate_point*:
+	    transformed_new_vice_center = old_top_surface_transform * new_vice_center
 	    vice_x = transformed_new_vice_center.x + vice_jaw_dx/2
 	    new_mount_translate_point = \
 	      P(vice_x, old_mount_translate_point.y, old_mount_translate_point.z)
 	
-	    # Compute *jaws_spread*:
-	    part_tne = part.tne
-	    part_bsw = part.bsw
-	    transformed_part_bsw = top_surface_transform * part_bsw
-	    transformed_part_tne = top_surface_transform * part_tne
-	    jaws_spread = (transformed_part_bsw.y - transformed_part_tne.y).absolute()
+	    # The code below is a little tricky.  We need to compute the hole end_points
+            # using both the *old_cnc_transform* and the *new_cnc_transform*.  Next,
+	    # we need to create the *operation_slide* operation and stuff it onto
+	    # the operations associated with *old_mount*.  Then only after *operation_slide*
+            # is created, can we switch over to the *new_mount*.
 
-	    # Create *new_mount* from the *old_mount*, but with a new name and translate point:
-	    new_mount = current_mount._remount(new_mount_name, new_mount_translate_point)
-	    #part._current_mount = new_mount
+	    # Create *new_mount* from the *old_mount*, but with a *new_mount_name* and
+            # a *new_mount_translate point*:
+	    new_mount = old_mount._remount(new_mount_name, new_mount_translate_point)
+
+	    # Using *old_cnc_transform* and *new_cnc_transform* compute the 4 needed
+	    # points for the *Operation_Slide* initializier:
+	    old_cnc_transform = old_mount._cnc_transform_get()
+	    new_cnc_transform = new_mount._cnc_transform_get()
+	    old_cnc_start = old_cnc_transform * start
+	    old_cnc_stop  = old_cnc_transform * stop
+	    new_cnc_stop  = new_cnc_transform * stop
+	    new_cnc_start = new_cnc_transform * start
+	    cnc_start = old_cnc_start
+
+	    # Create *operation_slide* and tack it onto *part* using the *old_mount*:
+	    operation_slide = Operation_Slide(part, comment,
+	      dowel_pin_tool, feed_speed, spindle_speed, cnc_start,
+	      old_cnc_start, old_cnc_stop, new_cnc_stop, new_cnc_start, tracing = tracing+1)
+	    part._operation_append(operation_slide)
+
+	    # Now we register the *new_mount*.
 	    part._mount_register(new_mount)
+
+	    # Finally, create the *new_operation_mount* and append it to *part*:
 	    selected_parallel_height = new_mount._selected_parallel_height_get()
 	    spacers = []
 	    tooling_plate_present = False
-	    operation_mount = Operation_Mount(part, new_mount_name, vice, jaws_spread,
+	    new_operation_mount = Operation_Mount(part, new_mount_name, vice, jaws_spread,
 	      selected_parallel_height, tooling_plate, spacers, tooling_plate_present, tracing + 1)
-	    part._operation_append(operation_mount)
+	    part._operation_append(new_operation_mount)
 
+	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    indent = tracing * ' ' 
 	    print("{0}<=Part.vice_slide_remount('{0}', {1:i}, {2:i}, {3:i}, '{4}', {5;i})".
 	      format(indent, new_mount_name, diameter, start, stop, flags))
 
@@ -18845,7 +19024,7 @@ class Code:
 	code._rapid_speed = Speed(in_per_sec = 75.0) # Should be read from Mill object
 	code._time = Time()		  # Total Tool path time
 	code._tool = None		  # Currently selected tool
-	code._tool_change_point = None    # Tool change location relative to viceo origin
+	code._tool_change_point = None    # Tool change location relative to vice origin
 	code._tool_program_number = -1    # Tool program number
 	code._tool_wrl_lines = None       # The lines to be written into the tool VRML file
 
