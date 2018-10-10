@@ -881,7 +881,7 @@ class P:
 	z1, z2 = point1.z.minimum_maximum(point2.z)
 
 	# Return the minimum and maximum points:
-	return P(x1, y1, z1,), P(x2, y2, z2)
+	return P(x1, y1, z1), P(x2, y2, z2)
 
     def normalize(self):
 	""" *P*: Return *self* normalized to have a length of 1. """
@@ -5075,9 +5075,10 @@ class Mount:
 	  new_mount_translate_point, old_mount._top_surface_safe_z, old_mount._xy_rapid_safe_z,
 	  old_mount._is_tooling_plate_mount, old_mount._selected_parallel_height, tracing=tracing+1)
 
-	# Copy some more fields over:
-	new_mount._extra_start_bsw          = old_mount._extra_start_bsw
-	new_mount._extra_start_tne          = old_mount._extra_start_tne
+	# Copy some more fields over.
+        # Note that the new start_bsw/tne is copied from the old stop_bsw/tne:
+	new_mount._extra_start_bsw          = old_mount._extra_stop_bsw
+	new_mount._extra_start_tne          = old_mount._extra_stop_tne
 	new_mount._extra_stop_bsw           = old_mount._extra_stop_bsw
 	new_mount._extra_stop_tne           = old_mount._extra_stop_tne
 	new_mount._is_tooling_plate_mount   = old_mount._is_tooling_plate_mount
@@ -9556,12 +9557,13 @@ class Operation_Simple_Pocket(Operation):
 
 	code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 
+	helper_tracing = tracing + 1 if trace_detail >= 3 else -1000000
 	is_laser = isinstance(tool, Tool_End_Mill) and tool._is_laser_get()
 	if is_laser:
 	    z_end = cnc_corner_tne.z - total_cut
 	    code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius, z_end,
 	      tool_radius, zero, spindle_speed, feed_speed, True, rotate,
-	      comment = comment, tracing = tracing + 1)
+	      comment = comment, tracing = helper_tracing)
 	else:
 	    # Compute the total number of rectangular paths needed:
 	    paths = 0
@@ -9589,7 +9591,7 @@ class Operation_Simple_Pocket(Operation):
 		    # We only need to do the exterior path to a depth of *z_plunge*:
 		    code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius, z,
 		      r, zero, spindle_speed, feed_speed, True, rotate,
-		      comment = operation._comment, tracing = tracing + 1)
+		      comment = operation._comment, tracing = helper_tracing)
 		elif pocket_kind == Operation.POCKET_KIND_FLAT:
 		    # Generate {paths} rectangular passes over the pocket:
 		    for path in range(paths):
@@ -9628,7 +9630,7 @@ class Operation_Simple_Pocket(Operation):
 			# Mill out a pocket at level *z*:
 		        code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius,
 			  z, tool_radius, offset, spindle_speed, feed_speed, rapid_move,
-			  rotate, comment=comment, tracing = tracing + 1)
+			  rotate, comment=comment, tracing = helper_tracing)
 		else:
 		    assert False, "Unknown pocket kind: {0}".format(pocket_kind)
 
@@ -15985,6 +15987,168 @@ class Part:
 	self.hole_through(comment, screw_diameter, \
 	  start_point, flags, countersink_diameter)
 
+    def side_face(self, comment, flags, tracing=-1000000):
+	""" *Part*: Remove extra material from a side surface of the *Part* object (i.e. *self*.)
+	    This operation basically removes the extra material that was specified using
+	    the *extra_dx* argument to the *Part*.*vice_mount*() method.
+	    * *comment*: Shows up in generated CNC code.
+	    * *flags*: specifies whether to remove the left or right side.  Both can be
+	      specified at the same time:
+	      * 'l': Left side.
+	      * 'r': Right side.
+	"""
+
+	# Verify argument types:
+	assert isinstance(comment, str)
+	assert isinstance(flags, str)
+	assert isinstance(tracing, int)
+
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part.side_face('{1}', '{2}')".format(indent, comment, flags))
+	    trace_detail = 2
+
+	# Only do stuff if in *ezcad* is in *cnc_mode*:
+	part = self
+	ezcad = part._ezcad_get()
+	if ezcad._cnc_mode:
+	    # Get the current mount:
+	    current_mount = part._current_mount
+	    assert isinstance(current_mount, Mount), \
+	      "Is part '{0}' mounted in vice?".format(part._name)
+
+	    # Iterate across flags:
+	    for flag in flags:
+		# Figure out which *flag* is selected:
+		if flag == 'l':
+		    is_left = True
+                elif flag == 'r':
+		    is_left = False
+		else:
+		    assert "Flag '{0}' is not allowed".format(flag)
+
+		# Convert the extra bounding material bounding box via *top_surface_transform*:
+		extra_stop_bsw, extra_stop_tne = current_mount._extra_stop_get()
+		top_transform = current_mount._top_surface_transform_get()
+		top_extra_stop_bsw, top_extra_stop_tne = \
+		  (top_transform * extra_stop_bsw).minimum_maximum(top_transform * extra_stop_tne)
+		if trace_detail >= 2:
+		    print("{0}Part='{1}'".format(indent, part._name))
+		    print("{0}part.tne={1:i}".format(indent, part.tne))
+		    print("{0}part.bsw={1:i}".format(indent, part.bsw))
+		    print("{0}current_mount='{1}'".format(indent, current_mount._name_get()))
+		    print("{0}extra_stop_tne={1:i}".format(indent, extra_stop_tne))
+		    print("{0}extra_stop_bsw={1:i}".format(indent, extra_stop_bsw))
+		    print("{0}top_transform=\n{1:m}".format(indent, top_transform))
+		    print("{0}top_extra_stop_tne={1:i}".format(indent, top_extra_stop_tne))
+		    print("{0}top_extra_stop_bsw={1:i}".format(indent, top_extra_stop_bsw))
+
+		# Grap the bounding box oriented using *top_surface_transform(*:
+		top_bounding_box_bsw, top_bounding_box_tne = part._bounding_box_get(top_transform)
+		if trace_detail >= 2:
+		    print("{0}top_bounding_box_tne={1:i}".
+		      format(indent, top_bounding_box_tne))
+		    print("{0}top_bounding_box_bsw={1:i}".
+		      format(indent, top_bounding_box_bsw))
+
+		# Compute *remove_dz* which is the amount mow off the top:
+		extra_bottom_dz = L(inch="1/8")
+		remove_dz = \
+		  (top_extra_stop_tne.z - top_extra_stop_bsw.z).absolute() - extra_bottom_dz
+		right_remove_dx = (top_extra_stop_tne.x - top_bounding_box_tne.x).absolute()
+		if trace_detail >= 2:
+		    print("{0}remove_dz={1:i}".format(indent, remove_dz))
+
+		# Search for an *end_mill_tool* that can do the job:
+		detail_tracing = -1000000
+		if trace_detail >= 3:
+		    detail_tracing = tracing + 1
+		maximum_diameter = L(inch=1.000)
+		end_mill_tool = self._tools_end_mill_search(maximum_diameter,
+		  remove_dz, "simple_pocket", detail_tracing)
+		assert end_mill_tool != None, \
+		  "Could not find a end mill to mill off top of part {0}".format(part._name)
+		if trace_detail >= 1:
+		     print("{0}end_mill_tool='{1}'".format(indent, end_mill_tool._name_get()))
+
+		# Grab some values out of *end_mill_tool*:
+		end_mill_diameter = end_mill_tool._diameter_get()
+		end_mill_radius = end_mill_diameter / 2
+		end_mill_feed_speed = end_mill_tool._feed_speed_get()
+		end_mill_spindle_speed = end_mill_tool._spindle_speed_get()
+		if trace_detail >= 2:
+		    print("{0}end_mill_diameter={1:i}".format(indent, end_mill_diameter))
+		    print("{0}feed_speed={1:I} spindle_speed={2}".
+		      format(indent, end_mill_feed_speed, end_mill_spindle_speed))
+
+		# Define some X/Y/Z coordinates:
+		extra = L(inch="1/8")
+		x9 = top_bounding_box_tne.x + end_mill_diameter + extra
+		x8 = top_bounding_box_tne.x
+		x1 = top_bounding_box_bsw.x
+		x0 = top_bounding_box_bsw.x - end_mill_diameter - extra
+
+		y9 = top_bounding_box_tne.y + end_mill_radius
+		y8 = top_bounding_box_tne.y
+		y1 = top_bounding_box_bsw.y
+		y0 = top_bounding_box_bsw.y - end_mill_radius
+
+		z9 = top_extra_stop_tne.z
+		z8 = top_bounding_box_tne.z
+		z1 = top_bounding_box_bsw.z
+		z0 = top_extra_stop_bsw.z - extra
+
+		# Figure out the pocket dimensions for top surface space:
+		if is_left:
+		    top_corner1 = P(x0, y0, z0)
+		    top_corner2 = P(x1, y9, z9)
+		    new_top_extra_stop_bsw = P(x1, top_extra_stop_bsw.y, top_extra_stop_bsw.z)
+		    new_top_extra_stop_tne = top_extra_stop_tne
+		else:
+		    top_corner1 = P(x8, y0, z0)
+		    top_corner2 = P(x9, y9, z9)
+		    new_top_extra_stop_bsw = top_extra_stop_bsw
+		    new_top_extra_stop_tne = P(x8, top_extra_stop_tne.y, top_extra_stop_tne.z)
+
+		# Note that we need to map back from top surface coordinates to actual coordinates
+		# for the *Operation_Simple_Pocket*() below:
+		reverse_top_transform = top_transform.reverse()
+		final_corner1, final_corner2 = (reverse_top_transform * top_corner1). \
+		  minimum_maximum(reverse_top_transform * top_corner2)
+		if trace_detail >= 2:
+		    print("{0}top_corner1={1:i}".format(indent, top_corner1))
+		    print("{0}top_corner2={1:i}".format(indent, top_corner2))
+		    print("{0}final_corner1={1:i}".format(indent, final_corner1))
+		    print("{0}final_corner2={1:i}".format(indent, final_corner2))
+		    print("{0}new_top_extra_stop_tne={1:i}".format(indent, new_top_extra_stop_tne))
+		    print("{0}new_top_extra_stop_bsw={1:i}".format(indent, new_top_extra_stop_bsw))
+
+		# Now construct the *operation_simple_packet* and add it to *part*:
+		operation_order = Operation.ORDER_END_MILL_SIMPLE_POCKET
+		pocket_kind = Operation.POCKET_KIND_FLAT
+		operation_simple_pocket = Operation_Simple_Pocket(part, comment, 0,
+		  end_mill_tool, operation_order, None, end_mill_feed_speed, end_mill_spindle_speed,
+		  final_corner1, final_corner2, end_mill_radius, end_mill_radius, pocket_kind,
+		  Part.ANGLE0, tracing = tracing + 1)
+		#operation_simple_pocket._tracing = 5
+		part._operation_append(operation_simple_pocket)
+
+		# Remember to update the extra material to note that the top face has been removed:
+		zero = L()
+		new_extra_stop_bsw, new_extra_stop_tne = \
+		  (reverse_top_transform * new_top_extra_stop_bsw).minimum_maximum(
+		  reverse_top_transform * new_top_extra_stop_tne)
+		if trace_detail >= 2:
+		    print("{0}new_extra_stop_tne={1:i}".format(indent, new_extra_stop_tne))
+		    print("{0}new_extra_stop_bsw={1:i}".format(indent, new_extra_stop_bsw))
+		current_mount._extra_stop_set(new_extra_stop_bsw, new_extra_stop_tne)
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    print("{0}<=Part.side_face('{1}', '{2}')".format(indent, comment, flags))
+
     def simple_pocket(self,
       comment, corner1, corner2, radius, flags, reverse=False, rotate=ANGLE0, tracing = -1000000):
 	""" *Part*: Create a simple rectangular pocket in the *Part* object (i.e. *self*)
@@ -17411,12 +17575,21 @@ class Part:
 
 	"""
 
+	# Verify argument types:
+	assert isinstance(new_mount_name, str)
+	assert isinstance(diameter, L) or isinstance(diameter, str)
+	assert isinstance(start, P)
+	assert isinstance(stop, P)
+	assert isinstance(flags, str)
+	assert isinstance(new_vice_center, P)
+
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = tracing * ' ' 
-	    print("{0}=>Part.vice_slide_remount('{0}', {1:i}, {2:i}, {3:i}, '{4}', {5;i})".
-	      format(indent, new_mount_name, diameter, start, stop, flags))
+	    diameter_format = "{0:i}".format if isinstance(diameter, L) else diameter
+	    print("{0}=>Part.vice_slide_remount('{1}', {2}, {3:i}, {4:i}, '{5}', {6:i})".
+	      format(indent, new_mount_name, diameter_format, start, stop, flags, new_vice_center))
 	    trace_detail = 2
 
 	part = self
@@ -17511,8 +17684,8 @@ class Part:
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Part.vice_slide_remount('{0}', {1:i}, {2:i}, {3:i}, '{4}', {5;i})".
-	      format(indent, new_mount_name, diameter, start, stop, flags))
+	    print("{0}<=Part.vice_slide_remount('{1}', {2}, {3:i}, {4:i}, '{5}', {6:i})".
+	      format(indent, new_mount_name, diameter_format, start, stop, flags, new_vice_center))
 
     def xxx_vice_mount_helper(self, extra_bsw, extra_tne, is_tooling_plate_mount, tracing=-1000000):
 	""" *Part*: Return a mount translate point and parallel height for the material bounding
@@ -20349,8 +20522,8 @@ class Code:
 	rx2 = x2 - corner_radius
 	ry1 = y1 + corner_radius
 	ry2 = y2 - corner_radius
-	assert rx1 < rx2
-	assert ry1 < ry2
+	assert rx1 < rx2, "x1={0:i} x2={1:i} corner_radius={2:i}".format(x1, x2, corner_radius)
+	assert ry1 < ry2, "y1={0:i} y2={1:i} corner_radius={2:i}".format(y1, y2, corner_radius)
 	if trace_detail >= 2:
 	    print("{0}rx1={1:i} ry1={2:i} rx2={3:i} ry2={4:i}".format(indent, rx1, ry1, rx2, ry2))
 
