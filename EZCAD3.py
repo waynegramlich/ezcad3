@@ -2051,8 +2051,9 @@ class BOM:
 	# Stuff *part* into *bom* and initialize tables:
 	bom._part = part
 	bom._blocks = []
+	bom._extrusions = []
 	bom._pending_block = None
-
+	bom._pending_extrusion = None
 
     def _block_pending(self, part, material, corner1, corner2):
 	""" *BOM*: Register a block of *material* with opposing corners of *corner1* and *corner2*
@@ -2071,6 +2072,43 @@ class BOM:
 	# Hang onto a *pending_block*:
 	bom._pending_block = BOM_Block(part, material, corner1, corner2)
 
+    def _extrusion_pending(self,
+      part, material, kind, a_width, b_width, a_thickness, b_thickness, length, tracing=-1000000):
+	""" *BOM*: Register a block of *material* with opposing corners of *corner1* and *corner2*
+	    with the *BOM* object.
+	"""
+
+	# Use *bom* instead of *self*:
+	bom = self
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(material, Material)
+	assert isinstance(kind, str)
+	assert isinstance(a_width, L)
+	assert isinstance(b_width, L)
+	assert isinstance(a_thickness, L)
+	assert isinstance(b_thickness, L)
+	assert isinstance(length, L)
+	assert isinstance(tracing, int)
+
+	#print("BOM._extrusion_pending('{0}')".format(part._name_get()))
+
+	# Perform an requested *tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>BOM._extrussion_pending('{1}', ...)".format(indent, part._name_get()))
+
+
+	# Hang onto a *pending_extrusion*:
+	bom_extrusion = \
+	  BOM_Extrusion(part, material, kind, a_width, b_width, a_thickness, b_thickness, length)
+	assert isinstance(bom_extrusion._key, tuple)
+	bom._pending_extrusion = bom_extrusion
+
+	if tracing >= 0:
+	    print("{0}<=BOM._extrussion_pending('{1}', ...)".format(indent, part._name_get()))
+
     def _block_register(self, transform):
 	""" *BOM*: Register any pending *BOM_Block* associated with *BOM*.
 	"""
@@ -2088,6 +2126,21 @@ class BOM:
 	    bom._blocks.append(pending_block)
 	    bom._pending_block = None
 
+    def _extrusion_register(self, transform):
+	""" *BOM*: Register any pending *BOM_Extrusion* associated with *BOM*:
+	"""
+
+	# Verify argument types:
+	assert isinstance(transform, Transform)
+
+	bom = self
+	pending_extrusion = bom._pending_extrusion
+	if isinstance(pending_extrusion, BOM_Extrusion):
+	    pending_extrusion._transform(transform)
+	    bom._extrusions.append(pending_extrusion)
+	    #print("BOM._extrusion_register('{0}')".format(pending_extrusion._part._name_get()))
+	    bom._pending_extrusion = None
+
     def _merge(self, child_bom):
 	""" *BOM*: Merge the contents of *child_bom* into to the parent *BOM* object (i.e. *self*.)
 	"""
@@ -2097,6 +2150,7 @@ class BOM:
 
 	# Merge the *BOM_Blocks* from *child_bom* to *parent_bom*:
 	parent_bom._blocks.extend(child_bom._blocks)
+	parent_bom._extrusions.extend(child_bom._extrusions)
 
     def _material_summary(self):
 	""" *BOM*: Generate a material summary:
@@ -2134,6 +2188,17 @@ class BOM:
 		  format(dx, dy, dz, part_name))
 	summary_file.close()
 	
+	# Write out the extrusions file:
+	with open("/tmp/extrusions.txt", "w") as extrusions_file:
+	    extrusions = bom._extrusions
+	    #print("len_extrusions={0}".format(len(extrusions)))
+	    extrusions.sort(key=BOM_Extrusion.key)
+	    for extrusion in extrusions:
+		length = extrusion._length
+		name = extrusion._part._name_get()
+		extrusions_file.write("{0:5} {1:.3i} x {2:.3i}: {3:30} {4:.3i}\n".format(
+		  extrusion._kind, extrusion._a_width, extrusion._b_width, name, length))
+
 class BOM_Block:
     """ *BOM_Block*: Represents a block of material.
     """
@@ -2236,6 +2301,48 @@ class BOM_Block:
     def key(self):
 	""" *BOM_Block*: Return an immutable tuple for comparing the *BOM_Block* object
 	    (i.e. *self*) with other *BOM_Block* objects when sorting.
+	"""
+
+	return self._key
+
+class BOM_Extrusion:
+    """ *BOM_Extrusion*: Represents a *Part* made from an extrusion.
+    """
+
+    def __init__(self, part, material, kind, a_width, b_width, a_thickness, b_thickness, length):
+	""" *BOM_Extrusion*: Initialize the *BOM_Block* object to contain *part*, *material*,
+	    *kind*, *a_width*, *b_width, *a_thickness*, *b_thickness*, and *length*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(material, Material)
+	assert isinstance(kind, str)
+	assert isinstance(a_width, L)
+	assert isinstance(a_thickness, L)
+	assert isinstance(b_width, L)
+	assert isinstance(b_thickness, L)
+	assert isinstance(length, L)
+
+	# Stuff the values into *bom_extrusion* (i.e. *self*):
+	bom_extrusion = self
+	bom_extrusion._part = part
+	bom_extrusion._material = material
+	bom_extrusion._kind = kind
+	bom_extrusion._a_width = a_width
+	bom_extrusion._a_thickness = a_thickness
+	bom_extrusion._b_width = b_width
+	bom_extrusion._b_thickness = b_thickness
+	bom_extrusion._length = length
+	bom_extrusion._key = (kind, a_width.inches(), b_width.inches(),
+	   a_thickness.inches(), b_thickness.inches(), length.inches())
+
+    def _transform(self, transform):
+	pass
+
+    def key(self):
+	""" *BOM_extrusion*: Return an immutable tuple for comparing the *BOM_Extrusion* object
+	    (i.e. *self*) with other *BOM_Extrusion* objects when sorting.
 	"""
 
 	return self._key
@@ -13299,6 +13406,9 @@ class Part:
 	# Perform the extrusion:
 	self.extrude(comment, material, color,
 	  contours, start, start_extra, end, end_extra, rotate, tracing + 1)
+	length = start.distance(end) + start_extra + end_extra
+	self._bom._extrusion_pending(self,
+	  material, "tube", width, height, thickness, thickness, length, tracing=tracing + 1)
 
 	# Wrap up any requested *tracing*;
 	if tracing >= 0:
@@ -15029,6 +15139,12 @@ class Part:
 	end_extra = zero
 	self.extrude(comment, material, color, contours,
 	  start, start_extra, end, end_extra, rotate, tracing=tracing + 1)
+
+	if part._ezcad._cnc_mode:
+	    # Add an extrusion record to the *part* BOM (Bill Of Materials):
+	    length = start.distance(end) + start_extra + end_extra
+	    part._bom._extrusion_pending(part,
+	      material, kind, a_width, b_width, a_thickness, b_thickness, length)
 
 	if tracing >= 0:
 	    print(("{0}<=Part.extrusion('{1}', '{2}', *, *, k='{3}', s={4:i}, e={5:i}," +
@@ -17347,6 +17463,7 @@ class Part:
 	    # Register the block with the *bom* (Bill Of Materials):
 	    bom = part._bom
 	    bom._block_register(top_surface_transform)
+	    bom._extrusion_register(top_surface_transform)
 
 	    # Grab some values from the *vice*:
 	    shop = part._shop_get()
@@ -17437,7 +17554,7 @@ class Part:
 	    part_centered_in_vice = True
 	    if isinstance(vice_center, P):
 		# Deal with *vice_center*:
-		assert not dowel_pin_requested, "vice_center is incompatible with 'l'&'r' flags"
+		#assert not dowel_pin_requested, "vice_center is incompatible with 'l'&'r' flags"
 		transformed_vice_center = top_surface_transform * vice_center
 		#print("vice_center={0:i} transformed_vice_center={1:i}".format(
 		#  vice_center, transformed_vice_center))
