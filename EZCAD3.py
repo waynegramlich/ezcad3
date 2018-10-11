@@ -17191,11 +17191,12 @@ class Part:
  	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    vice_center_format = "None" if vice_center == None else "{0}:i".format(vice_center)
+	    vice_center_format = \
+	      "{0:i}".format(vice_center) if isinstance(vice_center, P) else "None"
 	    print(("{0}=>Part.vice_mount('{1}', '{2}', '{3}', '{4}', '{5}, " +
-	      "{6:i}, {7:i}, {8:i}, {9:i}, {10:i}, {11)").format(indent,
+	      "{6:i}, {7:i}, {8:i}, {9:i}, {10:i}, {11}").format(indent,
 	      part._name, name, top_surface, jaw_surface, flags, extra_dx, extra_dy,
-	      extra_top_dz, extra_bottom_dz, paralalle_height_extra, vice_center_format))
+	      extra_top_dz, extra_bottom_dz, parallel_height_extra, vice_center_format))
 	    trace_detail = 3
 	    detail_tracing = tracing + 1
 
@@ -17634,26 +17635,35 @@ class Part:
 
 	    # Generate any needed dowel pin operation:
 	    if dowel_pin_requested:
-		dowel_x = None
+		dowel_x = zero
 		plunge_x = None
 		dowel_pin_comment = "no dowel pin"
 		plunge_x_offset = L(inch=0.750)
 		if is_left_dowel_pin:
 		    dowel_pin_comment = "Left dowel pin"
-		    if part_centered_in_vice:
+		    if isinstance(vice_center, P):
+			dowel_x = top_extra_start_bsw.x + mount_translate_point.x
+			if trace_detail >= 2:
+			    print("{0}tesbswx={1:i} mtpx={2:i} dowel_x={3:i}".format(
+			      indent, top_extra_start_bsw.x, mount_translate_point.x, dowel_x))
+		    elif part_centered_in_vice:
 			dowel_x = vice_jaw_dx/2 - (part_dx + extra_dx)/2
 		    else:
 			dowel_x = zero
 		    plunge_x = dowel_x - plunge_x_offset
 		elif is_right_dowel_pin:
 		    dowel_pin_comment = "Right dowel pin"
-		    if part_centered_in_vice:
+		    if isinstance(vice_center, P):
+			dowel_x = top_extra_start_tne.x + mount_translate_point.x
+		    elif part_centered_in_vice:
 			dowel_x = vice_jaw_dx/2 + (part_dx + extra_dx)/2
 		    else:
 			dowel_x = vice_jaw_dx
 		    plunge_x = dowel_x + plunge_x_offset
 		else:
 		    assert False
+		if trace_detail >= 2:
+		    print("{0}dowel_x={1:i}".format(indent, dowel_x))
 
 		# Create *cnc_plunge_point* and *cnc_dowel_point*:
 		cnc_plunge_point = P(plunge_x, vice_y, zero)
@@ -17671,9 +17681,9 @@ class Part:
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    print(("{0}<=Part.vice_mount('{1}', '{2}', '{3}', '{4}', '{5}, " +
-	      "{6:i}, {7:i}, {8:i}, {9:i}, {10:i}, {11:i})").format(indent,
+	      "{6:i}, {7:i}, {8:i}, {9:i}, {10:i}, {11})").format(indent,
 	      part._name, name, top_surface, jaw_surface, flags, extra_dx, extra_dy,
-	      extra_top_dz, extra_bottom_dz, paralalle_height_extra, vice_center_format))
+	      extra_top_dz, extra_bottom_dz, parallel_height_extra, vice_center_format))
 
     def vice_slide_remount(self, new_mount_name, diameter, start, stop, flags,
       new_vice_center, tracing=-1000000):
