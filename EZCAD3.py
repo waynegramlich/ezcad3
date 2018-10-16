@@ -8454,6 +8454,11 @@ class Operation_Slide(Operation):
 	operation_slide._old_cnc_start = old_cnc_start
 	operation_slide._old_cnc_stop  = old_cnc_stop
 
+	# Wrap up any *tracing*:
+	if tracing >= 0:
+	    indent = tracing * ' '
+	    print("{0}<=Operation_Slide.__init__(...)".format(indent))
+
     def _cnc_generate(self,
       mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
 	""" *Operation_Slide: Perform the CNC operations required for the *Operation_Slide* object
@@ -8536,16 +8541,23 @@ class Operation_Mount(Operation):
     def __init__(self, part, comment, vice, jaws_spread,
       parallels_height, tooling_plate, spacers, tooling_plate_present, tracing=-1000000):
 	""" *Operation_Mount*: Initialize the *Operation_Mount* object (i.e. *self*) to describe
-	    how *part* is mounted for CNC operations.  *comment* shows up in generated G-code.
-	    *vice* specifies which vice is being used; `None` is used if there is no vice.
-	    *jaws_spread* specifics the distance in Y between the two vice jaws (negative for
-	    no vice.)  If a vice is being used, parallels height specifies what height should
-	    be selected from the vice parallels (negative for none.)  *tooling_plate* specifies
-	    whether or not a tooling plate should be mounted on top of the parallels.  Use `None`
-	    if no tooling plate is needed.  *spacers* is a list of tooling plate hole coordinate
-	    quadruples, which specify where tooling plate spacers are placed
-	    (e.g. [(x1,y1,x2,y2),...,(xN,yN,xN+1,yN+1)] .)  The list can be empty if there is
-	    no tooling plate.
+	    how *part* is mounted for CNC operations.  The arguments are:
+	    * *part*: The *Part* to be mounted.	    
+	    * *comment*: A short text string that shows up in generated G-code.
+	    * *vice*:  The *Vice* object which vice is being used.
+	      `None` is specified if there is no vice.
+	    * *jaws_spread*: The Y distance between the two vice jaws.  Specify a negative value
+	      no vice.
+	    * *parallels_height*: This specifies the height of the parallels mounted int the vice.
+	      If there is now vice, a negative values is specified.
+	    * *tooling_plate*: This specifies the *Tooling_Plate* object that the part is
+	       that the part is mounted on.  Specify `None` if no o tooling plate is needed.
+	    * *spacers*: This specifies a list of tooling plate hole coordinate quadruples,
+	      which specify where tooling plate spacers are placed
+	      (e.g. [(x1,y1,x2,y2),...,(xN,yN,xN+1,yN+1)] .)  This list is empty if there is
+	      no tooling plate.
+	    * *tooling_plate_present*: This is *True* if a tooling plate is present and
+	      *False* otherwise.
 	"""
 
 	# Use *operation_mount* instead of *self*:
@@ -8582,7 +8594,6 @@ class Operation_Mount(Operation):
         spindle_speed = Hertz()
 	Operation.__init__(operation_mount, "Mount", Tool.KIND_MOUNT, part, comment,
 	  sub_priority, tool, order, follows, feed_speed, spindle_speed, part.c, tracing + 1)
-
 
 	# Load up *operation_mount*:
 	operation_mount._jaws_spread           = jaws_spread
@@ -8775,7 +8786,7 @@ class Operation_Multi_Mount(Operation):
 	# Perform any requested *tracing*:
 	if tracing >= 1:
 	    indent = ' ' * tracing
-	    print(("{0}=>Operation_Mount.__init__(*, p='{1}', fm='{2}', c='{3}'," +
+	    print(("{0}=>Operation_Multi_Mount.__init__(*, p='{1}', fm='{2}', c='{3}'," +
 	      " v='{4}' js={5:i} ph={5:i}, *, {6}, {7}))").format(indent,
               part._name_get(),  comment, vice._name_get(), jaws_spread, parallels_height,
 	      spacers, tooling_plate_present))
@@ -8803,7 +8814,7 @@ class Operation_Multi_Mount(Operation):
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 1:
-	    print(("{0}<=Operation_Mount.__init__(*, p='{1}', fm='{2}', c='{3}'," +
+	    print(("{0}<=Operation_Multi_Mount.__init__(*, p='{1}', fm='{2}', c='{3}'," +
 	      " v='{4}' js={5:i} ph={5:i}, *, {6}))").format(indent,
 	      part._name_get(), comment, vice._name_get(), jaws_spread, parallels_height, spacers))
 
@@ -17500,7 +17511,8 @@ class Part:
 	    # as near to the top jaw edge as possible.  However, sometimes the parallels will
 	    # not let us get that low:
 	    selected_parallel_height = smallest_parallel_height
-	    epsilon = L(inch=.000001)
+	    #epsilon = L(inch=.000001)
+	    epsilon = zero
 	    for index, parallel_height in enumerate(parallels_heights):
 		# Use *epsilon* to deal with rounding errors:
 		trial_top_surface_z = parallel_height - \
@@ -17509,7 +17521,7 @@ class Part:
 		    print(("{0}Parallel[{1}]: parallel_height={2:i} " +
 		      "trial_top_surface_z={3:i} vice_jaw_dz={4:i}").
 		      format(indent, index, parallel_height, trial_top_surface_z, vice_jaw_dz))
-		if parallel_height > selected_parallel_height and \
+		if parallel_height >= selected_parallel_height and \
 		  trial_top_surface_z >= vice_jaw_dz:
 		    selected_parallel_height = parallel_height
 		    if trace_detail >= 3:
@@ -17553,15 +17565,21 @@ class Part:
             # the vice:
 	    vice_x = vice_jaw_dx/2
 	    part_centered_in_vice = True
+
+	    # Compute *vice_x*, the X offset from the *part* origin after applying
+	    # *top_surface_transform* to the correct location in the vice:
 	    if isinstance(vice_center, P):
 		# Deal with *vice_center*:
 		#assert not dowel_pin_requested, "vice_center is incompatible with 'l'&'r' flags"
-		transformed_vice_center = top_surface_transform * vice_center
-		#print("vice_center={0:i} transformed_vice_center={1:i}".format(
+		top_vice_center = top_surface_transform * vice_center
 		#  vice_center, transformed_vice_center))
 		#print("top_surface_transform={0:s}".format(top_surface_transform))
-		vice_x = transformed_vice_center.x + vice_jaw_dx/2
+		vice_x = vice_jaw_dx/2 - top_vice_center.x
 		part_centered_in_vice = False
+		if trace_detail >= 2:
+		    print("{0}vice_jaw_dx/2={1:i}".format(indent, vice_jaw_dx/2))
+		    print("{0}vice_center={1:i}".format(indent, vice_center))
+		    print("{0}top_vice_center={1:i}".format(indent, top_vice_center))
 	    elif dowel_pin_requested and part_dx + extra_dx < vice_jaw_dx:
 		# Deal with any requested dowel pin operations:
 		if is_left_dowel_pin:
@@ -17724,12 +17742,20 @@ class Part:
 	if ezcad._cnc_mode:
 	    # Drill the hole that we care about into *part* (i.e. *self*):
 	    part.hole(new_mount_name, diameter, start, stop, flags)
-
-	    # Grab the transforms for *old_mount* from *part*:
-	    old_mount = part._current_mount_get()
+	
+	    # Grab some values from *old_mount*.  Note that while the translate mount point will
+	    # change from *old_mount* to *new_mount*, the *top_surface_transform* will not change:
+	    old_mount                 = part._current_mount_get()
+	    top_surface_transform     = old_mount._top_surface_transform_get() # Does not change!
 	    old_mount_translate_point = old_mount._mount_translate_point_get()
-	    old_top_surface_transform = old_mount._top_surface_transform_get()
 	    old_cnc_transform         = old_mount._cnc_transform_get()
+	    if trace_detail >= 2:
+		print("{0}old_mount='{1}'".format(indent, old_mount._name_get()))
+		print("{0}old_mount_translate_point={1:i}".
+		  format(indent, old_mount_translate_point))
+	    if trace_detail >= 3:
+		print("{0}top_surface_transform={1}".format(indent, top_surface_transform))
+		print("{0}old_cnc_transform={1}".format(indent, old_cnc_transform))
 
 	    # Grab the *vice_jaw_dx* from *shop* and *vice*:
 	    shop = part._shop_get()
@@ -17737,13 +17763,21 @@ class Part:
 	    vice_jaw_volume = vice._jaw_volume_get()
 	    vice_jaw_dx = vice_jaw_volume.x
 	    tooling_plate = None
+	    if trace_detail >= 2:
+		print("{0}vice_jaw_volume={1:i}".format(indent, vice_jaw_volume))
 
 	    # Compute *jaws_spread*:
 	    part_tne = part.tne
 	    part_bsw = part.bsw
-	    transformed_part_bsw = old_top_surface_transform * part_bsw
-	    transformed_part_tne = old_top_surface_transform * part_tne
-	    jaws_spread = (transformed_part_bsw.y - transformed_part_tne.y).absolute()
+	    top_part_bsw = top_surface_transform * part_bsw
+	    top_part_tne = top_surface_transform * part_tne
+	    jaws_spread = (top_part_bsw.y - top_part_tne.y).absolute()
+	    # FIXME: *vice_jaw_dx* should be based on the current extra material and no one
+            # the part dimensions!!!
+	    if trace_detail >= 2:
+		print("{0}top_part_bsw={1:i}".format(indent, top_part_bsw))
+		print("{0}top_part_tne={1:i}".format(indent, top_part_tne))
+		print("{0}jaws_spread={1:i}".format(indent, jaws_spread))
 
 	    # Find a *drill_tool* that matches *diameter*:
 	    if isinstance(diameter, str):
@@ -17756,21 +17790,33 @@ class Part:
 		drill_axis = (start - stop).normalize()
 		new_stop = stop - drill_axis * additional_z_depth.millimeters()
 		stop = new_stop
+		if trace_detail >= 2:
+		    print("{0}new_stop={1:i}".format(indent, new_stop))
 
 	    # Find *dowel_pin_tool* that matches *diameter*:
 	    deep_tracing = tracing + 1 if trace_detail >= 3 else -1000000
 	    dowel_pin_tool = part._tools_dowel_pin_search(diameter, deep_tracing)
+	    if tracing >= 2:
+		print("{0}dowel_pin_tool='{1}'".format(indent, dowel_pin_tool._name_get()))
 
-	    # Create *operation_side* and append it to *part*:
+	    # Grab *feed_speed* and *spindle_speed* from *dowel_pin_tool*:
 	    comment = ""
 	    feed_speed = dowel_pin_tool._feed_speed_get()
 	    spindle_speed = Hertz() # The spindle is off for this operaton:
+	    if tracing >= 2:
+		print("{0}feed_speed={1:I}".format(indent, feed_speed))
+		print("{0}spindle_speed={1}".format(indent, spindle_speed))
 	    
 	    # Compute *new_mount_translate_point* from the *old_mount_translate_point*:
-	    transformed_new_vice_center = old_top_surface_transform * new_vice_center
-	    vice_x = transformed_new_vice_center.x + vice_jaw_dx/2
+	    top_new_vice_center = top_surface_transform * new_vice_center
+	    vice_x = vice_jaw_dx/2 - top_new_vice_center.x
 	    new_mount_translate_point = \
 	      P(vice_x, old_mount_translate_point.y, old_mount_translate_point.z)
+	    if tracing >= 2:
+		print("{0}top_new_vice_center={1:i}".
+		  format(indent, top_new_vice_center))
+		print("{0}vice_x={1:i} new_mount_translate_point={2:i}".
+		  format(indent, vice_x, new_mount_translate_point))
 	
 	    # The code below is a little tricky.  We need to compute the hole end_points
             # using both the *old_cnc_transform* and the *new_cnc_transform*.  Next,
@@ -17779,8 +17825,11 @@ class Part:
             # is created, can we switch over to the *new_mount*.
 
 	    # Create *new_mount* from the *old_mount*, but with a *new_mount_name* and
-            # a *new_mount_translate point*:
+            # a *new_mount_translate point*:1
 	    new_mount = old_mount._remount(new_mount_name, new_mount_translate_point)
+	    #assert new_mount._top_surface_transform_get() == old_mount._top_surface_transform_get()
+	    if tracing >= 2:
+		print("{0}new_mount='{1}'".format(indent, new_mount._name_get()))
 
 	    # Using *old_cnc_transform* and *new_cnc_transform* compute the 4 needed
 	    # points for the *Operation_Slide* initializier:
@@ -17791,6 +17840,11 @@ class Part:
 	    new_cnc_stop  = new_cnc_transform * stop
 	    new_cnc_start = new_cnc_transform * start
 	    cnc_start = old_cnc_start
+	    if tracing >= 2:
+		print("{0}old_cnc_start={1:i} old_cnc_stop={2:i}".
+		  format(indent, old_cnc_start, old_cnc_stop))
+		print("{0}new_cnc_start={1:i} new_cnc_stop={2:i}".
+		  format(indent, new_cnc_start, new_cnc_stop))
 
 	    # Create *operation_slide* and tack it onto *part* using the *old_mount*:
 	    operation_slide = Operation_Slide(part, comment,
@@ -22284,11 +22338,12 @@ class Shop:
 	  L(inch="1-1/2") ] )
 	tool_change_x = L(inch=-1.500)
 	tool_change_y = L()
-	tool_change_z = L(inch=8.000)
+	tool_change_z = L(inch=8.500)
 	tool_change_point = P(tool_change_x, tool_change_y, tool_change_z)
 
 	# Create *vice*:
-	vice_volume = P(L(inch=5.1), L(inch=5.0), L(inch=1.5))
+	#vice_volume = P(L(inch=5.1), L(inch=5.0), L(inch=1.5))
+	vice_volume = P(L(inch=5.0), L(inch=5.0), L(inch=1.5))
 	vice = Vice("5in_Vice", vice_volume, parallels, tool_change_point)
 
 	# Initialize *shop*:
