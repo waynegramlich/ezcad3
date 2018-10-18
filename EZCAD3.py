@@ -11354,6 +11354,12 @@ class Part:
 	raise AttributeError("Part '{0}' instance has no attribute named '{1}'".
 	  format(self._name, name))
 
+    def is_cnc_mode(self):
+	""" *Part*: Return *True* if *Part* in the CNC construction mode. """
+
+	part = self
+	return part._ezcad._cnc_mode
+
     def _manufacture(self, ezcad, tree_depth, tracing=-1000000):
 	""" *Part*: Visit the *Part* object (i.e. *self*) and all is the children *Part*'s
 	    and perform any manufacturing steps.
