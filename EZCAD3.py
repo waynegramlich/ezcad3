@@ -16784,7 +16784,7 @@ class Part:
 	    plate_mount._extra_stop_set( extra_start_bsw, extra_start_tne)
 
 	    # Remember the *plate_holes* in both *vice_mount* and *plate_mount*.
-	    # *vice_mount* is needed for multi-mounting:
+	    # *vice_mount* are needed for multi-mounting:
 	    vice_mount._tooling_plate_holes_set( plate_holes, tracing = tracing + 1)
 	    plate_mount._tooling_plate_holes_set(plate_holes, tracing = tracing + 1)
 
@@ -20209,7 +20209,8 @@ class Code:
 	code._mode_motion(0, code._vrml_motion_color_tool_change)
 	code._length("X", tool_change_point.x)
 	code._length("Y", tool_change_point.y)
-	code._length("Z", tool_change_point.z)
+	safe_z = tool_change_point.z.maximum(code._mount._xy_rapid_safe_z_get())
+	code._length("Z", safe_z)
 	code._comment("Return to tool change point")
 	code._command_end()
 
@@ -20550,13 +20551,17 @@ class Code:
 	    print("{0}SB code._vrml_points={1}".
 	      format(indent, [ "{0:i}".format(vrml_point) for vrml_point in code._vrml_points ]))
 
+	# Figure out which Z to use for *tool_change_point*:
+	xy_rapid_safe_z = mount._xy_rapid_safe_z_get()
+	safe_z = tool_change_point.z.maximum(xy_rapid_safe_z)
+
 	# Start at *tool_change_point*:
 	code._command_begin()
 	code._unsigned("G8", 49) # Disable tool offset
 	code._mode_motion(0, code._vrml_motion_color_rapid)
 	code._length("X", tool_change_point.x)
 	code._length("Y", tool_change_point.y)
-	code._length("Z", tool_change_point.z)
+	code._length("Z", safe_z)
 	code._comment("Start at tool change point with tool offsets disabled")
 	code._command_end(vrml_suppress = True, tracing = tracing + 1)
 	if trace_detail >= 2:
@@ -22488,8 +22493,8 @@ class Shop:
 	stub = Tool.DRILL_STYLE_STUB
 	laser = True
 
-	dowel_pin = shop._dowel_pin_append("3/8 Dowel Pin",
-	  1, 9, hss, in3_8, L(inch=.900), in3_16)
+	#dowel_pin = shop._dowel_pin_append("3/8 Dowel Pin",
+	#  1, 9, hss, in3_8, L(inch=.900), in3_16)
 	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill [.9in]",
 	  2, hss, in3_8, 2, L(inch=.900), degrees90)
 	drill_36 = shop._drill_append("#36 [#6-32 75% thread]", # McMaster: 2912A211 2.5" deep drill
