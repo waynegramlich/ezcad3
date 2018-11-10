@@ -2153,15 +2153,15 @@ class BOM:
 	parent_bom._extrusions.extend(child_bom._extrusions)
 
     def _material_summary(self):
-	""" *BOM*: Generate a material summary:
+	""" *BOM*: Generate material summaries for the *BOM* object (i.e. *self*):
 	"""
 
-	# Use *bom* instead of *self*:
+	# Sort *blocks* (i.e. *self*) based on the associated key:
 	bom = self
-
 	blocks = bom._blocks
 	blocks.sort(key=BOM_Block.key)
 
+	# Further sweep through *block* and sort into *thicknesses*:
 	thicknesses = {}
 	for block in blocks:
 	    key = block._key
@@ -2171,33 +2171,78 @@ class BOM:
 	    else:
 		thicknesses[thickness_key] = [block]
 	
-	summary_file = open("/tmp/blocks.txt", "w")
-	thicknesses_keys = sorted(thicknesses.keys())
-	for thickness_key in thicknesses_keys:
-	    grouped_blocks = thicknesses[thickness_key]
-	    block0 = grouped_blocks[0]
-	    adjusted_dz = block0._adjusted_dz
-	    summary_file.write("{0} {1} {2}:\n".
-	      format(thickness_key[0], thickness_key[1], adjusted_dz))
-	    for block in grouped_blocks:
-		dx = block._dx
-		dy = block._dy
-		dz = block._dz
-		part_name = block._part.name_get()
-		summary_file.write("    {0:i} x {1:i} x {2:i}: '{3}\n".
-		  format(dx, dy, dz, part_name))
-	summary_file.close()
+	# Write out the *blocks_file*:
+	with open("/tmp/blocks.txt", "w") as blocks_file:
+	    blocks_file.write("# Note that block sizes do not include extra material!!!\n")	    
+	    thicknesses_keys = sorted(thicknesses.keys())
+
+	    # Output based on thickness first:
+	    for thickness_key in thicknesses_keys:
+		grouped_blocks = thicknesses[thickness_key]
+		block0 = grouped_blocks[0]
+		adjusted_dz = block0._adjusted_dz
+		blocks_file.write("{0} {1} {2}:\n".
+		  format(thickness_key[0], thickness_key[1], adjusted_dz))
+
+		# Output each *block*:
+		for block in grouped_blocks:
+		    part_name = block._part.name_get()
+		    blocks_file.write("    {0:i} x {1:i} x {2:i}: '{3}\n".
+		      format(block._dx, block._dy, block._dz, part_name))
 	
-	# Write out the extrusions file:
+	# For each *extrusion* in *extrusions* create an *extrusion_key* and group the
+	# *extrusion* into *extrusion_groups* by key:
+	extrusions = bom._extrusions
+	extrusions.sort(key=BOM_Extrusion.key)
+	extrusion_groups = {}
+	for extrusion in extrusions:
+	    # Create *extrusion_key* and tack onto *extrusion_keys* list:
+	    kind = extrusion._kind
+	    a_width = extrusion._a_width.inches()
+	    b_width = extrusion._b_width.inches()
+	    extrusion_key = (kind, a_width, b_width)
+	    #print("extruion_key={0}".format(extrusion_key))
+
+	    # Sort extrution into approprate extrusion_group:
+	    if extrusion_key in extrusion_groups:
+		# Access previously created *extrusion_group*:
+		extrusion_group = extrusion_groups[extrusion_key]
+	    else:
+		# Create a new *extrusion_group* and stuff into *extrusions_group*:
+		extrusion_group = []
+		extrusion_groups[extrusion_key] = extrusion_group
+
+	    # Append *extrusion* to appropriate *extrusion_group*:
+	    extrusion_group.append(extrusion)
+
+	# Write out the *extrusions_file*:
 	with open("/tmp/extrusions.txt", "w") as extrusions_file:
-	    extrusions = bom._extrusions
-	    #print("len_extrusions={0}".format(len(extrusions)))
-	    extrusions.sort(key=BOM_Extrusion.key)
-	    for extrusion in extrusions:
-		length = extrusion._length
-		name = extrusion._part._name_get()
-		extrusions_file.write("{0:5} {1:.3i} x {2:.3i}: {3:30} {4:.3i}\n".format(
-		  extrusion._kind, extrusion._a_width, extrusion._b_width, name, length))
+	    extrusions_file.write("# Note that extrusions do not include extra matieral!!!\n")
+
+	    # Output each *extrusion_group* based on sorted *extrusion_keys*:
+	    extrusion_keys = extrusion_groups.keys()
+	    extrusion_keys.sort()
+	    for extrusion_key in extrusion_keys:
+		# Grab the associated *extrusion_group* based on *extrusion_key* and compute
+		# the *total_length:
+		extrusion_group = extrusion_groups[extrusion_key]
+		total_length = L()
+		for extrusion in extrusion_group:
+		    total_length += extrusion._length
+
+		# Output the extrusion group heading:
+		kind    = extrusion_key[0]
+		a_width = extrusion_key[1]
+		b_width = extrusion_key[2]
+		extrusions_file.write("{0} {1:.3} x {2:.3}: Total length={3:.3i}in ({3:.3f}ft)\n".
+		  format(kind, a_width, b_width, total_length))
+
+		# Now output each *extrusion* from *extrusion_group*:
+		extrusion_group.sort(key=BOM_Extrusion.key)
+		for extrusion in extrusion_group:
+		    length = extrusion._length
+		    name = extrusion._part._name_get()
+		    extrusions_file.write("    {0:30} {1:.3i}\n".format(name, length))
 
 class BOM_Block:
     """ *BOM_Block*: Represents a block of material.
@@ -4884,7 +4929,7 @@ class Mount:
 
     def __init__(self, name, part, top_surface_transform, mount_translate_point,
       top_surface_safe_z, xy_rapid_safe_z, is_tooling_plate_mount, selected_parallel_height,
-      tracing=-1000000):
+      tool_change_point=None, tracing=-1000000):
 	""" *Mount*: Initialize the *Mount* object (i.e. *self*) to contain *name*, *part*,
 	    * *top_surface_transform*, and *mount_translate_point*.
 	    * *name*: provides a mount name for debugging purposes.
@@ -4916,13 +4961,14 @@ class Mount:
 	assert isinstance(xy_rapid_safe_z, L)
 	assert isinstance(is_tooling_plate_mount, bool)
 	assert isinstance(selected_parallel_height, L)
+	assert isinstance(tool_change_point, P) or tool_change_point == None
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i}, {6}, {7:i})".
+	    print("{0}=>Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i}, {6}, {7:i}, *)".
 	      format(indent, name, part._name_get(), mount_translate_point, top_surface_safe_z,
 	      xy_rapid_safe_z, is_tooling_plate_mount, selected_parallel_height))
 	    trace_detail = 2
@@ -4936,6 +4982,13 @@ class Mount:
 	if trace_detail >= 2:
 	    print("{0}top_surface_transform={1:v}".format(indent, top_surface_transform))
 	    print("{0}cnc_transform={1:v}".format(indent, cnc_transform))
+
+	# If *tool_change_point* is not set, use the value stored in *vice*:
+	if not isinstance(tool_change_point, P):
+	    shop = part._shop_get()
+	    vice = shop._vice_get()
+	    tool_change_point = vice._tool_change_point_get()
+	    assert isinstance(tool_change_point, P)
 
 	# Load up *mount*:
 	zero = L()
@@ -4953,6 +5006,7 @@ class Mount:
 	mount._selected_parallel_height = selected_parallel_height # Height of the parallel to use
 	mount._spacers = []					# Tooling plate spacer locations
 	mount._stl_vrml = None					# STL *VRML* object for mount
+	mount._tool_change_point = tool_change_point		# The tool change point to use
 	mount._tooling_plate_holes = []				# Each tooling plate hole (x, y)
 	mount._top_surface_safe_z = top_surface_safe_z		# Z altitude above which Z rapids OK
 	mount._top_surface_transform = top_surface_transform	# Transfrom from part to CNC orgin
@@ -4964,7 +5018,7 @@ class Mount:
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i}, {6}, {7:i})".
+	    print("{0}<=Mount.__init__('{1}', '{2}', *, {3:i}, {4:i}, {5:i}, {6}, {7:i}, *)".
 	      format(indent, name, part._name_get(), mount_translate_point, top_surface_safe_z,
 	      xy_rapid_safe_z, is_tooling_plate_mount, selected_parallel_height))
 
@@ -5190,6 +5244,7 @@ class Mount:
 	new_mount._extra_stop_tne           = old_mount._extra_stop_tne
 	new_mount._is_tooling_plate_mount   = old_mount._is_tooling_plate_mount
 	new_mount._selected_parallel_height = old_mount._selected_parallel_height
+	new_mount._tool_change_point        = old_mount._tool_change_point
 	return new_mount
 
     def _selected_parallel_height_get(self):
@@ -5262,6 +5317,12 @@ class Mount:
 	    print("{0}<=Mount._stl_vrml_get('{1}')=>'{2}'".
 	      format(indent, mount._name, stl_vrml._name_get()))
 	return stl_vrml
+
+    def _tool_change_point_get(self):
+	""" *Mount*: Return the tool change point for the *Mount* object (i.e. *self*):
+	"""
+
+	return self._tool_change_point
 
     def _tooling_plate_holes_get(self):
 	""" *Mount*: Return all of the tooling holes locations with the *Mount* object
@@ -5927,8 +5988,10 @@ class Mount_Operations:
 	    # path visualization:
 	    shop = part._shop_get()
 	    code = shop._code_get()
+	    vice = shop._vice_get()
+	    tool_change_point = mount0._tool_change_point_get()
 	    code._start(part, tool, tool_program_number,
-	      spindle_speed, mount0, cnc_vrml_lines, tracing = tracing + 1)
+	      spindle_speed, mount0, tool_change_point, cnc_vrml_lines, tracing = tracing + 1)
 	    if trace_detail >= 2:
 		print("{0}A code._vrml_points={1}".format(indent,
 		  ["{0:i}".format(vrml_point) for vrml_point in code._vrml_points]))
@@ -17152,7 +17215,7 @@ class Part:
 
     def vice_mount(self, name, top_surface, jaw_surface, flags,
       extra_dx=L(), extra_dy=L(), extra_top_dz=L(), extra_bottom_dz=L(),
-      parallel_height_extra=L(), vice_center=None, tracing=-100000):
+      parallel_height_extra=L(), vice_center=None, tool_change_point=None, tracing=-100000):
 	""" *Part*: Cause the *Part* object (i.e. *self*) to be mounted in a vice with
 	    * *top_surface* facing upwards and *jaw_surface* mounted towards the rear vice jaw.
 	    * *name*: is the name assigned to the internally generated *Mount* object for
@@ -17181,6 +17244,7 @@ class Part:
 	    * *vice_center*: (optional) specifies the exact point in the *Part* object
 	      (i.e. *self*) that should be placed in the center of the vice.  This will override
 	      any part adjustment caused by the 'l' and 'r' flags.
+	    * *tool_change_point*: (optional) specifies where the point where tool changes occur.
 	"""
 
 	# Use *part* instead of self:
@@ -17200,6 +17264,7 @@ class Part:
 	assert isinstance(extra_bottom_dz, L) # and extra_bottom_dz >= zero
 	assert isinstance(parallel_height_extra, L)
 	assert isinstance(vice_center, P) or vice_center == None
+	assert isinstance(tool_change_point, P) or tool_change_point == None
 
 	# Preform any requested *tracing*:
 	detail_tracing = -1000000
@@ -17494,6 +17559,10 @@ class Part:
 	    if trace_detail >= 1:
 		print("{0}vice_jaw_volume={1:i}".format(indent, vice_jaw_volume))
 
+	    # If no *tool_change_point* is specified, grab it from *vice*:
+	    if not isinstance(tool_change_point, P):
+		tool_change_point = vice._tool_change_point_get()
+
 	    # Now compute the *half_part_dx*, *half_part_dy*, and *half_part_dz*:
 	    half_part_dx = c.distance(left_dowel_point)
 	    half_part_dy = c.distance(jaw_point)
@@ -17616,7 +17685,7 @@ class Part:
 	    # Create *mount* and stuff into *part*:
 	    mount = Mount(name, part, top_surface_transform, mount_translate_point,
 	      cnc_top_surface_safe_z, cnc_xy_rapid_safe_z, False, selected_parallel_height,
-	      tracing = tracing + 1)
+	      tool_change_point = tool_change_point, tracing = tracing + 1)
 	    part._mount_register(mount, tracing = tracing + 1)
 
 	    # We can only deal with the extra material if the part is oriented correctly.
@@ -20460,7 +20529,8 @@ class Code:
 	code._z = big
 	code._z1 = zero
 
-    def _start(self, part, tool, tool_program_number, spindle_speed, mount, vrml, tracing=-1000000):
+    def _start(self, part, tool, tool_program_number, spindle_speed,
+      mount, tool_change_point, vrml, tracing=-1000000):
 	""" *Code*: Start writing out the G-code for *tool*...
 	"""
 
@@ -20473,6 +20543,7 @@ class Code:
 	assert isinstance(tool_program_number, int)
 	assert isinstance(spindle_speed, Hertz)
 	assert isinstance(mount, Mount)
+	assert isinstance(tool_change_point, P)
 	assert isinstance(vrml, VRML_Lines)
 	assert isinstance(tracing, int)
 
@@ -20525,7 +20596,6 @@ class Code:
 	# Grap *vice* and *tool_change_point* and save into *code*:
 	shop = ezcad._shop_get()
 	vice = shop._vice_get()
-	tool_change_point = vice._tool_change_point_get()
 	code._tool_change_point = tool_change_point
 
 	# Clear out *vrml_points* and intialize the location to be at *tool_change_point*:
