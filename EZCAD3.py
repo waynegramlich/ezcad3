@@ -5703,8 +5703,9 @@ class Mount_Operations:
 	    next_mount_program_number -= next_mount_program_number % 10
 
 	    # Write out the final G-code lines to *mount_ngc_file*:
-	    # FIXME: Read tool change point from *vice*:
-	    mount_ngc_file.write("G49 G0 X-1.5 Y0 Z8 ( Return to tool change point )\n")
+	    tool_change_point = mount._tool_change_point_get()
+	    mount_ngc_file.write("G49 G0 X{0:i} Y{1:i} Z{2:i} ( Return to tool change point )\n".
+              format(tool_change_point.x, tool_change_point.y, tool_change_point.z))
 	    mount_ngc_file.write("( Estimated time: {0:m} )\n".format(total_path_time))
 	    #mount_ngc_file.write("G53 G0 Y0.0 ( Move the work to the front )\n")
 	    mount_ngc_file.write("M2\n")
