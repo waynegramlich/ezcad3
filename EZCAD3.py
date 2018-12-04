@@ -5704,8 +5704,13 @@ class Mount_Operations:
 
 	    # Write out the final G-code lines to *mount_ngc_file*:
 	    tool_change_point = mount._tool_change_point_get()
-	    mount_ngc_file.write("G49 G0 X{0:i} Y{1:i} Z{2:i} ( Return to tool change point )\n".
-              format(tool_change_point.x, tool_change_point.y, tool_change_point.z))
+	    mount_ngc_file.write(
+	      "( Assume previous operation left tool at Z-safe height for the tool )\n")
+	    mount_ngc_file.write("G0 X{0:i} Y{1:i} ( Return to tool change point X/Y )\n".
+              format(tool_change_point.x, tool_change_point.y))
+	    mount_ngc_file.write(
+	      "G49 G0 Z{0:i} ( Disable tool offsets and return to final tool change point Z)\n".
+	      format(tool_change_point.z))
 	    mount_ngc_file.write("( Estimated time: {0:m} )\n".format(total_path_time))
 	    #mount_ngc_file.write("G53 G0 Y0.0 ( Move the work to the front )\n")
 	    mount_ngc_file.write("M2\n")
@@ -16281,21 +16286,23 @@ class Part:
 		      format(indent, end_mill_feed_speed, end_mill_spindle_speed))
 
 		# Define some X/Y/Z coordinates:
-		extra = L(inch="1/8")
-		x9 = top_bounding_box_tne.x + end_mill_diameter + extra
+		x_extra = L(inch="1/8")
+		x9 = top_bounding_box_tne.x + end_mill_diameter + x_extra
 		x8 = top_bounding_box_tne.x
 		x1 = top_bounding_box_bsw.x
-		x0 = top_bounding_box_bsw.x - end_mill_diameter - extra
+		x0 = top_bounding_box_bsw.x - end_mill_diameter - x_extra
 
-		y9 = top_bounding_box_tne.y + end_mill_radius
+		y_extra = L(inch="1/4")
+		y9 = top_bounding_box_tne.y + end_mill_radius + y_extra
 		y8 = top_bounding_box_tne.y
 		y1 = top_bounding_box_bsw.y
-		y0 = top_bounding_box_bsw.y - end_mill_radius
+		y0 = top_bounding_box_bsw.y - end_mill_radius - y_extra
 
+		z_extra = L(inch="1/16")
 		z9 = top_extra_stop_tne.z
 		z8 = top_bounding_box_tne.z
 		z1 = top_bounding_box_bsw.z
-		z0 = top_extra_stop_bsw.z - extra
+		z0 = top_extra_stop_bsw.z - z_extra
 
 		# Figure out the pocket dimensions for top surface space:
 		if is_left:
@@ -20274,14 +20281,19 @@ class Code:
 
 	# Return to *tool_change_point*:
 	tool_change_point = code._tool_change_point
+	safe_z = code._mount._xy_rapid_safe_z_get()
 	code._command_begin()
-	code._unsigned("G8", 49)	# Disable tool offset
 	code._mode_motion(0, code._vrml_motion_color_tool_change)
 	code._length("X", tool_change_point.x)
 	code._length("Y", tool_change_point.y)
-	safe_z = tool_change_point.z.maximum(code._mount._xy_rapid_safe_z_get())
 	code._length("Z", safe_z)
-	code._comment("Return to tool change point")
+	code._comment("Return to tool change point at Z-safe height")
+	code._command_end()
+
+	# Disable the tool offset:
+	code._command_begin()
+	code._unsigned("G8", 49)
+	code._comment("Disable tool offset")
 	code._command_end()
 
 	# Write out the final commands to wrap up the subroutine and end the 
@@ -20670,6 +20682,18 @@ class Code:
 	    code_stream.write("M8 (Coolant on)\n")
 	else:
 	    code_stream.write("M9 (Coolant off)\n")
+
+	# Now force the tool to *tool_change_point* with tool offset on:
+	#code._command_begin()
+	#code._mode_motion(0, code._vrml_motion_color_rapid)
+	#code._length("X", tool_change_point.x)
+	#code._length("Y", tool_change_point.y)
+	#code._length("Z", safe_z + L(inch=0.001))
+	#code._comment("Stay at tool change point with tool offsets enabled")
+	#code._command_end(vrml_suppress = True, tracing = tracing + 1)
+	if trace_detail >= 2:
+	    print("{0}SC code._vrml_points={1}".
+	      format(indent, [ "{0:i}".format(vrml_point) for vrml_point in code._vrml_points ]))
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -21744,6 +21768,7 @@ class Code:
 	    code._mode_motion(0, code._vrml_motion_color_rapid)
 	    code._length("X", x)
 	    code._length("Y", y)
+	    code._comment("Z Safe")
 	    code._command_end()
 
 	    # Estimate the time it takes to perform the operation:
@@ -21862,6 +21887,7 @@ class Code:
 		    code._command_begin()
 		    code._mode_motion(0, code._vrml_motion_color_retract)
 		    code._length("Z", z_target)
+		    code._comment("Get to Z target (from_routine='{0}')".format(from_routine))
 		    code._command_end()
 		    z_current = z_target
 
@@ -22605,8 +22631,8 @@ class Shop:
 	  15, hss, L(inch=0.0700), 4, L(inch=0.750), "#50", degrees118, stub, no_center_cut, drills)
 	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill [1.6in]",
 	  16, hss, in3_8, 4, L(inch=1.600), not laser)
-	dowel_3_8_long = shop._dowel_pin_append("3/8 Dowel Pin [1.5in]",
-	  16, 66, hss, in3_8, L(inch=1.500), zero)
+	dowel_3_8_long = shop._dowel_pin_append("3/8 Dowel Pin [1.6in]",
+	  16, 66, hss, in3_8, L(inch=1.600), zero)
 	#end_mill_3_4 = shop._end_mill_append("3/4 End Mill",
 	#  13, hss, in3_4, 2, in1_3_8)
 	drill_30 = shop._drill_append("#30 [#4-40 free]",
