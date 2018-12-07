@@ -18853,7 +18853,7 @@ class Fastener(Part):
     # M5.0x0.80 ~= #10-32	  0.1960	5.3 = 0.2087*
     # M6.0x1.00 ~= 1/4-20	  0.2570*	6.4 = 0.2520
 
-    def __init__(self, up, name):
+    def __init__(self, up, name, color="red"):
 	""" *Fastener*: Initialize the *Fastener* object (i.e. *self*) to have a parent of *up*
 	    and a name of *name*.
 	"""
@@ -18864,6 +18864,7 @@ class Fastener(Part):
 	# Verify argument types:
 	assert isinstance(up, Part) or up == None
 	assert isinstance(name, str)
+	assert isinstance(color, str)
 
 	# Initialize the *Part* super class:
 	Part.__init__(self, up, name)
@@ -18873,7 +18874,7 @@ class Fastener(Part):
 
 	zero = L()
 	fastener.comment_s = name
-	fastener.color = Color("red")
+	fastener.color = Color(color)
 	fastener.material = Material("steel", "stainless")
 	fastener.start_p = P()
 	fastener.end_p = P()
@@ -18894,7 +18895,7 @@ class Fastener(Part):
 
     def configure(self, start, end, flags,
       head_washer_diameter = None, tail_washer_diameter = None, sides_angle = None,
-      tracing=-1000000):
+      color=None, tracing=-1000000):
      	""" *Fastener*: Confitugure the *Fastener* object (i.e. *self*).
 	    *comment* shows up in generated CNC.  *material* specifies the fastener material.
 	    *color* specifies the rendering color.  *start* and *end* specify the end points
@@ -18913,6 +18914,8 @@ class Fastener(Part):
 	assert isinstance(head_washer_diameter, L) or head_washer_diameter == None
 	assert isinstance(tail_washer_diameter, L) or tail_washer_diameter == None
 	assert isinstance(sides_angle, Angle) or sides_angle == None
+	assert isinstance(color, Color) or color == None
+	assert isinstance(tracing, int)
 
 	# Perform an requested *tracing*:
 	trace_detail = -1
@@ -19042,6 +19045,8 @@ class Fastener(Part):
 	fastener.flat_head_diameter_l = flat_head_diameter
 	fastener.start_p = start
 	fastener.end_p = end
+	if color != None:
+	    fastener.color = color
 
 	# Wrap up any *tracing*:
 	if tracing >= 0:
