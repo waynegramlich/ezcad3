@@ -73,6 +73,20 @@
 #
 ####################################################################################################
 
+# Useful Tap URL:
+#   https://www.threadtools.com/Threadtools.com/files/0e/0eaf24e0-7856-445a-ab42-8687422026d7.pdf
+#
+# Tapping G-Code:
+#
+# M8 ( Coolant )
+# S500 M3  ( RPMS, M3 Spindle on CW )
+# G1 Z-0.25 F17.73 (Tapping to Z at 10% slower feed rate )
+# M4 ( Spindle Reverse )
+# G4 P0.3 ( Dwell for .3 seconds )
+# G1 Z0.4 F21.67 ( Free out at 10% faster )
+# M3 ( Spindle CW)
+# G4 P0.6 ( Dwell of 0.6 seconds before moving to next hole )
+
 # Mounting:
 #
 # This is an overview of the of the various issues associated with part mounting.
@@ -16423,7 +16437,7 @@ class Part:
 		start_extra = L(mm = 1.0)
 		end_extra = zero
 		if flags == "t":
-		    end_extra = L(mm = 1.0)
+		    end_extra = L(mm = 1.5)
 
 		# Compute the *start* and *end* points:
 		#start = P(x_center, y_center, z2 + start_extra)
