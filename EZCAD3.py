@@ -10870,9 +10870,8 @@ class Part:
 
 	# Use *part* instead of *self*:
 	part = self
-
 	current_mount = part._current_mount
-	assert isinstance(current_mount, Mount)
+	assert isinstance(current_mount, Mount), "No mount for Part '{0}'".format(part._name)
 	return current_mount
 
     def _dimensions_update(self, ezcad, tracing):
@@ -15258,7 +15257,7 @@ class Part:
 	    * *comment* will show up in any generated RS-274 code or error messages:
             * *diameter* can be either a length (*L*) or a string (*str*).  If it is a
 	      a string, it is of the form "S:F", where S is a screw thread (e.g. "#0-80",
-	      "2-56", ..., "1/4-20") and F is a hole fit (either "close" or "loose").
+	      "#2-56", ..., "1/4-20") and F is a hole fit (either "close" or "loose").
 	"""
 
 	# Use *part* instead of *self*:
@@ -19237,7 +19236,7 @@ class Fastener(Part):
 	    indent = ' ' * tracing
 	    print("{0}=>Fastener._fasten('{1}', '{2}', '{3}', '{4}')".
 	      format(indent, fastener._name, comment, part._name_get(), select))
-	    trace_detail = 1
+	    trace_detail = 3
 
 	# No need to do anything until we are past dimensions mode:
 	ezcad = part._ezcad_get()
@@ -19284,7 +19283,7 @@ class Fastener(Part):
 		start = transform * start
 		end = transform * end
 	    if trace_detail >= 1:
-		print("{0}start={1:i} end={2:i}".format(indent, start, end))
+		print("{0}transformed start={1:i} end={2:i}".format(indent, start, end))
 
 	    # Clip *start* and *end* to be within the bounding box of *part* to create
 	    # *new_start* and *new_end*:
@@ -19331,8 +19330,9 @@ class Fastener(Part):
 	    #  fastener.comment_s, start, new_start, end, new_end)
 	    epsilon = L(inch=.00000001)
 	    if new_start.distance(new_end) < epsilon:
-	      "Fastener.fasten: Part '{0}' (center={1:i}) misses Fastener '{2}' (center={3:i}". \
-	      format(fastener.comment_s, fastener.c, part.name_get(), part.c)
+		print(("Fastener._fasten: Part '{0}' (center={1:i})" + 
+		  " misses Fastener '{2}' (center={3:i}"). \
+		  format(fastener.comment_s, fastener.c, part.name_get(), part.c))
 	    else:
 		part.hole(hole_name, diameter, new_start, new_end, flags, tracing = tracing + 1)
 
@@ -23164,10 +23164,11 @@ class Tool:
     KIND_END_MILL = 3
     KIND_MILL_DRILL = 4
     KIND_DRILL = 5
-    KIND_DOUBLE_ANGLE = 6
-    KIND_DOVE_TAIL = 7
-    KIND_LASER = 8
-    KIND_LAST = 9
+    KIND_TAP = 6
+    KIND_DOUBLE_ANGLE = 7
+    KIND_DOVE_TAIL = 8
+    KIND_LASER = 9
+    KIND_LAST = 10
 
     # Drill style:
     DRILL_STYLE_NONE = 0
@@ -23943,6 +23944,30 @@ class Tool_Mill_Drill(Tool):		# A mill-drill bit
 	radius = diameter / 2
 	tip_depth = radius * (Angle(deg=90.0) - point_angle/2).tangent()
 	return tip_depth
+
+class Tool_Tap(Tool):
+    """ *Tool_Tap*: Represents a tapping tool.
+    """
+
+    def __init__(self, name, number, material, diameter, flutes_count, maximum_z_depth):
+        """ *Tool_Tap*: Initialize the *Tool_Tap* object (i.e. *self*):
+	"""
+
+	# Verify argument types:
+	zero = L()
+	assert isinstance(up, Part) or up == None
+	assert isinstance(name, str) and not ' ' in name
+	assert isinstance(number, int) and number >= 0
+	assert isinstance(material, int) and Tool.Material_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L) and diameter >= zero	# Zero is OK
+	assert isinstance(flutes_count, int) and flutes_count > 0
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+
+	tap = self
+	Tool.__init__(tap,
+	  name, number, Tool.KIND_TAP, material, diameter, flues_count, maximum_z_depth)
+	#FIXME: more here!!!
+
 
 class Tooling_Plate:
     """ *Tooling_Plate*: A *Tooling_Plate* object represents a flat plate of holes
