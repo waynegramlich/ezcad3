@@ -73,20 +73,6 @@
 #
 ####################################################################################################
 
-# Useful Tap URL:
-#   https://www.threadtools.com/Threadtools.com/files/0e/0eaf24e0-7856-445a-ab42-8687422026d7.pdf
-#
-# Tapping G-Code:
-#
-# M8 ( Coolant )
-# S500 M3  ( RPMS, M3 Spindle on CW )
-# G1 Z-0.25 F17.73 (Tapping to Z at 10% slower feed rate )
-# M4 ( Spindle Reverse )
-# G4 P0.3 ( Dwell for .3 seconds )
-# G1 Z0.4 F21.67 ( Free out at 10% faster )
-# M3 ( Spindle CW)
-# G4 P0.6 ( Dwell of 0.6 seconds before moving to next hole )
-
 # Mounting:
 #
 # This is an overview of the of the various issues associated with part mounting.
@@ -548,14 +534,19 @@ class L:
     #
     # <I>__mul__</I>() returns *self* &times; *number*.  *number* must
     # be either a *float* or an *int*.
-    def __rmul__(self, number):
+    def __rmul__(self, right):
 	""" *L*: Multiply *self* by *number*. """
 
 	# Check argument types:
-	assert isinstance(number, float) or isinstance(number, int)
+	assert isinstance(right, float) or isinstance(right, int) or isinstance(right, Hertz)
 
 	# Return result:
-	return L(self._mm * number)
+	mm = self._mm
+	if isinstance(right, Hertz):
+	    result = Speed(mm_per_sec = mm * right.frequency())
+        else:
+	    result = L(mm * right)
+	return result
 
     ## @brief Return *self* converted to a string.
     #  @param self is the *L* object to convert.
@@ -3084,13 +3075,20 @@ class Speed:
 	    format_text = format_text[:-1]
 	else:
             assert False, "Unrecognized Speed format '{0}'".format(format_text)
-	
+
 	# Format the value as a string and return it:
 	value = self._mm_per_sec * scale
 	speed_format_text = "{0:" + format_text + "f}"
 	#print("base={0} format_text='{1}' scaled={2} speed_format_text='{3}'".
 	#  format(self._mm_per_sec, format_text, value, speed_format_text))
 	return speed_format_text.format(value)
+
+    def __mul__(self, right):
+	""" *Speed*: Return the product of the *Speed* object (i.e. *self*) with *right*.
+	"""
+
+	assert isinstance(right, float)
+	return Speed(mm_per_sec=self._mm_per_sec * right)
 
     def millimeters_per_second(self):
 	""" *Speed*: Return the speed a *float* in millimeters per second.
@@ -4841,7 +4839,7 @@ class EZCAD3:
 	lines = []
 	lines.append("( Canned subroutine for drilling holes with pecking )")
 	lines.append("( o83 call [#1] [#2] [#3] [#4]    [#5]     [#6]        [#7]       [#8]     )")
-	lines.append("o83 sub  ( [F]  [X]  [Y]  [Z_TOP] [Z_SAFE] [Z_RETRACT] [Z_BOTTOM] [Z_PECK] )")
+	lines.append("( o83 sub ( [F]  [X]  [Y]  [Z_TOP] [Z_SAFE] [Z_RETRACT] [Z_BOTTOM] [Z_PECK] )")
 	lines.append("                  ( Local variables [Z]: #9 )")
 	lines.append("G0 Z[#4]               ( // Make sure we are at Z_TOP )")
 	lines.append("G0 X[#2] y[#3]         ( // Make sure we are at [X, Y] )")
@@ -4861,6 +4859,38 @@ class EZCAD3:
 	lines.append("o83 call [10] [0] [0] [.5] [.1] [-.5] [.2] ( Example call )")
 	lines.append("m2                 ( // End of File )")
 	ngc_directory._lines_write("83.ngc", lines)
+
+	# Example tap code
+	# S500 M3  ( RPMS, M3 Spindle on CW )
+	# G1 Z-0.25 F17.73 (Tapping to Z at 10% slower feed rate )
+	# M4 ( Spindle Reverse )
+	# G4 P0.3 ( Dwell for .3 seconds )
+	# G1 Z0.4 F21.67 ( Free out at 10% faster )
+	# M3 ( Spindle CW )
+	# G4 P0.6 ( Dwell of 0.6 seconds before moving to next hole )
+
+	# Construct subroutine `61.ngc` as a list of lines and write out to *ngc_directory*:
+	lines = []
+	lines.append("( Canned subroutine for threading a hole. )")
+	lines.append(("( o61 call [#1]            [#2]    [#3] [#4] [#5]     " +
+	              "[#6]        [#7]     [#8]           [#9]      [#10]       )"))
+	lines.append(("( o61 sub  [SPINDLE_SPEED] [Z_SAFE] [X] [Y] [Z_START] " +
+	              "[DOWN_FEED] [Z_STOP] [BOTTOM_DWELL] [UP_FEED] [TOP_DWELL] )"))
+	lines.append("S[#1] M3        ( Ensure the spindle is clockwise at SPINDLE_SPEED )")
+	lines.append("G0 Z[#2]        ( Make we are at Z_SAFE )" )
+	lines.append("G0 X[#3] Y[#4]  ( Make sure we are at [X, Y] )")
+	lines.append("G0 Z[#5]        ( Rapid down to Z_START in air)")
+	lines.append("G1 F[#6] Z[#7]  ( Put tap in at DOWN_FEED to Z_STOP )")
+	lines.append("M4              ( Reverse spindle direction )")
+	lines.append("G4 P[#8]        ( Dwell for BOTTOM_DWELL sec. for spindle reverse )")
+	lines.append("G1 F[#9] Z[#5]  ( Pull tap out at UP_FEED speed to Z_START ) ")
+	lines.append("M3              ( Put spindle back into the forward direction )")
+	lines.append("G0 Z[#2]        ( Make we are at Z_SAFE again )" )
+	lines.append("G4 P[#10]       ( Dwell for TOP_DWELL sec. for spindle to respin ) ")
+	lines.append("o61 endsub      ( End of subroutine )")
+	lines.append("m2              ( End of file )")
+	ngc_directory._lines_write("61.ngc", lines)
+	
 
     def _scad_directory_get(self):
 	""" *EZCAD3*: Return the directory to read/write SCAD files from/into from the *EZCAD3*
@@ -5970,10 +6000,10 @@ class Mount_Operations:
 	# Grap some values from *tool_mount_operations*:
 	pairs = tool_mount_operations._pairs
 	assert len(pairs) > 0
-	pair0 = pairs[0]
-	mount0 = pair0._mount_get()
-	mount0_cnc_transform = mount0._cnc_transform_get()
-	operation0 = pair0._operation_get()
+	pair_last = pairs[-1]
+	mount_last = pair_last._mount_get()
+	mount_last_cnc_transform = mount_last._cnc_transform_get()
+	operation_last = pair_last._operation_get()
 
 	# While *Operation_Mount._cnc_generate*() does not actually generate any CNC code
 	# it *DOES* generate VRML for CNC visualization.  Thus, we must actually call
@@ -5983,17 +6013,17 @@ class Mount_Operations:
 	new_tool_program_number = tool_program_number
 	if True:
 	    # Grab some values from *tool_mount_operations*:
-	    tool = operation0._tool_get()
-	    feed_speed = operation0._feed_speed_get()
-	    spindle_speed = operation0._spindle_speed_get()
-	    part = operation0._part_get()
+	    tool = operation_last._tool_get()
+	    feed_speed = operation_last._feed_speed_get()
+	    spindle_speed = operation_last._spindle_speed_get()
+	    part = operation_last._part_get()
 
 	    # Remember that *part* uses *tool*:
 	    tool._part_register(part)
 
 	    # Create *cnc_tool_vrml* for recording just this *tool*:
 	    part_name = part._name_get()
-	    mount_name = mount0._name_get()
+	    mount_name = mount_last._name_get()
 	    tool_name = tool._name_get()
 	    cnc_tool_vrml_name = "{0}__{1}__{2}__Tool".format(part_name, mount_name, tool_name)
 	    cnc_tool_vrml = VRML_Group(cnc_tool_vrml_name)
@@ -6009,9 +6039,9 @@ class Mount_Operations:
 	    shop = part._shop_get()
 	    code = shop._code_get()
 	    vice = shop._vice_get()
-	    tool_change_point = mount0._tool_change_point_get()
+	    tool_change_point = mount_last._tool_change_point_get()
 	    code._start(part, tool, tool_program_number,
-	      spindle_speed, mount0, tool_change_point, cnc_vrml_lines, tracing = tracing + 1)
+	      spindle_speed, mount_last, tool_change_point, cnc_vrml_lines, tracing = tracing + 1)
 	    if trace_detail >= 2:
 		print("{0}A code._vrml_points={1}".format(indent,
 		  ["{0:i}".format(vrml_point) for vrml_point in code._vrml_points]))
@@ -6087,8 +6117,8 @@ class Mount_Operations:
 	    tool_name = tool._name_get()
 	    if tool_name != "None":
 		mount_ngc_file.write("O{0} call ( T{1}: {2} Priority: {3} Time:{4:m})\n".format(
-		  tool_program_number, tool._number_get(), tool_name, operation0._priority_get(),
-		  code._time_get()))
+		  tool_program_number, tool._number_get(), tool_name, operation_last._priority_get(),
+		  code._total_time_get()))
 
 	    # Update *path_bounding_box*:
 	    path_bounding_box.bounding_box_expand(code._bounding_box_get())
@@ -6100,9 +6130,9 @@ class Mount_Operations:
 
 	    # Now output *cnc_tool_vrml* to the *ngc_directory* if it is not a mount operation:
 	    if trace_detail >= 3:
-		print("{0}operation0='{1}' is_mount={2}".
-		  format(indent, operation0._name_get(), operation0._is_mount_get()))
-	    if not operation0._is_mount_get():
+		print("{0}operation_last='{1}' is_mount={2}".
+		  format(indent, operation_last._name_get(), operation_last._is_mount_get()))
+	    if not operation_last._is_mount_get():
 		ezcad = part._ezcad_get()
 		ngc_directory = ezcad._ngc_directory_get()
 		cnc_tool_vrml_padded_text = cnc_tool_vrml._text_pad(0)
@@ -7196,9 +7226,10 @@ class Operation:
     ORDER_DOUBLE_ANGLE_V_GROOVE =	13
     ORDER_DOUBLE_ANGLE_CHAMFER =	14
     ORDER_DRILL =                       15
-    ORDER_VERTICAL_LATHE =		16
-    ORDER_SLIDE =			17
-    ORDER_LAST =			18
+    ORDER_TAP =				16
+    ORDER_VERTICAL_LATHE =		17
+    ORDER_SLIDE =			18
+    ORDER_LAST =			19
     # These constants identify what order to do operations in:
     KIND_CONTOUR = 0
     KIND_DOWEL_PIN = 1
@@ -8270,7 +8301,7 @@ class Operation_Drill(Operation):
 	    if trace_detail >= 1:
 		print("{0}z_start={1:i} z_stop={2:i}".format(indent, z_start, z_stop))
 
-	    # Make darn sure we start a high enough Z:
+	    # Make darn sure we start at a high enough Z:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed, tracing=deep_tracing)
 
 	    #drill_depth = top_surface_safe_z - z_stop
@@ -8616,6 +8647,9 @@ class Operation_Slide(Operation):
 	code._z_feed(feed_speed, spindle_speed, new_cnc_start.z, "")
 	code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 	code._line_comment("End Slide Operation")
+
+# Useful Tap URL:
+#   https://www.threadtools.com/Threadtools.com/files/0e/0eaf24e0-7856-445a-ab42-8687422026d7.pdf
 
 class Operation_Mount(Operation):
     """ *Operation_Mount* is a class that indicates that the part mount position has changed.
@@ -9919,6 +9953,129 @@ class Operation_Simple_Pocket(Operation):
 	    (i.e. *self*). """
 
 	return self._y2
+
+class Operation_Tap(Operation):
+    """ *Operation_Tap*: Represents a thread tapping CNC operation.
+    """
+
+    def __init__(self, part, comment, tool, start, stop, tracing=-1000000):
+	""" *Operation_Tap*: Initialize the *Operation_Tap* object (i.e. *self.)"""
+
+	# Verify argument types:
+	assert isinstance(part, Part)
+	assert isinstance(comment, str)
+	assert isinstance(tool, Tool_Tap)
+	assert isinstance(start, P)
+	assert isinstance(stop, P)
+	assert isinstance(tracing, int)
+
+	# Initialize *operation_tap* (i.e. *self*):
+	operation_tap = self
+	spindle_speed = tool._spindle_speed_get()
+	Operation.__init__(operation_tap, "Tap", Operation.ORDER_TAP, part, comment, 0, tool,
+	  Operation.ORDER_TAP, None, tool._feed_speed_get(), tool._spindle_speed_get(), start,
+	  tracing + 1)
+
+	# Stuff some values into *operation_tap*:
+	operation_tap._start = start
+	operation_tap._stop  = stop
+
+    def _cnc_generate(self,
+      mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-100000):
+	""" *Operation_Tap*: Generate the CNC code for the *Operation_Tap* object (i.e. *self*):
+	    The arguments are:
+	    * *mount*: The orientation and placement of the *Part*.
+	    * *mount_ngc_file*: The file to output the G codes to.
+	    * *cnc_vrml*: ??
+	    * *mount_vrml_lines*: ??
+	    * *mount_vrml_stl*: ??
+	    * *is_last*: *True* if this is the last *Operation_Tap* in a sequence of tap operations
+	      and *False* otherwise.
+	"""
+
+	# Verify argument types:
+	assert isinstance(mount, Mount)
+	assert isinstance(mount_ngc_file, file)
+	assert isinstance(cnc_vrml, VRML_Group)
+	assert isinstance(mount_vrml_lines, VRML_Lines)
+	assert isinstance(mount_vrml_stl, VRML_Group)
+	assert isinstance(is_last, bool)
+	assert isinstance(tracing, int)
+
+	# Grap some values from *operation_tap* (i.e. *self*):
+	operation_tap = self
+	comment       = operation_tap._comment
+	part          = operation_tap._part
+	shop          = part._shop_get()
+	code          = shop._code_get()
+	tap_tool      = operation_tap._tool_get()
+	start         = operation_tap._start
+	stop          = operation_tap._stop
+	
+	# Grab some values out of *tap_tool*:
+	actual_spindle_speed  = tap_tool._actual_spindle_speed_get()
+	bottom_dwell          = tap_tool._bottom_dwell_get()
+	feed_speed_adjust     = tap_tool._feed_speed_adjust_get()
+	nominal_spindle_speed = tap_tool._nominal_spindle_speed_get()
+	thread_pitch          = tap_tool._thread_pitch_get()
+	top_dwell             = tap_tool._top_dwell_get()
+
+	# Compute the *up_feed_speed* and *down_feed_speed*:
+	unadjusted_feed_speed = actual_spindle_speed * thread_pitch
+	down_feed_speed       = unadjusted_feed_speed * (1.00 - feed_speed_adjust)
+	up_feed_speed         = unadjusted_feed_speed * (1.00 + feed_speed_adjust)
+	#print("unadjusted_feed_speed={0:I}".format(unadjusted_feed_speed))
+
+	# Grab some values from *mount*:
+	xy_rapid_safe_z    = mount._xy_rapid_safe_z_get()
+	cnc_transform      = mount._cnc_transform_get()
+	top_surface_safe_z = mount._top_surface_safe_z_get()
+
+	# Compute the *cnc_start* and *cnc_top*:
+	cnc_start          = cnc_transform * start
+	cnc_stop           = cnc_transform * stop
+	cnc_start_z        = cnc_start.z
+	cnc_stop_z         = cnc_stop.z
+
+	# We want to generate code that looks basically as follows:
+	#
+	# M8 ( Coolant )
+	# S500 M3  ( RPMS, M3 Spindle on CW )
+	# G1 Z-0.25 F17.73 (Tapping to Z at 10% slower feed rate )
+	# M4 ( Spindle Reverse )
+	# G4 P0.3 ( Dwell for .3 seconds )
+	# G1 Z0.4 F21.67 ( Free out at 10% faster )
+	# M3 ( Spindle CW )
+	# G4 P0.6 ( Dwell of 0.6 seconds before moving to next hole )
+
+	# Output a line comment:
+	code._line_comment("Thread Operation: {0}".format(comment))
+
+	# The actual operation has been stored in the `o61.ngc` file written out elsewhere.
+	# The arguments for `o61.ngc` are:
+	# * SPINDLE_SPEED[#1]: Nominal spindle speed (which does not change.)
+        # * Z_SAFE[#2]: The Z height at which is possible to rapid in the X/Y direction.
+        # * X[#3]: The X coordinate of the hole to be tapped.
+	# * Y[#4]: The Y coordinate of the hole to be tapped.
+	# * Z_START[#5]: The Z height at which tapping starts.
+	# * DOWN_FEED[#6]: The rate to feed the tap down.
+	# * Z_STOP[#7]: The Z height at which to stop tapping.
+	# * BOTTOM_DWELL[#8]: The amount of time to wait for the spindle to reverse at the bottom.
+	# * UP_FEED[#9]: The rate to feed the tap up.
+	# * TOP_DWELL[#10]: The amount of time to wait for the spindle to go forward again.
+	code._command_begin()
+	code._call(61)
+	code._hertz("[]", nominal_spindle_speed) # *SPINDLE_SPEED*
+	code._length("[]", xy_rapid_safe_z)	 # *Z_SAFE*
+	code._length("[]", cnc_start.x)		 # *X*
+	code._length("[]", cnc_start.y)		 # *Y*
+	code._length("[]", cnc_start_z)		 # *Z_START*
+	code._speed("[]", down_feed_speed)	 # *DOWN_FEED*
+	code._length("[]", cnc_stop_z)		 # *Z_STOP*
+	code._time("[]", bottom_dwell)		 # *BOTTOM_DWELL*
+	code._speed("[]", up_feed_speed)	 # *UP_FEED*
+	code._time("[]", top_dwell)		 # *TOP_DWELL*
+	code._command_end()
 
 class Operation_Vertical_Lathe(Operation):
     """ *Operation_Vertical_Lathe* is a class that represents a vertical
@@ -12170,6 +12327,39 @@ class Part:
 	      format(indent, self._name, preferred_diameter))
 	return dowel_pin
 
+    def _tools_tap_search(self, diameter, maximum_z_depth, tracing=-1000000):
+	""" *Part*: Return the best *Tool* that taps at *diameter* to a maximum depth of
+	    *maximum_z_depth*.
+	"""
+
+	# Verify argument types:
+	assert isinstance(diameter, L)
+	assert isinstance(maximum_z_depth, L)
+	assert isinstance(tracing, int)
+	
+	# Perform any requested *tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Part._tools_tap_search('{1}', {2:i}, {3:i})".
+	      format(indent, self._name, diameter, maximum_z_depth))
+	    trace_detail = 3
+
+	# Seach for a *drill_tool* that matches our requirements:
+	tap_tool = self._tools_search(Tool_Tap._match,
+	  diameter, maximum_z_depth, "tap", tracing = tracing + 1)
+	if trace_detail >= 2:
+	    print("{0}is_tap_tool={1}".format(indent, isinstance(drill_tool, Tool_Tap)))
+
+	# Wrap up any requested *tracing*:
+	if tracing >= 0:
+	    tool_name = "NONE"
+	    if isinstance(drill_tool, Tool_Tap):
+		tool_name = tap_tool._name_get()
+	    print("{0}<=Part._tools_tap_search('{1}', {2:i}, {3:i}) => {4}".
+	      format(indent, self._name, diameter, maximum_z_depth, tool_name))
+	return tap_tool
+
     def _tools_drill_search(self, diameter, maximum_z_depth, tracing=-1000000):
 	""" *Part*: Return a drill tool for the *Part* object (i.e. *self*) that has 
 	    a diameter of *diameter* and go to a depth of at least *maximum_z_depth*.
@@ -12410,7 +12600,10 @@ class Part:
 		    tool._priority = priority
 		    tool_material = tool._material_get()
 		    surface_speed = None
-		    if tool._flutes_count_get() > 0:
+		    #FIXME: Kludge: Should be more generic way of specifying that a tool
+                    # is not supposed to compute its speeds and feeds from material and tool
+                    # geometry!!!!
+		    if tool._flutes_count_get() > 0 and not isinstance(tool, Tool_Tap):
 			# We have {surface_speed}, compute {low_speed} and
 			# {high_speed}:
 			low_speed = speed_range._low_speed_get()
@@ -14651,10 +14844,23 @@ class Part:
     def countersink_hole(self, comment, hole_diameter, countersink_diameter,
       start, stop, flags, sides = -1, sides_angle=Angle(), tracing=-1000000):
 	""" *Part*: Put a *hole_diameter* hole into the *Part* object (i.e. *self*) starting
-	    at *start* to an end depth of *end*.  If *countersink_diameter* is non-zero,
+	    at *start* to an end depth of *stop*.  If *countersink_diameter* is non-zero,
 	    the part will be have a 90 degree countersink of *countersink_diameter* at *start*.
-	    *comment* will show up in any  generated RS-274 code.  *hole_kind* specifies the
-	    kind of hole.
+	    
+	    * *comment* will show up in any generated RS-274 code or error messages:
+            * *diameter* can be either a length (*L*) or a string (*str*).  If it is a
+	      a string, it is of the form "S:F", where S is a screw thread (e.g. "#0-80",
+	      "#2-56", ..., "1/4-20") and F is a hole fit (either "close" or "loose").
+	    * *start* is the *Point* to start drilling at,
+	    * *stop* is the *Point* to stop drilling at,
+	    * *flags* is one or more of the following embedded into a single string:
+	      * 'h': Indicates that the hole should be threaded as well,
+	      * 't': Indicates that additional drilling should be performed to force the drill
+		     bit all the way through the part (i.e. past *stop*),
+	      * 'p': Indicates that the tip of the drill should stop at *stop*,
+	      * 'f': Indicates the the hole should have flat bottom (i.e. needs to be milled.)
+	    * *sides* (optional) specifies the number of sides in the hole for rendering purposes,
+	    * *sides_angle* (optional) specifies how to rotate the sides.
 	"""
     
 	# Use *part* instead of *self*:
@@ -14697,16 +14903,17 @@ class Part:
 	    degrees0 = Angle(deg=0.0)
 
 	    # Compute *is_tip_hole*, *is_flat_hole* and *is_through_hole* from *flags*:
+	    is_flat_hole = 'f' in flags
+	    is_threaded = 'h' in flags
 	    is_through_hole = 't' in flags
 	    is_tip_hole = 'p' in flags
-	    is_flat_hole = 'f' in flags
 	    assert is_through_hole or is_tip_hole or is_flat_hole, \
 	      "Specify 't' for through hole, 'p' for tip hole or 'f' for flat hole in flags"
 	    assert     is_through_hole and not is_tip_hole and not is_flat_hole or \
 	      not is_through_hole and     is_tip_hole and not is_flat_hole or \
 	      not is_through_hole and not is_tip_hole and     is_flat_hole,   \
 	      "Only specify one of 't', 'p', or 'f' for flags argument"
-	
+
 	    # Figure out how deep we want the countsink "cone hole" to go:
 	    is_countersink = countersink_diameter > zero
 	    if not is_countersink:
@@ -14802,6 +15009,14 @@ class Part:
 	    drill_tool = part._tools_drill_search(hole_diameter, hole_z_depth, deep_tracing)
 	    end_mill_tool = part._tools_end_mill_search(hole_diameter,
 	      hole_z_depth, "countersink_hole", deep_tracing)
+	    tap_tool = None
+	    if is_threaded:
+		tap_tool = part._tools_tap_search(hole_diameter, hole_z_depth, deep_tracing)
+		#if isinstance(tap_tool, Tool_Tap):
+		#    sys.stdout.write("+")
+		#else:
+		#    print("Hole '{0}' can not be tapped (diameter={1:i} hole_z_depth={2:i})".
+		#      format(comment, hole_diameter, hole_z_depth))
 	    end_mill_tool_is_laser = False
 	    if end_mill_tool != None:
 		end_mill_tool_is_laser = end_mill_tool._is_laser_get()
@@ -14810,8 +15025,10 @@ class Part:
 	        print("{0}drill_tool={1}".format(indent, drill_tool))
 	        print("{0}end_mill_tool={1}".format(indent, end_mill_tool))
 		print("{0}end_mill_tool_is_laser={1}".format(indent, end_mill_tool_is_laser))
+		print("{0}tap_tool={1}".format(indent, tap_tool))
 		print("{0}is_through_hole={1}".format(indent, is_through_hole))
 		print("{0}is_tip_hole={1}".format(indent, is_tip_hole))
+		print("{0}is_threaded={1}".format(indent, is_threaded))
 
 	    # We have to decide whether we are going to do an *Operation_Drill* or an
             # *Operation_Round_Pocket*.  We have searched for three tools -- *mill_drill_tool*,
@@ -14890,6 +15107,12 @@ class Part:
 		  start, stop, False, tracing = tracing + 1)
 		part._operation_append(operation_drill, tracing = tracing + 1)
 		success = True
+
+		# Now thread the hole:
+		if is_threaded and isinstance(tap_tool, Tool_Tap):
+		    operation_tap = Operation_Tap(part,
+		      comment, tap_tool, start, stop, tracing = tracing + 1)
+		    part._operation_append(operation_tap, tracing = tracing + 1)
     	    else:
 	    	print(("Can't drill diameter {0:i} hole {1:i} deep in part '{2}'" +
 	         " flags='{3}' md={4} d={5} em={6}").
@@ -15253,11 +15476,19 @@ class Part:
     def hole(self, comment, diameter, start, stop, flags,
       sides=-1, sides_angle=Angle(), tracing = -1000000):
 	""" *Part*:  Put a *diameter* hole long the axis from *start* down to *stop*
-	    into the *Part* object (i.e. *self*).
+	    into the *Part* object (i.e. *self*).  The routine arguments are:
 	    * *comment* will show up in any generated RS-274 code or error messages:
             * *diameter* can be either a length (*L*) or a string (*str*).  If it is a
 	      a string, it is of the form "S:F", where S is a screw thread (e.g. "#0-80",
 	      "#2-56", ..., "1/4-20") and F is a hole fit (either "close" or "loose").
+	    * *start* is the *Point* to start drilling at,
+	    * *stop* is the *Point* to stop drilling at,
+	    * *flags* is one or more of the following embedded into a single string:
+	      * 'f': Indicates that the hole should have flat bottom (i.e. needs to be milled.)
+	      * 'h': Indicates that the hole needs to be threaded.
+	      * 'p': Indicates that the tip of the drill should stop at *stop*,
+	      * 't': Indicates that additional drilling should be performed to force the drill
+		     bit all the way through the part (i.e. past *stop*),
 	"""
 
 	# Use *part* instead of *self*:
@@ -19213,10 +19444,15 @@ class Fastener(Part):
 	
     def _fasten(self, comment, part, select, transform=None, tracing=-1000000):
 	""" *Fastener*: Use  the *Fastener* object (i.e. *self*) to drill a hole in *part*
-	    using its current mount for *part*.  *select* should be "thread* for a threaded
-	    hole, "close* for a close fit hole, "free" for a looser fit hole, "access"
-	    for a free hole with room to snuggle the screw head into, "set_screw" for
-	    landing suitable for a set screw.
+	    using its current mount for *part*.  *select* should be one of the following:
+	    * `"close"`: for a close fit hole,
+	    * `"close_access"`: ...
+	    * `"free"`: for a looser fit hole,
+	    * `"thread"`: for a threaded hole with threading,
+	    * `"thread_hole"`: for a threaded hole without threading,
+	    * `"thread_access"`: ...
+	    * `"thread_access_hole"`: ...
+	    * `"set_screw"`: for milling a landing suitable for a set screw.
 	"""
 
 	# Use *fastener* instead of *self*:
@@ -19225,8 +19461,8 @@ class Fastener(Part):
 	# Verify argument types:
 	assert isinstance(comment, str)
 	assert isinstance(part, Part)
-	assert isinstance(select, str) and \
-	  select in ("thread", "close", "loose", "thread_access", "close_access", "set_screw")
+	assert isinstance(select, str) and select in (
+	  "close", "close_access", "free", "thread", "thread_hole", "thread_access", "set_screw")
 	assert isinstance(transform, Transform) or transform == None
 	assert isinstance(tracing, int)
 
@@ -19242,8 +19478,19 @@ class Fastener(Part):
 	ezcad = part._ezcad_get()
 	if ezcad._stl_mode or ezcad._cnc_mode:
 	    # Process the *select* argument:
-	    flags = "t"
-	    if select == "thread":
+	    access_operation_needed = False
+	    hole_flags = "t"
+	    if select == "close":
+		diameter = fastener.close_fit_l
+	    elif select == "close_access":
+		diameter = fastener.close_fit_l
+		access_operation_needed = True
+	    elif select == "free":
+		diameter = fastener.free_fit_l
+	    elif select == "set_screw":
+		diameter = 2 * fastener.major_diameter_l
+		hole_flags = "f"
+	    elif select == "thread":
 		#FIXME: We need to be smart and distinguish between hard and soft materials:
 		#material = part._material
 		#generic = material._generic
@@ -19252,17 +19499,13 @@ class Fastener(Part):
 		#else:
 		#    diameter = fastener.thread75_l
 	        diameter = fastener.thread75_l
-	    elif select == "close":
-		diameter = fastener.close_fit_l
-	    elif select == "free":
-		diameter = fastener.free_fit_l
+		hole_flags += "h"
+	    elif select == "thread_hole":
+		diameter = fastener.thread75_l
 	    elif select == "thread_access":
 		diameter = fastener.thread75_l
-	    elif select == "close_access":
-		diameter = fastener.close_fit_l
-	    elif select == "set_screw":
-		diameter = 2 * fastener.major_diameter_l
-		flags = "f"
+		access_operation_needed = True
+		#hole_flags += "h"
 	    else:
 		assert False, \
 		  "select='{0}' not 'thread', 'close', 'loose', 'thread_access' or 'close_access'".\
@@ -19334,11 +19577,11 @@ class Fastener(Part):
 		  " misses Fastener '{2}' (center={3:i}"). \
 		  format(fastener.comment_s, fastener.c, part.name_get(), part.c))
 	    else:
-		part.hole(hole_name, diameter, new_start, new_end, flags, tracing = tracing + 1)
+		part.hole(hole_name, diameter, new_start, new_end, hole_flags, tracing=tracing+1)
 
 	    # An "access" hole is drilled about 1/4 of the way in on to after the first
 	    # hole is drilled:
-	    if select == "thread_access" or select == "close_access":
+	    if access_operation_needed:
 		#print("Access hole {0}".format(fastener.comment_s))
 		#print("Access hole: ns={0:i} ne={1:i} depth={2:i}".
 		#  format(new_start, new_end, new_start.distance(new_end)))
@@ -19478,7 +19721,7 @@ class Code:
 	code._mount  = None               # *Mount* object to use for current batch of G-code
 	code._mount_wrl_lines = None      # The lines to be written into the mount VRML file
 	code._rapid_speed = Speed(in_per_sec = 75.0) # Should be read from Mill object
-	code._time = Time()		  # Total Tool path time
+	code._total_time = Time()	  # Total Tool path time
 	code._tool = None		  # Currently selected tool
 	code._tool_change_point = None    # Tool change location relative to vice origin
 	code._tool_program_number = -1    # Tool program number
@@ -19540,6 +19783,19 @@ class Code:
 	"""
 
 	return self._bounding_box
+
+    def _call(self, subroutine_number):
+	""" *Code*: Add a subroutine call to *subroutine_number* for the current command associated
+	    with the *Code* object (i.e. *self*.)
+	"""
+
+	# Verify argument types:
+	assert isinstance(subroutine_number, int) and subroutine_number > 0
+
+	# Append the `o*subroutine_number* call` to *command_chunks*:
+	code = self
+	command_chunks = code._command_chunks
+	command_chunks.append("o{0} call".format(subroutine_number))
 
     def _command_begin(self):
 	""" *Code*: Start a new RS274 command in the *Code* object (i.e. *self*). """
@@ -19919,8 +20175,7 @@ class Code:
 	code._command_begin()
 
 	# Tack on the call:
-	command_chunks = code._command_chunks
-	command_chunks.append("o{0} call".format(g_cycle))
+	code._call(g_cycle)
 
 	# Grab *x_before* and *y_before* needed for time estimation:
 	x_before = code._x
@@ -19951,17 +20206,17 @@ class Code:
 
 	# Compute an estimate for how long the drill operation will take:
 	rapid_speed = code._rapid_speed
-	time = code._time
-	time += xy_distance / rapid_speed
-	time += (xy_rapid_safe_z - r) / rapid_speed
+	total_time = code._total_time
+	total_time += xy_distance / rapid_speed
+	total_time += (xy_rapid_safe_z - r) / rapid_speed
 	pecks = int(math.ceil((r - z) / q)) if isinstance(q, L) else 1
 	peck_amount = (r - z) / pecks
 	for peck_index in range(pecks):
 	    peck_dz = (peck_index + 1) * peck_amount
-	    time += peck_dz / f
-	    time += peck_dz / rapid_speed
-	time += (xy_rapid_safe_z - r) / rapid_speed
-	code._time = time
+	    total_time += peck_dz / f
+	    total_time += peck_dz / rapid_speed
+	total_time += (xy_rapid_safe_z - r) / rapid_speed
+	code._total_time = total_time
 
 	# *g_complete* specifies whether Z ends on *z_before* or *r*:
 	if g_complete == 98:
@@ -20346,7 +20601,7 @@ class Code:
 	code._vrml_points_flush("")
 
 	# Grab the path time:
-	time = code._time
+	total_time = code._total_time
 
 	# Reset *code*:
 	code._reset()
@@ -20356,8 +20611,8 @@ class Code:
 
 	# Perform any requested *tracing* and return *time*:
 	if tracing >= 0:
-	     print("{0}<=Code._finish()=>{1:m}".format(indent, time))
-	return time
+	     print("{0}<=Code._finish()=>{1:m}".format(indent, total_time))
+	return total_time
 
     def _g1_set(self, g1):
 	""" *Code*: Set the G1 field of the *Code* object (i.e. *self*) to *g1*. """
@@ -20529,7 +20784,6 @@ class Code:
 	# Reset the *code* object:
 	code._begin = True
 	code._bounding_box = Bounding_Box()
-	code._time = Time()
 	code._f = Speed(mm_per_sec=huge)
 	code._g1 = huge
 	code._g2 = huge
@@ -20556,6 +20810,7 @@ class Code:
 	code._r0 = big
 	code._r1 = big
 	code._s = Hertz(rps=123456789.0)
+	code._total_time = Time()
 	code._x = big
 	code._y = big
 	code._z = big
@@ -21008,12 +21263,34 @@ class Code:
 		chunk = "{0}{1:I}".format(field_name[0], value)
 	    code._command_chunks.append(chunk)
 
-    def _time_get(self):
-	""" *Code*: Return the time required for the perform the tool path specified by the
+    def _time(self, field_name, time):
+	""" *Code*: Output a time value:
+	"""
+
+	# Verity argument types:
+	assert isinstance(field_name, str)
+	assert isinstance(time, Time)
+	
+	# Decode *field* name using *code* (i.e. *self*):
+	code = self
+	command_chunks = code._command_chunks
+	changed = False
+	if field_name == "P":
+	    if code._p != time:
+		code._p = time
+		changed = True
+	        command_chunks.append("{0}{1}".format(field_name, time))
+	elif field_name == "[]":
+	    command_chunks.append("[{0}]".format(time))
+	else:
+	    assert False
+
+    def _total_time_get(self):
+	""" *Code*: Return the total time required for the perform the tool path specified by the
 	    *Code* object (i.e. *self*:
 	"""
 
-	return self._time
+	return self._total_time
 
     def _tool_set(self, tool):
         """ *Code*: Set the current tool for the *Code* object (i.e. *self*) to *tool*:
@@ -21197,7 +21474,7 @@ class Code:
 		previous_value = 0x12345
 
 	assert matched, "Unrecognized field name {0}".format(field_name)
-	if previous_value != value or field_name == "G1" or field_name == "G8":
+	if previous_value != value or field_name in ("G1", "G4", "G8"):
 	    code._command_chunks.append("{0}{1}".format(field_name[0], value))
 
     def old__vice_xy_set(self, vice_x, vice_y):
@@ -21630,7 +21907,7 @@ class Code:
 	    p2 = P(x,  y,  zero)
 	    distance = p1.distance(p2)
 	    seconds = distance / f    # feed = distance / sec  ==>  sec = distance / feed
-	    code._time += seconds
+	    code._total_time += seconds
     
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -21696,7 +21973,7 @@ class Code:
 	    p2 = P(x,  y,  zero)
 	    distance = p1.distance(p2)
 	    seconds = distance / f    # feed = distance / sec  ==>  sec = distance / feed
-	    code._time += seconds
+	    code._total_time += seconds
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -21755,7 +22032,7 @@ class Code:
 	    p2 = P(x,        y,        zero)
 	    distance = p1.distance(p2)
 	    seconds = distance / f    # feed = distance / sec  ==>  sec = distance / feed
-	    code._time += seconds
+	    code._total_time += seconds
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -21797,7 +22074,7 @@ class Code:
 	    distance = p1.distance(p2)
 	    rapid_speed = code._rapid_speed
 	    seconds = distance / rapid_speed    # feed = distance / sec  ==>  sec = distance / feed
-	    code._time += seconds
+	    code._total_time += seconds
 
     def _xy_rapid_safe_z_force(self, feed, speed, tracing=-100000):
 	""" *Code*: Force the tool for the *Code* object (i.e. *self*) to be at the
@@ -22674,6 +22951,9 @@ class Shop:
 	  25, hss, L(mm=6.00),     2, L(mm=28.00), "6mm", degrees135, stub, center_cut, drills)
 	drill_8mm = shop._drill_append("8mm drill [3in]",
 	  26, hss, L(mm=8.00),    2, L(inch="2-61/64"), "8mm", degrees135, stub, center_cut, drills)
+	tap_4_40 = shop._tap_append("4-40 tap",
+	  27, hss, L(inch=0.0890), 2, L(inch=0.600), L(inch=0.100), L(inch=1.000)/40.0,
+	  Time(sec=0.300), Time(sec=0.600), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.100)
 
 	# Laser "tools":
 	laser_007 = shop._end_mill_append("Laser_007",
@@ -22877,6 +23157,53 @@ class Shop:
 	  number, material, diameter, flutes, maximum_z_depth, point_angle)
 	self._tool_append(tool_mill_drill)
 	return tool_mill_drill
+
+    def _tap_append(self, name, number, material, diameter, flutes_count, maximum_z_depth,
+      tip_length, thread_pitch, bottom_dwell, top_dwell, nominal_spindle_speed, actual_spindle_speed,
+      feed_speed_adjust):
+        """ *Shop*: Creata a the *Tool_Tap* object and append it to the tool is of the *Shop*
+	    object (i.e. *self*).  The arguments are:
+	    * *name*: The tool name.
+	    * *number*: The tool number.
+	    * *material*: Tap material.
+	    * *diameter*: Tap diameter.
+	    * *flutes_count*: The number of flutes.
+	    * *maximum_z_depth*: The maximum depth of tapping (including *tip_length*:)
+	    * *tip_length*: The length of the tip until full thread tapping occurs.
+	    * *thread_pitch*: The distance between two adjacent threads.
+	    * *bottom_dwell*: The amount of time to dwell at the bottom of the threading to reverse
+	      spindle direction.
+	    * *top_dwell*: The amount of time to dwell at the top of the threading operation to
+	      reverse spindle direction.
+	    * *nominal_spindle_speed*: Nominal spindle speed sent to CNC controller (i.e. `Sxxx`).
+	    * *actual_spindle_speed*: Actual measured spindle speed.
+	    * *speed_adjust*: The amount to slow down the nominal feed rate on the way down
+	       (to force the tap holder into tension) and the amount to speed up the nominal
+	       feed rate on on the way up (to pull the tap out of tension.)
+	"""
+
+	zero = L()
+	assert isinstance(name, str)
+	assert isinstance(number, int) and number >= 0
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(diameter, L) and diameter >= zero	# Zero is OK
+	assert isinstance(flutes_count, int) and flutes_count > 0
+	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+	assert isinstance(tip_length, L) and tip_length > zero
+	assert isinstance(thread_pitch, L) and thread_pitch > zero
+	assert isinstance(bottom_dwell, Time)
+	assert isinstance(top_dwell, Time)
+	assert isinstance(nominal_spindle_speed, Hertz)
+	assert isinstance(actual_spindle_speed, Hertz)
+	assert isinstance(feed_speed_adjust, float)
+
+	# Create the *tool_tap* and append it to *shop* (i.e. *self*):
+	tool_tap = Tool_Tap(name, number, material, diameter, flutes_count, maximum_z_depth,
+	  tip_length, thread_pitch, bottom_dwell, top_dwell, nominal_spindle_speed,
+	  actual_spindle_speed, feed_speed_adjust)
+	shop = self
+	shop._tool_append(tool_tap)
+	return tool_tap
 
     def _tools_get(self):
 	""" *Shop*: Return the tools list object associated with the *Shop* object
@@ -23364,10 +23691,10 @@ class Tool:
     def _spindle_speed_set(self, spindle_speed):
 	""" *Tool*: Return the spindle speed for the *Tool* object (i.e. *self*). """
 
-	# Verify argument types:
+	# Verify argument types and set *spindle_speed* for *tool* (i.e. *self*) :
 	assert isinstance(spindle_speed, Hertz)
-
-	self._spindle_speed = spindle_speed
+	tool = self
+	tool._spindle_speed = spindle_speed
 
     def _vrml_append(self, vrml, pad, tip, tip_depth, tracing=-1000000):
 	""" *Tool*: Write out a visualization of the *Tool* object in VRML format to
@@ -23949,25 +24276,151 @@ class Tool_Tap(Tool):
     """ *Tool_Tap*: Represents a tapping tool.
     """
 
-    def __init__(self, name, number, material, diameter, flutes_count, maximum_z_depth):
-        """ *Tool_Tap*: Initialize the *Tool_Tap* object (i.e. *self*):
+    def __init__(self, name, number, material, diameter, flutes_count, maximum_z_depth, tip_length,
+      thread_pitch, bottom_dwell, top_dwell, nominal_spindle_speed, actual_spindle_speed,
+      feed_speed_adjust):
+        """ *Tool_Tap*: Initialize the *Tool_Tap* object (i.e. *self*) with the following arguments:
+	    * *name*: The tool name.
+	    * *number*: The tool number.
+	    * *material*: Tap material.
+	    * *diameter*: Tap diameter.
+	    * *flutes_count*: The number of flutes.
+	    * *maximum_z_depth*: The maximum depth of tapping (including *tip_length*:)
+	    * *tip_length*: The length of the tip until full thread tapping occurs.
+	    * *thread_pitch*: The distance between two adjacent threads.
+	    * *bottom_dwell*: The amount of time to dwell at the bottom of the threading to reverse
+	      spindle direction.
+	    * *top_dwell*: The amount of time to dwell at the top of the threading operation to
+	      reverse spindle direction.
+	    * *nominal_spindle_speed*: Nominal spindle speed.
+	    * *actual_spindle_speed*: Actual spindle speed.
+	    * *feed_speed_adjust*: The amount to slow down the feed rate on the way down
+	      (to force the tap holder into tension) and the amount to speed up the feed rate
+	      on on the way up (to pull the tap houlout of tension.)
 	"""
 
 	# Verify argument types:
 	zero = L()
-	assert isinstance(up, Part) or up == None
-	assert isinstance(name, str) and not ' ' in name
+	assert isinstance(name, str)
 	assert isinstance(number, int) and number >= 0
-	assert isinstance(material, int) and Tool.Material_NONE < material < Tool.MATERIAL_LAST
+	assert isinstance(material, int) and Tool.MATERIAL_NONE < material < Tool.MATERIAL_LAST
 	assert isinstance(diameter, L) and diameter >= zero	# Zero is OK
 	assert isinstance(flutes_count, int) and flutes_count > 0
 	assert isinstance(maximum_z_depth, L) and maximum_z_depth > zero
+	assert isinstance(tip_length, L) and tip_length > zero
+	assert isinstance(thread_pitch, L) and thread_pitch > zero
+	assert isinstance(bottom_dwell, Time)
+	assert isinstance(top_dwell, Time)
+	assert isinstance(nominal_spindle_speed, Hertz)
+	assert isinstance(actual_spindle_speed, Hertz)
+	assert isinstance(feed_speed_adjust, float)
 
-	tap = self
-	Tool.__init__(tap,
-	  name, number, Tool.KIND_TAP, material, diameter, flues_count, maximum_z_depth)
-	#FIXME: more here!!!
+	# Initialize *tool_tap* (i.e. *self*) as a *Tool*:
+	tool_tap = self
+	Tool.__init__(tool_tap,
+	  name, number, Tool.KIND_TAP, material, diameter, flutes_count, maximum_z_depth)
 
+	# Compute the nomininal feed speed:
+	nominal_feed_speed = \
+	  Speed(in_per_sec=nominal_spindle_speed.frequency() * thread_pitch.inches())
+
+	# Load some values into *tap*:
+	tool_tap._tip_length            = tip_length
+	tool_tap._thread_pitch          = thread_pitch
+	tool_tap._bottom_dwell          = bottom_dwell
+	tool_tap._top_dwell             = top_dwell
+	tool_tap._nominal_spindle_speed = nominal_spindle_speed
+	tool_tap._actual_spindle_speed  = actual_spindle_speed
+	tool_tap._nominal_feed_speed    = nominal_feed_speed
+	tool_tap._feed_speed_adjust     = feed_speed_adjust
+	tool_tap._feed_speed_set(nominal_feed_speed)
+	tool_tap._spindle_speed_set(nominal_spindle_speed)
+
+    def _actual_spindle_speed_get(self):
+	""" *Tool_Tap*: Return the actual spindle speed for the *Tool_Tap* object (i.e. *self*.)
+	"""
+
+	return self._actual_spindle_speed
+
+    def _bottom_dwell_get(self):
+	""" *Tool_Tap*: Return the bottom dwell time for the *Tool_Tap* object (i.e. *self*.)
+	"""
+
+	return self._bottom_dwell
+
+    def _feed_speed_adjust_get(self):
+	""" *Tool_Tap*: Return the feed speed adjust factor for the *Tool_Tap* object (i.e. *self*.)
+	"""
+
+	return self._feed_speed_adjust
+
+    @staticmethod
+    def _match(tool, desired_diameter, maximum_z_depth, from_routine, tracing=-1000000):
+	""" *Tool_*:  Return the diameter of *tool*, provided it is a *Drill_Tool*
+	    object with a diameter that is very close to *desired_diameter* and
+	    can reach at least to *maximum_z_depth*.  If no match occurs, -1.0 is returned.
+	    *from_routine* is used for tracing.
+	"""
+    
+	# Verify argument types:
+	assert isinstance(tool, Tool)
+	assert isinstance(desired_diameter, L)
+	assert isinstance(maximum_z_depth, L)
+	assert isinstance(from_routine, str)
+	assert isinstance(tracing, int)
+
+	# Perform any requested tracing*:
+	trace_detail = -1
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}=>Tool_Tap._match('{1}', {2:i}, {3:i}, '{4}')".
+	      format(indent, tool, desired_diameter, maximum_z_depth, from_routine))
+	    trace_detail = 3
+
+	# *priority* is negative if *tool* is not a *Tool_Tap* object:
+	priority = -1.0
+	if isinstance(tool, Tool_Tap):
+	    # Make sure *tap* is long enough)
+	    tap = tool
+	    if trace_detail >= 3:
+		print("{0}Tap_max_z_depth={1:i} requested_max_z_depth={2:i}".
+		  format(indent, tap._maximum_z_depth, maximum_z_depth))
+	    if tap._maximum_z_depth >= maximum_z_depth:
+		# If the *tool* *diameter* is very close to *desired_diameter* we have match::
+		diameter = tool._diameter
+		epsilon = L(inch=0.00001)
+		if trace_detail >= 3:
+		    print("{0}desiried_diameter={1:i} diameter={2:i}".
+		      format(indent, desired_diameter, diameter))
+		if (desired_diameter - diameter).absolute() < epsilon:
+		    # We have a match; set *priority* to the diameter:
+		    priority = diameter.millimeters()
+
+	# Wrap-up any requested tracing*:
+	if tracing >= 0:
+	    indent = ' ' * tracing
+	    print("{0}<=Tool_Tap._match('{1}', {2:i}, {3:i}, '{4}') => {5}".
+	      format(indent, tool, desired_diameter, maximum_z_depth, from_routine, priority))
+
+	return priority
+
+    def _nominal_spindle_speed_get(self):
+	""" *Tool_Tap*: Return the nominal spindle speed for the *Tool_Tap* object (i.e. *self*.)
+	"""
+
+	return self._nominal_spindle_speed
+
+    def _thread_pitch_get(self):
+	""" *Tool_Tap*: Return the thread pitch for the *Tool_Tap* object (i.e. *self*.)
+	"""
+
+	return self._thread_pitch
+
+    def _top_dwell_get(self):
+	""" *Tool_Tap*: Return the top dwell time for the *Tool_Tap* object (i.e. *self*.)
+	"""
+
+	return self._top_dwell
 
 class Tooling_Plate:
     """ *Tooling_Plate*: A *Tooling_Plate* object represents a flat plate of holes
