@@ -10019,6 +10019,7 @@ class Operation_Tap(Operation):
 	nominal_spindle_speed = tap_tool._nominal_spindle_speed_get()
 	thread_pitch          = tap_tool._thread_pitch_get()
 	top_dwell             = tap_tool._top_dwell_get()
+	tip_length            = tap_tool._tip_length_get()
 
 	# Compute the *up_feed_speed* and *down_feed_speed*:
 	unadjusted_feed_speed = actual_spindle_speed * thread_pitch
@@ -10051,6 +10052,9 @@ class Operation_Tap(Operation):
 	# Output a line comment:
 	code._line_comment("Thread Operation: {0}".format(comment))
 
+	code._line_comment("( o61 sub  [SPINDLE_SPEED] [Z_SAFE] [X] [Y] [Z_START] " +
+	                   "[DOWN_FEED] [Z_STOP] [BOTTOM_DWELL] [UP_FEED] [TOP_DWELL] )")
+
 	# The actual operation has been stored in the `o61.ngc` file written out elsewhere.
 	# The arguments for `o61.ngc` are:
 	# * SPINDLE_SPEED[#1]: Nominal spindle speed (which does not change.)
@@ -10065,16 +10069,16 @@ class Operation_Tap(Operation):
 	# * TOP_DWELL[#10]: The amount of time to wait for the spindle to go forward again.
 	code._command_begin()
 	code._call(61)
-	code._hertz("[]", nominal_spindle_speed) # *SPINDLE_SPEED*
-	code._length("[]", xy_rapid_safe_z)	 # *Z_SAFE*
-	code._length("[]", cnc_start.x)		 # *X*
-	code._length("[]", cnc_start.y)		 # *Y*
-	code._length("[]", cnc_start_z)		 # *Z_START*
-	code._speed("[]", down_feed_speed)	 # *DOWN_FEED*
-	code._length("[]", cnc_stop_z)		 # *Z_STOP*
-	code._time("[]", bottom_dwell)		 # *BOTTOM_DWELL*
-	code._speed("[]", up_feed_speed)	 # *UP_FEED*
-	code._time("[]", top_dwell)		 # *TOP_DWELL*
+	code._hertz("[]", nominal_spindle_speed)    # *SPINDLE_SPEED*
+	code._length("[]", xy_rapid_safe_z)         # *Z_SAFE*
+	code._length("[]", cnc_start.x)	            # *X*
+	code._length("[]", cnc_start.y)	            # *Y*
+	code._length("[]", cnc_start_z)             # *Z_START*
+	code._speed("[]", down_feed_speed)          # *DOWN_FEED*
+	code._length("[]", cnc_stop_z - tip_length) # *Z_STOP*
+	code._time("[]", bottom_dwell)              # *BOTTOM_DWELL*
+	code._speed("[]", up_feed_speed)            # *UP_FEED*
+	code._time("[]", top_dwell)                 # *TOP_DWELL*
 	code._command_end()
 
 class Operation_Vertical_Lathe(Operation):
@@ -12349,12 +12353,12 @@ class Part:
 	tap_tool = self._tools_search(Tool_Tap._match,
 	  diameter, maximum_z_depth, "tap", tracing = tracing + 1)
 	if trace_detail >= 2:
-	    print("{0}is_tap_tool={1}".format(indent, isinstance(drill_tool, Tool_Tap)))
+	    print("{0}is_tap_tool={1}".format(indent, isinstance(tap_tool, Tool_Tap)))
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
 	    tool_name = "NONE"
-	    if isinstance(drill_tool, Tool_Tap):
+	    if isinstance(tap_tool, Tool_Tap):
 		tool_name = tap_tool._name_get()
 	    print("{0}<=Part._tools_tap_search('{1}', {2:i}, {3:i}) => {4}".
 	      format(indent, self._name, diameter, maximum_z_depth, tool_name))
@@ -14903,10 +14907,10 @@ class Part:
 	    degrees0 = Angle(deg=0.0)
 
 	    # Compute *is_tip_hole*, *is_flat_hole* and *is_through_hole* from *flags*:
-	    is_flat_hole = 'f' in flags
-	    is_threaded = 'h' in flags
+	    is_flat_hole =    'f' in flags
+	    is_threaded =     'h' in flags
+	    is_tip_hole =     'p' in flags
 	    is_through_hole = 't' in flags
-	    is_tip_hole = 'p' in flags
 	    assert is_through_hole or is_tip_hole or is_flat_hole, \
 	      "Specify 't' for through hole, 'p' for tip hole or 'f' for flat hole in flags"
 	    assert     is_through_hole and not is_tip_hole and not is_flat_hole or \
@@ -14961,8 +14965,11 @@ class Part:
 		top_z, bottom_z = bottom_z, top_z
 
 	    # Compute the *start_z*, *hole_kind*, and *stop_z*:
+	    original_stop = stop
 	    start_z = top_surface_start.z
 	    stop_z = top_surface_stop.z
+	    original_hole_z_depth = start_z - stop_z
+	    assert start_z >= stop_z
 	    if is_tip_hole:
 		hole_kind = Part.HOLE_TIP
 	    elif is_flat_hole:
@@ -14978,21 +14985,23 @@ class Part:
 		stop = top_surface_transform.reverse() * top_surface_stop
 	    else:
 		assert False, "No hole kind specified"
-	    hole_z_depth = start_z - stop_z
-	    assert hole_z_depth >= zero, \
-	      "start_z={0:i} stop_z={1:i} hole_z_depth={2:i}".format(start_z, stop_z, hole_z_depth)
+	    final_hole_z_depth = start_z - stop_z
+	    assert original_hole_z_depth >= zero, \
+	      "start_z={0:i} stop_z={1:i} original_hole_z_depth={2:i}".format(
+	      start_z, stop_z, original_hole_z_depth)
 
 	    # Print out some tracing infromation:
 	    if trace_detail >= 1:
 		print("{0}hole_kind={1}".format(indent, hole_kind))
-	    if trace_detail >= 2 or hole_z_depth <= zero:
+	    if trace_detail >= 2:
 		print("{0}start={1:i}".format(indent, start))
 		print("{0}stop={1:i}".format(indent, stop))
 		print("{0}top_surface_start={1:i}".format(indent, top_surface_start))
 		print("{0}top_surface_stop={1:i}".format(indent, top_surface_stop))
 		print("{0}start_z={1:i}".format(indent, start_z))
 		print("{0}stop_z={1:i}".format(indent, stop_z))
-		print("{0}hole_z_depth={1:i}".format(indent, hole_z_depth))
+		print("{0}original_hole_z_depth={1:i}".format(indent, original_hole_z_depth))
+		print("{0}final_hole_z_depth={1:i}".format(indent, final_hole_z_depth))
 		print("{0}top_surface_tne={1:i} tne={2:i}".format(indent, top_surface_tne, tne))
 		print("{0}top_surface_bsw={1:i} bsw={2:i}".format(indent, top_surface_bsw, bsw))
 
@@ -15006,12 +15015,13 @@ class Part:
 	    maximum_mill_drill_diameter = L(inch=1.0)
 	    mill_drill_tool = part._tools_mill_drill_tip_search(
 	      maximum_mill_drill_diameter, countersink_diameter/2, deep_tracing)
-	    drill_tool = part._tools_drill_search(hole_diameter, hole_z_depth, deep_tracing)
+	    drill_tool = part._tools_drill_search(hole_diameter, final_hole_z_depth, deep_tracing)
 	    end_mill_tool = part._tools_end_mill_search(hole_diameter,
-	      hole_z_depth, "countersink_hole", deep_tracing)
+	      final_hole_z_depth, "countersink_hole", deep_tracing)
 	    tap_tool = None
 	    if is_threaded:
-		tap_tool = part._tools_tap_search(hole_diameter, hole_z_depth, deep_tracing)
+		tap_tool = \
+		  part._tools_tap_search(hole_diameter, original_hole_z_depth, deep_tracing)
 		#if isinstance(tap_tool, Tool_Tap):
 		#    sys.stdout.write("+")
 		#else:
@@ -15111,7 +15121,7 @@ class Part:
 		# Now thread the hole:
 		if is_threaded and isinstance(tap_tool, Tool_Tap):
 		    operation_tap = Operation_Tap(part,
-		      comment, tap_tool, start, stop, tracing = tracing + 1)
+		      comment, tap_tool, start, original_stop, tracing = tracing + 1)
 		    part._operation_append(operation_tap, tracing = tracing + 1)
     	    else:
 	    	print(("Can't drill diameter {0:i} hole {1:i} deep in part '{2}'" +
@@ -16886,7 +16896,7 @@ class Part:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.tooling_plate_drill('{1}', '{2}', {3}, {4}, {5})".format(
 	      indent, part._name, plate_mount_name, rows, columns, skips))
-	    trace_detail = 2
+	    trace_detail = 3
 	    if trace_detail >= 3:
 		deep_tracing = tracing + 1
 
@@ -17029,7 +17039,7 @@ class Part:
 			reversed_start = reverse_top_transform * start
 			reversed_stop = reverse_top_transform * stop
 			part.hole("Tooling plate hole ({0}, {1})".format(row, column),
-			  plate_drill_diameter, reversed_start, reversed_stop, "t",
+			  plate_drill_diameter, reversed_start, reversed_stop, "th",
 			  tracing = deep_tracing)
 			if trace_detail >= 1:
 			    print(("{0}column={1} row={2} " +
@@ -18068,7 +18078,8 @@ class Part:
 	ezcad = part._ezcad	
 	if ezcad._cnc_mode:
 	    # Drill the hole that we care about into *part* (i.e. *self*):
-	    part.hole(new_mount_name, diameter, start, stop, flags)
+	    hole_tracing = tracing + 1 if trace_detail >= 3 else -1000000
+	    part.hole(new_mount_name, diameter, start, stop, flags, tracing=hole_tracing)
 	
 	    # Grab some values from *old_mount*.  Note that while the translate mount point will
 	    # change from *old_mount* to *new_mount*, the *top_surface_transform* will not change:
@@ -18152,7 +18163,7 @@ class Part:
             # is created, can we switch over to the *new_mount*.
 
 	    # Create *new_mount* from the *old_mount*, but with a *new_mount_name* and
-            # a *new_mount_translate point*:1
+            # a *new_mount_translate point*:
 	    new_mount = old_mount._remount(new_mount_name, new_mount_translate_point)
 	    #assert new_mount._top_surface_transform_get() == old_mount._top_surface_transform_get()
 	    if tracing >= 2:
@@ -18164,8 +18175,8 @@ class Part:
 	    new_cnc_transform = new_mount._cnc_transform_get()
 	    old_cnc_start = old_cnc_transform * start
 	    old_cnc_stop  = old_cnc_transform * stop
-	    new_cnc_stop  = new_cnc_transform * stop
 	    new_cnc_start = new_cnc_transform * start
+	    new_cnc_stop  = new_cnc_transform * stop
 	    cnc_start = old_cnc_start
 	    if tracing >= 2:
 		print("{0}old_cnc_start={1:i} old_cnc_stop={2:i}".
@@ -22851,6 +22862,24 @@ class Shop:
 	# Brass		500	500-1150	300-200	200-260
 	# Aluminum	2100	3300		1000	1500
 
+	# Unfortuately, these numbers do not agree with other sources...
+	# Plastics SFM informat was copied from:
+        #    https://www.scribd.com/document/334271077/SFM-Plastics
+	#                                        Tool Material
+	#        Plastic                    HSS SFM         Carbide SFM   FeedRate  
+	#        ===================================================================
+	#        Polyethelene               1000-2000       2500-5000     High
+	#        *Polyvinyl Chloride (PVC)  1000-2000       2500-5000     High
+	#        **Acrylic                   500-1500       1250-3750     Med~High
+	#        ABS                         500-1000       1250-2500     Med~High
+	#        Nylon 6/6                  1000            2500          High
+	#        Acetal                     1000-2000       2000-5000     High
+	#        Polypropylene              1000-2000       2500-5000     High
+	#        *Polycarbonate              500-1500        750-1000     Med~High
+	#        ===================================================================
+	#        * Denotes material may become gummy when machined
+	#        ** Extruded acrylic becomes gummy more so than cast acrylic
+
 	# Start loading some surface speeds into *shop*:
 	hss = Tool.MATERIAL_HIGH_SPEED_STEEL
 	plastic = Material("Plastic", "")
@@ -22952,8 +22981,20 @@ class Shop:
 	drill_8mm = shop._drill_append("8mm drill [3in]",
 	  26, hss, L(mm=8.00),    2, L(inch="2-61/64"), "8mm", degrees135, stub, center_cut, drills)
 	tap_4_40 = shop._tap_append("4-40 tap",
-	  27, hss, L(inch=0.0890), 2, L(inch=0.600), L(inch=0.100), L(inch=1.000)/40.0,
+	  27, hss, L(inch=0.0890), 2, L(inch=0.550), L(inch=0.050), L(inch=1.000)/40.0,
 	  Time(sec=0.300), Time(sec=0.600), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.100)
+	tap_6_32 = shop._tap_append("6-32 tap",
+	  28, hss, L(inch=0.1065), 2, L(inch=0.580), L(inch=0.250), L(inch=1.000)/32.0,
+	  Time(sec=0.300), Time(sec=0.600), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.100)
+	# North American Tool sells reduced shank taps.  Western tool is listed as a distributor.
+	# Reiff & Nestor (Discount-tools.com)
+	# http://www.discount-tools.com/techcontents/014.pdf
+	# http://www.discount-tools.com/techcontents/Threading%20Tool%20Speeds%20&%20Feeds.pdf
+	# http://www.vikingdrill.com/viking-Tap-FeedandSpeed.php
+	# http://media.guhring.com/documents/tech/Formulas/Tap.pdf
+	# https://zero-divide.net/?page=fswizard  # Free speed feed calculator
+        # https://www.scribd.com/document/334271077/SFM-Plastics # A plastic to SFM table
+	# http://www.harveytool.com/secure/Content/Documents/SF_70400.pdf
 
 	# Laser "tools":
 	laser_007 = shop._end_mill_append("Laser_007",
@@ -24285,8 +24326,9 @@ class Tool_Tap(Tool):
 	    * *material*: Tap material.
 	    * *diameter*: Tap diameter.
 	    * *flutes_count*: The number of flutes.
-	    * *maximum_z_depth*: The maximum depth of tapping (including *tip_length*:)
-	    * *tip_length*: The length of the tip until full thread tapping occurs.
+	    * *maximum_z_depth*: The maximum depth of full tapping (excluding *tip_length*):
+	    * *tip_length*: The length of length of that tapered portion tap before
+	      full thread tapping occurs.
 	    * *thread_pitch*: The distance between two adjacent threads.
 	    * *bottom_dwell*: The amount of time to dwell at the bottom of the threading to reverse
 	      spindle direction.
@@ -24415,6 +24457,13 @@ class Tool_Tap(Tool):
 	"""
 
 	return self._thread_pitch
+
+    def _tip_length_get(self):
+	""" *Tool_Tap*: Return the tip length (i.e. the tapered part of the tap)
+	    for the *Tool_Tap* object (i.e. *self*.)
+	"""
+
+	return self._tip_length
 
     def _top_dwell_get(self):
 	""" *Tool_Tap*: Return the top dwell time for the *Tool_Tap* object (i.e. *self*.)
