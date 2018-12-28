@@ -4814,10 +4814,11 @@ class EZCAD3:
 	lines.append("    O901 endwhile")
 	lines.append("  G0 Z#<z_safe>                         (All done, retract to z_safe)")
 	lines.append("  O19 endsub")
-	lines.append("")
-	lines.append("(An example call:)")
-	lines.append("O19 call [0.0] [0.0] [0.0] [-0.525] [0.100] [0.010] [10.000] [5000]")
+	#lines.append("")
+	#lines.append("(An example call:)")
+	#lines.append("O19 call [0.0] [0.0] [0.0] [-0.525] [0.100] [0.010] [10.000] [5000]")
 	lines.append("M2")
+	lines.append("")
 	ngc_directory._lines_write("19.ngc", lines)
 
 	# Construct subroutine `81.ngc` as a list of *lines* and write out to *ngc_directory*:
@@ -4831,15 +4832,16 @@ class EZCAD3:
 	lines.append("G1 F[#1] Z[#7] ( Drill down to Z_BOTTOM )")
 	lines.append("G0 Z[#4]       ( Retract to Z_TOP )")
 	lines.append("o81 endsub     ( End of subroutine )")
-	lines.append("o81 call [10] [0] [0] [.5] [.1] [-.5] ( Example call )")
-	lines.append("m2             ( End of File )")
+	#lines.append("o81 call [10] [0] [0] [.5] [.1] [-.5] ( Example call )")
+	lines.append("M2             ( End of File )")
+	lines.append("")
 	ngc_directory._lines_write("81.ngc", lines)
 
 	# Construct subroutine `83.ngc` as a list of *lines* and write out to *ngc_directory*:
 	lines = []
 	lines.append("( Canned subroutine for drilling holes with pecking )")
 	lines.append("( o83 call [#1] [#2] [#3] [#4]    [#5]     [#6]        [#7]       [#8]     )")
-	lines.append("( o83 sub ( [F]  [X]  [Y]  [Z_TOP] [Z_SAFE] [Z_RETRACT] [Z_BOTTOM] [Z_PECK] )")
+	lines.append("o83 sub   ([F]  [X]  [Y]  [Z_TOP] [Z_SAFE] [Z_RETRACT] [Z_BOTTOM] [Z_PECK] )")
 	lines.append("                  ( Local variables [Z]: #9 )")
 	lines.append("G0 Z[#4]               ( // Make sure we are at Z_TOP )")
 	lines.append("G0 X[#2] y[#3]         ( // Make sure we are at [X, Y] )")
@@ -4856,8 +4858,9 @@ class EZCAD3:
 	lines.append("o831 while [#9 GT #7]  ( } while [#9 > #7] )")
 	lines.append("G0 Z[#4]               ( // Rapid retract to Z_TOP )")
 	lines.append("o83 endsub         ( // End of subroutine )")
-	lines.append("o83 call [10] [0] [0] [.5] [.1] [-.5] [.2] ( Example call )")
-	lines.append("m2                 ( // End of File )")
+	#lines.append("o83 call [10] [0] [0] [.5] [.1] [-.5] [.2] ( Example call )")
+	lines.append("M2                 ( // End of File )")
+	lines.append("")
 	ngc_directory._lines_write("83.ngc", lines)
 
 	# Example tap code
@@ -4874,7 +4877,7 @@ class EZCAD3:
 	lines.append("( Canned subroutine for threading a hole. )")
 	lines.append(("( o61 call [#1]            [#2]    [#3] [#4] [#5]     " +
 	              "[#6]        [#7]     [#8]           [#9]      [#10]       )"))
-	lines.append(("( o61 sub  [SPINDLE_SPEED] [Z_SAFE] [X] [Y] [Z_START] " +
+	lines.append(("o61 sub  ( [SPINDLE_SPEED] [Z_SAFE] [X] [Y] [Z_START] " +
 	              "[DOWN_FEED] [Z_STOP] [BOTTOM_DWELL] [UP_FEED] [TOP_DWELL] )"))
 	lines.append("S[#1] M3        ( Ensure the spindle is clockwise at SPINDLE_SPEED )")
 	lines.append("G0 Z[#2]        ( Make we are at Z_SAFE )" )
@@ -4886,11 +4889,11 @@ class EZCAD3:
 	lines.append("G1 F[#9] Z[#5]  ( Pull tap out at UP_FEED speed to Z_START ) ")
 	lines.append("M3              ( Put spindle back into the forward direction )")
 	lines.append("G0 Z[#2]        ( Make we are at Z_SAFE again )" )
-	lines.append("G4 P[#10]       ( Dwell for TOP_DWELL sec. for spindle to respin ) ")
+	lines.append("G4 P[#10]       ( Dwell for TOP_DWELL sec. for spindle to respin )")
 	lines.append("o61 endsub      ( End of subroutine )")
-	lines.append("m2              ( End of file )")
+	lines.append("M2              ( End of file )")
+	lines.append("")
 	ngc_directory._lines_write("61.ngc", lines)
-	
 
     def _scad_directory_get(self):
 	""" *EZCAD3*: Return the directory to read/write SCAD files from/into from the *EZCAD3*
