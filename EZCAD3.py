@@ -4879,7 +4879,8 @@ class EZCAD3:
 	              "[#6]        [#7]     [#8]           [#9]      [#10]       )"))
 	lines.append(("o61 sub  ( [SPINDLE_SPEED] [Z_SAFE] [X] [Y] [Z_START] " +
 	              "[DOWN_FEED] [Z_STOP] [BOTTOM_DWELL] [UP_FEED] [TOP_DWELL] )"))
-	lines.append("S[#1] M3        ( Ensure the spindle is clockwise at SPINDLE_SPEED )")
+	lines.append("M49             ( Disable spindle speed and feed rate override controls )")
+	lines.append("M3 S[#1]        ( Ensure the spindle is clockwise at SPINDLE_SPEED )")
 	lines.append("G0 Z[#2]        ( Make we are at Z_SAFE )" )
 	lines.append("G0 X[#3] Y[#4]  ( Make sure we are at [X, Y] )")
 	lines.append("G0 Z[#5]        ( Rapid down to Z_START in air)")
@@ -4891,6 +4892,7 @@ class EZCAD3:
 	lines.append("G0 Z[#2]        ( Make we are at Z_SAFE again )" )
 	lines.append("G4 P[#10]       ( Dwell for TOP_DWELL sec. for spindle to respin )")
 	lines.append("o61 endsub      ( End of subroutine )")
+	lines.append("M50             ( Enable spindle speed and feed rate override controls )")
 	lines.append("M2              ( End of file )")
 	lines.append("")
 	ngc_directory._lines_write("61.ngc", lines)
@@ -19077,14 +19079,67 @@ class Plate:
 		    plate_file.write(part_summary)
 		    plate_file.write('\n')
 
+	    # Output a page break:
+	    plate_file.write("\f\n")
+
+	    # Write the distances across the top:
+	    for y_index in range(5):
+		plate_file.write(7 * ' ')
+		for x_index in range(cells_dx):
+		    hundredths = (x_index + 1) * 25
+		    if y_index == 0:
+			# Print 10's:
+			character = str((hundredths / 1000) % 10)
+		    elif y_index == 1:
+			# Print 1's:
+			character = str((hundredths / 100) % 10)
+		    elif y_index == 2:
+			# Print decimal point:
+			character = '.'
+		    elif y_index == 3:
+			# Print .1's:
+			character = str((hundredths / 10) % 10)
+		    else:
+			# Print .01's:
+			character = str(hundredths % 10)
+		    plate_file.write(character)
+		plate_file.write('\n')
+	    plate_file.write('\n')
+
 	    # Print out the *cells_grid*:
 	    for y_index in range(cells_dy):
 		row = cells_grid[y_index]
+		plate_file.write("{0:05.2f}  ".format((y_index + 1) * 0.25))
 		for x_index in range(cells_dx):
 		    grid_value = row[x_index]
 		    character = chr(grid_value + character_offset) if grid_value >= 0 else '.'
 		    plate_file.write(character)
+		plate_file.write("  {0:05.2f}  ".format((y_index + 1) * 0.25))
 		plate_file.write("\n")
+
+	    # Write the distances across the bottom:
+	    plate_file.write('\n')
+	    for y_index in range(5):
+		plate_file.write(7 * ' ')
+		for x_index in range(cells_dx):
+		    hundredths = (x_index + 1) * 25
+		    if y_index == 0:
+			# Print 10's:
+			character = str((hundredths / 1000) % 10)
+		    elif y_index == 1:
+			# Print 1's:
+			character = str((hundredths / 100) % 10)
+		    elif y_index == 2:
+			# Print decimal point:
+			character = '.'
+		    elif y_index == 3:
+			# Print .1's:
+			character = str((hundredths / 10) % 10)
+		    else:
+			# Print .01's:
+			character = str(hundredths % 10)
+		    plate_file.write(character)
+		plate_file.write('\n')
 
 	# Wrap-up any requested *tracing*:
 	if tracing >= 0:
@@ -22983,12 +23038,12 @@ class Shop:
 	  25, hss, L(mm=6.00),     2, L(mm=28.00), "6mm", degrees135, stub, center_cut, drills)
 	drill_8mm = shop._drill_append("8mm drill [3in]",
 	  26, hss, L(mm=8.00),    2, L(inch="2-61/64"), "8mm", degrees135, stub, center_cut, drills)
-	tap_4_40 = shop._tap_append("4-40 tap",
+	tap_4_40 = shop._tap_append("#4-40 tap",
 	  27, hss, L(inch=0.0890), 2, L(inch=0.550), L(inch=0.050), L(inch=1.000)/40.0,
-	  Time(sec=0.300), Time(sec=0.600), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.100)
-	tap_6_32 = shop._tap_append("6-32 tap",
-	  28, hss, L(inch=0.1065), 2, L(inch=0.580), L(inch=0.250), L(inch=1.000)/32.0,
-	  Time(sec=0.300), Time(sec=0.600), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.100)
+	  Time(sec=1.500), Time(sec=1.500), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.100)
+	tap_6_32 = shop._tap_append("#6-32 tap",
+	  28, hss, L(inch=0.1065), 2, L(inch=0.625), L(inch=0.100), L(inch=1.000)/32.0,
+	  Time(sec=1.500), Time(sec=1.500), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.100)
 	# North American Tool sells reduced shank taps.  Western tool is listed as a distributor.
 	# Reiff & Nestor (Discount-tools.com)
 	# http://www.discount-tools.com/techcontents/014.pdf
@@ -23120,7 +23175,6 @@ class Shop:
 		break
 
 	return dowel_pin_tool
-
 
     def _drill_append(self, name, number, material, diameter,
       flutes_count, maximum_z_depth, drill_name, point_angle, drill_kind, is_center_cut, drills):
