@@ -18876,7 +18876,8 @@ class Plate:
 
 	# Sort *triples* by the sort order:
 	triples = plate._triples
-	triples.sort(key=lambda triple: triple[2])
+	#triples.sort(key=lambda triple: triple[2])	
+	#print("triples={0}".format([triple[1:] for triple in triples]))
 	
 	# Grab some values from *plate*:
 	dx           = plate._dx
@@ -19080,50 +19081,43 @@ class Plate:
 		    plate_file.write('\n')
 
 	    # Output a page break:
-	    plate_file.write("\f\n")
+	    plate_file.write("\f")
 
-	    # Write the distances across the top:
-	    for y_index in range(5):
-		plate_file.write(7 * ' ')
-		for x_index in range(cells_dx):
-		    hundredths = (x_index + 1) * 25
-		    if y_index == 0:
-			# Print 10's:
-			character = str((hundredths / 1000) % 10)
-		    elif y_index == 1:
-			# Print 1's:
-			character = str((hundredths / 100) % 10)
-		    elif y_index == 2:
-			# Print decimal point:
-			character = '.'
-		    elif y_index == 3:
-			# Print .1's:
-			character = str((hundredths / 10) % 10)
-		    else:
-			# Print .01's:
-			character = str(hundredths % 10)
-		    plate_file.write(character)
-		plate_file.write('\n')
-	    plate_file.write('\n')
-
-	    # Print out the *cells_grid*:
+	    # Create the *rows* list which represents each row of *cell_grid* as a string:
+	    rows = list()
 	    for y_index in range(cells_dy):
-		row = cells_grid[y_index]
-		plate_file.write("{0:05.2f}  ".format((y_index + 1) * 0.25))
+		row_characters = list()
 		for x_index in range(cells_dx):
-		    grid_value = row[x_index]
+		    grid_value = cells_grid[y_index][x_index]
 		    character = chr(grid_value + character_offset) if grid_value >= 0 else '.'
-		    plate_file.write(character)
-		plate_file.write("  {0:05.2f}  ".format((y_index + 1) * 0.25))
-		plate_file.write("\n")
+		    row_characters.append(character)
+		row = "".join(row_characters)
+		#print("[0]:'{1}'".format(y_index, row))
+		rows.append(row)
 
-	    # Write the distances across the bottom:
-	    plate_file.write('\n')
+	    # Create the *columns* list which represents each column of *cell_grid* as a string:
+	    columns = list()
+	    for x_index in range(cells_dx):
+		column_characters = list()
+		for y_index in range(cells_dy):
+		    grid_value = cells_grid[y_index][x_index]
+		    character = chr(grid_value + character_offset) if grid_value >= 0 else '.'
+		    column_characters.append(character)
+		column = "".join(column_characters)
+		#print("[{0}]:'{1}'".format(x_index, column))
+		columns.append(column)
+
+	    # Compute *vertical_headings* for printing before and after the *cells_grid* is printed:
+	    vertical_heading_lines = list()
 	    for y_index in range(5):
-		plate_file.write(7 * ' ')
+		pad_characters = 7 * ' '
+		line_characters = [ pad_characters ]
 		for x_index in range(cells_dx):
 		    hundredths = (x_index + 1) * 25
-		    if y_index == 0:
+		    if x_index < cells_dx - 2 and columns[x_index + 1] == columns[x_index]:
+			# We can suppress this one:
+			character = ' '
+		    elif y_index == 0:
 			# Print 10's:
 			character = str((hundredths / 1000) % 10)
 		    elif y_index == 1:
@@ -19138,8 +19132,22 @@ class Plate:
 		    else:
 			# Print .01's:
 			character = str(hundredths % 10)
-		    plate_file.write(character)
-		plate_file.write('\n')
+		    line_characters.append(character)
+		line = "".join(line_characters) + "\n"
+		vertical_heading_lines.append(line)
+	    vertical_headings = "".join(vertical_heading_lines)
+
+	    # Print out the *cells_grid* to *plate_file*:
+	    plate_file.write(vertical_headings)
+	    empty_heading = 5 * ' '
+	    for y_index in range(cells_dy):
+		distance = (y_index + 1) * 0.25
+		heading = "{0:05.2f}".format(distance)
+		row = rows[y_index]
+		if y_index < cells_dy - 2 and row == rows[y_index + 1] == row:
+		    heading = empty_heading
+		plate_file.write("{0}  {1}  {0}\n".format(heading, row))
+	    plate_file.write(vertical_headings)
 
 	# Wrap-up any requested *tracing*:
 	if tracing >= 0:
