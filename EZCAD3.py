@@ -14918,10 +14918,13 @@ class Part:
 	    is_through_hole = 't' in flags
 	    assert is_through_hole or is_tip_hole or is_flat_hole, \
 	      "Specify 't' for through hole, 'p' for tip hole or 'f' for flat hole in flags"
-	    assert     is_through_hole and not is_tip_hole and not is_flat_hole or \
+	    assert is_through_hole and not is_tip_hole and not is_flat_hole or \
 	      not is_through_hole and     is_tip_hole and not is_flat_hole or \
 	      not is_through_hole and not is_tip_hole and     is_flat_hole,   \
 	      "Only specify one of 't', 'p', or 'f' for flags argument"
+
+	    #*TEMPORARY*: Diable threading for now:
+	    is_threaded = False
 
 	    # Figure out how deep we want the countsink "cone hole" to go:
 	    is_countersink = countersink_diameter > zero
@@ -18876,7 +18879,7 @@ class Plate:
 
 	# Sort *triples* by the sort order:
 	triples = plate._triples
-	#triples.sort(key=lambda triple: triple[2])	
+	triples.sort(key=lambda triple: triple[2])	
 	#print("triples={0}".format([triple[1:] for triple in triples]))
 	
 	# Grab some values from *plate*:
@@ -23048,10 +23051,10 @@ class Shop:
 	  26, hss, L(mm=8.00),    2, L(inch="2-61/64"), "8mm", degrees135, stub, center_cut, drills)
 	tap_4_40 = shop._tap_append("#4-40 tap",
 	  27, hss, L(inch=0.0890), 2, L(inch=0.550), L(inch=0.050), L(inch=1.000)/40.0,
-	  Time(sec=1.500), Time(sec=1.500), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.100)
+	  Time(sec=1.500), Time(sec=1.500), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.050)
 	tap_6_32 = shop._tap_append("#6-32 tap",
 	  28, hss, L(inch=0.1065), 2, L(inch=0.625), L(inch=0.100), L(inch=1.000)/32.0,
-	  Time(sec=1.500), Time(sec=1.500), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.100)
+	  Time(sec=1.500), Time(sec=1.500), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.050)
 	# North American Tool sells reduced shank taps.  Western tool is listed as a distributor.
 	# Reiff & Nestor (Discount-tools.com)
 	# http://www.discount-tools.com/techcontents/014.pdf
@@ -23264,9 +23267,10 @@ class Shop:
 	self._tool_append(tool_mill_drill)
 	return tool_mill_drill
 
+
     def _tap_append(self, name, number, material, diameter, flutes_count, maximum_z_depth,
-      tip_length, thread_pitch, bottom_dwell, top_dwell, nominal_spindle_speed, actual_spindle_speed,
-      feed_speed_adjust):
+      tip_length, thread_pitch, bottom_dwell, top_dwell, nominal_spindle_speed,
+      actual_spindle_speed, feed_speed_adjust):
         """ *Shop*: Creata a the *Tool_Tap* object and append it to the tool is of the *Shop*
 	    object (i.e. *self*).  The arguments are:
 	    * *name*: The tool name.
