@@ -8309,6 +8309,7 @@ class Operation_Drill(Operation):
 	    # Make darn sure we start at a high enough Z:
 	    code._xy_rapid_safe_z_force(feed_speed, spindle_speed, tracing=deep_tracing)
 
+	    #FIXME: *drill_depth* includes any remaining material before a top face operation:
 	    #drill_depth = top_surface_safe_z - z_stop
 	    drill_depth = cnc_start.z - cnc_stop.z
 	    trip_depth = 3 * diameter
@@ -8328,7 +8329,7 @@ class Operation_Drill(Operation):
 		f = feed_speed		#FIXME: Slow feed down by 20%!!!
 		p = None
 		#r = top_surface_safe_z + L(inch=0.1000)
-		r = z_start
+		r = z_start.maximum(z_safe)	# *r* must be at or above *z_start*
 		s = spindle_speed
 		x = cnc_start.x
 		y = cnc_start.y
@@ -15132,6 +15133,7 @@ class Part:
 		      comment, tap_tool, start, original_stop, tracing = tracing + 1)
 		    part._operation_append(operation_tap, tracing = tracing + 1)
     	    else:
+		hole_z_depth = start.z - stop.z
 	    	print(("Can't drill diameter {0:i} hole {1:i} deep in part '{2}'" +
 	         " flags='{3}' md={4} d={5} em={6}").
 	         format(hole_diameter, hole_z_depth, part._name, flags, mill_drill_tool != None,
@@ -20198,7 +20200,7 @@ class Code:
 
     def _drill_cycle(self, g_complete, g_cycle, f, p, q, z_safe, r, s, x, y, z, tracing=-1000000):
 	""" *Code*: Generate one drill cycle for the *Code* object (i.e. *self*.)  *g_complete*
-	    must be either 98 or 99 for either a G89 or G99 completion cycle.  *g_cycle* must
+	    must be either 98 or 99 for either a G98 or G99 completion cycle.  *g_cycle* must
 	    specify one of the canned drill cycles (i.e. 73, 74, 76, 81, 82, 83, 84, 85, 86, 87,
 	    88, or 89.)  *f* is the feed speed, *p* is pause time for some of the cycles.
 	    *q* is used for peck drilling.  *r* is the retract level.  *s* is the spindle speed.
@@ -23001,7 +23003,7 @@ class Shop:
 	dowl_pin_end_mill_3_8 = shop._dowel_pin_append("3/8in Dowel Pin",
 	  5, 55, hss, in3_8, in5_8, zero)
 	end_mill_1_4 = shop._end_mill_append("1/4 End Mill",
-	  6, hss, in1_4, 2, in1_2, not laser)
+	  6, hss, in1_4, 2, in5_8, not laser)
 	double_angle = shop._double_angle_append("3/4 Double Angle",
 	  7, hss, in3_4, 10, L(inch=0.875), degrees90, in1_4, in1_4)
 	dove_tail = shop._dove_tail_append("3/8 Dove Tail",
