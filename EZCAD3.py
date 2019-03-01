@@ -9115,11 +9115,13 @@ class Operation_Round_Pocket(Operation):
     """
 
     def __init__(self, part, comment, sub_priority, tool, order, follows, diameter,
-      countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed, tracing=-100000):
+      countersink_diameter, inner_diameter, hole_kind, start, stop,
+      feed_speed, spindle_speed, tracing=-100000):
 	""" *Operation_Round_Pocket*: will intitialize an
 	    *Operation_Round_Pocket* object (i.e. *self*) to contain
 	    *part*, *comment*, *sub_priority*, *tool*, *order*, *follows*,
 	    *diameter*, *hole_kind*, *start*, *stop*, *feed_speed*, and *spindle_speed*.
+	    *innner_diameter*:
 	"""
 
 	# Use *operation_round_pocket* instead of *self*:
@@ -9132,7 +9134,8 @@ class Operation_Round_Pocket(Operation):
 	assert isinstance(tool, Tool)
 	assert isinstance(order, int)
 	assert isinstance(follows, Operation) or follows == None
-	assert isinstance(diameter, L)
+	assert isinstance(diameter, L)	
+	assert isinstance(inner_diameter, L)
 	assert isinstance(countersink_diameter, L)
 	assert isinstance(hole_kind, int)
 	assert isinstance(start, P)
@@ -9144,10 +9147,12 @@ class Operation_Round_Pocket(Operation):
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print(("{0}=>Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
-	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm}").
-	      format(indent, "Round_Pocket", part._name_get(), comment, sub_priority, tool, order,
-	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed))
+	    print("{0}=>Operation_Round_Pocket.__init__(*, '{1}', '{2}', '{3}', {4}, '{5}', "
+	          "{6}, {7:i}, {8:i}, {9:i} {10}, {11:i}, {12:i}, "
+		  "{13:i}, {14:rpm}".
+	      format(indent, "Round_Pocket", part._name_get(), comment, sub_priority, tool,
+	        order, diameter, inner_diameter, countersink_diameter, hole_kind, start, stop,
+	        feed_speed, spindle_speed))
 
 	# Initialize superclass:
 	cnc_start = start
@@ -9157,6 +9162,7 @@ class Operation_Round_Pocket(Operation):
 
 	# Load up *operation_round_pocket*:
 	operation_round_pocket._diameter = diameter
+	operation_round_pocket._inner_diameter = inner_diameter
 	operation_round_pocket._countersink_diameter = countersink_diameter
 	operation_round_pocket._hole_kind = hole_kind
 	operation_round_pocket._start = start
@@ -9164,10 +9170,12 @@ class Operation_Round_Pocket(Operation):
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print(("{0}<=Operation_Round_Pocket.__init__('{1}', '{2}', '{3}', {4}, '{5}', {6}," +
-	           " *, {7:i} {8:i}, {9}, {10:i}, {11:i}, {12:i}, {13:rpm})").
-              format(indent,"Round_Pocket", part._name_get(), comment, sub_priority, tool, order,
-	      diameter, countersink_diameter, hole_kind, start, stop, feed_speed, spindle_speed))
+	    print("{0}<=Operation_Round_Pocket.__init__(*, '{1}', '{2}', '{3}', {4}, '{5}', "
+	          "{6}, {7:i}, {8:i}, {9:i} {10}, {11:i}, {12:i}, "
+		  "{13:i}, {14:rpm}".
+              format(indent," Round_Pocket", part._name_get(), comment, sub_priority, tool,
+		order, diameter, inner_diameter, countersink_diameter, hole_kind, start, stop,
+		feed_speed, spindle_speed))
 
     def _cnc_generate(self,
       mount, mount_ngc_file, cnc_vrml, mount_vrml_lines, mount_vrml_stl, is_last, tracing=-1000000):
@@ -9195,16 +9203,17 @@ class Operation_Round_Pocket(Operation):
 	    indent = ' ' * tracing
 	    print("{0}=>Operation_Round_Pocket._cnc_generate('{1}', '{2}', *, '{3}')".
 	      format(indent, operation_round_pocket._name, mount._name_get(), cnc_vrml._name_get()))
-	    trace_detail = 2
+	    trace_detail = 3
 
 	# Extract some values from *operation_round_pocket*:
-	comment   = operation_round_pocket._comment
-	diameter  = operation_round_pocket._diameter
-	hole_kind = operation_round_pocket._hole_kind
-	part      = operation_round_pocket._part
-	start     = operation_round_pocket._start
-	stop      = operation_round_pocket._stop
-	tool      = operation_round_pocket._tool
+	comment        = operation_round_pocket._comment
+	diameter       = operation_round_pocket._diameter
+	inner_diameter = operation_round_pocket._inner_diameter
+	hole_kind      = operation_round_pocket._hole_kind
+	part           = operation_round_pocket._part
+	start          = operation_round_pocket._start
+	stop           = operation_round_pocket._stop
+	tool           = operation_round_pocket._tool
 
 	# The *top_surface_transform* has been previously set orient the material correctly for CNC:
 	cnc_transform = mount._cnc_transform_get()
@@ -9215,7 +9224,7 @@ class Operation_Round_Pocket(Operation):
 
 	# Compute some values based on *diameter*:
 	maximum_depth = diameter / 3.0
-	radius = diameter / 2
+	final_radius = diameter / 2
 
 	# Extract some values from *part* and *shop*:
 	shop = part._shop
@@ -9229,9 +9238,28 @@ class Operation_Round_Pocket(Operation):
 	# Figure out if *tool* is a laser:
 	is_laser = tool._is_laser_get()
 
-	# Compute some values based on {tool_diameter}:
-	tool_radius = tool_diameter / 2 
-	half_tool_radius = tool_radius / 2
+	# Compute some radii:
+	zero               = L()
+	spring_radius      = L(inch=0.005)
+	tool_radius        = tool_diameter / 2 
+	half_tool_radius   = tool_radius / 2
+	inner_radius       = inner_diameter / 2
+	outer_radius       = diameter / 2
+	code._line_comment("tool_radius={0:i} inner_radius={1:i} outer_radius={2:i}".
+	  format(tool_radius, inner_radius, outer_radius))
+        start_radius       = zero if inner_radius <= zero else inner_radius + tool_radius
+        stop_radius        = final_radius - spring_radius - tool_radius
+        delta_radius       = stop_radius  - start_radius
+	if trace_detail >= 2:
+	    print("{0}tool_radius={1:i} inner_radius={2:i} outer_radius={3:i}".
+	      format(indent, tool_radius, inner_radius, outer_radius))
+	    print("{0}start_radius={1:i} stop_radius={2:i} delta_radius={3:i}".
+	      format(indent, start_radius, stop_radius, delta_radius))
+	assert delta_radius > zero, \
+	  "start_radius={0:i} stop_radius={1:i}".format(start_radius, stop_radius)
+        final_radius       = outer_radius - tool_radius
+        final_delta_radius = final_radius - start_radius
+	assert final_delta_radius > zero
 
 	if trace_detail >= 1:
 	    print("{0}is_laser={1}".format(indent, is_laser))
@@ -9239,9 +9267,12 @@ class Operation_Round_Pocket(Operation):
 	    # We just cut a simple circle:
 	    if trace_detail >= 2:
 		print("{0}start={1:i} stop={2:i}".format(indent, mapped_start, mapped_stop))
-	    code._dxf_circle(mapped_start.x, mapped_start.y, radius - tool_radius)
+	    code._dxf_circle(mapped_start.x, mapped_start.y, outer_radius - tool_radius)
+	    if inner_diameter > zero:
+		code._dxf_circle(mapped_start.x, mapped_start.y, inner_radius + tool_radius)
 	else:
 	    # We do all the work to mill out the round_pocket pocket;
+	    code._line_comment("RoundPocket:")
 
 	    # Deal with through holes:
 	    is_through = False
@@ -9254,26 +9285,32 @@ class Operation_Round_Pocket(Operation):
 		z_stop -= L(inch=0.025)
 
 	    code._line_comment(comment)
+	    code._line_comment("start={0:i} stop={1:i} diameter={2:i} inner_diameter={3:i}".
+	      format(start, stop, diameter, inner_diameter))
 	    code._line_comment(
-	      "x={0:i} y={1:i} radius={2:i} z_start={3:i} z_stop={4:i} tool_radius={5:i}".
-	      format(x, y, radius, z_start, z_stop, tool_radius))
+	      "x={0:i} y={1:i} final_radius={2:i} z_start={3:i} z_stop={4:i} tool_radius={5:i}".
+	      format(x, y, final_radius, z_start, z_stop, tool_radius))
 	    
 	    z_depth = (start - stop).length()
 	    depth_passes = int(z_depth / maximum_depth) + 1
 	    depth_per_pass = z_depth / float(depth_passes)
 	    assert depth_passes < 100
+	    code._line_comment(
+              "z_depth={0:i} depth_passes={1} depth_per_pass={2:i}".
+	      format(z_depth, depth_passes, depth_per_pass))
 
 	    # Move to position:
 	    code._xy_rapid_safe_z_force(f, s)
-	    code._xy_rapid(x, y)
+	    code._line_comment("here 1")
+	    code._xy_rapid(x, y + start_radius)
+	    code._line_comment("here 2")
 
 	    z_feed = f / 4.0
-	    shave = L(inch=0.005)
-	    radius_remove = radius - shave - tool_radius
+	    # FIXME: We should do a spring pass for *inner_diameter*!!!
 	    for depth_pass in range(depth_passes):
 		code._line_comment(
-		  "{0} round_pocket pocket [depth pass {1} of {2}] radius_remove={3:i}".
-		  format(comment, depth_pass + 1, depth_passes, radius_remove))
+		  "{0} round_pocket pocket [depth pass {1} of {2}] stop_radius={3:i}".
+		  format(comment, depth_pass + 1, depth_passes, stop_radius))
 		
 		# Get to proper depth:
 		z = z_start - depth_per_pass * float(depth_pass + 1)
@@ -9282,53 +9319,54 @@ class Operation_Round_Pocket(Operation):
 
 		if is_through:
 		    # We are going all the way through, so we can ignore the material in the middle:
-		    code._xy_feed(f, s, x, y + radius_remove)
+		    code._xy_feed(f, s, x, y + stop_radius)
 		    code._z_feed(z_feed, s, z, "round_pocket_pocket", tracing=tracing+1)
-		    code._xy_ccw_feed(f, s, radius_remove, x, y - radius_remove)
-		    code._xy_ccw_feed(f, s, radius_remove, x, y + radius_remove)
+		    code._xy_ccw_feed(f, s, stop_radius, x, y - stop_radius)
+		    code._xy_ccw_feed(f, s, stop_radius, x, y + stop_radius)
 		else:
  		    # We have to mow out all the intervening space:
-		    radius_passes = int(radius_remove /  half_tool_radius) + 1
-		    pass_remove_delta = radius_remove / float(radius_passes)
-		    code._line_comment("radius_passes={1} pass_remove_delta={1:i}".
+		    code._line_comment("start_radius={0:i} stop_radius={1:i} delta_radius={2:i}".
+		      format(start_radius, stop_radius, delta_radius))
+		    radius_passes = int(delta_radius /  half_tool_radius) + 1
+		    assert isinstance(radius_passes, int)
+		    pass_remove_delta = delta_radius / float(radius_passes)
+		    code._line_comment("radius_passes={0} pass_remove_delta={1:i}".
 		      format(radius_passes, pass_remove_delta))
 
-		    #for radius_index in range(radius_passes):
+		    # Mow the material using concentric circles:
+		    #code._xy_feed(f, s, x, y + start_radius)
 		    for radius_index in range(radius_passes):
-			pass_remove = pass_remove_delta * float(radius_index + 1)
-			code._line_comment("radius pass {0} of {1}: pass_remove={2:i}".
-			  format(radius_index + 1, radius_passes, pass_remove))
-			code._xy_feed(f, s, x, y + pass_remove)
+			pass_radius = start_radius + pass_remove_delta * float(radius_index)
+			code._line_comment("radius pass {0} of {1}: pass_radius={2:i}".
+			  format(radius_index + 1, radius_passes, pass_radius))
+			code._xy_feed(f, s, x, y + pass_radius)
 			code._z_feed(z_feed, s, z, "round_pocket_pocket[{0}]".format(radius_index),
 			  tracing=tracing + 1)
-			code._xy_ccw_feed(f, s, pass_remove, x, y - pass_remove)
-			code._xy_ccw_feed(f, s, pass_remove, x, y + pass_remove)
+			code._xy_ccw_feed(f, s, pass_radius, x, y - pass_radius)
+			code._xy_ccw_feed(f, s, pass_radius, x, y + pass_radius)
 		    code._line_comment("radius passes done")
-		    code._xy_feed(f, s, x, y)
+		    code._xy_feed(f, s, x, y + start_radius)
 
 	    # Do a "spring pass" to make everybody happy:
 	    if True:
 		code._line_comment("{0} round_pocket pocket 'spring' pass".format(comment))
-		path_radius = radius - tool_radius
-		half_path_radius = path_radius / 2
-		code._xy_feed(f, s, x, y)
+		half_final_delta_radius = final_delta_radius / 2
+		code._xy_feed(f, s, x, y + start_radius)
 
 		# Carefully feed the tool to the edge:
 		code._line_comment("Carefully feed tool to the edge of the hole")
-		code._xy_ccw_feed(f, s,
-		  half_path_radius, x + half_path_radius, y + half_path_radius)
-		code._xy_ccw_feed(f, s, half_path_radius, x, y + path_radius)
+		code._xy_ccw_feed(f, s, half_final_delta_radius, x, y + final_radius)
+		#code._xy_feed(f, s, x, y + final_radius)
 
 		# Peform the entire spring cut:
 		code._line_comment("Peform the entire spring cut")
-		code._xy_ccw_feed(f, s, path_radius, x, y - path_radius)
-		code._xy_ccw_feed(f, s, path_radius, x, y + path_radius)
+		code._xy_ccw_feed(f, s, final_radius, x, y - final_radius, tracing=tracing+1)
+		code._xy_ccw_feed(f, s, final_radius, x, y + final_radius, tracing=tracing+1)
 
 		# Carefully remove the tool back to the center:
 		code._line_comment("Carefully remove the tool back to the center")
-		code._xy_ccw_feed(f, s,
-		  half_path_radius, x - half_path_radius, y + half_path_radius)
-		code._xy_ccw_feed(f, s, half_path_radius, x, y)
+		code._xy_ccw_feed(f, s, half_final_delta_radius, x, y + start_radius)
+		#code._xy_feed(f, s, x, y + start_radius)
 
 	    # Safely retract to z safe:
 	    code._line_comment("Safely retract to z safe")
@@ -9340,7 +9378,7 @@ class Operation_Round_Pocket(Operation):
 	      format(indent, operation_round_pocket._name, mount._name_get(), cnc_vrml._name_get()))
 
     def compare(self, pocket2):
-	""" *Operation_Pocket*: Return -1, 0, 1 if *pocket1* (i.e. *self*)
+	""" *Operation_Round_Pocket*: Return -1, 0, 1 if *pocket1* (i.e. *self*)
 	    should sort before, at, or after *pocket2*.
 	"""
 
@@ -9603,6 +9641,13 @@ class Operation_Simple_Pocket(Operation):
 	Operation.__init__(operation_simple_pocket, "Simple_Pocket", operation_kind, part, comment,
           sub_priority, tool, order, follows, feed_speed, spindle_speed, cnc_start, tracing + 1)
 
+	dx = (corner2.x - corner1.x).absolute()
+	dy = (corner2.y - corner1.y).absolute()
+	minimum_span = dx.minimum(dy)
+	maximum_radius = minimum_span / 2
+	assert tool_radius <= maximum_radius
+	assert tool_radius <= corner_radius
+
 	# Load up the rest of *operation_simple_pocket*:
 	operation_simple_pocket._corner1 = corner1
 	operation_simple_pocket._corner2 = corner2
@@ -9676,6 +9721,10 @@ class Operation_Simple_Pocket(Operation):
 	tool          = operation_simple_pocket._tool
 	tool_radius   = operation_simple_pocket._tool_radius
 
+	zero = L()
+	assert tool_radius > zero
+	assert corner_radius > zero
+
 	# Extract some values from *part* and *shop*:
 	shop = part._shop_get()
 	code = shop._code_get()
@@ -9701,14 +9750,10 @@ class Operation_Simple_Pocket(Operation):
 
 	# Figure out the *cnc_volume*:
 	cnc_volume = cnc_corner_tne - cnc_corner_bsw
-	cnc_volume_dx = cnc_volume.x
-	cnc_volume_dy = cnc_volume.y
-	cnc_volume_dz = cnc_volume.z
 	if trace_detail >= 2:
 	    print("{0}cnc_volume={1:i}".format(indent, cnc_volume))
 
 	# Define some constants:
-	zero = L()
 	z_extra = zero
 	#mount_translate_point = mount._mount_translate_point_get()
 	mount_translate_point = P(zero, zero, zero)
@@ -9722,15 +9767,15 @@ class Operation_Simple_Pocket(Operation):
 	  format(cnc_corner_bsw, cnc_corner_tne, tool_radius, corner_radius))
 
 	# Figure out the *minimum_span* across the pocket::
-	minimum_span = zero
-	if cnc_volume_dx > cnc_volume_dy:
-	    minimum_span = cnc_volume_dy
-	else:
-	    minimum_span = cnc_volume_dx
-	half_minimum_span = minimum_span / 2
+	zero = L()
+	minimum_span = cnc_volume.x.minimum(cnc_volume.y)
+	maximum_radius = minimum_span / 2
 	if trace_detail >= 2:
-	    print("{0}minimum_span={1:i} half_minimum_span={2:i}".
-	      format(indent, minimum_span, half_minimum_span))
+	    print("{0}minimum_span={1:i} maximum_radius={2:i}".
+	      format(indent, minimum_span, maximum_radius))
+
+	assert tool_radius <= maximum_radius
+	assert tool_radius <= corner_radius
 
 	# Emit the preparatory G-Code:
 	is_laser = tool._is_laser_get()
@@ -9751,7 +9796,7 @@ class Operation_Simple_Pocket(Operation):
 
 	# Compute *total_cut* which is the total depth of the pocket including some extra:
 	# if the pocket goes all the way through:
-	total_cut = cnc_volume_dz + z_extra
+	total_cut = cnc_volume.z + z_extra
 	if trace_detail >= 1:
 	    print("{0}total_cut={1:i} z_extra={2:i}".format(indent, total_cut, z_extra))
 
@@ -9796,6 +9841,8 @@ class Operation_Simple_Pocket(Operation):
 	#t :@= smul@(r, 0.65)
 	t = r / 2
 
+	assert corner_radius >= tool_radius
+
 	code._xy_rapid_safe_z_force(feed_speed, spindle_speed)
 
 	helper_tracing = tracing + 1 if trace_detail >= 3 else -1000000
@@ -9808,6 +9855,7 @@ class Operation_Simple_Pocket(Operation):
 	else:
 	    # Compute the total number of rectangular paths needed:
 	    paths = 0
+	    half_minimum_span = minimum_span / 2
 	    remaining = half_minimum_span
 	    while remaining > zero:
 		if paths == 0:
@@ -13786,7 +13834,8 @@ class Part:
 	# Update the position of the vice edge:
 	part.vice_y = vice_y
 
-    def round_pocket(self, comment, diameter, start, stop, flags, tracing=-1000000):
+    def round_pocket(self,
+      comment, diameter, start, stop, flags, inner_diameter=L(), tracing=-1000000):
 	""" *Part*: Manufacture a round pocket in the *Part* object (i.e. *self*) that
 	    is *diameter* round, starts at *start* and ends at *end*.  Set *flags* to 't'
 	    if the round pocket is supposed to go through *part*.
@@ -13804,26 +13853,28 @@ class Part:
 	assert isinstance(tracing, int)
 
 	# Perform an requested *tracing*:
+	assert tracing < 0
 	trace_detail = -1
 	deep_tracing = -1000000
 	if tracing < 0 and part._tracing >= 0:
 	    tracing = part._tracing
 	if tracing >= 0:
 	    indent = ' ' * tracing
-            print("{0}=>Part.round_pocket('{1}', {2:i}, {3:i} {4:i}, '{5}'".
-	      format(indent, comment, diameter, start, stop, flags))
+            print("{0}=>Part.round_pocket('{1}', d={2:i}, {3:i} {4:i}, '{5}', id={6:i})".
+	      format(indent, comment, diameter, start, stop, flags, inner_diameter))
 	    trace_detail = 2
-	    #deep_tracing = tracing + 1
+	    deep_tracing = tracing + 1
 	if trace_detail >= 1:
 	    print("{0}start-stop={1:i}".format(indent, start - stop))
 
 	# Cut the round round pocket in the object:
 	ezcad = part._ezcad_get()
+	zero = L()
 	if ezcad._stl_mode:
 	    lines = part._scad_difference_lines
 	    pad = ' ' * 4
-	    lines.append("{0}// round_pocket('{1}, {2:i}, {3:i}, {4:i}, '{5}')".
-	      format(pad, comment, diameter, start, stop, flags))
+	    lines.append("{0}// round_pocket('{1}, {2:i}, {3:i}, {4:i}, {5:i}, '{5}')".
+	      format(pad, comment, diameter, inner_diameter, start, stop, flags))
 
 	    degrees0 = Angle()
 	    hole_axis = (start - stop).normalize()
@@ -13837,13 +13888,29 @@ class Part:
 		print("{0}start={1:i} new_stop={2:i}".format(indent, start, stop))
 		print("{0}hole_axis={1:m} new_start={2:i} new_stop={3:i}".
 		  format(indent, hole_axis, new_start, new_stop))
-	    part._scad_cylinder(comment, Color("black"), diameter, diameter,
-	      new_start, new_stop, lines, pad, 24, degrees0, tracing = deep_tracing)
+	    if inner_diameter > zero:
+		# We need to generate an annular 
+		lines.append(pad + "difference() {")
+		new_pad = pad + ' '
+	        part._scad_cylinder(comment + "1", Color("black"), diameter, diameter,
+		  new_start, new_stop, lines, new_pad, 24, degrees0, tracing = deep_tracing)
+		part._scad_cylinder(comment + "2", Color("black"), inner_diameter, inner_diameter,
+		  new_start, new_stop, lines, new_pad, 24, degrees0, tracing = deep_tracing)
+		lines.append(pad + "}")
+	    else:
+	        part._scad_cylinder(comment, Color("black"), diameter, diameter,
+		  new_start, new_stop, lines, pad, 24, degrees0, tracing = deep_tracing)
 
 	# Perform the CNC:
 	if ezcad._cnc_mode:
 	    hole_z_depth = start.distance(stop)
-	    end_mill_tool = part._tools_end_mill_search(diameter,
+	    spring_radius = L(inch=0.005)
+	    search_diameter = diameter - spring_radius
+	    if inner_diameter > zero:
+		search_diameter = diameter/2 - inner_diameter/2 - spring_radius
+	    if trace_detail >= 2:
+		print("{0}search_diameter={1:0}".format(indent, search_diameter))
+	    end_mill_tool = part._tools_end_mill_search(search_diameter,
 	      hole_z_depth, "round_pocket", deep_tracing)
 	    assert end_mill_tool != None, \
 	      "Could not find end mill for '{0}' round pocket".format(comment)
@@ -13868,17 +13935,16 @@ class Part:
 		  format(indent, stop, new_stop))
 
 	    # Create *operation_round_pocket* and stuff it into the *part* operation list:
-	    zero = L()
 	    operation_round_pocket = Operation_Round_Pocket(part, comment, 0, end_mill_tool,
-	      Operation.ORDER_END_MILL_ROUND_POCKET, None, diameter, zero, hole_kind, new_start,
-	      new_stop, end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
-	      tracing = tracing + 1)
+	      Operation.ORDER_END_MILL_ROUND_POCKET, None, diameter, zero, inner_diameter,
+	      hole_kind, new_start, new_stop, end_mill_tool._feed_speed_get(),
+	      end_mill_tool._spindle_speed_get(), tracing = tracing + 1)
 	    part._operation_append(operation_round_pocket)
 
 	# Wrap-up any requested *tracing*:
 	if tracing >= 0:
-            print("{0}<=Part.round_pocket('{1}', {2:i}, {3:i} {4:i}, '{5}'".
-	      format(indent, comment, diameter, start, stop, flags))
+            print("{0}<=Part.round_pocket('{1}', d={2:i}, {3:i} {4:i}, '{5}', id={6:i})".
+	      format(indent, comment, diameter, start, stop, flags, inner_diameter))
 
     def round_tube_extrude(self, comment, material, color,
       outer_diameter, inner_diameter, start, start_extra, end, end_extra, tracing = -1000000):
@@ -14009,7 +14075,7 @@ class Part:
 		print("{0}top_bounding_box_bsw={1:i}".
 		  format(indent, top_bounding_box_bsw))
 
-	    # Compute *remove_dz* which is the amount mow off the top:
+	    # Compute *remove_dz* which is the amount to mow off the top:
 	    remove_dz = top_extra_stop_tne.z - top_bounding_box_tne.z
 	    if trace_detail >= 2:
 		print("{0}remove_dz={1:i}".format(indent, remove_dz))
@@ -14039,6 +14105,12 @@ class Part:
 	      end_mill_offset
 	    top_corner2 = top_extra_stop_tne + end_mill_offset
 
+	    top_dx = (top_corner2.x - top_corner1.x).absolute()
+	    top_dy = (top_corner2.y - top_corner1.y).absolute()
+	    top_minimum_span = top_dx.minimum(top_dy)
+	    top_minimum_radius = top_minimum_span/2
+	    assert top_minimum_radius >= end_mill_radius
+	
 	    # Note that we need to map back from CNC coordinates to actual coordinates
 	    # for the *Operation_Simple_Pocket*() below:
 	    reverse_top_transform = top_transform.reverse()
@@ -15067,7 +15139,7 @@ class Part:
 		mount = part._current_mount
 		operation_round_pocket = Operation_Round_Pocket(part, comment,
 		  0, end_mill_tool, Operation.ORDER_END_MILL_ROUND_POCKET, None,
-		  hole_diameter, countersink_diameter, hole_kind, start, stop,
+                  hole_diameter, countersink_diameter, zero, hole_kind, start, stop,
 		  end_mill_tool._feed_speed_get(), end_mill_tool._spindle_speed_get(),
 		  tracing = tracing + 1)
 		part._operation_append(operation_round_pocket)
@@ -15192,7 +15264,7 @@ class Part:
 
     def _scad_cylinder(self, comment, color,
       start_diameter, end_diameter, start, end, lines, pad, sides, sides_angle, tracing = -1000000):
-	""" *Part*: Generate an open some openscad code the *Part* object (i.e. *self*)
+	""" *Part*: Generate and open some openscad code the *Part* object (i.e. *self*)
 	    for drawing a cylinder (or cone) that is *start_diameter* on at *start*
 	    *end_diameter* at *end*.  *lines* is the list to which the lines are
 	    appended with each line prefixed by *pad*.  The cylinder is rendered with *color*.
@@ -16620,7 +16692,7 @@ class Part:
     def simple_pocket(self,
       comment, corner1, corner2, radius, flags, reverse=False, rotate=ANGLE0, tracing = -1000000):
 	""" *Part*: Create a simple rectangular pocket in the *Part* object (i.e. *self*)
-	    bounding corners of *bottom_corner* and *top_corner*, a corner radius if *radius*.
+	    bounding corners of *bottom_corner* and *top_corner*, a corner radius of *radius*.
 	"""
 
 	# Use *part* instead of *self*:
@@ -16640,8 +16712,6 @@ class Part:
 	trace_detail = -1
 	if tracing < 0 and part._tracing >= 0:
 	    tracing = part._tracing
-	#if tracing < 0 and rotate != Part.ANGLE0:
-	#    tracing = 3
 	if tracing >= 0:
 	    indent = ' ' * tracing
 	    print("{0}=>Part.simple_pocket('{1}', '{2}', {3:i}, {4:i}, {5:i}, '{6}')".
@@ -16671,6 +16741,61 @@ class Part:
 	    if trace_detail >= 2:
 		print("{0}bsw_corner={1:i} tne_corner={2:i}".format(indent, bsw_corner, tne_corner))
 
+	    if ezcad._cnc_mode:
+		if trace_detail >= 2:
+		    print("{0}Part.simple_pocket: CNC_MODE started".format(indent))
+
+		# Grab the *top_surface_transform* from *part* that has been previously
+		# set to orient the material properly for the CNC machine orgin:
+		mount = part._current_mount
+		cnc_transform = mount._cnc_transform_get()
+
+		# Figure out *dz* which is the depth the pocket:
+		cnc_corner1 = cnc_transform * corner1
+		cnc_corner2 = cnc_transform * corner2
+		cnc_corner_bsw, cnc_corner_tne = cnc_corner1.minimum_maximum(cnc_corner2)
+		cnc_corner_volume = cnc_corner_tne - cnc_corner_bsw
+		minimum_span = cnc_corner_volume.x.minimum(cnc_corner_volume.y)
+		maximum_radius = minimum_span/2
+
+		# Make sure that *radius* is big enough to actually use:
+		if radius <= maximum_radius:
+		    # Search for a matching *end_mill_tool*:
+		    maximum_diameter = 2 * radius if radius > zero else 2 * maximum_radius
+		    deep_tracing = tracing + 1 if trace_detail >= 3 else -1000000
+		    end_mill_tool = self._tools_end_mill_search(maximum_diameter,
+		      cnc_corner_volume.z, "simple_pocket", deep_tracing)
+		    assert end_mill_tool != None, \
+		      "Could not find a end mill to mill {0:i} radius pockets".format(radius)
+		    if tracing >= 0:
+			print("{0}end_mill_tool='{1}'".format(indent, end_mill_tool._name_get()))
+		    end_mill_diameter = end_mill_tool._diameter_get()
+		    end_mill_radius = end_mill_diameter / 2
+		    end_mill_feed_speed = end_mill_tool._feed_speed_get()
+		    end_mill_spindle_speed = end_mill_tool._spindle_speed_get()
+		    if radius <= zero:
+			radius = end_mill_radius
+		    assert end_mill_radius <= radius
+
+		    # Create the pocket operation:
+		    if trace_detail >= 2:
+			print("{0}corner1={1:i} corner2={2:i}".format(indent, corner1, corner2))
+		    operation_order = Operation.ORDER_END_MILL_SIMPLE_POCKET
+		    operation_simple_pocket = Operation_Simple_Pocket(self, comment, 0,
+		      end_mill_tool, operation_order, None, end_mill_feed_speed,
+		      end_mill_spindle_speed, corner1, corner2, radius, end_mill_radius,
+		      Operation.POCKET_KIND_FLAT, rotate, tracing = tracing + 1)
+		    self._operation_append(operation_simple_pocket)
+		else:
+		    #print("dx={0:i} dy={1:i} minimum_span={2:i}".format(dx, dy, minimum_span))
+		    print("Simple Pocket: '{0}':'{1}' radius of {2:i} needs to be {3:i} or less".
+		      format(self._name, comment, radius, maximum_radius))
+
+		if trace_detail >= 2:
+		    print("{0}Part.simple_pocket: CNC_MODE done".format(indent))
+
+	    # Normally, we do *stl_mode* first, but *cnc_mode* can modify *radius* if is
+	    # set to *zero*.  We want to pick up those modifications:
 	    if ezcad._stl_mode:
 		# Compute *top_transform* and transform the two corners:
 		if trace_detail >= 2:
@@ -16772,46 +16897,6 @@ class Part:
 
 		if trace_detail >= 2:
 		    print("{0}Part.simple_pocket: STL_MODE done".format(indent))
-
-	    if ezcad._cnc_mode:
-		if trace_detail >= 2:
-		    print("{0}Part.simple_pocket: CNC_MODE started".format(indent))
-
-		# Grab the *top_surface_transform* from *part* that has been previously
-		# set to orient the material properly for the CNC machine orgin:
-		mount = part._current_mount
-		cnc_transform = mount._cnc_transform_get()
-
-		# Figure out *dz* which is the depth the pocket:
-		cnc_corner1 = cnc_transform * corner1
-		cnc_corner2 = cnc_transform * corner2
-		dz = (cnc_corner2.z - cnc_corner1.z).absolute()
-
-		# Search for a matching *end_mill_tool*:
-		maximum_diameter = 2 * radius
-		end_mill_tool = \
-		  self._tools_end_mill_search(maximum_diameter, dz, "simple_pocket", tracing + 1)
-		assert end_mill_tool != None, \
-		  "Could not find a end mill to mill {0:i} radius pockets".format(radius)
-		if tracing >= 0:
-		    print("{0}end_mill_tool='{1}'".format(indent, end_mill_tool._name_get()))
-		end_mill_diameter = end_mill_tool._diameter_get()
-		end_mill_radius = end_mill_diameter / 2
-		end_mill_feed_speed = end_mill_tool._feed_speed_get()
-		end_mill_spindle_speed = end_mill_tool._spindle_speed_get()
-
-		# Create the pocket operation:
-		if trace_detail >= 2:
-		    print("{0}corner1={1:i} corner2={2:i}".format(indent, corner1, corner2))
-		operation_order = Operation.ORDER_END_MILL_SIMPLE_POCKET
-		operation_simple_pocket = Operation_Simple_Pocket(self, comment, 0,
-		  end_mill_tool, operation_order, None, end_mill_feed_speed, end_mill_spindle_speed,
-		  corner1, corner2, radius, end_mill_radius, Operation.POCKET_KIND_FLAT,
-		  rotate, tracing = tracing + 1)
-		self._operation_append(operation_simple_pocket)
-
-		if trace_detail >= 2:
-		    print("{0}Part.simple_pocket: CNC_MODE done".format(indent))
 
 	# Perform any requested *tracing*:
 	if tracing >= 0:
@@ -21155,18 +21240,27 @@ class Code:
 	x2 = cnc_corner_tne.x
 	y1 = cnc_corner_bsw.y
 	y2 = cnc_corner_tne.y
-	assert x1 < x2
-	assert y1 < y2
+	dx = x2 - x1
+	dy = y2 - y1
+	assert dx > zero
+	assert dy > zero
+	minimum_span = dx.minimum(dy)
+	maximum_radius = minimum_span / 2
 	if trace_detail >= 2:
 	    print("{0}x1={1:i} y1={2:i} x2={3:i} y2={4:i}".format(indent, x1, y1, x2, y2))
     
+	assert tool_radius <= maximum_radius
+	assert tool_radius <= corner_radius
+
 	# Compute the arc center locations:
 	rx1 = x1 + corner_radius
 	rx2 = x2 - corner_radius
 	ry1 = y1 + corner_radius
 	ry2 = y2 - corner_radius
-	assert rx1 < rx2, "x1={0:i} x2={1:i} corner_radius={2:i}".format(x1, x2, corner_radius)
-	assert ry1 < ry2, "y1={0:i} y2={1:i} corner_radius={2:i}".format(y1, y2, corner_radius)
+	assert rx1 <= rx2, "x1={0:i} x2={1:i} corner_radius={2:i} comment='{3}'".format(
+	  x1, x2, corner_radius, comment)
+	assert ry1 <= ry2, "y1={0:i} y2={1:i} corner_radius={2:i} comment='{3}'".format(
+	  y1, y2, corner_radius, comment)
 	if trace_detail >= 2:
 	    print("{0}rx1={1:i} ry1={2:i} rx2={3:i} ry2={4:i}".format(indent, rx1, ry1, rx2, ry2))
 
@@ -21221,7 +21315,7 @@ class Code:
 	# Determine the starting location for this path:
 	start_x = ox1
 	start_y = oy1
-	if offset < corner_radius:
+	if offset <= corner_radius:
 	    # We have rounded corner path:
 	    start_x = rx1
 	start = P(start_x, start_y, zero)
@@ -21605,7 +21699,7 @@ class Code:
 
 	# Define some *Angle* constants:
 	degrees0 = Angle(deg=0.0)
-	degrees15 = Angle(deg=15.0)
+	degrees15 = Angle(deg=15.0)/3
 	degrees90 = Angle(deg=90.0)
 	degrees180 = Angle(deg=180.0)
 	degrees360 = Angle(deg=360.0)
@@ -21766,6 +21860,7 @@ class Code:
 	step_angle = arb_angle / float(steps)
 
 	# Lay down A=(*ax*,*ay*,*az*):
+	code._vrml_points_flush("red")
 	vrml_points = code._vrml_points
 	vrml_points.append(P(ax, ay, z))
 
@@ -23002,14 +23097,14 @@ class Shop:
 	  5, hss, in3_8, 4, in5_8, not laser)
 	dowl_pin_end_mill_3_8 = shop._dowel_pin_append("3/8in Dowel Pin",
 	  5, 55, hss, in3_8, in5_8, zero)
-	end_mill_1_4 = shop._end_mill_append("1/4 End Mill",
+	end_mill_1_4 = shop._end_mill_append("1/4 End Mill [5/8in]",
 	  6, hss, in1_4, 2, in5_8, not laser)
 	double_angle = shop._double_angle_append("3/4 Double Angle",
 	  7, hss, in3_4, 10, L(inch=0.875), degrees90, in1_4, in1_4)
 	dove_tail = shop._dove_tail_append("3/8 Dove Tail",
 	  8, hss, in3_8, 6, in1_4, in3_16, degrees45)
 	# Note 9 is the alternate tool dowel pin for tool 1.
-	end_mill_3_16 = shop._end_mill_append("3/16 End Mill",
+	end_mill_3_16 = shop._end_mill_append("3/16 End Mill [1/2in]",
 	  10, hss, in3_16, 2, in1_2, not laser)
 	drill_25 = shop._drill_append("#25 [#6-32 free]",
           11, hss, L(inch=0.1495), 2, L(inch=2.000), "#25", degrees118, stub, no_center_cut, drills)
@@ -23057,6 +23152,10 @@ class Shop:
 	tap_6_32 = shop._tap_append("#6-32 tap",
 	  28, hss, L(inch=0.1065), 2, L(inch=0.625), L(inch=0.100), L(inch=1.000)/32.0,
 	  Time(sec=1.500), Time(sec=1.500), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.050)
+	mill_3_16 = shop._end_mill_append("3/16 End Mill [.5in]",
+          29, hss, in3_16, 4, in1_2, not laser)
+	mill_1_8 = shop._end_mill_append("1/8 End Mill [.5in]",
+          30, hss, in1_8, 4, in3_8, not laser)
 	# North American Tool sells reduced shank taps.  Western tool is listed as a distributor.
 	# Reiff & Nestor (Discount-tools.com)
 	# http://www.discount-tools.com/techcontents/014.pdf
@@ -23068,8 +23167,8 @@ class Shop:
 	# http://www.harveytool.com/secure/Content/Documents/SF_70400.pdf
 
 	# Laser "tools":
-	laser_007 = shop._end_mill_append("Laser_007",
-	  100, hss, L(inch=0.007), 2, L(inch=1.500), laser)
+	#laser_007 = shop._end_mill_append("Laser_007",
+	#  100, hss, L(inch=0.007), 2, L(inch=1.500), laser)
 	#laser_000 = shop._end_mill_append("Laser_000",
 	#  101, hss, L(), 2, L(inch=0.750), laser)
 
