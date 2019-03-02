@@ -8193,12 +8193,6 @@ class Operation_Drill(Operation):
 	assert isinstance(is_countersink, bool)
 	assert isinstance(tracing, int)
 
-	# Initialize the super class:
-	cnc_start = start
-	Operation.__init__(operation_drill, "Drill", Operation.KIND_DRILL, part, comment,
-	  sub_priority, tool, order, follows, tool._feed_speed_get(), tool._spindle_speed_get(),
-          cnc_start, tracing + 1)
-
 	# Perform any requested *tracing*:
 	if tracing >= 0:
 	    indent = ' ' * tracing
@@ -8207,6 +8201,12 @@ class Operation_Drill(Operation):
               format(indent, part._name_get(), comment, tool._name_get(),
               order, diameter, hole_kind, start, stop, is_countersink))
 	    operation_drill._tracing = tracing
+
+	# Initialize the super class:
+	cnc_start = start
+	Operation.__init__(operation_drill, "Drill", Operation.KIND_DRILL, part, comment,
+	  sub_priority, tool, order, follows, tool._feed_speed_get(), tool._spindle_speed_get(),
+          cnc_start, tracing + 1)
 
 	# Load up *operation_drill*:
 	operation_drill._diameter = diameter
@@ -10556,7 +10556,6 @@ class Part:
 	part._ezcad = ezcad			# Top level *EZCAD3* object
 	part._is_part = False			# *True* => physical part made; *False* => assembly
 	part._is_place_only = False		# *True* => Render from *place*() calls only
-	part._laser_preferred = False
 	part._material = Material("plastic", "abs")
 	part._mount_operations_table = {}
 	part._mount_operations_list = []	# List of operations that construct part
@@ -15128,9 +15127,10 @@ class Part:
 	    # 1. the *end_mill_tool* is a laser, indicating that we generating a .dxf file, or
             # 2. the hole is meant to have a flat bottom, or
             # 3. we can't find a matching drill with the correct diameter.
-	    if (end_mill_tool != None) and \
-              ((end_mill_tool_is_laser and drill_tool == None) or \
-	      is_flat_hole or drill_tool == None):
+	    end_mill_is_preferred = \
+	      end_mill_tool != None and end_mill_tool._name_get() == part._tool_preferred
+	    if ( (end_mill_is_preferred and not is_tip_hole)
+	      or (end_mill_tool != None and drill_tool == None and not is_tip_hole) ):
 		# Generate an *operation_round_pocket*:
 		if trace_detail >= 1:
 		    print("{0}Mill out the hole".format(indent))
@@ -23167,8 +23167,8 @@ class Shop:
 	# http://www.harveytool.com/secure/Content/Documents/SF_70400.pdf
 
 	# Laser "tools":
-	#laser_007 = shop._end_mill_append("Laser_007",
-	#  100, hss, L(inch=0.007), 2, L(inch=1.500), laser)
+	laser_007 = shop._end_mill_append("Laser_007",
+	  100, hss, L(inch=0.007), 2, L(inch=1.500), laser)
 	#laser_000 = shop._end_mill_append("Laser_000",
 	#  101, hss, L(), 2, L(inch=0.750), laser)
 
