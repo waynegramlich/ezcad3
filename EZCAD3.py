@@ -10489,27 +10489,29 @@ class Part:
 
     ANGLE0 = Angle()
     SCREW_DRILLS = {
-      "#0-80:close":   L(inch=0.0635), # #53 drill
-      "#0-80:loose":   L(inch=0.0700), # #50 drill
-      "#0-80:thread":  L(inch=0.0469), # 3/64 drill
-      "#2-56:close":   L(inch=0.0890), # #43 drill
-      "#2-56:loose":   L(inch=0.0960), # #41 drill
-      "#2-56:thread":  L(inch=0.0700), # #50 drill
-      "#4-40:close":   L(inch=0.1160), # #32 drill
-      "#4-40:loose":   L(inch=0.1285), # #30 drill
-      "#4-40:thread":  L(inch=0.0890), # #43 drill
-      "#6-32:close":   L(inch=0.1440), # #27 drill
-      "#6-32:loose":   L(inch=0.1495), # #25 drill
-      "#6-32:thread":  L(inch=0.1065), # #36 drill
-      "#10-24:close":  L(inch=0.1960), # #9 drill
-      "#10-24:loose":  L(inch=0.2010), # #7 drill
-      "#10-24:thread": L(inch=0.1495), # #25 drill
-      "#10-32:close":  L(inch=0.1960), # #9 drill
-      "#10-32:loose":  L(inch=0.2010), # #7 drill
-      "#10-32:thread": L(inch=0.1590), # #21 drill
-      "1/4-20:close":  L(inch=0.2570), # F drill
-      "1/4-20:loose":  L(inch=0.2660), # H drill
-      "1/4-20:thread": L(inch=0.2010), # #7 drill
+      "#0-80:close":    L(inch=0.0635), # #53 drill
+      "#0-80:loose":    L(inch=0.0700), # #50 drill
+      "#0-80:thread":   L(inch=0.0469), # 3/64 drill
+      "#2-56:close":    L(inch=0.0890), # #43 drill
+      "#2-56:loose":    L(inch=0.0960), # #41 drill
+      "#2-56:thread":   L(inch=0.0700), # #50 drill
+      "#2-56:pan_head": L(inch=0.1695), # #18 Drill (>0.167in)
+      "#4-40:close":    L(inch=0.1160), # #32 drill
+      "#4-40:loose":    L(inch=0.1285), # #30 drill
+      "#4-40:thread":   L(inch=0.0890), # #43 drill
+      "#4-40:pan_head": L(inch=0.2210), # #2 drill (>0.219in)
+      "#6-32:close":    L(inch=0.1440), # #27 drill
+      "#6-32:loose":    L(inch=0.1495), # #25 drill
+      "#6-32:thread":   L(inch=0.1065), # #36 drill
+      "#10-24:close":   L(inch=0.1960), # #9 drill
+      "#10-24:loose":   L(inch=0.2010), # #7 drill
+      "#10-24:thread":  L(inch=0.1495), # #25 drill
+      "#10-32:close":   L(inch=0.1960), # #9 drill
+      "#10-32:loose":   L(inch=0.2010), # #7 drill
+      "#10-32:thread":  L(inch=0.1590), # #21 drill
+      "1/4-20:close":   L(inch=0.2570), # F drill
+      "1/4-20:loose":   L(inch=0.2660), # H drill
+      "1/4-20:thread":  L(inch=0.2010), # #7 drill
     }
 
     # Flavors of values that can be stored in a {Part}:
@@ -13852,7 +13854,6 @@ class Part:
 	assert isinstance(tracing, int)
 
 	# Perform an requested *tracing*:
-	assert tracing < 0
 	trace_detail = -1
 	deep_tracing = -1000000
 	if tracing < 0 and part._tracing >= 0:
@@ -13888,7 +13889,7 @@ class Part:
 		print("{0}hole_axis={1:m} new_start={2:i} new_stop={3:i}".
 		  format(indent, hole_axis, new_start, new_stop))
 	    if inner_diameter > zero:
-		# We need to generate an annular 
+		# We need to generate an hole with an annular island in the middle:
 		lines.append(pad + "difference() {")
 		new_pad = pad + ' '
 	        part._scad_cylinder(comment + "1", Color("black"), diameter, diameter,
@@ -15980,7 +15981,7 @@ class Part:
 	    screw_level.depth_set(depth)
 
     def screw_diameter(self, screw, flags):
-	""" Part internal: Return the diamter associated with {screw}
+	""" *Part*: internal: Return the diameter associated with {screw}
 	    using {flags} to select the style of hole. """
 
 	# http://www.electroimpact.com/company/QMS-0003.pdf
@@ -23085,11 +23086,11 @@ class Shop:
 	#  1, 9, hss, in3_8, L(inch=.900), in3_16)
 	mill_drill_3_8 = shop._mill_drill_append("3/8 Mill Drill [.9in]",
 	  2, hss, in3_8, 2, L(inch=.900), degrees90)
-	drill_36 = shop._drill_append("#36 [#6-32 75% thread]", # McMaster: 2912A211 2.5" deep drill
+	drill_36 = shop._drill_append("#36 [#6-32:thread75%]", # McMaster: 2912A211 2.5" deep drill
 	  3,     hss, L(inch=0.1065), 2, L(inch=2.500), "#36", degrees118, stub, center_cut, drills)
 	dowel_36 = shop._dowel_pin_append("#36 Dowel Pin",
 	  3, 53, hss, L(inch=0.1065), L(inch=1.500), zero)
-	drill_27 = shop._drill_append("#27 [#6-32 close]",
+	drill_27 = shop._drill_append("#27 [#6-32:close]",
 	  4, hss, L(inch=0.1440), 2,  L(inch=1.875), "#27", degrees118, stub, center_cut, drills)
 	dowel_27 = shop._dowel_pin_append("#27 Dowel Pin",
 	  4, 54, hss, L(inch=0.1440), L(inch=1.875), zero)
@@ -23106,19 +23107,19 @@ class Shop:
 	# Note 9 is the alternate tool dowel pin for tool 1.
 	end_mill_3_16 = shop._end_mill_append("3/16 End Mill [1/2in]",
 	  10, hss, in3_16, 2, in1_2, not laser)
-	drill_25 = shop._drill_append("#25 [#6-32 free]",
+	drill_25 = shop._drill_append("#25 [#6-32:free]",
           11, hss, L(inch=0.1495), 2, L(inch=2.000), "#25", degrees118, stub, no_center_cut, drills)
-	drill_9 = shop._drill_append("#9 [#10 close]",
+	drill_9 = shop._drill_append("#9 [#10:close]",
 	  12, hss, L(inch=0.1960), 2, L(inch=2.000), "#9", degrees118, stub, no_center_cut, drills)
-	drill_43 = shop._drill_append("#43 [#4-40 75% thread]", # McMaster: 3096357
+	drill_43 = shop._drill_append("#43 [#4-40:thread75% #2-56:close]", # McMaster: 3096357
 	  13, hss, L(inch=.0890), 2, L(inch=2.110), "#43", degrees118, stub, center_cut, drills)
 	dowel_43 = shop._dowel_pin_append("#43 Dowel Pin",
 	  13, 63, hss, L(inch=0.0890), L(inch=1.250), zero)
-	drill_32 = shop._drill_append("#32 [#4-40 close]",
+	drill_32 = shop._drill_append("#32 [#4-40:close]",
 	  14, hss, L(inch=0.1160), 2,  L(inch=1.625), "#32", degrees118, stub, center_cut, drills)
 	dowel_32 = shop._dowel_pin_append("#32 Dowel Pin",
 	  14, 64, hss, L(inch=0.1160), L(inch=1.625), zero)
-	drill_50 = shop._drill_append("#50 [#0-80 free]",
+	drill_50 = shop._drill_append("#50 [#0-80:free, #2-52:thread]",
 	  15, hss, L(inch=0.0700), 4, L(inch=0.750), "#50", degrees118, stub, no_center_cut, drills)
 	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill [1.6in]",
 	  16, hss, in3_8, 4, L(inch=1.600), not laser)
@@ -23126,7 +23127,7 @@ class Shop:
 	  16, 66, hss, in3_8, L(inch=1.600), zero)
 	#end_mill_3_4 = shop._end_mill_append("3/4 End Mill",
 	#  13, hss, in3_4, 2, in1_3_8)
-	drill_30 = shop._drill_append("#30 [#4-40 free]",
+	drill_30 = shop._drill_append("#30 [#4-40:free]",
 	  17, hss, L(inch=0.1285), 2, L(inch=1.750), "#30", degrees118, stub, no_center_cut, drills)
 	drill_1_8 = shop._drill_append("1/8",
 	  18, hss, in1_8, 2, L(inch=1.750), "1/8", degrees118, stub, no_center_cut, drills)
@@ -23134,11 +23135,12 @@ class Shop:
 	  19, hss, in1_16, 2, L(inch=1.750), "1/16", degrees118, stub, no_center_cut, drills)
 	drill_3_32 = shop._drill_append("3/32",
 	  20, hss, in3_32, 2, L(inch=1.750), "3/32", degrees118, stub, no_center_cut, drills)
-	drill_42 = shop._drill_append("#42 [#4-44 75%]",
+	# Drill #42 should be be used to thread steel/iron!!!
+	drill_42 = shop._drill_append("#42 [#4-48:thread50%]",
 	  21, hss, L(inch=0.0935), 2, L(inch=1.750), "#42", degrees118, stub, no_center_cut, drills)
-	drill_52 = shop._drill_append("#52 [#0-80 close]",
+	drill_52 = shop._drill_append("#52 [#0-80:close]",
 	  22, hss, L(inch=0.0635), 2, L(inch=1.90), "#52", degrees118, stub, center_cut, drills)
-	drill_3_64 = shop._drill_append("3/64 [#0-80 75% thread]",
+	drill_3_64 = shop._drill_append("3/64 [#0-80:thread75%]",
           23, hss, L(inch="3/64"), 2, L(inch=1.05), "3/64", degrees118, stub, center_cut, drills)
 	drill_19 = shop._drill_append("#19 [M4x.7 close]",
 	  24, hss, L(inch=0.1660), 2, L(inch=2.00), "M4x.7", degrees118, stub, center_cut, drills)
@@ -23152,10 +23154,8 @@ class Shop:
 	tap_6_32 = shop._tap_append("#6-32 tap",
 	  28, hss, L(inch=0.1065), 2, L(inch=0.625), L(inch=0.100), L(inch=1.000)/32.0,
 	  Time(sec=1.500), Time(sec=1.500), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.050)
-	mill_3_16 = shop._end_mill_append("3/16 End Mill [.5in]",
-          29, hss, in3_16, 4, in1_2, not laser)
-	mill_1_8 = shop._end_mill_append("1/8 End Mill [.5in]",
-          30, hss, in1_8, 4, in3_8, not laser)
+	#mill_1_8 = shop._end_mill_append("1/8 End Mill [.5in]",
+        #  30, hss, in1_8, 4, in3_8, not laser)
 	# North American Tool sells reduced shank taps.  Western tool is listed as a distributor.
 	# Reiff & Nestor (Discount-tools.com)
 	# http://www.discount-tools.com/techcontents/014.pdf
