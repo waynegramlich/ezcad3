@@ -6059,6 +6059,12 @@ class Mount_Operations:
 	    # This is done by keeping track of whenever a new pair comes along.
 	    part_mount_table = {}
 
+	    # List all of the operations into *code*:
+	    for index, pair in enumerate(pairs):
+		tool_operation = pair._operation_get()
+		code._line_comment("Operation[{0}]: {1}".
+		  format(index, tool_operation._comment_get()))
+
 	    # Perform each *operation* in *tool_operations*:
 	    pairs_size = len(pairs)
 	    for index, pair in enumerate(pairs):
@@ -6066,6 +6072,8 @@ class Mount_Operations:
 		tool_mount = pair._mount_get()
 		tool_mount_name = tool_mount._name_get()
 		tool_operation = pair._operation_get()
+		code._line_comment("operation[{0}]: {1}".
+		  format(index, tool_operation._comment_get()))
 		tool_operation_name = tool_operation._name_get()
 		tool = tool_operation._tool_get()
 		tool_name = tool._name_get()
@@ -9880,7 +9888,7 @@ class Operation_Simple_Pocket(Operation):
 		    # We only need to do the exterior path to a depth of *z_plunge*:
 		    code._simple_pocket_helper(cnc_corner_bsw, cnc_corner_tne, corner_radius, z,
 		      r, zero, spindle_speed, feed_speed, True, rotate,
-		      comment = operation._comment, tracing = helper_tracing)
+		      comment = comment, tracing = helper_tracing)
 		elif pocket_kind == Operation.POCKET_KIND_FLAT:
 		    # Generate {paths} rectangular passes over the pocket:
 		    for path in range(paths):
@@ -16782,10 +16790,12 @@ class Part:
 		    if trace_detail >= 2:
 			print("{0}corner1={1:i} corner2={2:i}".format(indent, corner1, corner2))
 		    operation_order = Operation.ORDER_END_MILL_SIMPLE_POCKET
+		    operation_kind = (Operation.POCKET_KIND_THROUGH if 't' in flags
+		      else Operation.POCKET_KIND_FLAT)
 		    operation_simple_pocket = Operation_Simple_Pocket(self, comment, 0,
 		      end_mill_tool, operation_order, None, end_mill_feed_speed,
 		      end_mill_spindle_speed, corner1, corner2, radius, end_mill_radius,
-		      Operation.POCKET_KIND_FLAT, rotate, tracing = tracing + 1)
+		      operation_kind, rotate, tracing = tracing + 1)
 		    self._operation_append(operation_simple_pocket)
 		else:
 		    #print("dx={0:i} dy={1:i} minimum_span={2:i}".format(dx, dy, minimum_span))
