@@ -2178,22 +2178,32 @@ class BOM:
 	
 	# Write out the *blocks_file*:
 	with open("/tmp/blocks.txt", "w") as blocks_file:
-	    blocks_file.write("# Note that block sizes do not include extra material!!!\n")	    
-	    thicknesses_keys = sorted(thicknesses.keys())
+	    # Output the header:
+	    blocks_file.write(
+	      "# Blocks have 1/4 inch extra material in DX/DY rounded up to nearest 1/8 inch:\n")
+	    blocks_file.write("\n")
 
 	    # Output based on thickness first:
+	    thicknesses_keys = sorted(thicknesses.keys())
 	    for thickness_key in thicknesses_keys:
 		grouped_blocks = thicknesses[thickness_key]
 		block0 = grouped_blocks[0]
 		adjusted_dz = block0._adjusted_dz
 		blocks_file.write("{0} {1} {2}:\n".
 		  format(thickness_key[0], thickness_key[1], adjusted_dz))
+	        blocks_file.write("    DX      DY      DZ     Part Name\n")
+	        blocks_file.write("    =====   =====   =====  ===========\n")
 
 		# Output each *block*:
 		for block in grouped_blocks:
 		    part_name = block._part.name_get()
-		    blocks_file.write("    {0:i} x {1:i} x {2:i}: '{3}\n".
-		      format(block._dx, block._dy, block._dz, part_name))
+		    block_dx = block._dx
+		    block_dy = block._dy
+		    adjusted_dx = math.ceil(block_dx.inches() * 8.0 - 0.001)/8.0 + 0.25
+		    adjusted_dy = math.ceil(block_dy.inches() * 8.0 - 0.001)/8.0 + 0.25
+		    blocks_file.write("    {0:.3f} x {1:.3f} x {2:.3i}  {3}\n".
+		      format(adjusted_dx, adjusted_dy, block._dz, part_name))
+	        blocks_file.write("\n")
 	
 	# For each *extrusion* in *extrusions* create an *extrusion_key* and group the
 	# *extrusion* into *extrusion_groups* by key:
