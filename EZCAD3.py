@@ -20891,7 +20891,7 @@ class Code:
 		changed = True
  	elif field_name == "R1":
 	    if code._r1 != value:
-		coe._r1 = value
+		code._r1 = value
 		changed = True
 	elif field_name == "X":
 	    #offset = code._vice_x
@@ -23139,8 +23139,8 @@ class Shop:
 	  14, hss, L(inch=0.1160), 2,  L(inch=1.625), "#32", degrees118, stub, center_cut, drills)
 	dowel_32 = shop._dowel_pin_append("#32 Dowel Pin",
 	  14, 64, hss, L(inch=0.1160), L(inch=1.625), zero)
-	drill_50 = shop._drill_append("#50 [#0-80:free, #2-52:thread]",
-	  15, hss, L(inch=0.0700), 4, L(inch=0.750), "#50", degrees118, stub, no_center_cut, drills)
+	drill_6mm = shop._drill_append("6mm drill [1.1in]",
+	  15, hss, L(mm=6.00),     2, L(mm=28.00), "6mm", degrees135, stub, center_cut, drills)
 	end_mill_3_8_long = shop._end_mill_append("3/8 End Mill [1.6in]",
 	  16, hss, in3_8, 4, L(inch=1.600), not laser)
 	dowel_3_8_long = shop._dowel_pin_append("3/8 Dowel Pin [1.6in]",
@@ -23164,8 +23164,8 @@ class Shop:
           23, hss, L(inch="3/64"), 2, L(inch=1.05), "3/64", degrees118, stub, center_cut, drills)
 	drill_19 = shop._drill_append("#19 [M4x.7 close]",
 	  24, hss, L(inch=0.1660), 2, L(inch=2.00), "M4x.7", degrees118, stub, center_cut, drills)
-	drill_6mm = shop._drill_append("6mm drill [1.1in]",
-	  25, hss, L(mm=6.00),     2, L(mm=28.00), "6mm", degrees135, stub, center_cut, drills)
+	drill_50 = shop._drill_append("#50 [#0-80:free, #2-52:thread]",
+	  25, hss, L(inch=0.0700), 4, L(inch=0.900), "#50", degrees118, stub, no_center_cut, drills)
 	drill_8mm = shop._drill_append("8mm drill [3in]",
 	  26, hss, L(mm=8.00),    2, L(inch="2-61/64"), "8mm", degrees135, stub, center_cut, drills)
 	tap_4_40 = shop._tap_append("#4-40 tap",
