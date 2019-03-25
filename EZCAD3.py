@@ -16773,8 +16773,10 @@ class Part:
 		cnc_corner1 = cnc_transform * corner1
 		cnc_corner2 = cnc_transform * corner2
 		cnc_corner_bsw, cnc_corner_tne = cnc_corner1.minimum_maximum(cnc_corner2)
-		cnc_corner_volume = cnc_corner_tne - cnc_corner_bsw
-		minimum_span = cnc_corner_volume.x.minimum(cnc_corner_volume.y)
+		cnc_volume = cnc_corner_tne - cnc_corner_bsw
+		minimum_span = cnc_volume.x.minimum(cnc_volume.y)
+		assert minimum_span > zero, \
+		  "Pocket volume is empty ({0:i}, {1:i})".format(cnc_corner1, cnc_corner2)
 		maximum_radius = minimum_span/2
 
 		# Make sure that *radius* is big enough to actually use:
@@ -16783,9 +16785,10 @@ class Part:
 		    maximum_diameter = 2 * radius if radius > zero else 2 * maximum_radius
 		    deep_tracing = tracing + 1 if trace_detail >= 3 else -1000000
 		    end_mill_tool = self._tools_end_mill_search(maximum_diameter,
-		      cnc_corner_volume.z, "simple_pocket", deep_tracing)
+		      cnc_volume.z, "simple_pocket", deep_tracing)
 		    assert end_mill_tool != None, \
-		      "Could not find a end mill to mill {0:i} radius pockets".format(radius)
+		      "End mill for {0:i} radius pockets not found ({1:i}". \
+		      format(maximum_radius, cnc_volume)
 		    if tracing >= 0:
 			print("{0}end_mill_tool='{1}'".format(indent, end_mill_tool._name_get()))
 		    end_mill_diameter = end_mill_tool._diameter_get()
@@ -23118,15 +23121,15 @@ class Shop:
 	  5, hss, in3_8, 4, in5_8, not laser)
 	dowl_pin_end_mill_3_8 = shop._dowel_pin_append("3/8in Dowel Pin",
 	  5, 55, hss, in3_8, in5_8, zero)
-	end_mill_1_4 = shop._end_mill_append("1/4 End Mill [5/8in]",
-	  6, hss, in1_4, 2, in5_8, not laser)
+	end_mill_1_4 = shop._end_mill_append("1/4 End Mill [3/4in]",
+	  6, hss, in1_4, 4, in3_4, not laser)
 	double_angle = shop._double_angle_append("3/4 Double Angle",
 	  7, hss, in3_4, 10, L(inch=0.875), degrees90, in1_4, in1_4)
 	dove_tail = shop._dove_tail_append("3/8 Dove Tail",
 	  8, hss, in3_8, 6, in1_4, in3_16, degrees45)
 	# Note 9 is the alternate tool dowel pin for tool 1.
 	end_mill_3_16 = shop._end_mill_append("3/16 End Mill [1/2in]",
-	  10, hss, in3_16, 2, in1_2, not laser)
+	  10, hss, in3_16, 4, in1_2, not laser)
 	drill_25 = shop._drill_append("#25 [#6-32:free]",
           11, hss, L(inch=0.1495), 2, L(inch=2.000), "#25", degrees118, stub, no_center_cut, drills)
 	drill_9 = shop._drill_append("#9 [#10:close]",
@@ -23165,7 +23168,7 @@ class Shop:
 	drill_19 = shop._drill_append("#19 [M4x.7 close]",
 	  24, hss, L(inch=0.1660), 2, L(inch=2.00), "M4x.7", degrees118, stub, center_cut, drills)
 	drill_50 = shop._drill_append("#50 [#0-80:free, #2-52:thread]",
-	  25, hss, L(inch=0.0700), 4, L(inch=0.900), "#50", degrees118, stub, no_center_cut, drills)
+	  25, hss, L(inch=0.0700), 4, L(inch=0.900), "#50", degrees118, stub, center_cut, drills)
 	drill_8mm = shop._drill_append("8mm drill [3in]",
 	  26, hss, L(mm=8.00),    2, L(inch="2-61/64"), "8mm", degrees135, stub, center_cut, drills)
 	tap_4_40 = shop._tap_append("#4-40 tap",
