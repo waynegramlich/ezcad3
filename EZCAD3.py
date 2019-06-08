@@ -8318,7 +8318,9 @@ class Operation_Drill(Operation):
 	    elif hole_kind == Part.HOLE_TIP:
 		z_stop = cnc_stop.z
 	    elif hole_kind == Part.HOLE_FLAT:
-		assert False, "Flat holes can't be done with point drills"
+		assert False, \
+                  "Flat holes can't be done with point drills, part='{0}' comment='{1}'".format(
+                  part._name, comment)
 	    else:
 		assert False, "Unknown hole kind"
 	    if trace_detail >= 1:
@@ -9263,21 +9265,38 @@ class Operation_Round_Pocket(Operation):
 	half_tool_radius   = tool_radius / 2
 	inner_radius       = inner_diameter / 2
 	outer_radius       = diameter / 2
+        assert tool_radius >= zero
+        assert inner_radius >= zero
+        assert outer_radius > zero
+        assert inner_radius <= outer_radius, \
+          "part='{0}' inner_radius={1:i} outer_radius={2:i}".format(
+          outer_radius, inner_radius, outer_radius)
+
 	code._line_comment("tool_radius={0:i} inner_radius={1:i} outer_radius={2:i}".
 	  format(tool_radius, inner_radius, outer_radius))
         start_radius       = zero if inner_radius <= zero else inner_radius + tool_radius
-        stop_radius        = final_radius - spring_radius - tool_radius
+        if start_radius < zero:
+            start_radius = zero
+        assert start_radius >= zero
+        stop_radius        = outer_radius - spring_radius - tool_radius
+        spring_pass = True
+        if stop_radius < zero:
+            stop_radius = zero
+            spring_pass = False
+
         delta_radius       = stop_radius  - start_radius
+	assert delta_radius >= zero, \
+          "part='{0}' outer={1:i} stop={2:i} start={3:i} inner={4:i} tool={5:i}".format(
+          part._name, outer_radius, stop_radius, start_radius, inner_radius, tool_radius)
 	if trace_detail >= 2:
 	    print("{0}tool_radius={1:i} inner_radius={2:i} outer_radius={3:i}".
 	      format(indent, tool_radius, inner_radius, outer_radius))
 	    print("{0}start_radius={1:i} stop_radius={2:i} delta_radius={3:i}".
 	      format(indent, start_radius, stop_radius, delta_radius))
-	assert delta_radius > zero, \
-	  "start_radius={0:i} stop_radius={1:i}".format(start_radius, stop_radius)
+
+        # *final_radius* is only used for the *spring_pass*:
         final_radius       = outer_radius - tool_radius
         final_delta_radius = final_radius - start_radius
-	assert final_delta_radius > zero
 
 	if trace_detail >= 1:
 	    print("{0}is_laser={1}".format(indent, is_laser))
@@ -9365,8 +9384,8 @@ class Operation_Round_Pocket(Operation):
 		    code._line_comment("radius passes done")
 		    code._xy_feed(f, s, x, y + start_radius)
 
-	    # Do a "spring pass" to make everybody happy:
-	    if True:
+	    # Do a *spring pass*:
+	    if spring_pass:
 		code._line_comment("{0} round_pocket pocket 'spring' pass".format(comment))
 		half_final_delta_radius = final_delta_radius / 2
 		code._xy_feed(f, s, x, y + start_radius)
@@ -9663,7 +9682,9 @@ class Operation_Simple_Pocket(Operation):
 	dy = (corner2.y - corner1.y).absolute()
 	minimum_span = dx.minimum(dy)
 	maximum_radius = minimum_span / 2
-	assert tool_radius <= maximum_radius
+	assert tool_radius <= maximum_radius, \
+          "tool='{0}' part='{1}' tool_radius={2:i} maximum_radius={3:i}".format(
+          tool._name, part._name, tool_radius, maximum_radius)
 	assert tool_radius <= corner_radius
 
 	# Load up the rest of *operation_simple_pocket*:
@@ -23128,8 +23149,8 @@ class Shop:
 	dove_tail = shop._dove_tail_append("3/8 Dove Tail",
 	  8, hss, in3_8, 6, in1_4, in3_16, degrees45)
 	# Note 9 is the alternate tool dowel pin for tool 1.
-	end_mill_3_16 = shop._end_mill_append("3/16 End Mill [1/2in]",
-	  10, hss, in3_16, 4, in1_2, not laser)
+	#end_mill_3_16 = shop._end_mill_append("3/16 End Mill [1/2in]",
+	#  10, hss, in3_16, 4, in1_2, not laser)
 	drill_25 = shop._drill_append("#25 [#6-32:free]",
           11, hss, L(inch=0.1495), 2, L(inch=2.000), "#25", degrees118, stub, no_center_cut, drills)
 	drill_9 = shop._drill_append("#9 [#10:close]",
@@ -23177,6 +23198,8 @@ class Shop:
 	tap_6_32 = shop._tap_append("#6-32 tap",
 	  28, hss, L(inch=0.1065), 2, L(inch=0.625), L(inch=0.100), L(inch=1.000)/32.0,
 	  Time(sec=1.500), Time(sec=1.500), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.050)
+	end_mill_3_16 = shop._end_mill_append("3/16 End Mill [1/2in]",
+	  44, hss, in3_16, 2, in1_2, not laser)
 	#mill_1_8 = shop._end_mill_append("1/8 End Mill [.5in]",
         #  30, hss, in1_8, 4, in3_8, not laser)
 	# North American Tool sells reduced shank taps.  Western tool is listed as a distributor.
