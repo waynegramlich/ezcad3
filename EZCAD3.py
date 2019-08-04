@@ -11566,7 +11566,7 @@ class Part:
 
 	return self._ezcad
 
-    def fasten(self, comment, fastener, select, tracing=-1000000):
+    def fasten(self, comment, fastener, select, diameter=None, tracing=-1000000):
 	""" *Part*: Use *fastener* to drill a hole from the *Part* object (i.e. *self*).
 	    *select* is one of "thread", "close", or "free" to specify the desired hole
 	    diameter for the hole.  *comment* is used for debugging.
@@ -11579,6 +11579,7 @@ class Part:
         assert isinstance(comment, str)
         assert isinstance(fastener, Fastener)
 	assert isinstance(select, str)
+        assert isinstance(diameter, str) or isinstance(diameter, L) or diameter is None
 	assert isinstance(tracing, int)
 
 	# Perform any requested *tracing*:
@@ -11592,7 +11593,7 @@ class Part:
 	    trace_detail = 2
 
 	# Perform the fasten operation:
-	fastener._fasten(comment, part, select, tracing = tracing + 1)
+	fastener._fasten(comment, part, select, diameter, tracing = tracing + 1)
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
@@ -19654,7 +19655,8 @@ class Fastener(Part):
 	      format(dx, dy, dz))
 	    difference_lines.append("")
 	
-    def _fasten(self, comment, part, select, transform=None, tracing=-1000000):
+    def _fasten(self,
+     comment, part, select, override_diameter=None, transform=None, tracing=-1000000):
 	""" *Fastener*: Use  the *Fastener* object (i.e. *self*) to drill a hole in *part*
 	    using its current mount for *part*.  *select* should be one of the following:
 	    * `"close"`: for a close fit hole,
@@ -19675,6 +19677,8 @@ class Fastener(Part):
 	assert isinstance(part, Part)
 	assert isinstance(select, str) and select in (
 	  "close", "close_access", "free", "thread", "thread_hole", "thread_access", "set_screw")
+        assert (isinstance(override_diameter, str) or
+          isinstance(override_diameter, L) or override_diameter is None)
 	assert isinstance(transform, Transform) or transform == None
 	assert isinstance(tracing, int)
 
@@ -19682,8 +19686,8 @@ class Fastener(Part):
 	trace_detail = -1
 	if tracing >= 0:
 	    indent = ' ' * tracing
-	    print("{0}=>Fastener._fasten('{1}', '{2}', '{3}', '{4}')".
-	      format(indent, fastener._name, comment, part._name_get(), select))
+	    print("{0}=>Fastener._fasten('{1}', '{2}', '{3}', '{4}', '{5}')".
+	      format(indent, fastener._name, comment, part._name_get(), select, diameter))
 	    trace_detail = 3
 
 	# No need to do anything until we are past dimensions mode:
@@ -19789,6 +19793,8 @@ class Fastener(Part):
 		  " misses Fastener '{2}' (center={3:i}"). \
 		  format(fastener.comment_s, fastener.c, part.name_get(), part.c))
 	    else:
+                if override_diameter is not None:
+                    diameter = override_diameter
 		part.hole(hole_name, diameter, new_start, new_end, hole_flags, tracing=tracing+1)
 
 	    # An "access" hole is drilled about 1/4 of the way in on to after the first
@@ -19891,8 +19897,8 @@ class Fastener(Part):
 
 	# Wrap up any requested *tracing*:
 	if tracing >= 0:
-	    print("{0}<=Fastener._fasten('{1}', '{2}', '{3}', '{4}')".
-	      format(indent, fastener._name, comment, part._name_get(), select))
+	    print("{0}<=Fastener._fasten('{1}', '{2}', '{3}', '{4}', '{5}')".
+	      format(indent, fastener._name, comment, part._name_get(), select, diameter))
 
     def _start_get(self):
 	""" *Fastener*: Return the start point for the *Fastener* object (i.e. *self*.)
@@ -23139,7 +23145,7 @@ class Shop:
 	dowel_27 = shop._dowel_pin_append("#27 Dowel Pin",
 	  4, 54, hss, L(inch=0.1440), L(inch=1.875), zero)
 	end_mill_3_8 = shop._end_mill_append("3/8 End Mill [5/8in]",
-	  5, hss, in3_8, 4, in5_8, not laser)
+	  5, hss, in3_8, 2, in5_8, not laser)
 	dowl_pin_end_mill_3_8 = shop._dowel_pin_append("3/8in Dowel Pin",
 	  5, 55, hss, in3_8, in5_8, zero)
 	end_mill_1_4 = shop._end_mill_append("1/4 End Mill [3/4in]",
@@ -23148,9 +23154,10 @@ class Shop:
 	  7, hss, in3_4, 10, L(inch=0.875), degrees90, in1_4, in1_4)
 	dove_tail = shop._dove_tail_append("3/8 Dove Tail",
 	  8, hss, in3_8, 6, in1_4, in3_16, degrees45)
-	# Note 9 is the alternate tool dowel pin for tool 1.
-	#end_mill_3_16 = shop._end_mill_append("3/16 End Mill [1/2in]",
-	#  10, hss, in3_16, 4, in1_2, not laser)
+	end_mill_1_8 = shop._end_mill_append("1/8 End Mill [1/2in]",
+          9, hss, in1_8, 2, in1_2, not laser)
+	end_mill_3_16 = shop._end_mill_append("3/16 End Mill [1/2in]",
+	  10, hss, in3_16, 2, in1_2, not laser)
 	drill_25 = shop._drill_append("#25 [#6-32:free]",
           11, hss, L(inch=0.1495), 2, L(inch=2.000), "#25", degrees118, stub, no_center_cut, drills)
 	drill_9 = shop._drill_append("#9 [#10:close]",
@@ -23198,8 +23205,6 @@ class Shop:
 	tap_6_32 = shop._tap_append("#6-32 tap",
 	  28, hss, L(inch=0.1065), 2, L(inch=0.625), L(inch=0.100), L(inch=1.000)/32.0,
 	  Time(sec=1.500), Time(sec=1.500), Hertz(rpm=500.0), Hertz(rpm=504.0), 0.050)
-	end_mill_3_16 = shop._end_mill_append("3/16 End Mill [1/2in]",
-	  44, hss, in3_16, 2, in1_2, not laser)
 	#mill_1_8 = shop._end_mill_append("1/8 End Mill [.5in]",
         #  30, hss, in1_8, 4, in3_8, not laser)
 	# North American Tool sells reduced shank taps.  Western tool is listed as a distributor.
