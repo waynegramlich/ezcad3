@@ -8818,11 +8818,36 @@ class Operation_Mount(Operation):
 	  format(cnc_extra_start_dx.absolute(), cnc_extra_start_dy.absolute(),
 	  cnc_extra_start_dz.absolute(), material))
 	selected_parallel_height = mount._selected_parallel_height_get()
+
+        # Produce a more standard *parallels_height_text*:
+        eigth_inches = int(selected_parallel_height.inches() * 8.0)
+        whole_inches = eigth_inches / 8
+        numerator = eigth_inches % 8
+        denominator = 8
+        if trace_detail >= 2:
+            print("{0}eight_inches={1} numerator={2}".format(indent, eigth_inches, numerator))
+            while numerator % 2 == 0 and denominator > 1:
+                numerator /= 2
+                denominator /= 2
+            print("{0}whole_inches={1} numerator={2} denominator={3}".
+              format(indent, whole_inches, numerator, denomonator))
+        if whole_inches == 0:
+            parallel_height_text = "{0}/{1}".format(numerator, denominator)
+        else:
+            if numerator == 0:
+                parallel_height_text = "{0}".format(whole_inches)
+            else:
+                parallel_height_text = "{0}-{1}/{2}".format(
+                  whole_inches, numerator, denominator)
+	
+        #mount_ngc_file.write("( e={0} w={0} n={1} d={2} )\n".
+        #  format(eigth_inches, whole_inches, numerator, denominator))
 	if mount._is_tooling_plate_mount_get():
-	    mount_ngc_file.write("( Parallels height {0:i}in for tooling plate )\n".
-	      format(selected_parallel_height))
+	    mount_ngc_file.write("( Parallels height {0:i}in [= {1} inch] for tooling plate )\n".
+	      format(selected_parallel_height, parallel_height_text))
 	else:
-	    mount_ngc_file.write("( Parallels height {0:i}in )\n".format(selected_parallel_height))
+	    mount_ngc_file.write("( Parallels height {0:i}in [= {1} inch] )\n".
+              format(selected_parallel_height, parallel_height_text))
 
 	# If there is a tooling plate, visualize that into *cnc_vrml_lines*:
 	jaws_spread = (cnc_extra_start_tne.y - cnc_extra_start_bsw.y).absolute()
@@ -9243,8 +9268,9 @@ class Operation_Round_Pocket(Operation):
 	    print("{0}cnc_transform={1:v}".format(indent, cnc_transform))
 
 	# Compute some values based on *diameter*:
-	maximum_depth = diameter / 3.0
-	final_radius = diameter / 2
+        tool_diameter = tool._diameter_get()
+	maximum_depth = tool_diameter / 3.0
+	final_radius = tool_diameter / 2
 
 	# Extract some values from *part* and *shop*:
 	shop = part._shop
@@ -17679,7 +17705,7 @@ class Part:
 	    vice_center_format = \
 	      "{0:i}".format(vice_center) if isinstance(vice_center, P) else "None"
 	    print(("{0}=>Part.vice_mount('{1}', '{2}', '{3}', '{4}', '{5}, " +
-	      "{6:i}, {7:i}, {8:i}, {9:i}, {10:i}, {11}").format(indent,
+	      "xx={6:i}, xy={7:i}, xtz={8:i}, xbz={9:i}, phx={10:i}, vc={11}").format(indent,
 	      part._name, name, top_surface, jaw_surface, flags, extra_dx, extra_dy,
 	      extra_top_dz, extra_bottom_dz, parallel_height_extra, vice_center_format))
 	    trace_detail = 3
@@ -18009,6 +18035,7 @@ class Part:
 		print("{0}parallels_heights={1}".format(indent,
 		  [parallel_height.inches() for parallel_height in parallels_heights]))
 		print("{0}selected_parallel_height={1:i}".format(indent, selected_parallel_height))
+                print("{0}xbz={1:i} part_dz={2:i}".format(indent, extra_bottom_dz, part_dz))
 
 	    # Now we can compute *cnc_top_surface_z* and *cnc_xy_rapid_safe_z*:
 	    cnc_top_surface_z = selected_parallel_height + extra_bottom_dz + part_dz
@@ -22967,7 +22994,9 @@ class Shop:
 	  L(inch="1-1/8"),
 	  L(inch="1-1/4"),
 	  L(inch="1-3/8"),
-	  L(inch="1-1/2") ] )
+ 	  L(inch="1-1/2"),
+	  L(inch="1-5/8"),
+	  L(inch="1-3/4") ] )
 	tool_change_x = L(inch=-1.500)
 	tool_change_y = L()
 	tool_change_z = L(inch=8.500)
@@ -23195,7 +23224,7 @@ class Shop:
           23, hss, L(inch="3/64"), 2, L(inch=1.05), "3/64", degrees118, stub, center_cut, drills)
 	drill_19 = shop._drill_append("#19 [M4x.7 close]",
 	  24, hss, L(inch=0.1660), 2, L(inch=2.00), "M4x.7", degrees118, stub, center_cut, drills)
-	drill_50 = shop._drill_append("#50 [#0-80:free, #2-52:thread]",
+	drill_50 = shop._drill_append("#50 [#0-80:free, #2-56:thread]",
 	  25, hss, L(inch=0.0700), 4, L(inch=0.900), "#50", degrees118, stub, center_cut, drills)
 	drill_8mm = shop._drill_append("8mm drill [3in]",
 	  26, hss, L(mm=8.00),    2, L(inch="2-61/64"), "8mm", degrees135, stub, center_cut, drills)
